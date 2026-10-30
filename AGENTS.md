@@ -9,6 +9,7 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 - `npm run dev`: dev server
 - `npm run build`: `tsc -b` then Vite build (use this as the typecheck)
 - `npm run lint`: oxlint
+- `npm run agents`: regenerate `AGENTS.md` from this file. Run it after every edit to `CLAUDE.md`; never edit `AGENTS.md` by hand.
 
 ## Layout
 
