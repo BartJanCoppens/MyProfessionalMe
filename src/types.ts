@@ -1,0 +1,53 @@
+// id, title, dom, lvl, format, source, hours, cpd, state, pct, due, why
+export type Learn = [string, string, string, number, string, string, number, number, string, number, string, string];
+// learning id, stage, obligation
+export type Mapping = [string, string, string];
+
+export type Project = {
+  id: string; client: string; name: string; role: string; period: string; hours: number; lead: string; evaluator: string; evalDate: string; overall: string;
+  summary: string;
+  // [dimension, rating 0..2, comment]
+  dims: [string, number, string][] | null;
+  quote: string;
+  // [learning id, advice]
+  advice: [string, string][];
+};
+
+export type Test = {
+  id: string; name: string; provider: string; date: string; headline: string; unit: string;
+  bars: ([string, number] | [string, number, string])[];
+  reading: string;
+  sugg: [string, string][];
+};
+
+export type Ambition = { id: string; text: string; horizon: string; doms: string[]; ids?: string[]; from: string };
+export type Interest = { label: string; dom: string; ids?: string[] };
+
+export type CloudKey = 'proj' | 'pers' | 'amb';
+export type CloudMeta = {
+  label: string; long: string; laneLabel: string; laneSub: string; color: string; text: string; wash: string;
+  anchor: number; frac: number; screen: Screen; goLabel: string;
+};
+
+export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'adminLib' | 'adminMap';
+export type View = 'constellation' | 'radar' | 'road';
+export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | null;
+
+export type ChatMsg = { role: 'assistant' | 'user'; text: string };
+export type Proposal = {
+  interests: { label: string; domain: string }[];
+  ambition: { text: string; horizon?: string; domains?: string[] } | null;
+};
+export type AvatarState = { initials: string; bg: string; photo: string | null };
+
+export type AppState = {
+  screen: Screen; view: View; sel: Sel; detailId: string | null; origin: Screen;
+  chosen: string[]; states: Record<string, string>; pcts: Record<string, number>;
+  libQ: string; libOb: string; libLevel: string; libFormat: string; libDom: string;
+  teamTab: string; adminQ: string; adminStatus: string; drawerOpen: boolean; importQ: string;
+  blState: string | null; maps: Record<string, Mapping[]>; pending: Record<string, boolean>; mapSel: string | null; overStage: string | null;
+  toast: string | null; noteOpen: boolean; myRating: string;
+  projSel: string; clouds: Record<CloudKey, boolean>; share: Record<string, string>;
+  ambitions: Ambition[]; interests: Interest[]; chatInput: string; chatBusy: boolean; proposal: Proposal | null;
+  avatar: AvatarState; chat: ChatMsg[];
+};

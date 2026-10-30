@@ -1,0 +1,19 @@
+@import url('./tokens/fonts.css');
+@import url('./tokens/colors.css');
+@import url('./tokens/typography.css');
+@import url('./tokens/spacing.css');
+@import url('./tokens/motion.css');
+
+body{margin:0;background:#f3f5f0;color:#1a1d18;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.45}
+a{color:#4c7a10;text-decoration:none}a:hover{text-decoration:underline}
+*{box-sizing:border-box}
+@keyframes pmPop{from{transform:scale(0)}}
+@keyframes pmBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@keyframes pmSwell{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+@keyframes pmGrow{from{transform:scale(.15);opacity:0}}
+@keyframes pmDraw{from{stroke-dashoffset:240}}
+@keyframes pmFadeUp{from{opacity:0;transform:translateY(6px)}}
+@keyframes pmPulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.6);opacity:0}}
+@keyframes pmDot{0%,100%{box-shadow:0 0 0 0 rgba(134,188,37,.55)}50%{box-shadow:0 0 0 5px rgba(134,188,37,0)}}
+[data-pm-motion="off"] *{animation:none!important}
+@media (prefers-reduced-motion:reduce){[data-pm-motion] *{animation:none!important}}
