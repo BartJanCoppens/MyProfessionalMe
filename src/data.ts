@@ -1,5 +1,5 @@
 // Seed data for the MyProfessionalMe prototype (verbatim from the Claude Design file).
-import type { Learn, Mapping, Project, Test, Ambition, Interest, CloudKey, CloudMeta } from './types';
+import type { Learn, Mapping, Project, Test, Ambition, Interest, CloudKey, CloudMeta, AvatarSpec, Signal, Persona } from './types';
 
 export const DOMAINS: [string, string, string][] = [
   ['tech','Job technical skills','Tech skills'],['acad','Academic background','Academic'],['pers','Personal growth','Personal'],
@@ -49,7 +49,11 @@ export const LEARN: Learn[] = [
  ['L34','Sustainability strategy for industrials','ind',3,'E-learning','edX',10,6,'not-started',0,'',''],
  ['L35','ESG data and reporting tooling','tec',3,'E-learning','Microsoft Learn',6,0,'not-started',0,'',''],
  ['L36','Delegation and workload planning','lead',2,'E-learning','Internal academy',2,0,'not-started',0,'',''],
- ['L37','Storytelling with data','pers',3,'Game','Internal academy',2,0,'not-started',0,'','']
+ ['L37','Storytelling with data','pers',3,'Game','Internal academy',2,0,'not-started',0,'',''],
+ ['L38','Holding scope with a procurement director','prof',3,'Avatar','Avatar studio',1.5,0,'in-progress',40,'','A ten-minute spoken role-play with an AI avatar who reopens agreed scope. Three runs; the best one counts once it reaches 4 of 5 on every skill.'],
+ ['L39','Giving hard feedback to a junior','lead',2,'Avatar','Avatar studio',1,0,'not-started',0,'','Practise the conversation before you have it. The avatar is a capable analyst who missed two deadlines and does not see the problem.'],
+ ['L40','Presenting a fee increase to a sceptical CFO','prof',4,'Avatar','Avatar studio',1.5,0,'not-started',0,'','The avatar challenges every number. You are scored on clarity, calm and whether you protect the relationship.'],
+ ['L41','Calming an escalating client call','pers',3,'Avatar','Avatar studio',1,0,'accepted',100,'','']
 ];
 export const MAPS0: Record<string, Mapping[]> = {
  'Consulting':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L20','Analyst','advised'],['L31','Analyst','advised'],['L10','Consultant','mandatory'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','advised'],['L13','Consultant','advised'],['L1','Senior consultant','mandatory'],['L2','Senior consultant','advised'],['L8','Senior consultant','advised'],['L11','Senior consultant','advised'],['L19','Senior consultant','advised'],['L23','Senior consultant','advised'],['L4','Manager','mandatory'],['L12','Manager','mandatory'],['L27','Manager','mandatory'],['L18','Manager','advised'],['L28','Manager','advised'],['L3','Senior manager','advised']],
@@ -84,6 +88,51 @@ export const PROGRAM_OF: Record<string, string> = { 'Internal academy':'Internal
 export const PROGRAMS: [string, string, string][] = [['Internal academy','synced 07:10 today','#86BC25'],['Coursera / edX','synced yesterday','#86BC25'],['Professional bodies','ACCA · ITAA · IBR/IRE · manual','#a0a69d'],['Microsoft Learn','synced 07:10 today','#86BC25'],['Books · O’Reilly, Perlego','synced 2 days ago','#e0a100'],['Mentoring / coaching','manual','#a0a69d']];
 export const PUB: Record<string, [string, string]> = { L19:['clarification','Needs review'], L14:['clarification','Needs review'], L22:['not-started','Draft'] };
 export const AV_SWATCHES: [string, string, string][] = [['#1a1d18','#fff','Ink'],['#86BC25','#10180a','Green'],['#2f7fc1','#fff','Blue'],['#8a5a8c','#fff','Plum'],['#4c7a10','#fff','Moss']];
+export const AVATARS: Record<string, AvatarSpec> = {
+ L38:{ persona:'Marc Verhoeven', role:'Procurement director, energy utility', initials:'MV', brief:'Polite, well prepared and relentless. Reopens scope that was agreed in the last steering committee.', skills:['Assertiveness','Clarity','Listening'], target:4, attempts:[['21 Oct 2026',[2,3,3],'Conceded the second workshop within four minutes.'],['26 Oct 2026',[3,4,4],'Held the line on scope and traded timing instead.']] },
+ L39:{ persona:'Noah Claes', role:'Analyst, eight months in', initials:'NC', brief:'Capable and well liked. Missed two deadlines and thinks the plan was unrealistic.', skills:['Directness','Empathy','Next steps'], target:4, attempts:[] },
+ L40:{ persona:'Hilde Jacobs', role:'CFO, wholesale trader', initials:'HJ', brief:'Has read the engagement letter twice. Asks for the number behind every number.', skills:['Clarity','Calm','Relationship'], target:4, attempts:[] },
+ L41:{ persona:'Pieter Wouters', role:'Operations director, logistics client', initials:'PW', brief:'A go-live slipped and he is under pressure from his own board.', skills:['Calm','Empathy','Ownership'], target:4, attempts:[['2 Jul 2026',[3,4,3],'Apologised well; no clear next step.'],['9 Jul 2026',[4,4,4],'Named the owner and the date before he asked.']] }
+};
+export const LEARN_BY: Record<string, Learn> = {}; LEARN.forEach((r) => { LEARN_BY[r[0]] = r; });
+// key, label, colour, canMand, who belongs, obligation policy, rule field
+export const LENSES: [string, string, string, boolean, string, string, string][] = [
+ ['bl','Business line','#1a1d18',true,'Everyone whose contract sits in the business line, at their current stage.','Mandatory or advised. Mandatory items need Learning Council sign-off before they publish.','business_line'],
+ ['ind','Industry','#2f7fc1',true,'People with 300 or more charged hours in the sector over the last 12 months, from staffing data.','Mandatory or advised. Keep mandatory for sector regulation.','industry'],
+ ['tec','Technology','#b5762a',true,'People who hold the skill tag, or charged hours on a project that uses the technology.','Mandatory or advised.','technology'],
+ ['amb','Ambition','#4c7a10',false,'People who saved a matching ambition in My profile, matched on its text and domains.','Suggested only. Ambitions are personal and never create obligations.','ambition'],
+ ['pro','Profile','#8a5a8c',false,'People who chose to share a personality profile with their counsellor. Unshared profiles are never read.','Suggested only. Personality data never makes a learning mandatory and never affects readiness.','profile']
+];
+// audience key, name, reach (people)
+export const AUDS: Record<string, [string, string, number][]> = {
+ bl: [['Consulting','Consulting',508],['Advisory','Advisory',412],['Tax & Legal','Tax & Legal',366]],
+ ind: [['ind:energy','Energy & utilities',84],['ind:health','Healthcare',61],['ind:whole','Wholesale & retail',97],['ind:public','Public sector',73]],
+ tec: [['tec:data','Data & Azure',118],['tec:sap','SAP',64],['tec:ai','Generative AI',142]],
+ amb: [['amb:sust','Sustainability lead',47],['amb:people','People leader',88],['amb:expert','Deep specialist',59],['amb:bizdev','Business developer',36]],
+ pro: [['pro:blue','Cool blue first',121],['pro:red','Fiery red first',74],['pro:green','Earth green first',96],['pro:yellow','Sunshine yellow first',83]]
+};
+export const AUD_INFO: Record<string, { lens: string; name: string; reach: number }> = {}; Object.keys(AUDS).forEach((l) => AUDS[l].forEach((a) => { AUD_INFO[a[0]] = { lens: l, name: a[1], reach: a[2] }; }));
+export const STAGE_FR = [.19,.25,.28,.17,.11];
+export const STG_SHORT = ['Analyst','Consultant','Senior','Manager','Sr manager'];
+export const AUD_MAPS0: Record<string, Mapping[]> = {
+ 'ind:energy':[['L14','Consultant','advised'],['L38','Senior consultant','advised'],['L34','Senior consultant','advised'],['L18','Senior consultant','mandatory']],
+ 'ind:health':[['L22','Consultant','advised']], 'ind:whole':[['L2','Senior consultant','advised']], 'ind:public':[],
+ 'tec:data':[['L23','Consultant','advised'],['L26','Consultant','advised'],['L35','Senior consultant','advised']], 'tec:sap':[], 'tec:ai':[],
+ 'amb:sust':[['L34','Senior consultant','advised'],['L35','Manager','advised']], 'amb:people':[['L36','Consultant','advised'],['L39','Senior consultant','advised'],['L28','Senior consultant','advised']], 'amb:expert':[], 'amb:bizdev':[['L12','Senior consultant','advised']],
+ 'pro:blue':[['L37','Senior consultant','advised']], 'pro:red':[], 'pro:green':[], 'pro:yellow':[]
+};
+export const SIGNALS: Signal[] = [
+ { id:'S1', kind:'Gap', st:'clarification', op:{ op:'add', aud:'ind:energy', lid:'L32', stage:'Senior consultant', ob:'advised' }, evidence:'23 of 41 Senior-consultant evaluations in Energy & utilities this year mention scope being reopened by procurement. No Energy mapping covers negotiation.', quote:'“Let procurement reopen scope three times in workshops.” · Brabant Energy, Oct 2026' },
+ { id:'S2', kind:'Load', st:'in-progress', op:{ op:'setOb', aud:'ind:energy', lid:'L18', stage:'Senior consultant', ob:'advised' }, evidence:'A Senior consultant in Energy & utilities stacks {mand} h of mandatory learning once the business-line path is added, against a 40 h budget. This item drives most of it.', quote:'' },
+ { id:'S3', kind:'Gap', st:'clarification', op:{ op:'add', aud:'tec:data', lid:'L37', stage:'Consultant', ob:'advised' }, evidence:'People tagged Data & Azure are rated “Developing” on communication 1.7 times as often as the firm average in 2026 evaluations.', quote:'“Precise analysis, but the steering deck lost the room.” · wholesale client, Jun 2026' },
+ { id:'S4', kind:'Gap', st:'clarification', op:{ op:'add', aud:'amb:people', lid:'L33', stage:'Senior consultant', ob:'advised' }, evidence:'Of 88 people who saved a people-leader ambition, 61% have never run a client workshop according to staffing records.', quote:'' },
+ { id:'S5', kind:'Overlap', st:'submitted', op:{ op:'remove', aud:'ind:whole', lid:'L2', stage:'Senior consultant' }, evidence:'Value-chain cost modelling already reaches Senior consultants through the Consulting path, so people in Wholesale & retail receive it twice.', quote:'' },
+ { id:'S6', kind:'Gap', st:'clarification', op:{ op:'add', aud:'pro:red', lid:'L28', stage:'Consultant', ob:'advised' }, evidence:'Among people who shared a fiery-red-first profile, evaluations mention listening or leaving room for others 2.1 times as often. Only shared profiles are counted.', quote:'' }
+];
+// key, first name, full name, stage, audience per lens (bl null = the current business line)
+export const PERSONAS: Persona[] = [['lena','Lena','Lena Mertens','Senior consultant',{ bl:null, ind:'ind:energy', tec:'tec:data', amb:'amb:sust', pro:'pro:blue' }],
+ ['jonas','Jonas','Jonas Peeters','Consultant',{ bl:'Consulting', ind:'ind:whole', tec:'tec:sap', amb:'amb:people', pro:'pro:green' }],
+ ['amira','Amira','Amira Haddad','Analyst',{ bl:'Tax & Legal', ind:'ind:public', tec:'tec:ai', amb:'amb:expert', pro:'pro:red' }]];
 export const PROJECTS: Project[] = [
  { id:'P1', client:'Delcroix Trading BV', name:'Cost-to-serve redesign', role:'Acting workstream lead', period:'Feb – Jun 2026', hours:612, lead:'Thomas De Smet', evaluator:'Thomas De Smet · Senior manager', evalDate:'8 Jul 2026', overall:'Exceeds expectations',
    summary:'Redesigned the cost-to-serve model for 1,400 wholesale customers and the pricing rules that follow from it. Lena took over the analysis workstream in week 6.',
@@ -94,7 +143,7 @@ export const PROJECTS: Project[] = [
    summary:'Operating model for the merged retail and grid-services business: organisation design, governance and the first 100 days.',
    dims:[['Client impact',1,'Well liked by the HR and operations leads.'],['Problem solving',2,'Picked up the energy-transition context faster than anyone on the team.'],['Leading others',1,'Coached the analyst well.'],['Communication',1,'Let procurement reopen scope three times in workshops.'],['Commercial',1,'Spotted two change requests and handed them over for pricing.']],
    quote:'Strong on content. In the room she needs a stance before the meeting starts, especially with procurement.',
-   advice:[['L32','Prepare a negotiation stance before scope discussions with procurement.'],['L33','Run the next design workshop yourself, with a written agenda and decision log.'],['L34','Build on the energy context: the sector work comes back in 2027.']] },
+   advice:[['L32','Prepare a negotiation stance before scope discussions with procurement.'],['L38','Rehearse that stance with the procurement avatar before the next workshop.'],['L33','Run the next design workshop yourself, with a written agenda and decision log.'],['L34','Build on the energy context: the sector work comes back in 2027.']] },
  { id:'P3', client:'Flemish Care Group', name:'Procurement diagnostic', role:'Consultant', period:'Sep – Dec 2025', hours:380, lead:'Karel Wouters', evaluator:'Karel Wouters · Director', evalDate:'15 Jan 2026', overall:'Meets expectations',
    summary:'Spend cube and savings plan across 14 hospitals; the plan was signed off at €6.2m over three years.',
    dims:[['Client impact',1,'Savings plan accepted without changes.'],['Problem solving',1,'Solid structure; relied on the data team for every extract.'],['Leading others',1,'Helped onboard the new analyst.'],['Communication',2,'The hospital directors read her notes.'],['Commercial',0,'Not in scope.']],

@@ -1,6 +1,6 @@
 # MyProfessionalMe
 
-Clickable prototype of a learning & growth platform for a professional-services firm: personal growth map (constellation, radar and road views), learning library, projects & evaluations, personality and ambitions profile with an assistant, a counsellor team view, and admin screens for the learning library and curriculum mapping.
+Clickable prototype of a learning & growth platform for a professional-services firm: personal growth map (constellation, radar and road views), learning library with AI-avatar role-play practice, projects & evaluations, personality and ambitions profile with an assistant, a counsellor team view, and admin screens for the learning library and curriculum mapping by audience (business line, industry, technology, ambition, profile) with a curriculum copilot.
 
 Built with React, Vite and TypeScript from a Claude Design prototype.
 

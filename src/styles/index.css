@@ -8,6 +8,7 @@ body{margin:0;background:#f3f5f0;color:#1a1d18;font-family:'IBM Plex Sans',syste
 a{color:#4c7a10;text-decoration:none}a:hover{text-decoration:underline}
 *{box-sizing:border-box}
 @keyframes pmPop{from{transform:scale(0)}}
+@keyframes pmSpin{to{transform:rotate(360deg)}}
 @keyframes pmBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 @keyframes pmSwell{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
 @keyframes pmGrow{from{transform:scale(.15);opacity:0}}

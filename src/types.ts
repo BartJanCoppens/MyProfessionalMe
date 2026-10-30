@@ -23,6 +23,18 @@ export type Test = {
 export type Ambition = { id: string; text: string; horizon: string; doms: string[]; ids?: string[]; from: string };
 export type Interest = { label: string; dom: string; ids?: string[] };
 
+export type AvatarSpec = {
+  persona: string; role: string; initials: string; brief: string; skills: string[]; target: number;
+  // [date, score per skill (0..5), coach note]
+  attempts: [string, number[], string][];
+};
+
+// A change to one audience's mappings, from a signal, the copilot or a drag.
+export type Op = { op: 'add' | 'remove' | 'setOb'; aud: string; lid: string; stage?: string; ob?: string };
+export type Signal = { id: string; kind: string; st: string; op: Op; evidence: string; quote: string };
+export type Persona = [string, string, string, string, Record<string, string | null>];
+export type Read = { text: string; fix: string };
+
 export type CloudKey = 'proj' | 'pers' | 'amb';
 export type CloudMeta = {
   label: string; long: string; laneLabel: string; laneSub: string; color: string; text: string; wash: string;
@@ -50,4 +62,8 @@ export type AppState = {
   projSel: string; clouds: Record<CloudKey, boolean>; share: Record<string, string>;
   ambitions: Ambition[]; interests: Interest[]; chatInput: string; chatBusy: boolean; proposal: Proposal | null;
   avatar: AvatarState; chat: ChatMsg[];
+  // curriculum mapping: lens, selected audience and stage, signals handled, learner's-eye persona, copilot
+  mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>;
+  persona: string; reads: Record<string, Read>; readBusy: boolean;
+  cpInput: string; cpBusy: boolean; cpReply: string; cpOpsP: Op[] | null;
 };

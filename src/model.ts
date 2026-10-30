@@ -2,14 +2,15 @@
 // everything the screens render from AppState, and the action methods patch state the same way the prototype did.
 import type { ChangeEvent, DragEvent, KeyboardEvent, RefObject } from 'react';
 import {
-  AMB0, AV_SWATCHES, BLS, CLOUD_META, CUR, DOMAINS, FILL, HEAT, IMPORT_RESULTS, INT0, KEYWORDS, LEARN, LEVELS, MAPS0, MY_STAGE, OB_LABEL, OB_TONE,
-  OUTCOMES, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, STAGES, STATE_LABEL, TARGET, TEAM, TESTS,
+  AMB0, AUD_INFO, AUD_MAPS0, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, CUR, DOMAINS, FILL, HEAT, IMPORT_RESULTS, INT0, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
+  MY_STAGE, OB_LABEL, OB_TONE, OUTCOMES, PERSONAS, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TEAM, TESTS,
 } from './data';
 import type { Config } from './config';
-import type { AppState, AvatarState, ChatMsg, CloudKey, Learn, Proposal, Screen } from './types';
+import type { AppState, AvatarState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
 
 const AVATAR_KEY = 'mpm-avatar';
 const opt = (v: string, l: string) => ({ value: v, label: l });
+const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!;
 
 type Evidence = { id: string; text: string; src: string };
 type ChatReply = { reply: string; interests?: { label: string; domain: string }[]; ambition?: Proposal['ambition'] };
@@ -19,10 +20,11 @@ export function initState(cfg: Config): AppState {
   try { avatar = Object.assign(avatar, JSON.parse(localStorage.getItem(AVATAR_KEY) || '{}')); } catch { /* keep default */ }
   return {
     screen: cfg.startScreen, view: cfg.homeView, sel: null, detailId: null, origin: 'library',
-    chosen: ['L9', 'L14', 'L26'], states: {}, pcts: {},
+    chosen: ['L9', 'L14', 'L26', 'L38', 'L41'], states: {}, pcts: {},
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
-    blState: null, maps: JSON.parse(JSON.stringify(MAPS0)), pending: {}, mapSel: null, overStage: null,
+    blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, persona: 'lena', reads: {}, readBusy: false, cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
     projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: { T1: 'thomas', T2: 'me', T3: 'thomas' },
     ambitions: AMB0.slice(), interests: INT0.slice(), chatInput: '', chatBusy: false, proposal: null,
@@ -84,7 +86,8 @@ export class Logic {
     const hasDue = ob === 'mandatory' && !!due; const dueSoon = due === '30 Nov 2026';
     const hoursLabel = (hours % 1 ? hours.toFixed(1) : hours) + ' h';
     return {
-      id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel, cpd, state, pct,
+      id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
+      isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
       stateLabel: state === 'in-progress' ? 'In progress · ' + pct + '%' : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
       dueLabel: hasDue ? 'Due ' + due : (m && m.si <= MY_STAGE + 1 ? 'By ' + m.stage + ' stage' : ''), dueColor: hasDue ? (dueSoon ? '#9a3d0c' : '#7a5000') : '#8b918a',
@@ -130,7 +133,7 @@ export class Logic {
     const cs = sel && sel.type === 'cloud' ? clouds.find((x) => x.key === sel.id) : null;
     const edges: { x1: number; y1: number; x2: number; y2: number; stroke: string; w: number; op: number }[] = [];
     const hubs: { delay: string; id: string; x: number; y: number; xP: string; yP: string; lxP: string; lyP: string; tf: string; ta: 'left' | 'right' | 'center'; label: string; cur: string; lvl: string; stroke: string; sw: number; op: number; onClick: () => void }[] = [];
-    const nodes: { delay: string; id: string; x: number; y: number; r: number; ring: number; ringOp: number; fill: string; stroke: string; sw: number; dash: string; op: number; title: string; onClick: () => void }[] = [];
+    const nodes: { delay: string; isAvatar: boolean; orbX: number; orbO: string; orbD: string; id: string; x: number; y: number; r: number; ring: number; ringOp: number; fill: string; stroke: string; sw: number; dash: string; op: number; title: string; onClick: () => void }[] = [];
     DOMAINS.forEach((d, i) => {
       const p = this.polar(cx, cy, rx, ry, i, 9);
       const list = items.filter((it) => it.dom === d[0]);
@@ -146,7 +149,7 @@ export class Logic {
         edges.push({ x1: p.x, y1: p.y, x2: x, y2: y, stroke: isSel ? '#4c7a10' : '#c8cdc3', w: isSel ? 2 : 1, op: rel ? 1 : 0.15 });
         const r = 4.5 + it.lvl * 1.4;
         nodes.push({
-          delay: (i * 70 + 180 + j * 30) + 'ms', id: it.id, x, y, r, ring: r + 3, ringOp: isSel ? 1 : 0, fill: FILL[it.state],
+          delay: (i * 70 + 180 + j * 30) + 'ms', isAvatar: it.isAvatar, orbX: x + r + 4.5, orbO: x + 'px ' + y + 'px', orbD: (-(i + j) * 0.7) + 's', id: it.id, x, y, r, ring: r + 3, ringOp: isSel ? 1 : 0, fill: FILL[it.state],
           stroke: it.ob === 'mandatory' ? '#1a1d18' : it.ob === 'advised' ? '#1a1d18' : it.ob === 'chosen' ? '#4c7a10' : '#b3b8ae',
           sw: it.ob === 'mandatory' ? 2 : it.ob === 'advised' ? 1.3 : 1, dash: it.ob === 'advised' ? '3 2' : 'none',
           op: rel ? 1 : 0.3, title: it.title + ' · ' + it.meta, onClick: () => this.setState({ sel: { type: 'node', id: it.id, dom: d[0] } }),
@@ -193,14 +196,14 @@ export class Logic {
   }
   road(items: Item[], clouds: Cloud[]) {
     const DUE_Q: Record<string, number> = { '30 Nov 2026': 0, 'Jan 2027': 1, 'Mar 2027': 1, 'Jun 2027': 2 };
-    type RoadItem = { id: string; title: string; sub: string; ringCss: string; onClick: () => void; delay?: string };
+    type RoadItem = { id: string; av: boolean; avInit: string; title: string; sub: string; ringCss: string; onClick: () => void; delay?: string };
     const cols = ['Q4 2026', 'Q1 2027', 'Q2 2027', 'Q3 2027'].map((label) => ({ label, items: [] as RoadItem[], count: '' }));
     const upcoming = items.filter((it) => it.state !== 'accepted' && it.state !== 'submitted' && it.state !== 'in-progress' && (it.ob === 'mandatory' || it.ob === 'advised'))
       .sort((a, b) => (a.ob === 'mandatory' ? 0 : 1) - (b.ob === 'mandatory' ? 0 : 1));
     let free = 0;
     upcoming.forEach((it) => {
       const q = it.hasDue ? DUE_Q[it.due] : (free++ % 4);
-      cols[q].items.push({ id: it.id, title: it.title, sub: (it.hasDue ? 'Due ' + it.due : 'Advised · ' + it.stage) + ' · ' + it.hoursLabel, ringCss: it.ob === 'mandatory' ? '2px solid #1a1d18' : '1.5px dashed #1a1d18', onClick: it.open });
+      cols[q].items.push({ id: it.id, av: it.isAvatar, avInit: it.avInit, title: it.title, sub: (it.hasDue ? 'Due ' + it.due : 'Advised · ' + it.stage) + ' · ' + it.hoursLabel, ringCss: it.ob === 'mandatory' ? '2px solid #1a1d18' : '1.5px dashed #1a1d18', onClick: it.open });
     });
     cols.forEach((c) => { c.count = c.items.length ? c.items.length + (c.items.length === 1 ? ' item' : ' items') : 'nothing due'; });
     const firmIds = upcoming.map((it) => it.id), byId: Record<string, Item> = {}; items.forEach((it) => { byId[it.id] = it; });
@@ -214,7 +217,7 @@ export class Logic {
         .sort((a, b) => Number(b.state === 'in-progress') - Number(a.state === 'in-progress') || a.lvl - b.lvl);
       list.forEach((it, k) => {
         const q = it.state === 'in-progress' ? 0 : it.hasDue ? DUE_Q[it.due] : Math.min(3, Math.floor(k * 4 / list.length));
-        cells[q].items.push({ id: it.id, title: it.title, sub: (it.state === 'in-progress' ? it.stateLabel : it.obLabel) + ' · ' + it.hoursLabel + (firmIds.includes(it.id) ? ' · also on firm path' : ''), ringCss: '1.5px dashed ' + x.color, onClick: it.open });
+        cells[q].items.push({ id: it.id, av: it.isAvatar, avInit: it.avInit, title: it.title, sub: (it.state === 'in-progress' ? it.stateLabel : it.obLabel) + ' · ' + it.hoursLabel + (firmIds.includes(it.id) ? ' · also on firm path' : ''), ringCss: '1.5px dashed ' + x.color, onClick: it.open });
       });
       lanes.push({ key: x.key, label: x.laneLabel, sub: list.length + ' learnings · ' + Math.round(list.reduce((a, it) => a + it.hours, 0)) + ' h · ' + x.laneSub, color: x.color, cells, select: () => this.setState({ sel: { type: 'cloud', id: x.key } }) });
     });
@@ -274,6 +277,16 @@ export class Logic {
       canAsk: d0.state === 'in-progress',
       approvalNote: d0.ob === 'mandatory' ? 'Mandatory items complete only after Thomas accepts your evidence.' : d0.ob === 'open' ? 'Open items need no approval. Adding one tells Thomas what you are curious about.' : 'Completion is logged automatically by ' + d0.source + ' where connected.',
       paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
+      av: AVATARS[d0.id] ? (() => {
+        const AV = AVATARS[d0.id]; const best = AV.skills.map((_sk, k) => Math.max(0, ...AV.attempts.map((a) => a[1][k])));
+        return {
+          persona: AV.persona, role: AV.role, initials: AV.initials, brief: AV.brief, sub: AV.attempts.length ? AV.attempts.length + ' of 3 runs used · best run counts' : 'No runs yet · 3 runs available',
+          skills: AV.skills.map((sk, k) => ({ name: sk, w: (best[k] / 5 * 100) + '%', val: best[k] ? best[k] + ' / 5' : '—', color: best[k] >= AV.target ? '#86BC25' : '#e0a100', tgt: (AV.target / 5 * 100) + '%' })),
+          hasRuns: AV.attempts.length > 0, runs: AV.attempts.slice().reverse().map((a) => ({ date: a[0], scores: AV.skills.map((sk, k) => sk + ' ' + a[1][k]).join(' · '), note: a[2] })),
+          start: () => this.say('Prototype: opens the avatar studio · voice or text, about 10 minutes · the run stays private until you share it'),
+          share: () => this.say('Best run shared with Thomas De Smet · he sees scores and the transcript, not the recording'),
+        };
+      })() : null,
     };
     if (d0.ob === 'open' && det.hasSugg) det.why = det.sugg[0].text + ' Suggested by ' + det.sugg[0].src + '. Not on a ' + bl + ' path at your stage; it counts toward your hours and levels once added.';
 
@@ -299,44 +312,8 @@ export class Logic {
       });
     const programs = PROGRAMS.map((p) => ({ name: p[0], sync: p[1], dot: p[2], count: LEARN.filter((l) => PROGRAM_OF[l[5]] === p[0]).length }));
 
-    // admin mapping
-    const map = s.maps[bl]; const mappedIds = map.map((m) => m[0]);
-    const mkDrag = (lid: string) => (e: DragEvent) => { this.refs.drag.current = lid; try { e.dataTransfer.setData('text/plain', lid); e.dataTransfer.effectAllowed = 'move'; } catch { /* ignore */ } };
-    const palette = items.filter((it) => !mappedIds.includes(it.id)).map((it) => ({ id: it.id, title: it.title, sub: it.domLabel + ' · L' + it.lvl + ' · ' + it.hoursLabel, onDragStart: mkDrag(it.id) }));
-    const headcount: Record<string, number> = { Analyst: 96, Consultant: 128, 'Senior consultant': 142, Manager: 88, 'Senior manager': 54 };
-    const stageCols = STAGES.map((st) => {
-      const list = map.filter((m) => m[1] === st); const mand = list.filter((m) => m[2] === 'mandatory').length; const hrs = list.reduce((a, m) => a + byId[m[0]].hours, 0);
-      const over = s.overStage === st;
-      return {
-        name: st, summary: list.length + ' learnings · ' + mand + ' mandatory · ' + Math.round(hrs) + ' h', bg: over ? '#fbfdf6' : '#fff', bd: over ? '#86BC25' : '#e1e5dc', bdStyle: over ? 'dashed' : 'solid',
-        items: list.map((m) => {
-          const it = byId[m[0]]; const isSel = s.mapSel === m[0]; const dim = !!s.mapSel && !isSel && byId[s.mapSel].dom !== it.dom;
-          return {
-            id: it.id, title: it.title, sub: it.domLabel + ' · L' + it.lvl + ' · ' + it.hoursLabel, isMand: m[2] === 'mandatory', pending: !!s.pending[m[0]], bg: m[2] === 'mandatory' ? '#f7f7f5' : '#fff',
-            border: (isSel ? '2px solid #1a1d18' : '1px solid #c8cdc3'), shadow: isSel ? '0 0 0 3px rgba(134,188,37,.45)' : 'none', op: dim ? 0.45 : 1, onDragStart: mkDrag(it.id),
-            onClick: () => this.setState({ mapSel: isSel ? null : m[0] }),
-          };
-        }),
-        onDragOver: (e: DragEvent) => { e.preventDefault(); if (s.overStage !== st) this.setState({ overStage: st }); },
-        onDragLeave: () => { if (s.overStage === st) this.setState({ overStage: null }); },
-        onDrop: (e: DragEvent) => { e.preventDefault(); const lid = this.refs.drag.current || e.dataTransfer.getData('text/plain'); if (!lid) return; this.dropOn(lid, st); },
-      };
-    });
-    const msM = s.mapSel ? map.find((m) => m[0] === s.mapSel) : null; const msIt = msM ? byId[msM[0]] : null;
-    const ms = msM && msIt ? {
-      title: msIt.title, sub: bl + ' · ' + msM[1] + ' stage · ' + msIt.domLabel + ' · ' + msIt.lvlLabel + ' · ' + msIt.hoursLabel, ob: msM[2],
-      setOb: (v: string) => this.setMapping(msM[0], msM[1], v),
-      touch: 'Touches ' + headcount[msM[1]] + ' people at ' + msM[1] + ' in ' + bl + (msM[2] === 'mandatory' ? ', plus everyone above who has not completed it yet.' : '. Advised items appear dashed on their maps; nobody is chased.'),
-      ns: Math.round(headcount[msM[1]] * 0.27) + ' not started', ip: Math.round(headcount[msM[1]] * 0.43) + ' in flight', dn: Math.round(headcount[msM[1]] * 0.30) + ' done',
-      rulePlain: 'Business line is ' + bl + ' and stage is ' + msM[1] + (msM[2] === 'mandatory' ? ' → mandatory before the next promotion review' : ' → advised, no deadline'),
-      ruleExpr: 'bl == "' + bl + '" && stage >= "' + msM[1] + '" → ' + msM[2] + '(' + msM[0] + ')',
-      remove: () => {
-        const maps = Object.assign({}, s.maps); maps[bl] = map.filter((m) => m[0] !== msM[0]); const pending = Object.assign({}, s.pending); pending[msM[0]] = true;
-        this.setState({ maps, pending, mapSel: null }); this.say('Removed from the ' + msM[1] + ' path · publish to apply');
-      },
-      openLib: () => this.openDetail(msM[0], 'adminMap'),
-    } : null;
     const pendingN = Object.keys(s.pending).length;
+    const cur = this.curriculum(items, byId);
 
     const sel = s.sel;
     const csel = sel && sel.type === 'cloud' ? clouds.find((x) => x.key === sel.id) || null : null;
@@ -445,11 +422,9 @@ export class Logic {
       domainOptions: DOMAINS.map((d) => opt(d[0], d[1])), levelOnlyOptions: LEVELS.map((l, i) => opt(String(i + 1), 'L' + (i + 1) + ' · ' + l)), formatOnlyOptions: formats.map((f) => opt(f, f)),
       saveDraft: () => { this.setState({ drawerOpen: false }); this.say('Saved as draft · visible to admins only'); },
       // admin mapping
-      blOptions: BLS.map((b) => opt(b, b)), setBl: (v: string) => this.setState({ blState: v, mapSel: null }),
       publish: () => { this.setState({ pending: {} }); this.say('Published · ' + pendingN + ' change' + (pendingN > 1 ? 's' : '') + ' now live on every ' + bl + ' map'); },
-      paletteCount: palette.length, palette, paletteOver: (e: DragEvent) => e.preventDefault(),
-      paletteDrop: (e: DragEvent) => { e.preventDefault(); const lid = this.refs.drag.current || e.dataTransfer.getData('text/plain'); if (lid) this.unmap(lid); },
-      stageCols, ms, obSetOptions: [opt('mandatory', 'Mandatory'), opt('advised', 'Advised')], clearMapSel: () => this.setState({ mapSel: null }),
+      obSetOptions: [opt('mandatory', 'Mandatory'), opt('advised', 'Advised')],
+      ...cur,
       toast: s.toast,
       motionAttr: this.props.motion === false ? 'off' : 'on',
       // avatar
@@ -466,20 +441,6 @@ export class Logic {
     const states = Object.assign({}, this.state.states), pcts = Object.assign({}, this.state.pcts); const np = Math.min(100, Math.round(it.pct + 100 / it.hours));
     pcts[it.id] = np; states[it.id] = np >= 100 ? 'submitted' : 'in-progress'; this.setState({ states, pcts });
     this.say(np >= 100 ? 'All hours logged · sent to Thomas for acceptance' : '1 hour logged · ' + np + '% of ' + it.hoursLabel);
-  }
-  setMapping(lid: string, stage: string, ob: string) {
-    const bl = this.bl(); const maps = Object.assign({}, this.state.maps); maps[bl] = maps[bl].filter((m) => m[0] !== lid).concat([[lid, stage, ob]]);
-    const pending = Object.assign({}, this.state.pending); pending[lid] = true; this.setState({ maps, pending, overStage: null });
-  }
-  dropOn(lid: string, stage: string) {
-    const cur = this.mapping(lid); if (cur && cur.stage === stage) { this.setState({ overStage: null }); return; }
-    this.setMapping(lid, stage, cur ? cur.ob : 'advised'); this.refs.drag.current = null;
-    this.say((cur ? 'Moved' : 'Added') + ' to the ' + stage + ' path in ' + this.bl() + ' as ' + (cur ? cur.ob : 'advised') + ' · publish to apply');
-  }
-  unmap(lid: string) {
-    const cur = this.mapping(lid); if (!cur) return; const bl = this.bl(); const maps = Object.assign({}, this.state.maps); maps[bl] = maps[bl].filter((m) => m[0] !== lid);
-    const pending = Object.assign({}, this.state.pending); pending[lid] = true; this.setState({ maps, pending, overStage: null, mapSel: null }); this.refs.drag.current = null;
-    this.say('Removed from the ' + cur.stage + ' path · publish to apply');
   }
   sysPrompt() {
     const s = this.state;
@@ -524,8 +485,208 @@ export class Logic {
     this.setState({ ambitions, interests, proposal: null, clouds: Object.assign({}, this.state.clouds, { amb: true }) });
     this.say('Saved to your profile · the ambitions cloud on your growth map now reflects it');
   }
+
+  // ---------- curriculum mapping (audiences per lens) ----------
+
+  applyOps(ops: Op[], msg?: string) {
+    const maps = Object.assign({}, this.state.maps), pending = Object.assign({}, this.state.pending);
+    ops.forEach((o) => {
+      const cur = maps[o.aud] || []; const ex = cur.find((m) => m[0] === o.lid); let arr = cur.filter((m) => m[0] !== o.lid);
+      const canMand = lensOf(o.aud)[3];
+      if (o.op === 'add') arr = arr.concat([[o.lid, o.stage!, canMand ? (o.ob || 'advised') : 'advised']]);
+      if (o.op === 'setOb') arr = arr.concat([[o.lid, ex ? ex[1] : o.stage!, canMand ? o.ob! : 'advised']]);
+      maps[o.aud] = arr; pending[o.aud + '|' + o.lid] = true;
+    });
+    this.setState({ maps, pending }); if (msg) this.say(msg);
+  }
+  sigValid(g: Signal) { const cur = (this.state.maps[g.op.aud] || []).find((m) => m[0] === g.op.lid); return g.op.op === 'add' ? !cur : g.op.op === 'remove' ? !!cur : !!(cur && cur[2] !== g.op.ob); }
+  reachAt(k: string, st?: string) { return Math.round(AUD_INFO[k].reach * STAGE_FR[Math.max(0, STAGES.indexOf(st || ''))]); }
+  // Everything one person receives at their stage, stacked across the audiences they belong to. Duplicates count once.
+  stack(p: Persona) {
+    const s = this.state, st = p[3], seen: Record<string, string[]> = {};
+    const layers: { lens: string; color: string; key: string; aud: string; n: number; h: number; titles: string[] }[] = [];
+    let tot = 0, mand = 0;
+    LENSES.forEach((L) => {
+      const key = L[0] === 'bl' ? (p[4].bl || this.bl()) : p[4][L[0]]!; const list = (s.maps[key] || []).filter((m) => m[1] === st); let h = 0, n = 0; const titles: string[] = [];
+      list.forEach((m) => {
+        const it = LEARN_BY[m[0]]; if (!it) return; if (seen[m[0]]) { seen[m[0]].push(AUD_INFO[key].name); return; }
+        seen[m[0]] = [AUD_INFO[key].name]; h += it[6]; n++; titles.push(it[1] + (L[3] && m[2] === 'mandatory' ? ' (mandatory)' : '')); if (L[3] && m[2] === 'mandatory') mand += it[6];
+      });
+      tot += h; layers.push({ lens: L[1], color: L[2], key, aud: AUD_INFO[key].name, n, h, titles });
+    });
+    const dups = Object.keys(seen).filter((k) => seen[k].length > 1).map((k) => ({ lid: k, title: LEARN_BY[k][1], via: seen[k] }));
+    return { layers, tot, mand, dups };
+  }
+  scriptedRead(P: Persona, st: Stack): Read {
+    if (st.mand > 40) return { text: 'This is more mandatory learning than my year allows: ' + Math.round(st.mand) + ' hours before I choose anything myself. I would rush the mandatory items and quietly skip the rest.', fix: 'Make one mandatory item in the industry layer advised, or move it to the next stage.' };
+    if (st.dups.length) return { text: 'Most of this fits where I am, but ' + st.dups[0].title + ' turns up twice and makes the plan look heavier than it is. I would wonder whether anyone looked at it as a whole.', fix: 'Remove ' + st.dups[0].title + ' from ' + st.dups[0].via[1] + '; ' + st.dups[0].via[0] + ' already covers it.' };
+    const empty = st.layers.find((l) => !l.n);
+    if (st.tot < 20) return { text: 'There is very little here for me yet. It reads like a starter list rather than a path toward anything I said I wanted.', fix: empty ? 'Map at least one learning to ' + empty.aud + ' at ' + P[3] + '.' : 'Add one stretch item at ' + P[3] + '.' };
+    return { text: 'This looks like a plan I can finish. The business-line items set the floor and the rest follows what I asked for' + (empty ? ', although nothing reflects my ' + empty.lens.toLowerCase() + ' yet.' : '.'), fix: empty ? 'Map one learning to ' + empty.aud + ' at ' + P[3] + '.' : 'No change needed; check again after the next evaluation round.' };
+  }
+  async readAs(P: Persona, st: Stack) {
+    if (this.state.readBusy) return; this.setState({ readBusy: true });
+    let res: Read | null = null;
+    if (this.props.liveAssistant !== false && window.claude?.complete) {
+      try {
+        const lines = st.layers.map((l) => l.lens + ' (' + l.aud + '): ' + (l.titles.length ? l.titles.join(', ') : 'nothing')).join('\n');
+        const raw = await window.claude.complete({ messages: [{ role: 'user', content: 'You are ' + P[2] + ', ' + P[3] + ' at a consulting, advisory, tax and legal firm. This is the learning your firm has lined up for you this year, stacked from every audience you belong to:\n' + lines + '\nTotal ' + Math.round(st.tot) + ' h of an 80 h budget; mandatory ' + Math.round(st.mand) + ' h of a 40 h budget. Arrives twice: ' + (st.dups.map((d) => d.title).join(', ') || 'none') + '.\nReply ONLY with JSON {"text": your honest first-person reaction, 2 sentences, at most 45 words, plain, no emoji, no exclamation marks, "fix": one concrete change for the curriculum team, at most 25 words, naming the audience and the learning}.' }], max_tokens: 300 });
+        const m = String(raw).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
+      } catch { res = null; }
+    }
+    if (!res || !res.text) res = this.scriptedRead(P, st);
+    const read = res;
+    // functional update: this.state is stale after the await
+    this.setState((s) => ({ readBusy: false, reads: { ...s.reads, [P[0]]: read } }));
+  }
+  validOps(ops?: Op[]) {
+    return (ops || []).filter((o) => o && AUD_INFO[o.aud] && LEARN_BY[o.lid] && ['add', 'remove', 'setOb'].includes(o.op) && (o.op === 'remove' || STAGES.includes(o.stage || '') || o.op === 'setOb'))
+      .map((o) => ({ ...o, ob: o.ob === 'mandatory' && lensOf(o.aud)[3] ? 'mandatory' : 'advised' })).slice(0, 5);
+  }
+  scriptedCp(text: string): { reply: string; ops: Op[] } {
+    const t = text.toLowerCase(), maps = this.state.maps, has = (k: string, id: string) => (maps[k] || []).some((m) => m[0] === id);
+    if (/twice|overlap|duplic|double/.test(t)) {
+      const hits: string[] = [];
+      STAGES.forEach((st) => LEARN.forEach((r) => { const ks = Object.keys(maps).filter((k) => AUD_INFO[k] && (maps[k] || []).some((m) => m[0] === r[0] && m[1] === st)); if (ks.length > 1) hits.push(r[1] + ' at ' + st + ' (' + ks.map((k) => AUD_INFO[k].name).join(', ') + ')'); }));
+      return { reply: hits.length ? 'These arrive twice for anyone in both audiences: ' + hits.slice(0, 3).join('; ') + '. Business-line mappings already reach everyone, so the narrower copy can usually go.' : 'Nothing arrives twice at the same stage right now.', ops: has('ind:whole', 'L2') ? [{ op: 'remove', aud: 'ind:whole', lid: 'L2' }] : [] };
+    }
+    if (/business dev|bizdev|sell/.test(t)) return { reply: 'A starter path for people who want to win work: scope negotiation and workshop facilitation at Senior consultant, data storytelling one stage earlier. All suggested, since ambitions never create obligations.', ops: ([{ op: 'add', aud: 'amb:bizdev', lid: 'L32', stage: 'Senior consultant' }, { op: 'add', aud: 'amb:bizdev', lid: 'L33', stage: 'Senior consultant' }, { op: 'add', aud: 'amb:bizdev', lid: 'L37', stage: 'Consultant' }] as Op[]).filter((o) => !has('amb:bizdev', o.lid)) };
+    if (/energy/.test(t)) return { reply: 'Energy & utilities seniors have sector strategy and the regulation item, but nothing on negotiation, while 23 of 41 evaluations mention procurement reopening scope. I would add scope negotiation as advised.', ops: has('ind:energy', 'L32') ? [] : [{ op: 'add', aud: 'ind:energy', lid: 'L32', stage: 'Senior consultant', ob: 'advised' }] };
+    if (/public|lighter|light/.test(t)) return { reply: 'Public sector has no mappings yet, so analysts there only receive the business-line path. A light start is one advised item on reading annual accounts; nothing mandatory.', ops: has('ind:public', 'L31') ? [] : [{ op: 'add', aud: 'ind:public', lid: 'L31', stage: 'Analyst', ob: 'advised' }] };
+    return { reply: 'I can add, remove or re-weight learnings for any audience. Name the audience and the stage, for example “Energy & utilities seniors” or “people with a people-leader ambition”.', ops: [] };
+  }
+  async askCp(raw: string) {
+    const text = (raw || '').trim(); if (!text || this.state.cpBusy) return;
+    this.setState({ cpBusy: true, cpInput: '', cpReply: '', cpOpsP: null });
+    let res: { reply: string; ops?: Op[] } | null = null;
+    if (this.props.liveAssistant !== false && window.claude?.complete) {
+      try {
+        const s = this.state;
+        const sys = 'You are the curriculum copilot of a consulting, advisory, tax and legal firm. Learnings are mapped to audiences at career stages. Audiences (key = name): ' + Object.keys(AUD_INFO).map((k) => k + ' = ' + AUD_INFO[k].name + ' (' + lensOf(k)[1] + ', ' + AUD_INFO[k].reach + ' people)').join('; ') + '. Stages: ' + STAGES.join(', ') + '. Ambition and Profile audiences can only be advised, never mandatory.\nLearnings: ' + LEARN.map((r) => r[0] + ' ' + r[1] + ' (' + r[2] + ', L' + r[3] + ', ' + r[6] + ' h)').join('; ') + '.\nCurrent mappings: ' + Object.keys(s.maps).filter((k) => AUD_INFO[k] && s.maps[k].length).map((k) => k + ': ' + s.maps[k].map((m) => m[0] + '@' + m[1] + '/' + m[2]).join(' ')).join(' | ') + '.\nYearly budget: 80 h total, 40 h mandatory.\nReply ONLY with JSON {"reply": string, at most 60 words, plain matter-of-fact English, no emoji, "ops": [{"op": "add"|"remove"|"setOb", "aud": key, "lid": id, "stage": stage, "ob": "mandatory"|"advised"}]}. Propose at most 4 ops and only when the request asks for a change.';
+        const out = await window.claude.complete({ system: sys, messages: [{ role: 'user', content: text }], max_tokens: 700 });
+        const m = String(out).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
+      } catch { res = null; }
+    }
+    if (!res || !res.reply) res = this.scriptedCp(text);
+    this.setState({ cpBusy: false, cpReply: res.reply, cpOpsP: this.validOps(res.ops) });
+  }
+  curriculum(items: Item[], byId: Record<string, Item>) {
+    const s = this.state, lens = s.mapLens, L = LENSES.find((l) => l[0] === lens)!, auds = AUDS[lens];
+    const audKey = s.mapAud && AUD_INFO[s.mapAud] && AUD_INFO[s.mapAud].lens === lens ? s.mapAud : (lens === 'bl' ? this.bl() : auds[0][0]);
+    const ai = AUD_INFO[audKey], canMand = L[3], map = s.maps[audKey] || [], mappedIds = map.map((m) => m[0]);
+    const sigOpen = SIGNALS.filter((g) => !s.sigDone[g.id] && this.sigValid(g));
+    const pick = (k: string, st?: string) => () => this.setState({ mapAud: k, mapStage: st || null, mapSel: null });
+    const covRows = auds.map((a) => {
+      const sig = sigOpen.filter((g) => g.op.aud === a[0]).length;
+      return {
+        key: a[0], name: a[1], reach: a[2] + ' people', rowBg: a[0] === audKey ? '#f3f5f0' : 'transparent', hasSig: sig > 0, sig: String(sig), pick: pick(a[0]),
+        cells: STAGES.map((st) => {
+          const list = (s.maps[a[0]] || []).filter((m) => m[1] === st); const h = list.reduce((x, m) => x + byId[m[0]].hours, 0); const nm = canMand ? list.filter((m) => m[2] === 'mandatory').length : 0;
+          const on = a[0] === audKey && s.mapStage === st; const k = Math.min(list.length, 4);
+          return {
+            stage: st, label: list.length ? String(list.length) : '—', sub: list.length ? Math.round(h) + ' h' : '', bg: list.length ? 'rgba(134,188,37,' + (0.14 + k * 0.14).toFixed(2) + ')' : '#fafbf8',
+            fg: list.length ? '#10180a' : '#b3b8ae', bd: on ? '#1a1d18' : '#eef0ea', ring: on ? '0 0 0 3px rgba(134,188,37,.45)' : 'none',
+            tip: a[1] + ' · ' + st + ' · ' + list.length + ' learnings' + (nm ? ' · ' + nm + ' mandatory' : '') + ' · ' + this.reachAt(a[0], st) + ' people', pick: pick(a[0], st),
+          };
+        }),
+      };
+    });
+    const mkDrag = (lid: string) => (e: DragEvent) => { this.refs.drag.current = lid; try { e.dataTransfer.setData('text/plain', lid); e.dataTransfer.effectAllowed = 'move'; } catch { /* ignore */ } };
+    const palette = items.filter((it) => !mappedIds.includes(it.id)).map((it) => ({ id: it.id, title: it.title, sub: it.domLabel + ' · L' + it.lvl + ' · ' + it.hoursLabel, onDragStart: mkDrag(it.id) }));
+    const dropA = (lid: string, st: string) => {
+      const c = map.find((m) => m[0] === lid); this.refs.drag.current = null;
+      if (c && c[1] === st) { this.setState({ overStage: null }); return; }
+      this.applyOps([{ op: 'add', aud: audKey, lid, stage: st, ob: c ? c[2] : 'advised' }], 'Mapped to ' + ai.name + ' · ' + st + ' · publish to apply'); this.setState({ overStage: null });
+    };
+    const otherAuds = (lid: string) => Object.keys(s.maps).filter((k) => AUD_INFO[k] && k !== audKey && s.maps[k].some((x) => x[0] === lid));
+    const stageCols = STAGES.map((st) => {
+      const list = map.filter((m) => m[1] === st); const mand = list.filter((m) => m[2] === 'mandatory').length; const hrs = list.reduce((a, m) => a + byId[m[0]].hours, 0); const over = s.overStage === st;
+      return {
+        name: st, summary: list.length + ' learnings' + (canMand ? ' · ' + mand + ' mandatory' : '') + ' · ' + Math.round(hrs) + ' h · ' + this.reachAt(audKey, st) + ' people',
+        bg: over ? '#fbfdf6' : '#fff', bd: over ? '#86BC25' : '#e1e5dc', bdStyle: over ? 'dashed' : 'solid', ring: s.mapStage === st ? '0 0 0 3px rgba(134,188,37,.45)' : 'none',
+        items: list.map((m) => {
+          const it = byId[m[0]]; const isSel = s.mapSel === m[0]; const dim = !!s.mapSel && !isSel && !!byId[s.mapSel] && byId[s.mapSel].dom !== it.dom; const also = otherAuds(m[0]).length; const isMand = canMand && m[2] === 'mandatory';
+          return {
+            id: it.id, title: it.title, sub: it.domLabel + ' · L' + it.lvl + ' · ' + it.hoursLabel + (also ? ' · +' + also + ' audience' + (also > 1 ? 's' : '') : ''), isMand, pending: !!s.pending[audKey + '|' + m[0]], bg: isMand ? '#f7f7f5' : '#fff',
+            border: isSel ? '2px solid #1a1d18' : canMand ? '1px solid #c8cdc3' : '1px dashed ' + L[2], shadow: isSel ? '0 0 0 3px rgba(134,188,37,.45)' : 'none', op: dim ? 0.45 : 1, onDragStart: mkDrag(it.id),
+            onClick: () => this.setState({ mapSel: isSel ? null : m[0] }),
+          };
+        }),
+        onDragOver: (e: DragEvent) => { e.preventDefault(); if (this.state.overStage !== st) this.setState({ overStage: st }); },
+        onDragLeave: () => { if (this.state.overStage === st) this.setState({ overStage: null }); },
+        onDrop: (e: DragEvent) => { e.preventDefault(); const lid = this.refs.drag.current || e.dataTransfer.getData('text/plain'); if (lid) dropA(lid, st); },
+      };
+    });
+    const msM = s.mapSel ? map.find((m) => m[0] === s.mapSel) : null; const msIt = msM ? byId[msM[0]] : null;
+    const ms = msM && msIt ? {
+      title: msIt.title, sub: L[1] + ' · ' + ai.name + ' · ' + msM[1] + ' · ' + msIt.domLabel + ' · ' + msIt.lvlLabel + ' · ' + msIt.hoursLabel, ob: msM[2], canMand,
+      setOb: (v: string) => this.applyOps([{ op: 'setOb', aud: audKey, lid: msM[0], stage: msM[1], ob: v }], 'Now ' + v + ' for ' + ai.name + ' · publish to apply'),
+      touch: canMand
+        ? 'Reaches ' + this.reachAt(audKey, msM[1]) + ' people at ' + msM[1] + ' in ' + ai.name + '. ' + (msM[2] === 'mandatory' ? 'It joins their mandatory items and counts toward readiness.' : 'Advised items appear dashed on their maps; nobody is chased.')
+        : 'Reaches up to ' + this.reachAt(audKey, msM[1]) + ' people at ' + msM[1] + ' who ' + (lens === 'amb' ? 'saved this ambition' : 'shared this profile') + '. It shows in their ' + (lens === 'amb' ? 'ambitions' : 'personality') + ' cloud as a suggestion and never counts toward readiness.',
+      also: (() => {
+        const r = otherAuds(msM[0]).map((k) => { const m = s.maps[k].find((x) => x[0] === msM[0])!; const Lk = lensOf(k); return { color: Lk[2], text: Lk[1] + ' · ' + AUD_INFO[k].name + ' · ' + m[1] + ' · ' + (Lk[3] ? m[2] : 'suggested') }; });
+        return r.length ? r : [{ color: '#d5dacf', text: 'No other audience' }];
+      })(),
+      rulePlain: L[1] + ' is ' + ai.name + ' and stage is ' + msM[1] + ' → ' + (canMand ? (msM[2] === 'mandatory' ? 'mandatory before the next promotion review' : 'advised, no deadline') : 'suggested in their cloud, never required'),
+      ruleExpr: L[6] + ' == "' + ai.name + '" && stage == "' + msM[1] + '" → ' + (canMand ? msM[2] : 'suggest') + '(' + msM[0] + ')',
+      remove: () => { this.applyOps([{ op: 'remove', aud: audKey, lid: msM[0] }], 'Removed from ' + ai.name + ' · publish to apply'); this.setState({ mapSel: null }); },
+      openLib: () => this.openDetail(msM[0], 'adminMap'),
+    } : null;
+    const lena = this.stack(PERSONAS[0]);
+    const sigCards = sigOpen.map((g, i) => {
+      const it = byId[g.op.lid], an = AUD_INFO[g.op.aud].name, reach = this.reachAt(g.op.aud, g.op.stage);
+      return {
+        id: g.id, kind: g.kind, st: g.st, where: lensOf(g.op.aud)[1] + ' · ' + an + (g.op.stage ? ' · ' + g.op.stage : ''), delay: (i * 60) + 'ms', hasQuote: !!g.quote, quote: g.quote,
+        title: g.op.op === 'add' ? 'Add “' + it.title + '”' : g.op.op === 'remove' ? 'Remove “' + it.title + '”' : 'Make “' + it.title + '” ' + g.op.ob,
+        evidence: g.evidence.replace('{mand}', String(Math.round(lena.mand))),
+        impact: g.op.op === 'remove' ? 'Removes a duplicate for ' + reach + ' people' : g.op.op === 'setOb' ? 'Frees ' + it.hours + ' mandatory h for ' + reach + ' people' : 'Reaches ' + reach + ' people · +' + it.hours + ' h each',
+        apply: () => {
+          this.applyOps([g.op], 'Applied · ' + an + ' · publish to apply');
+          this.setState((st) => ({ sigDone: { ...st.sigDone, [g.id]: true }, mapLens: AUD_INFO[g.op.aud].lens, mapAud: g.op.aud, mapStage: g.op.stage || null, mapSel: null }));
+        },
+        dismiss: () => this.setState((st) => ({ sigDone: { ...st.sigDone, [g.id]: true } })),
+      };
+    });
+    const P = PERSONAS.find((p) => p[0] === s.persona) || PERSONAS[0]; const stk = this.stack(P); const scale = Math.max(80, stk.tot);
+    const pz = {
+      name: P[2], stage: P[3], tags: stk.layers.map((l) => ({ key: l.lens, label: l.aud, color: l.color })),
+      segs: stk.layers.filter((l) => l.h > 0).map((l) => ({ key: l.lens, w: (l.h / scale * 100).toFixed(2) + '%', color: l.color, tip: l.lens + ' · ' + l.aud + ' · ' + Math.round(l.h) + ' h' })),
+      budgetX: 'calc(' + (80 / scale * 100).toFixed(2) + '% - 1px)', totLabel: Math.round(stk.tot) + ' h of 80 h', totFg: stk.tot > 80 ? '#9a2b22' : '#1a1d18',
+      mandLabel: Math.round(stk.mand) + ' h of 40 h budget', mandW: Math.min(100, stk.mand / 40 * 100).toFixed(1) + '%', mandColor: stk.mand > 40 ? '#9a2b22' : '#1a1d18', mandFg: stk.mand > 40 ? '#9a2b22' : '#1a1d18',
+      layers: stk.layers.map((l) => ({ key: l.lens, lens: l.lens, color: l.color, aud: l.aud, meta: l.n ? l.n + ' learning' + (l.n > 1 ? 's' : '') + ' · ' + Math.round(l.h) + ' h' : 'Nothing at ' + P[3] })),
+      hasDup: stk.dups.length > 0, dupText: stk.dups.map((d) => d.title + ' via ' + d.via.join(' and ')).join('; ') + '. Counted once.',
+    };
+    const rd = s.reads[P[0]];
+    const cpOpsP = s.cpOpsP || [];
+    const cpOps = cpOpsP.map((o) => ({
+      verb: o.op === 'add' ? 'Add' : o.op === 'remove' ? 'Remove' : 'Make ' + o.ob,
+      text: '“' + LEARN_BY[o.lid][1] + '” ' + (o.op === 'remove' ? 'from ' : '→ ') + AUD_INFO[o.aud].name + (o.stage && o.op !== 'remove' ? ' · ' + o.stage : '') + (o.op === 'add' ? ' · ' + o.ob : ''),
+    }));
+    return {
+      mapLens: lens, lensOptions: LENSES.map((l) => opt(l[0], l[1])), setLens: (v: string) => this.setState({ mapLens: v, mapAud: null, mapStage: null, mapSel: null }),
+      lensLabel: L[1], lensColor: L[2], lensRule: L[4], lensPolicy: L[5], audName: ai.name, audSummary: map.length + ' learnings · ' + ai.reach + ' people',
+      audChips: auds.map((a) => ({ key: a[0], label: a[1], reach: String(a[2]), on: a[0] === audKey, pick: pick(a[0]) })),
+      stageShort: STG_SHORT, covRows,
+      palette, paletteCount: palette.length, paletteOver: (e: DragEvent) => e.preventDefault(),
+      paletteDrop: (e: DragEvent) => {
+        e.preventDefault(); const lid = this.refs.drag.current || e.dataTransfer.getData('text/plain'); this.refs.drag.current = null;
+        if (lid && mappedIds.includes(lid)) this.applyOps([{ op: 'remove', aud: audKey, lid }], 'Removed from ' + ai.name + ' · publish to apply');
+      },
+      stageCols, ms, clearMapSel: () => this.setState({ mapSel: null }),
+      sigCards, sigCount: String(sigCards.length), noSig: sigCards.length === 0,
+      cpInput: s.cpInput, setCpInput: (e: ChangeEvent<HTMLInputElement>) => this.setState({ cpInput: e.target.value }),
+      cpKey: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') this.askCp(s.cpInput); }, cpSend: () => this.askCp(s.cpInput), cpBusy: s.cpBusy,
+      cpHasReply: !!s.cpReply, cpReply: s.cpReply, cpHasOps: cpOps.length > 0, cpOps,
+      cpApply: () => { const n = cpOpsP.length; this.applyOps(cpOpsP, n + ' change' + (n > 1 ? 's' : '') + ' applied · publish to apply'); this.setState({ cpOpsP: null }); }, cpDrop: () => this.setState({ cpOpsP: null }),
+      cpPrompts: ['What do Energy seniors still miss?', 'Where does a learning arrive twice?', 'Draft a path for the Business developer ambition'].map((l) => ({ label: l, send: () => this.askCp(l) })),
+      personaOptions: PERSONAS.map((p) => opt(p[0], p[2])), personaKey: P[0], setPersona: (v: string) => this.setState({ persona: v }), pz,
+      readAs: () => this.readAs(P, stk), readBusy: s.readBusy, readLabel: s.readBusy ? 'Reading the stack' : 'Read it as ' + P[1], read: rd || null, readHead: 'As ' + P[2] + ' would read it',
+    };
+  }
 }
 
 export type Item = ReturnType<Logic['item']>;
 export type Cloud = ReturnType<Logic['clouds']>[number];
 export type VM = ReturnType<Logic['renderVals']>;
+type Stack = ReturnType<Logic['stack']>;

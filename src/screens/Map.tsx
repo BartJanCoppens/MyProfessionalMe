@@ -59,6 +59,11 @@ function Constellation({ vm }: { vm: VM }) {
             <g key={n.id} opacity={n.op} onClick={n.onClick} style={{ cursor: 'pointer', transition: 'opacity .15s', transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmPop .4s cubic-bezier(.2,.7,.3,1) backwards', animationDelay: n.delay }}>
               <circle cx={n.x} cy={n.y} r={n.ring} fill="none" stroke="rgba(134,188,37,.45)" strokeWidth="3" opacity={n.ringOp} />
               <circle cx={n.x} cy={n.y} r={n.r} fill={n.fill} stroke={n.stroke} strokeWidth={n.sw} strokeDasharray={n.dash} />
+              {n.isAvatar && (
+                <g style={{ transformOrigin: n.orbO, animation: 'pmSpin 7s linear infinite', animationDelay: n.orbD }}>
+                  <circle cx={n.orbX} cy={n.y} r="2.6" fill="#1a1d18" stroke="#fff" strokeWidth="1" />
+                </g>
+              )}
               <title>{n.title}</title>
             </g>
           ))}
@@ -93,7 +98,7 @@ function Constellation({ vm }: { vm: VM }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', padding: '10px 18px', borderTop: '1px solid #eef0ea', fontSize: 12, color: '#5a6058' }}>
-        <span>Ring = obligation: solid ink is mandatory, dashed is advised, thin grey is your own choice. Size = level, L1 to L5. Clouds = where projects, personality and ambitions pull you.</span>
+        <span>Ring = obligation: solid ink is mandatory, dashed is advised, thin grey is your own choice. Size = level, L1 to L5. An orbiting dot marks avatar practice. Clouds = where projects, personality and ambitions pull you.</span>
         <span>Click a dot or a domain. Click the background to reset.</span>
       </div>
     </div>
@@ -178,7 +183,8 @@ function Road({ vm }: { vm: VM }) {
                     <Hover key={ri.id} onClick={ri.onClick} hoverStyle={{ background: '#fafbf8' }}
                       style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer', padding: '8px 10px', border: '1px solid #e1e5dc', borderRadius: 6, animation: 'pmFadeUp .4s ease-out backwards', animationDelay: ri.delay }}>
                       <span style={{ width: 12, height: 12, borderRadius: '50%', flex: 'none', marginTop: 3, border: ri.ringCss, background: '#fff' }} />
-                      <div style={{ minWidth: 0 }}><div style={{ fontWeight: 500, fontSize: 12.5, lineHeight: 1.3, textWrap: 'pretty' }}>{ri.title}</div><div style={{ fontSize: 11, color: '#5a6058' }}>{ri.sub}</div></div>
+                      <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontWeight: 500, fontSize: 12.5, lineHeight: 1.3, textWrap: 'pretty' }}>{ri.title}</div><div style={{ fontSize: 11, color: '#5a6058' }}>{ri.sub}</div></div>
+                      {ri.av && <AvatarBadge initials={ri.avInit} size={22} />}
                     </Hover>
                   ))}
                 </div>
@@ -202,6 +208,18 @@ function Road({ vm }: { vm: VM }) {
         The firm path holds mandatory items in the quarter of their deadline and advised items where Thomas placed them. The other lanes come from your project evaluations, personality profiles and ambitions; an item on two lanes counts once.
       </div>
     </div>
+  );
+}
+
+// An avatar-practice persona: initials on ink with a green "live" dot.
+export function AvatarBadge({ initials, size, ring = '#fff' }: { initials: string; size: number; ring?: string }) {
+  const dot = size >= 24 ? 9 : 8;
+  return (
+    <span title="Avatar practice" style={{ position: 'relative', width: size, height: size, borderRadius: '50%', background: '#1a1d18', color: '#fff', fontSize: size >= 24 ? 10 : 9.5, fontWeight: 600,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+      {initials}
+      <span style={{ position: 'absolute', right: -2, bottom: -2, width: dot, height: dot, borderRadius: '50%', background: '#86BC25', border: '2px solid ' + ring }} />
+    </span>
   );
 }
 

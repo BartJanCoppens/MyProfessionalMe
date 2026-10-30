@@ -10,7 +10,8 @@ import { LibraryScreen, DetailScreen } from './screens/Library';
 import ProjectsScreen from './screens/Projects';
 import ProfileScreen from './screens/Profile';
 import TeamScreen from './screens/Team';
-import { AdminLibraryScreen, AdminMappingScreen, AddLearningDrawer } from './screens/Admin';
+import { AdminLibraryScreen, AddLearningDrawer } from './screens/Admin';
+import AdminMappingScreen from './screens/Mapping';
 
 export default function App() {
   const cfg = useMemo(() => readConfig(), []);

@@ -1,5 +1,6 @@
 import { Avatar, Button, Card, Eyebrow, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
+import { AvatarBadge } from './Map';
 
 export function LibraryScreen({ vm }: { vm: VM }) {
   return (
@@ -25,6 +26,12 @@ export function LibraryScreen({ vm }: { vm: VM }) {
             </div>
             <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.25, textWrap: 'pretty' }}>{it.title}</div>
             <div style={{ fontSize: 12.5, color: '#5a6058' }}>{it.meta}</div>
+            {it.isAvatar && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 5, background: '#f3f5f0', minWidth: 0 }}>
+                <AvatarBadge initials={it.avInit} size={24} ring="#f3f5f0" />
+                <span style={{ fontSize: 12, color: '#3d423b', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.avWith}</span>
+              </div>
+            )}
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <StatusChip status={it.state} label={it.stateLabel} icon={it.stateIcon} />
@@ -55,6 +62,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 600px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
           <Card title="Why this is on your path"><p style={{ margin: 0, textWrap: 'pretty', maxWidth: 640 }}>{det.why}</p></Card>
+          {det.av && <AvatarPractice av={det.av} />}
           {det.hasSugg && (
             <Card title="Suggested by" subtitle={det.suggSub}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -135,5 +143,53 @@ export function DetailScreen({ vm }: { vm: VM }) {
         </div>
       </div>
     </>
+  );
+}
+
+function AvatarPractice({ av }: { av: NonNullable<VM['det']['av']> }) {
+  return (
+    <Card title="Practise with the avatar" subtitle={av.sub}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: 56, height: 56, borderRadius: '50%', background: '#1a1d18', color: '#fff', fontSize: 17, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+            {av.initials}
+            <span style={{ position: 'absolute', right: 0, bottom: 0, width: 14, height: 14, borderRadius: '50%', background: '#86BC25', border: '3px solid #fff', animation: 'pmDot 2.4s ease-in-out infinite' }} />
+          </div>
+          <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>{av.persona}</div>
+            <div style={{ fontSize: 12.5, color: '#5a6058' }}>{av.role}</div>
+            <p style={{ margin: '6px 0 0', textWrap: 'pretty' }}>{av.brief}</p>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Button onClick={av.start}>Start a session</Button>
+            {av.hasRuns && <LinkButton onClick={av.share}>Share best run with Thomas</LinkButton>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' }}>Best scores · 4 of 5 on every skill completes it</div>
+          {av.skills.map((sk) => (
+            <div key={sk.name} style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) 44px', gap: 10, alignItems: 'center', fontSize: 12.5 }}>
+              <span>{sk.name}</span>
+              <div style={{ position: 'relative', height: 8, borderRadius: 999, background: '#eef0ec' }}>
+                <div style={{ height: '100%', borderRadius: 999, width: sk.w, background: sk.color, transition: 'width .3s' }} />
+                <div style={{ position: 'absolute', top: -3, bottom: -3, left: sk.tgt, width: 2, background: '#1a1d18' }} />
+              </div>
+              <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#5a6058' }}>{sk.val}</span>
+            </div>
+          ))}
+        </div>
+        {av.hasRuns && (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {av.runs.map((rn) => (
+              <div key={rn.date} style={{ display: 'grid', gridTemplateColumns: '90px minmax(0,1fr)', gap: 10, padding: '8px 0', borderTop: '1px solid #eef0ea', fontSize: 12.5 }}>
+                <span style={{ color: '#8b918a' }}>{rn.date}</span>
+                <div style={{ minWidth: 0 }}><div style={{ textWrap: 'pretty' }}>{rn.note}</div><div style={{ fontSize: 11.5, color: '#5a6058' }}>{rn.scores}</div></div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>Runs are private until you share one. The avatar scores the conversation; Thomas sees scores and the transcript, never the recording.</div>
+      </div>
+    </Card>
   );
 }
