@@ -41,7 +41,10 @@ export type CloudMeta = {
   anchor: number; frac: number; screen: Screen; goLabel: string;
 };
 
-export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'adminLib' | 'adminMap';
+export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'adminLib' | 'adminMap' | 'users';
+
+// What the signed-in account may administer (from public.user_roles).
+export type Access = { isSystem: boolean; domains: string[] };
 export type View = 'constellation' | 'radar' | 'road';
 export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | null;
 

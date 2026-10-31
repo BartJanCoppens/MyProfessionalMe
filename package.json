@@ -1,7 +1,7 @@
 {
   "name": "myprofessionalme",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "agents": "sed '1s/^# CLAUDE.md$/# AGENTS.md/' CLAUDE.md > AGENTS.md"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

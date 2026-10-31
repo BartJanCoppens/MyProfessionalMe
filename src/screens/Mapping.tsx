@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Button, ChatBubble, FilterChip, Hover, Input, LinkButton, PageTitle, PillToggle, SegmentedControl, StatusChip, Tag } from '../ds';
+import { Banner, Button, ChatBubble, FilterChip, Hover, Input, LinkButton, PageTitle, PillToggle, SegmentedControl, StatusChip, Tag } from '../ds';
 import type { VM } from '../model';
 
 const card: CSSProperties = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' };
@@ -21,6 +21,7 @@ export default function AdminMappingScreen({ vm }: { vm: VM }) {
         <Copilot vm={vm} />
       </div>
       <LearnersEye vm={vm} />
+      {!vm.editable && <Banner tone="info">{vm.readOnlyNote}</Banner>}
       <Board vm={vm} />
       <SelectionDock vm={vm} />
     </>
@@ -205,8 +206,8 @@ function Board({ vm }: { vm: VM }) {
         </div>
         <div onDragOver={vm.paletteOver} onDrop={vm.paletteDrop} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, maxHeight: '60vh', overflow: 'auto', minHeight: 120 }}>
           {vm.palette.map((pi) => (
-            <Hover key={pi.id} draggable onDragStart={pi.onDragStart} hoverStyle={{ borderColor: '#86BC25' }}
-              style={{ border: '1px solid #c8cdc3', borderRadius: 5, background: '#f7f7f5', padding: '6px 9px', cursor: 'grab', minHeight: 38 }}>
+            <Hover key={pi.id} draggable={vm.editable} onDragStart={pi.onDragStart} hoverStyle={{ borderColor: '#86BC25' }}
+              style={{ border: '1px solid #c8cdc3', borderRadius: 5, background: '#f7f7f5', padding: '6px 9px', cursor: vm.editable ? 'grab' : 'default', minHeight: 38 }}>
               <div style={{ fontWeight: 500, fontSize: 12, ...ellipsis }}>{pi.title}</div>
               <div style={{ fontSize: 10.5, color: '#8b918a', ...ellipsis }}>{pi.sub}</div>
             </Hover>
@@ -224,7 +225,7 @@ function Board({ vm }: { vm: VM }) {
               <div style={{ padding: '10px 12px', borderBottom: '1px solid #eef0ea' }}><div style={{ fontWeight: 600 }}>{sc.name}</div><div style={{ fontSize: 11.5, color: '#5a6058' }}>{sc.summary}</div></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, flex: 1 }}>
                 {sc.items.map((mi) => (
-                  <Hover key={mi.id} draggable onDragStart={mi.onDragStart} onClick={mi.onClick} hoverStyle={{ borderColor: '#86BC25' }}
+                  <Hover key={mi.id} draggable={vm.editable} onDragStart={mi.onDragStart} onClick={mi.onClick} hoverStyle={{ borderColor: '#86BC25' }}
                     style={{ position: 'relative', border: mi.border, borderRadius: 5, background: mi.bg, padding: '5px 9px', cursor: 'pointer', boxShadow: mi.shadow, opacity: mi.op,
                       transition: 'opacity .15s,box-shadow .15s', animation: 'pmFadeUp .3s ease-out backwards' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -258,7 +259,7 @@ function SelectionDock({ vm }: { vm: VM }) {
     <div style={card}>
       <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef0ea', background: '#fafbf8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div><div style={{ fontWeight: 600, fontSize: 16 }}>{ms.title}</div><div style={{ fontSize: 12.5, color: '#5a6058' }}>{ms.sub}</div></div>
-        {ms.canMand ? <SegmentedControl options={vm.obSetOptions} value={ms.ob} onChange={ms.setOb} size="md" /> : <Tag tone="muted">Suggested only</Tag>}
+        {!ms.canMand ? <Tag tone="muted">Suggested only</Tag> : vm.editable ? <SegmentedControl options={vm.obSetOptions} value={ms.ob} onChange={ms.setOb} size="md" /> : <Tag tone="muted">{ms.ob}</Tag>}
       </div>
       <div style={{ padding: '14px 18px', display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 300px', minWidth: 0 }}>
@@ -278,7 +279,7 @@ function SelectionDock({ vm }: { vm: VM }) {
         </div>
       </div>
       <div style={{ padding: '12px 18px 16px', borderTop: '1px solid #eef0ea', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <Button variant="secondary" onClick={ms.remove}>Remove from {vm.audName}</Button>
+        {vm.editable && <Button variant="secondary" onClick={ms.remove}>Remove from {vm.audName}</Button>}
         <LinkButton onClick={ms.openLib}>Open in library →</LinkButton>
         <LinkButton tone="muted" onClick={vm.clearMapSel}>Clear</LinkButton>
       </div>

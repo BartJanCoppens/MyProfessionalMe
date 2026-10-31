@@ -1,9 +1,9 @@
 // The Claude Design prototype exposed these as editable props. Here they have defaults
-// and can be overridden from the URL, e.g. ?screen=team&view=radar&bl=Advisory&motion=off
+// and can be overridden from the URL, e.g. ?screen=team&view=radar&bl=Audit&motion=off
 import type { Screen, View } from './types';
 
 export type Config = {
-  businessLine: 'Consulting' | 'Advisory' | 'Tax & Legal';
+  businessLine: 'Consulting' | 'Audit' | 'Tax & Legal';
   startScreen: Screen;
   homeView: View;
   showMarks: boolean;
@@ -11,9 +11,9 @@ export type Config = {
   motion: boolean;
 };
 
-const SCREENS: Screen[] = ['map', 'library', 'team', 'adminLib', 'adminMap', 'projects', 'profile'];
+const SCREENS: Screen[] = ['map', 'library', 'team', 'adminLib', 'adminMap', 'users', 'projects', 'profile'];
 const VIEWS: View[] = ['constellation', 'radar', 'road'];
-const BLS = ['Consulting', 'Advisory', 'Tax & Legal'] as const;
+const BLS = ['Consulting', 'Audit', 'Tax & Legal'] as const;
 
 export function readConfig(search = window.location.search): Config {
   const q = new URLSearchParams(search);

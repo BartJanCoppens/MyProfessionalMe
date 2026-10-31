@@ -7,7 +7,7 @@ export const DOMAINS: [string, string, string][] = [
   ['corp','Corporate functions','Corp. fn.'],['tec','Technology','Technol.'],['lead','Leadership','Leading']];
 export const LEVELS = ['Foundation','Practitioner','Advanced','Expert','Thought leader'];
 export const STAGES = ['Analyst','Consultant','Senior consultant','Manager','Senior manager'];
-export const BLS = ['Consulting','Advisory','Tax & Legal'];
+export const BLS = ['Consulting','Audit','Tax & Legal'];
 export const MY_STAGE = 2;
 export const CUR = [3,3,2,3,2,2,1,2,1];
 export const TARGET = [4,3,3,4,3,3,2,3,3];
@@ -57,7 +57,7 @@ export const LEARN: Learn[] = [
 ];
 export const MAPS0: Record<string, Mapping[]> = {
  'Consulting':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L20','Analyst','advised'],['L31','Analyst','advised'],['L10','Consultant','mandatory'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','advised'],['L13','Consultant','advised'],['L1','Senior consultant','mandatory'],['L2','Senior consultant','advised'],['L8','Senior consultant','advised'],['L11','Senior consultant','advised'],['L19','Senior consultant','advised'],['L23','Senior consultant','advised'],['L4','Manager','mandatory'],['L12','Manager','mandatory'],['L27','Manager','mandatory'],['L18','Manager','advised'],['L28','Manager','advised'],['L3','Senior manager','advised']],
- 'Advisory':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L31','Analyst','mandatory'],['L20','Analyst','advised'],['L10','Consultant','mandatory'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','mandatory'],['L13','Consultant','advised'],['L2','Senior consultant','mandatory'],['L23','Senior consultant','mandatory'],['L1','Senior consultant','advised'],['L8','Senior consultant','advised'],['L11','Senior consultant','advised'],['L19','Senior consultant','advised'],['L12','Manager','mandatory'],['L18','Manager','mandatory'],['L27','Manager','mandatory'],['L4','Manager','advised'],['L28','Manager','advised'],['L6','Senior manager','advised']],
+ 'Audit':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L31','Analyst','mandatory'],['L20','Analyst','advised'],['L10','Consultant','mandatory'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','mandatory'],['L13','Consultant','advised'],['L2','Senior consultant','mandatory'],['L23','Senior consultant','mandatory'],['L1','Senior consultant','advised'],['L8','Senior consultant','advised'],['L11','Senior consultant','advised'],['L19','Senior consultant','advised'],['L12','Manager','mandatory'],['L18','Manager','mandatory'],['L27','Manager','mandatory'],['L4','Manager','advised'],['L28','Manager','advised'],['L6','Senior manager','advised']],
  'Tax & Legal':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L31','Analyst','mandatory'],['L20','Analyst','advised'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','advised'],['L10','Consultant','advised'],['L18','Senior consultant','mandatory'],['L19','Senior consultant','mandatory'],['L2','Senior consultant','advised'],['L8','Senior consultant','advised'],['L15','Senior consultant','advised'],['L26','Senior consultant','advised'],['L12','Manager','mandatory'],['L27','Manager','mandatory'],['L28','Manager','advised'],['L22','Senior manager','advised']]
 };
 export const TEAM: [string, string, string, number, number, number, number[], string][] = [
@@ -105,7 +105,7 @@ export const LENSES: [string, string, string, boolean, string, string, string][]
 ];
 // audience key, name, reach (people)
 export const AUDS: Record<string, [string, string, number][]> = {
- bl: [['Consulting','Consulting',508],['Advisory','Advisory',412],['Tax & Legal','Tax & Legal',366]],
+ bl: [['Consulting','Consulting',508],['Audit','Audit',412],['Tax & Legal','Tax & Legal',366]],
  ind: [['ind:energy','Energy & utilities',84],['ind:health','Healthcare',61],['ind:whole','Wholesale & retail',97],['ind:public','Public sector',73]],
  tec: [['tec:data','Data & Azure',118],['tec:sap','SAP',64],['tec:ai','Generative AI',142]],
  amb: [['amb:sust','Sustainability lead',47],['amb:people','People leader',88],['amb:expert','Deep specialist',59],['amb:bizdev','Business developer',36]],

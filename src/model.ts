@@ -6,10 +6,11 @@ import {
   MY_STAGE, OB_LABEL, OB_TONE, OUTCOMES, PERSONAS, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TEAM, TESTS,
 } from './data';
 import type { Config } from './config';
-import type { AppState, AvatarState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
+import type { Access, AppState, AvatarState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
 
 const AVATAR_KEY = 'mpm-avatar';
 const opt = (v: string, l: string) => ({ value: v, label: l });
+export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'users'];
 const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!;
 
 type Evidence = { id: string; text: string; src: string };
@@ -48,10 +49,11 @@ declare global {
 export class Logic {
   readonly state: AppState;
   readonly props: Config;
+  readonly access: Access;
   readonly refs: Refs;
   readonly setState: SetState;
-  constructor(state: AppState, setState: SetState, props: Config, refs: Refs) {
-    this.state = state; this.setState = setState; this.props = props; this.refs = refs;
+  constructor(state: AppState, setState: SetState, props: Config, refs: Refs, access: Access) {
+    this.state = state; this.setState = setState; this.props = props; this.refs = refs; this.access = access;
   }
 
   setAvatar(patch: Partial<AvatarState>) {
@@ -100,7 +102,10 @@ export class Logic {
   }
   items() { return LEARN.map((r) => this.item(r)); }
   openDetail(id: string, origin?: Screen) { this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0); }
-  go(screen: Screen) { this.setState({ screen, sel: null, mapSel: null }); window.scrollTo(0, 0); }
+  go(screen: Screen) { this.setState({ screen: ADMIN_SCREENS.includes(screen) && !this.isAdmin() ? 'map' : screen, sel: null, mapSel: null }); window.scrollTo(0, 0); }
+  isAdmin() { return this.access.isSystem || this.access.domains.length > 0; }
+  // System Admins edit every audience; Domain Admins only the business-line audiences they administer.
+  canEditAud(aud: string) { return this.access.isSystem || (AUD_INFO[aud]?.lens === 'bl' && this.access.domains.includes(aud)); }
   progressHours(it: Item) { return it.state === 'accepted' || it.state === 'submitted' ? it.hours : it.state === 'in-progress' ? it.hours * it.pct / 100 : 0; }
   readiness(items: Item[]) {
     const rel = items.filter((it) => it.mapped && it.mapped.si <= MY_STAGE + 1 && (it.ob === 'mandatory' || it.ob === 'advised'));
@@ -357,7 +362,7 @@ export class Logic {
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
       projects: ['Me · Projects & evaluations', 'Projects & evaluations'], profile: ['Me · My profile', 'My profile'], map: ['Me · Senior consultant · ' + bl, 'My growth map'], library: ['Me · Library', 'Library'],
-      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · 6 counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'],
+      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · 6 counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'],
     };
     const hubDock = sel && sel.type === 'hub' ? (() => {
       const di = DOMAINS.findIndex((d) => d[0] === sel.id); const list = items.filter((it) => it.dom === sel.id);
@@ -372,7 +377,7 @@ export class Logic {
       centerSub: 'Senior consultant → Manager · ' + readiness + '% ready', hoursYear, cpdYear, hoursChip: hoursYear + ' of 80 h this year',
       mapLead: 'You sit in the middle. The nine domains around you hold every learning the firm knows about; your ' + bl + ' affiliation decides which ones are mandatory, Thomas advises some, the rest is yours to choose. Clouds show where your projects, personality and ambitions pull you.',
       crumb: titles[s.screen][0], headerTitle: titles[s.screen][1], screen: s.screen,
-      navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'),
+      navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), goUsers: () => this.go('users'),
       navProj: s.screen === 'projects' || (s.screen === 'detail' && s.origin === 'projects'), navProfile: s.screen === 'profile' || (s.screen === 'detail' && s.origin === 'profile'),
       goMap: () => this.go('map'), goLibrary: () => this.go('library'), goTeam: () => this.go('team'), goAdminLib: () => this.go('adminLib'), goAdminMap: () => this.go('adminMap'), goProj: () => this.go('projects'), goProfile: () => this.go('profile'),
       goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : '← Back to library',
@@ -444,7 +449,7 @@ export class Logic {
   }
   sysPrompt() {
     const s = this.state;
-    return 'You are the growth assistant inside MyProfessionalMe, the learning platform of a consulting, advisory, tax and legal firm. You talk with Lena Mertens, senior consultant in ' + this.bl() + ', Brussels, aiming for Manager at the Sep 2027 review. Help her put her interests and ambitions into words. Plain, warm, matter-of-fact English. At most 70 words. One question at a time. No emoji, no exclamation marks, no lists.\n'
+    return 'You are the growth assistant inside MyProfessionalMe, the learning platform of a consulting, audit, tax and legal firm. You talk with Lena Mertens, senior consultant in ' + this.bl() + ', Brussels, aiming for Manager at the Sep 2027 review. Help her put her interests and ambitions into words. Plain, warm, matter-of-fact English. At most 70 words. One question at a time. No emoji, no exclamation marks, no lists.\n'
       + 'Known ambitions: ' + s.ambitions.map((a) => a.text + ' (' + a.horizon + ')').join('; ') + '.\nKnown interests: ' + s.interests.map((i) => i.label).join(', ') + '.\n'
       + 'Personality: Four Colours cool blue then earth green; MBTI INTJ; Big Five high openness and conscientiousness, low extraversion.\n'
       + 'Project feedback: ' + PROJECTS.filter((p) => p.dims).map((p) => p.client + ' (' + p.lead + '): ' + p.quote).join(' ') + '\n'
@@ -488,7 +493,14 @@ export class Logic {
 
   // ---------- curriculum mapping (audiences per lens) ----------
 
-  applyOps(ops: Op[], msg?: string) {
+  applyOps(all: Op[], msg?: string) {
+    const ops = all.filter((o) => this.canEditAud(o.aud));
+    if (ops.length < all.length) {
+      const outside = Array.from(new Set(all.filter((o) => !this.canEditAud(o.aud)).map((o) => AUD_INFO[o.aud].name)));
+      this.say('Outside your domain: ' + outside.join(', ') + (ops.length ? ' · the rest was applied' : ''));
+      if (!ops.length) return;
+      msg = undefined;
+    }
     const maps = Object.assign({}, this.state.maps), pending = Object.assign({}, this.state.pending);
     ops.forEach((o) => {
       const cur = maps[o.aud] || []; const ex = cur.find((m) => m[0] === o.lid); let arr = cur.filter((m) => m[0] !== o.lid);
@@ -530,7 +542,7 @@ export class Logic {
     if (this.props.liveAssistant !== false && window.claude?.complete) {
       try {
         const lines = st.layers.map((l) => l.lens + ' (' + l.aud + '): ' + (l.titles.length ? l.titles.join(', ') : 'nothing')).join('\n');
-        const raw = await window.claude.complete({ messages: [{ role: 'user', content: 'You are ' + P[2] + ', ' + P[3] + ' at a consulting, advisory, tax and legal firm. This is the learning your firm has lined up for you this year, stacked from every audience you belong to:\n' + lines + '\nTotal ' + Math.round(st.tot) + ' h of an 80 h budget; mandatory ' + Math.round(st.mand) + ' h of a 40 h budget. Arrives twice: ' + (st.dups.map((d) => d.title).join(', ') || 'none') + '.\nReply ONLY with JSON {"text": your honest first-person reaction, 2 sentences, at most 45 words, plain, no emoji, no exclamation marks, "fix": one concrete change for the curriculum team, at most 25 words, naming the audience and the learning}.' }], max_tokens: 300 });
+        const raw = await window.claude.complete({ messages: [{ role: 'user', content: 'You are ' + P[2] + ', ' + P[3] + ' at a consulting, audit, tax and legal firm. This is the learning your firm has lined up for you this year, stacked from every audience you belong to:\n' + lines + '\nTotal ' + Math.round(st.tot) + ' h of an 80 h budget; mandatory ' + Math.round(st.mand) + ' h of a 40 h budget. Arrives twice: ' + (st.dups.map((d) => d.title).join(', ') || 'none') + '.\nReply ONLY with JSON {"text": your honest first-person reaction, 2 sentences, at most 45 words, plain, no emoji, no exclamation marks, "fix": one concrete change for the curriculum team, at most 25 words, naming the audience and the learning}.' }], max_tokens: 300 });
         const m = String(raw).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
       } catch { res = null; }
     }
@@ -562,7 +574,7 @@ export class Logic {
     if (this.props.liveAssistant !== false && window.claude?.complete) {
       try {
         const s = this.state;
-        const sys = 'You are the curriculum copilot of a consulting, advisory, tax and legal firm. Learnings are mapped to audiences at career stages. Audiences (key = name): ' + Object.keys(AUD_INFO).map((k) => k + ' = ' + AUD_INFO[k].name + ' (' + lensOf(k)[1] + ', ' + AUD_INFO[k].reach + ' people)').join('; ') + '. Stages: ' + STAGES.join(', ') + '. Ambition and Profile audiences can only be advised, never mandatory.\nLearnings: ' + LEARN.map((r) => r[0] + ' ' + r[1] + ' (' + r[2] + ', L' + r[3] + ', ' + r[6] + ' h)').join('; ') + '.\nCurrent mappings: ' + Object.keys(s.maps).filter((k) => AUD_INFO[k] && s.maps[k].length).map((k) => k + ': ' + s.maps[k].map((m) => m[0] + '@' + m[1] + '/' + m[2]).join(' ')).join(' | ') + '.\nYearly budget: 80 h total, 40 h mandatory.\nReply ONLY with JSON {"reply": string, at most 60 words, plain matter-of-fact English, no emoji, "ops": [{"op": "add"|"remove"|"setOb", "aud": key, "lid": id, "stage": stage, "ob": "mandatory"|"advised"}]}. Propose at most 4 ops and only when the request asks for a change.';
+        const sys = 'You are the curriculum copilot of a consulting, audit, tax and legal firm. Learnings are mapped to audiences at career stages. Audiences (key = name): ' + Object.keys(AUD_INFO).map((k) => k + ' = ' + AUD_INFO[k].name + ' (' + lensOf(k)[1] + ', ' + AUD_INFO[k].reach + ' people)').join('; ') + '. Stages: ' + STAGES.join(', ') + '. Ambition and Profile audiences can only be advised, never mandatory.\nLearnings: ' + LEARN.map((r) => r[0] + ' ' + r[1] + ' (' + r[2] + ', L' + r[3] + ', ' + r[6] + ' h)').join('; ') + '.\nCurrent mappings: ' + Object.keys(s.maps).filter((k) => AUD_INFO[k] && s.maps[k].length).map((k) => k + ': ' + s.maps[k].map((m) => m[0] + '@' + m[1] + '/' + m[2]).join(' ')).join(' | ') + '.\nYearly budget: 80 h total, 40 h mandatory.\nReply ONLY with JSON {"reply": string, at most 60 words, plain matter-of-fact English, no emoji, "ops": [{"op": "add"|"remove"|"setOb", "aud": key, "lid": id, "stage": stage, "ob": "mandatory"|"advised"}]}. Propose at most 4 ops and only when the request asks for a change.';
         const out = await window.claude.complete({ system: sys, messages: [{ role: 'user', content: text }], max_tokens: 700 });
         const m = String(out).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
       } catch { res = null; }
@@ -572,9 +584,11 @@ export class Logic {
   }
   curriculum(items: Item[], byId: Record<string, Item>) {
     const s = this.state, lens = s.mapLens, L = LENSES.find((l) => l[0] === lens)!, auds = AUDS[lens];
-    const audKey = s.mapAud && AUD_INFO[s.mapAud] && AUD_INFO[s.mapAud].lens === lens ? s.mapAud : (lens === 'bl' ? this.bl() : auds[0][0]);
+    const ownLine = this.access.isSystem || this.access.domains.includes(this.bl()) ? this.bl() : this.access.domains[0] || this.bl();
+    const audKey = s.mapAud && AUD_INFO[s.mapAud] && AUD_INFO[s.mapAud].lens === lens ? s.mapAud : (lens === 'bl' ? ownLine : auds[0][0]);
+    const editable = this.canEditAud(audKey);
     const ai = AUD_INFO[audKey], canMand = L[3], map = s.maps[audKey] || [], mappedIds = map.map((m) => m[0]);
-    const sigOpen = SIGNALS.filter((g) => !s.sigDone[g.id] && this.sigValid(g));
+    const sigOpen = SIGNALS.filter((g) => !s.sigDone[g.id] && this.sigValid(g) && this.canEditAud(g.op.aud));
     const pick = (k: string, st?: string) => () => this.setState({ mapAud: k, mapStage: st || null, mapSel: null });
     const covRows = auds.map((a) => {
       const sig = sigOpen.filter((g) => g.op.aud === a[0]).length;
@@ -664,6 +678,7 @@ export class Logic {
       text: '“' + LEARN_BY[o.lid][1] + '” ' + (o.op === 'remove' ? 'from ' : '→ ') + AUD_INFO[o.aud].name + (o.stage && o.op !== 'remove' ? ' · ' + o.stage : '') + (o.op === 'add' ? ' · ' + o.ob : ''),
     }));
     return {
+      editable, readOnlyNote: editable ? '' : 'Read-only: you administer ' + this.access.domains.join(', ') + '. Only a System Admin edits ' + ai.name + '.',
       mapLens: lens, lensOptions: LENSES.map((l) => opt(l[0], l[1])), setLens: (v: string) => this.setState({ mapLens: v, mapAud: null, mapStage: null, mapSel: null }),
       lensLabel: L[1], lensColor: L[2], lensRule: L[4], lensPolicy: L[5], audName: ai.name, audSummary: map.length + ' learnings · ' + ai.reach + ' people',
       audChips: auds.map((a) => ({ key: a[0], label: a[1], reach: String(a[2]), on: a[0] === audKey, pick: pick(a[0]) })),

@@ -144,6 +144,15 @@ export function Field({ label, hint, size = 'md', children, style }: { label: Re
   );
 }
 
+export function Checkbox({ checked = false, onChange, children, style }: { checked?: boolean; onChange?: (v: boolean) => void; children?: ReactNode; style?: CSSProperties }) {
+  return (
+    <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 13.5, cursor: 'pointer', textWrap: 'pretty', ...style }}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange && onChange(e.target.checked)} style={{ width: 16, height: 16, margin: '2px 0 0', flex: 'none' }} />
+      <span>{children}</span>
+    </label>
+  );
+}
+
 const INPUT_HEIGHTS = { md: 30, lg: 34, '3xl': 42 };
 export function Input({ size = 'lg', invalid = false, style, onFocus, onBlur, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'style'> & { size?: keyof typeof INPUT_HEIGHTS; invalid?: boolean; style?: CSSProperties }) {
   const [focus, setFocus] = useState(false);

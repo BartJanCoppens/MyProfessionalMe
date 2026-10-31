@@ -6,7 +6,10 @@ Built with React, Vite and TypeScript from a Claude Design prototype.
 
 ```bash
 npm install
+cp .env.example .env.local   # fill in the Supabase URL and publishable key
 npm run dev
 ```
 
-URL options: `?bl=Consulting|Advisory|Tax%20%26%20Legal`, `?screen=map|library|projects|profile|team|adminLib|adminMap`, `?view=constellation|radar|road`, `?marks=off`, `?live=off`, `?motion=off`.
+Sign-in is required. Accounts are created by a System Admin or a Domain Admin in **Administration → User management**; there is no self sign-up.
+
+URL options: `?bl=Consulting|Audit|Tax%20%26%20Legal`, `?screen=map|library|projects|profile|team|adminLib|adminMap|users` (admin screens need an admin role), `?view=constellation|radar|road`, `?marks=off`, `?live=off`, `?motion=off`.

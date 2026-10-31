@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BrandMark, Button, NavGroupHeader, NavItem, StatusChip, Toast } from './ds';
+import { BrandMark, Button, LinkButton, NavGroupHeader, NavItem, StatusChip, Toast } from './ds';
 import { readConfig } from './config';
-import { initState, Logic } from './model';
+import { ADMIN_SCREENS, initState, Logic } from './model';
 import type { AppState } from './types';
 import type { VM } from './model';
 import { AvatarFace } from './screens/AvatarFace';
@@ -12,16 +12,33 @@ import ProfileScreen from './screens/Profile';
 import TeamScreen from './screens/Team';
 import { AdminLibraryScreen, AddLearningDrawer } from './screens/Admin';
 import AdminMappingScreen from './screens/Mapping';
+import UsersScreen from './screens/Users';
+import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
+import { useAuth } from './lib/useAuth';
+import type { Auth } from './lib/useAuth';
 
 export default function App() {
+  const auth = useAuth();
+  if (auth.status === 'loading') return <div style={{ minHeight: '100vh', background: '#f3f5f0' }} />;
+  if (auth.status === 'signed-out' || !auth.profile) return <SignInScreen />;
+  if (auth.profile.must_change_password) return <ChangePasswordScreen email={auth.profile.email} onDone={auth.reload} onSignOut={auth.signOut} />;
+  return <Workspace auth={auth} />;
+}
+
+function Workspace({ auth }: { auth: Auth }) {
   const cfg = useMemo(() => readConfig(), []);
-  const [state, setRaw] = useState<AppState>(() => initState(cfg));
+  const [state, setRaw] = useState<AppState>(() => {
+    const st = initState(cfg);
+    // Administration screens need a System or Domain Admin role, also when opened through ?screen=.
+    const admin = auth.access.isSystem || auth.access.domains.length > 0;
+    return ADMIN_SCREENS.includes(st.screen) && !admin ? { ...st, screen: 'map' } : st;
+  });
   const toastTimer = useRef<number | undefined>(undefined);
   const drag = useRef<string | null>(null);
   const file = useRef<HTMLInputElement | null>(null);
   const chat = useRef<HTMLDivElement | null>(null);
 
-  const logic = new Logic(state, (p) => setRaw((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat });
+  const logic = new Logic(state, (p) => setRaw((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, auth.access);
   const vm = logic.renderVals();
 
   useEffect(() => { if (chat.current) chat.current.scrollTop = 1e6; }, [state.chat, state.chatBusy, state.proposal]);
@@ -29,7 +46,7 @@ export default function App() {
 
   return (
     <div data-pm-motion={vm.motionAttr} style={{ display: 'flex', minHeight: '100vh', background: '#f3f5f0', color: '#1a1d18', fontFamily: "'IBM Plex Sans',system-ui,sans-serif", fontSize: 13, lineHeight: 1.45 }}>
-      <Sidebar vm={vm} />
+      <Sidebar vm={vm} auth={auth} />
       <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <header style={{ height: 60, background: '#fff', borderBottom: '1px solid #e1e5dc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '0 32px', position: 'sticky', top: 0, zIndex: 5 }}>
           <div style={{ minWidth: 0, flex: '1 1 200px' }}>
@@ -50,6 +67,7 @@ export default function App() {
           {vm.screen === 'team' && <TeamScreen vm={vm} />}
           {vm.screen === 'adminLib' && <AdminLibraryScreen vm={vm} />}
           {vm.screen === 'adminMap' && <AdminMappingScreen vm={vm} />}
+          {vm.screen === 'users' && <UsersScreen access={auth.access} meId={auth.profile!.id} say={(m) => logic.say(m)} />}
         </div>
       </main>
       {vm.drawerOpen && <AddLearningDrawer vm={vm} />}
@@ -58,7 +76,10 @@ export default function App() {
   );
 }
 
-function Sidebar({ vm }: { vm: VM }) {
+const roleLabel = ({ access }: Auth) =>
+  access.isSystem ? 'System Admin' : access.domains.length ? 'Domain Admin · ' + access.domains.join(', ') : 'Member';
+
+function Sidebar({ vm, auth }: { vm: VM; auth: Auth }) {
   return (
     <aside style={{ width: 248, flex: 'none', background: '#171a16', color: '#c9cec5', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', overflow: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 20px 14px' }}>
@@ -82,9 +103,14 @@ function Sidebar({ vm }: { vm: VM }) {
         <NavItem label="My profile" active={vm.navProfile} onClick={vm.goProfile} />
         <NavGroupHeader>Counsellor</NavGroupHeader>
         <NavItem label="My team" badge={vm.teamOverdue} active={vm.navTeam} onClick={vm.goTeam} />
-        <NavGroupHeader>Administration</NavGroupHeader>
-        <NavItem label="Learning library" active={vm.navAdminLib} onClick={vm.goAdminLib} />
-        <NavItem label="Curriculum mapping" count={vm.pendingLabel} active={vm.navAdminMap} onClick={vm.goAdminMap} />
+        {vm.showAdmin && (
+          <>
+            <NavGroupHeader>Administration</NavGroupHeader>
+            <NavItem label="Learning library" active={vm.navAdminLib} onClick={vm.goAdminLib} />
+            <NavItem label="Curriculum mapping" count={vm.pendingLabel} active={vm.navAdminMap} onClick={vm.goAdminMap} />
+            <NavItem label="User management" active={vm.navUsers} onClick={vm.goUsers} />
+          </>
+        )}
       </nav>
       <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px 18px', borderTop: '1px solid rgba(255,255,255,.08)' }}>
@@ -93,6 +119,14 @@ function Sidebar({ vm }: { vm: VM }) {
           <AvatarFace vm={vm} fontSize={12} />
         </span>
         <div style={{ minWidth: 0 }}><div style={{ color: '#fff', fontWeight: 500, fontSize: 13 }}>Lena Mertens</div><div style={{ fontSize: 11.5, color: '#858c82' }}>Counsellor: Thomas De Smet</div></div>
+      </div>
+      <div style={{ padding: '10px 20px 14px', borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: '#858c82', textTransform: 'uppercase', letterSpacing: '.06em' }}>Signed in</div>
+          <div style={{ color: '#c9cec5', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={auth.profile!.email}>{auth.profile!.full_name || auth.profile!.email}</div>
+          <div style={{ fontSize: 11.5, color: '#858c82' }}>{roleLabel(auth)}</div>
+        </div>
+        <LinkButton tone="onDark" size={12} onClick={auth.signOut}>Sign out</LinkButton>
       </div>
     </aside>
   );
