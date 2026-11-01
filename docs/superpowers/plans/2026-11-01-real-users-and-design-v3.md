@@ -1,5 +1,7 @@
 # Real users and design v3 Implementation Plan
 
+> **Status (1 Nov 2026):** Part A (Tasks 1–7) is done and merged. Parts B–D are superseded by `2026-11-01-design-v3-remaining.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the seeded persona Lena Mertens with real accounts (an admin can choose whose app they are looking at), then implement the design changes of 1 Nov 2026: learner media, domain zoom, Create & share with peer review, and the admin Knowledge library.
