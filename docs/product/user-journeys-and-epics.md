@@ -432,7 +432,7 @@ Each epic has a goal, the business value, the personas it serves, the KPIs an L&
 | E12.7 | View as is read-only and remembered per tab | Met | VIEW-01..13 |
 | E12.8 | Members never reach admin screens | Met | NAV-01, NAV-02 |
 | E12.9 | Leaked-password protection is on | Not built | Roadmap §6 |
-| E12.10 | v0.4.0 is in production and smoke-tested per role | Not built | Roadmap §1 (the site still serves v0.3.0) |
+| E12.10 | v0.4.0 is in production and smoke-tested per role | Met | Deployed 1 Nov 2026 with the bug fixes; smoke-tested on the live site as learner, Domain Admin, General Admin and a person without a line, including publishing curriculum changes (System Admin by the owner) |
 | E12.11 | Role, line, stage and counsellor changes are logged with who and when | Gap | No audit table |
 | E12.12 | Single sign-on with the firm's identity provider; line and stage provisioned from HR | Gap | Not in plans |
 | E12.13 | A person can export their learning record; deletion follows a retention policy | Gap | Deletion cascades from `profiles`; no export or retention rule |
@@ -1025,7 +1025,7 @@ Effort is a rough size for the current team (one developer working with agents):
 
 | Rank | Backlog item | Epics | Value | Effort | Depends on | Recommendation |
 |---|---|---|---|---|---|---|
-| 1 | **Ship v0.4.0 with the bug fixes:** deploy `main` and smoke-test per role, leaked-password protection, settle the counsellor-privacy mismatch | E12, E16, E11.8 | High | S | Owner's go to deploy | Do first. Production still serves v0.3.0; the fixes of `0b955a2` remove four blank-page crashes, and the privacy copy must match the policy before real users arrive |
+| 1 | **Finish hardening v0.4.0** (deployed and smoke-tested 1 Nov 2026): leaked-password protection, settle the counsellor-privacy mismatch | E12, E16, E11.8 | High | S | Owner's go to deploy | Do first. Production still serves v0.3.0; the fixes of `0b955a2` remove four blank-page crashes, and the privacy copy must match the policy before real users arrive |
 | 2 | **Close the completion loop:** a `learning_events` history (who, what, when), `accepted_by`/`accepted_at`, evidence upload (Supabase Storage), "changes requested" with a comment, an approvals queue on My team, last activity | E3, E4 | High | M | 1 | Next. It turns levels into defensible evidence and is the base for reporting and notifications |
 | 3 | **Deadlines, targets and audience membership:** dates per mandatory mapping set by admins; next-stage targets per stage (and optionally per line); an `audience_members` model (ambitions and personality opt-in by the learner, industry and technology by admins or staffing) that `mapping()`, readiness and the learner's eye stack | E1, E5, E6, E16 | High | M | 1 | Do with 2. It makes the curriculum model the design promises actually reach people |
 | 4 | **Server-side AI proxy** (first half of Roadmap §4): one edge function, caller's token, rate limit, EU processing; switch the four assistants to it | E13, E11, E5 | High | M | 1 | Move ahead of Create & share, as the roadmap itself says it is a prerequisite |
