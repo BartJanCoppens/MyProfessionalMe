@@ -102,7 +102,7 @@ function Copilot({ vm }: { vm: VM }) {
       <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 430, overflow: 'auto' }}>
         {vm.sigCards.map((sg) => (
           <div key={sg.id} style={{ padding: '10px 18px 12px', borderTop: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 6, animation: 'pmFadeUp .35s ease-out backwards', animationDelay: sg.delay }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><StatusChip status={sg.st} label={sg.kind} /><span style={{ fontSize: 11.5, color: '#8b918a' }}>{sg.where}</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><StatusChip status={sg.st} label={sg.kind} />{sg.example && <Tag tone="muted">Example signal</Tag>}<span style={{ fontSize: 11.5, color: '#8b918a' }}>{sg.where}</span></div>
             <div style={{ fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty' }}>{sg.title}</div>
             <div style={{ fontSize: 12.5, color: '#3d423b', textWrap: 'pretty' }}>{sg.evidence}</div>
             {sg.hasQuote && <div style={{ fontSize: 12, color: '#5a6058', borderLeft: '2px solid #d5dacf', paddingLeft: 8, textWrap: 'pretty' }}>{sg.quote}</div>}

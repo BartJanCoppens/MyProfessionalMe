@@ -87,6 +87,8 @@ export class Logic {
     try { await write(); await this.reloadSubject(); if (done) this.say(done); } catch (err) { this.say((err as Error).message); }
   }
   myStage() { return stageIndex(this.subject.stage); }
+  // Ambitions, interests and personality are private to the person (owner, Q8); nobody viewing them sees these.
+  privateData() { return this.subject.readOnly ? { ambitions: [] as Subject['data']['ambitions'], interests: [] as Subject['data']['interests'] } : this.subject.data; }
   // A counsellor or an admin who manages the viewed person may accept their submitted learning.
   canAccept(state: string) {
     const s = this.subject;
@@ -192,8 +194,9 @@ export class Logic {
     if (!f.title.trim()) { this.say('Give the learning a title'); return; }
     if (!(hours > 0)) { this.say('Effort must be a number of hours above zero'); return; }
     if (!(cpd >= 0)) { this.say('CPD units must be a number'); return; }
-    const foreign = f.id && status === 'draft' ? this.foreignAudiences(f.id) : [];
-    if (foreign.length) { this.say('Still mapped for ' + foreign.join(', ') + ' · ask their admins to unmap it before it becomes a draft'); return; }
+    // Drafts and learnings needing review are hidden from learners, so neither may drop off another audience's paths.
+    const foreign = f.id && status !== 'published' ? this.foreignAudiences(f.id) : [];
+    if (foreign.length) { this.say('Still mapped for ' + foreign.join(', ') + ' · ask their admins to unmap it before it is hidden from learners'); return; }
     const old = f.id ? LEARN_BY[f.id] : null;
     BUSY.add('learning');
     try {
@@ -224,9 +227,10 @@ export class Logic {
   // System Admins edit every audience; Domain Admins only the business-line audiences they administer.
   canEditAud(aud: string) { return AUD_INFO[aud]?.lens === 'bl' ? this.canEditLine(aud) : this.access.isSystem || !!this.access.isGeneral; }
   progressHours(it: Item) { return it.state === 'accepted' || it.state === 'submitted' ? it.hours : it.state === 'in-progress' ? it.hours * it.pct / 100 : 0; }
+  // Readiness counts accepted hours only (owner, Q5): submitted and in-progress work waits for acceptance.
   readiness(items: Item[]) {
     const rel = items.filter((it) => it.mapped && it.mapped.si <= this.myStage() + 1 && (it.ob === 'mandatory' || it.ob === 'advised'));
-    const tot = rel.reduce((a, it) => a + it.hours, 0), done = rel.reduce((a, it) => a + this.progressHours(it), 0);
+    const tot = rel.reduce((a, it) => a + it.hours, 0), done = rel.reduce((a, it) => a + (it.state === 'accepted' ? it.hours : 0), 0);
     return tot ? Math.round(100 * done / tot) : 0;
   }
   polar(cx: number, cy: number, rx: number, ry: number, i: number, n: number) { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return { a, x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) }; }
@@ -246,8 +250,8 @@ export class Logic {
     const pers: Evidence[] = []; TESTS.forEach((t) => t.sugg.forEach((x) => pers.push({ id: x[0], text: x[1], src: t.name })));
     const amb: Evidence[] = [], seen = new Set<string>();
     const pick = (doms: string[]) => doms.map((d) => items.filter((x) => x.dom === d && x.state !== 'accepted' && x.ob !== 'mandatory' && !seen.has(x.id)).sort((a, b) => b.lvl - a.lvl)[0]).filter(Boolean).map((x) => x.id);
-    this.subject.data.ambitions.forEach((a) => (a.ids || pick(a.doms)).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Ambition · ' + a.text, text: 'Builds ' + byId[id].domLabel.toLowerCase() + ', which this ambition depends on.' }); }));
-    this.subject.data.interests.forEach((i) => (i.ids || pick([i.dom])).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Interest · ' + i.label, text: 'Matches an interest you named.' }); }));
+    this.privateData().ambitions.forEach((a) => (a.ids || pick(a.doms)).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Ambition · ' + a.text, text: 'Builds ' + byId[id].domLabel.toLowerCase() + ', which this ambition depends on.' }); }));
+    this.privateData().interests.forEach((i) => (i.ids || pick([i.dom])).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Interest · ' + i.label, text: 'Matches an interest you named.' }); }));
     return [mk('proj', proj), mk('pers', pers), mk('amb', amb)];
   }
   // One domain up close (design v3): rings are levels L1–L5, green is the person's level now, dashed the next stage's target.
@@ -383,7 +387,7 @@ export class Logic {
     lanes.forEach((ln, li) => { ln.delay = (li * 110) + 'ms'; ln.cells.forEach((c, q) => c.items.forEach((it, k) => { it.delay = (li * 110 + q * 60 + k * 35 + 60) + 'ms'; })); });
     return {
       lanes, quarters, cols, inflight: inflight.map((it) => ({ id: it.id, label: it.title + ' · ' + it.stateLabel, dot: FILL[it.state], open: it.open })),
-      behind: done.length + ' completed · ' + Math.round(done.reduce((a, it) => a + it.hours, 0)) + ' h since Jan 2026', inflightCount: inflight.length,
+      behind: done.length + ' completed · ' + Math.round(done.reduce((a, it) => a + it.hours, 0)) + ' h accepted so far', inflightCount: inflight.length,
     };
   }
 
@@ -392,6 +396,8 @@ export class Logic {
     const byId: Record<string, Item> = {}; items.forEach((it) => { byId[it.id] = it; });
     const readiness = this.readiness(items);
     const hoursYear = Math.round(items.reduce((a, it) => a + this.progressHours(it), 0));
+    const fmtH = (h: number) => String(Math.round(h * 10) / 10);
+    const hoursSplit = fmtH(items.reduce((a, it) => a + (it.state === 'accepted' ? it.hours : 0), 0)) + ' h accepted · ' + fmtH(items.reduce((a, it) => a + (it.state === 'submitted' ? it.hours : 0), 0)) + ' h awaiting acceptance';
     const cpdYear = items.filter((it) => it.state === 'accepted').reduce((a, it) => a + it.cpd, 0);
     const clouds = this.clouds(items, byId);
     const c = this.constellation(items, clouds), r = this.radar(clouds), rd = this.road(items, clouds);
@@ -426,12 +432,12 @@ export class Logic {
         return { n, label: lab, note: isThis ? 'This learning' : tgt ? this.nextStage() : mine ? 'Reached' : '', bg: isThis ? '#1a1d18' : mine ? '#eef7dc' : '#fff', fg: isThis ? '#fff' : mine ? '#3f6a0a' : '#8b918a', bd: isThis ? '#1a1d18' : tgt ? '#1a1d18' : mine ? '#c9e39a' : '#e1e5dc' };
       }),
       // Ratings and notes come from colleagues once they are stored; none are seeded.
-      rating: 'No ratings or notes yet', notes: [] as { initials: string; who: string; text: string }[],
+      rating: 'Ratings and notes are not available yet', notes: [] as { initials: string; who: string; text: string }[],
       frac: d0.pct / 100, hoursDone: (Math.round(d0.hours * d0.pct / 100 * 10) / 10) + ' h', hoursText: 'logged of ' + d0.hoursLabel,
-      kv: [{ k: 'Format', v: d0.format }, { k: 'Source', v: d0.source }, { k: 'Effort', v: d0.hoursLabel }, { k: 'Level', v: d0.lvlLabel }, { k: 'CPD units', v: d0.cpd ? d0.cpd + ' · ACCA, ITAA' : 'None' }, { k: 'Deadline', v: d0.hasDue ? d0.due : 'None set' }, { k: 'Counts toward', v: d0.domLabel + ' · hours' }],
+      kv: [{ k: 'Format', v: d0.format }, { k: 'Source', v: d0.source }, { k: 'Effort', v: d0.hoursLabel }, { k: 'Level', v: d0.lvlLabel }, { k: 'CPD units', v: d0.cpd ? d0.cpd + (d0.cpd === 1 ? ' unit' : ' units') : 'None' }, { k: 'Deadline', v: d0.hasDue ? d0.due : 'None set' }, { k: 'Counts toward', v: d0.domLabel + ' · hours' }],
       canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || d0.state === 'in-progress',
       canAsk: d0.state === 'in-progress',
-      approvalNote: d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts your evidence.' : d0.ob === 'open' ? 'Open items need no approval. Adding one tells ' + this.counsellorFull() + ' what you are curious about.' : 'Completion is logged automatically by ' + d0.source + ' where connected.',
+      approvalNote: d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
       canAcceptIt: this.canAccept(d0.state), paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
       av: AVATARS[d0.id] ? (() => {
         const AV = AVATARS[d0.id]; const best = AV.skills.map((_sk, k) => Math.max(0, ...AV.attempts.map((a) => a[1][k])));
@@ -439,7 +445,7 @@ export class Logic {
           persona: AV.persona, role: AV.role, initials: AV.initials, brief: AV.brief, sub: AV.attempts.length ? AV.attempts.length + ' of 3 runs used · best run counts' : 'No runs yet · 3 runs available',
           skills: AV.skills.map((sk, k) => ({ name: sk, w: (best[k] / 5 * 100) + '%', val: best[k] ? best[k] + ' / 5' : '—', color: best[k] >= AV.target ? '#86BC25' : '#e0a100', tgt: (AV.target / 5 * 100) + '%' })),
           hasRuns: AV.attempts.length > 0, runs: AV.attempts.slice().reverse().map((a) => ({ date: a[0], scores: AV.skills.map((sk, k) => sk + ' ' + a[1][k]).join(' · '), note: a[2] })),
-          start: () => this.say('Prototype: opens the avatar studio · voice or text, about 10 minutes · the run stays private until you share it'),
+          start: () => this.say('Coming with the avatar studio'),
           share: () => this.say('Best run shared with ' + this.counsellorFull() + ' · they see scores and the transcript, not the recording'),
         };
       })() : null,
@@ -496,8 +502,8 @@ export class Logic {
       setShare: (v: string) => { this.setState((st) => ({ share: Object.assign({}, st.share, { [t.id]: v }) })); this.say(v === 'counsellor' ? t.name + ' result shared with ' + this.counsellorFull() : t.name + ' result is now visible to you only'); },
     }));
     const domName = (k: string) => (DOMAINS.find((d) => d[0] === k) || [k, k])[1];
-    const ambitions = this.subject.data.ambitions.map((a) => ({ id: a.id, text: a.text, meta: [a.horizon, a.from].filter(Boolean).join(' · '), doms: a.doms.map((d) => ({ key: d, label: domName(d) })), remove: () => this.persist(() => removeAmbition(a.id), 'Ambition removed') }));
-    const interests = this.subject.data.interests.map((i) => ({ label: i.label, dom: domName(i.dom), remove: () => this.persist(() => removeInterest(this.subject.id, i.label), 'Interest removed') }));
+    const ambitions = this.privateData().ambitions.map((a) => ({ id: a.id, text: a.text, meta: [a.horizon, a.from].filter(Boolean).join(' · '), doms: a.doms.map((d) => ({ key: d, label: domName(d) })), remove: () => this.persist(() => removeAmbition(a.id), 'Ambition removed') }));
+    const interests = this.privateData().interests.map((i) => ({ label: i.label, dom: domName(i.dom), remove: () => this.persist(() => removeInterest(this.subject.id, i.label), 'Interest removed') }));
     const pp = s.chatFor === this.subject.id ? s.proposal : null;
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
@@ -521,7 +527,7 @@ export class Logic {
       },
       bl, readiness, readinessW: readiness + '%', readinessFrac: readiness / 100, readinessDash: (readiness / 100 * 2 * Math.PI * 38) + ' ' + (2 * Math.PI * 38),
       readinessText: 'Readiness counts hours on mandatory and advised items up to the ' + this.nextStage() + ' stage in ' + bl + '. Your own choices count toward levels and hours, not readiness.',
-      centerSub: this.atTop() ? this.nextStage() + ' · top of the career path' : (this.subject.stage || STAGES[0]) + ' → ' + this.nextStage() + ' · ' + readiness + '% ready', hoursYear, cpdYear, hoursChip: hoursYear + ' of 80 h this year',
+      centerSub: this.atTop() ? this.nextStage() + ' · top of the career path' : (this.subject.stage || STAGES[0]) + ' → ' + this.nextStage() + ' · ' + readiness + '% ready', hoursYear, hoursSplit, cpdYear, hoursChip: hoursYear + ' of 80 h this year',
       noLineNote: this.subject.businessLine ? '' : (this.subject.readOnly ? this.subject.name + ' has' : 'You have') + ' no business line yet, so mandatory and advised items are shown for ' + bl + '. An admin sets the line in User management.',
       mapLead: 'You sit in the middle. The nine domains around you hold every learning the firm knows about; your ' + bl + ' affiliation decides which ones are mandatory, your counsellor advises some, the rest is yours to choose. Clouds show where your projects, personality and ambitions pull you.',
       crumb: titles[s.screen][0], headerTitle: titles[s.screen][1], screen: s.screen,
@@ -546,7 +552,7 @@ export class Logic {
       marks: [this.levels.every((l) => l > 0) ? 'All nine domains touched' : '', items.some((it) => it.state === 'accepted' && it.format === 'Certification') ? 'First certification' : ''].filter(Boolean),
       ...kbVals(this),
       // library
-      libLead: LEARN.length + ' learnings across nine domains · 6 connected programs · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),
+      libLead: LEARN.length + ' learnings across nine domains · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),
       obOptions: [opt('all', 'All'), opt('mandatory', 'Mandatory'), opt('advised', 'Advised'), opt('chosen', 'Chosen'), opt('open', 'Open')], libOb: s.libOb, setLibOb: (v: string) => this.setState({ libOb: v }),
       levelOptions: [opt('0', 'Any level')].concat(LEVELS.map((l, i) => opt(String(i + 1), 'L' + (i + 1) + ' · ' + l))), libLevel: s.libLevel, setLibLevel: (e: ChangeEvent<HTMLSelectElement>) => this.setState({ libLevel: e.target.value }),
       fmtTiles: formatTiles(LEARN, s.libFormat, (f) => this.setState({ libFormat: f })),
@@ -556,11 +562,12 @@ export class Logic {
       det, noteOpen: s.noteOpen, toggleNote: () => this.setState({ noteOpen: !s.noteOpen }), saveNote: () => { this.setState({ noteOpen: false }); this.say('Note posted · visible to colleagues on this learning'); },
       ratingOptions: [1, 2, 3, 4, 5].map((n) => opt(String(n), String(n))), myRating: s.myRating, setRating: (v: string) => this.setState({ myRating: v }),
       acceptIt: () => this.accept(d0.id, d0.title), addToPath: () => this.addToPath(d0.id), logHours: () => this.logHours(d0),
-      askApprove: () => this.persist(() => saveProgress(this.subject.id, d0.id, { state: 'submitted', pct: 100 }), 'Sent to ' + this.counsellorFull() + ' · they see your evidence and the hours you logged'),
+      askApprove: () => this.persist(() => saveProgress(this.subject.id, d0.id, { state: 'submitted', pct: 100 }), 'Sent to ' + this.counsellorFull() + ' · they see the hours you logged'),
       // projects & profile
       projLead: PROJECTS.length + ' engagements since Sep 2025 · ' + PROJECTS.filter((p) => p.dims).length + ' evaluated · synced from staffing and the performance tool. Advice from each evaluation lands in the projects cloud on your map.',
       projList, pr, requestEval: () => this.say('Prototype: sends an evaluation request through the performance tool · the evaluator is reminded after 10 days'),
-      profLead: 'Profiles, ambitions and interests are yours. You decide what your counsellor sees. None of this counts toward readiness; it shapes the clouds and paths on your map.',
+      profLead: 'Your ambitions, interests and personality results are private. Your counsellor sees your learning track: progress and acceptance.',
+      privateNote: this.subject.readOnly ? 'Ambitions, interests and personality results are private to ' + this.subject.name.split(' ')[0] + '.' : '',
       tests, shareOptions: [opt('me', 'Only me'), opt('counsellor', this.subject.counsellor ? this.counsellorFirst() : 'Counsellor')], addTest: () => this.say('Prototype: upload a report or enter results · Four Colours, MBTI, Big Five, DISC, Belbin team roles, Hogan'),
       ambitions, interests,
       chat: ([{ role: 'assistant', text: this.greeting() }] as ChatMsg[]).concat(this.myChat()), chatBusy: s.chatBusy, chatInput: s.chatInput, setChatInput: (e: ChangeEvent<HTMLInputElement>) => this.setState({ chatInput: e.target.value }),
@@ -572,7 +579,7 @@ export class Logic {
       teamLead: (n: number) => (n === 0 ? 'Nobody names ' : n === 1 ? 'One person names ' : n + ' people name ') + (this.subject.readOnly ? this.subject.name : 'you') + ' as counsellor. Readiness is measured against each person\'s next stage in their business line; mandatory items are the ones the firm chases.',
       // Rows for the counsellor screen, from real counsellees; opening one shows their app read-only.
       teamRows: (members: Member[], open: (id: string) => void) => members.map((m) => {
-        const t = memberSummary(m, s.maps, new Date());
+        const t = memberSummary(m, s.maps, new Date(), this.props.businessLine || 'Consulting');
         const initials = m.name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
         return {
           id: m.id, initials, name: m.name, grade: [m.stage || 'No stage', m.businessLine || 'No line'].join(' · '), readinessLabel: t.readiness + '%', barW: t.readiness + '%', hours: t.hours,
@@ -584,7 +591,7 @@ export class Logic {
       teamTabs: [opt('roster', 'Roster'), opt('heat', 'Levels by domain')], teamTab: s.teamTab, setTeamTab: (v: string) => this.setState({ teamTab: v }),
       domShort: DOMAINS.map((d) => d[2]), heatTargets: TARGET.map((v) => 'L' + v),
       // admin library
-      adminLead: LEARN.length + ' learnings · 6 connected programs · 3 need attention · last sync 28 Oct 2026 07:10', programs, adminQ: s.adminQ, setAdminQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ adminQ: e.target.value }),
+      adminLead: LEARN.length + ' learnings · ' + LEARN.filter((r) => LEARN_META[r[0]]?.status !== 'published').length + ' not yet published · the program panel shows example data', programs, adminQ: s.adminQ, setAdminQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ adminQ: e.target.value }),
       pubOptions: [opt('all', 'All'), opt('Published', 'Published'), opt('Needs review', 'Needs review'), opt('Draft', 'Draft')], adminStatus: s.adminStatus, setAdminStatus: (v: string) => this.setState({ adminStatus: v }), adminRows,
       syncNow: () => this.say('Sync started · Internal academy, Coursera / edX and Microsoft Learn · usually under a minute'),
       drawerOpen: s.drawerOpen, openDrawer: () => (this.editableLines().length ? this.setState({ drawerOpen: true, libForm: this.blankForm() }) : this.say('Only admins add learnings')), closeDrawer: () => this.setState({ drawerOpen: false, libForm: null }),
@@ -624,7 +631,7 @@ export class Logic {
       np >= 100 ? 'All hours logged · sent to ' + this.counsellorFull() + ' for acceptance' : '1 hour logged · ' + np + '% of ' + it.hoursLabel);
   }
   greeting() {
-    const a = this.subject.data.ambitions.length, i = this.subject.data.interests.length;
+    const a = this.privateData().ambitions.length, i = this.privateData().interests.length;
     const plural = (n: number, w: string) => n + ' ' + w + (n === 1 ? '' : 's');
     return 'I help you put your interests and ambitions into words. Nothing is saved until you confirm it. '
       + (a || i ? 'You have ' + plural(a, 'ambition') + ' and ' + plural(i, 'interest') + ' on file. ' : '')
@@ -642,7 +649,7 @@ export class Logic {
     if (t.includes('five years') || t.includes('5 years')) return { reply: 'Picture a normal week five years from now: which clients, which kind of work, and how much of it is leading others? Your answer is a good start for an ambition.', interests: [], ambition: null };
     if (t.includes('evaluation')) return { reply: 'No project evaluations are on file yet. Once the performance tool is connected I can summarise the themes they repeat. Meanwhile, what feedback from your last project do you remember most?', interests: [], ambition: null };
     if (t.includes('energy')) return { reply: 'Energy-transition work is a clear direction. Shall I save it as an ambition for the next three years? It pulls Industry & market, Regulations and Technology into your ambitions cloud.', interests: [], ambition: { text: 'Work mainly with energy-transition clients', horizon: '3 years', domains: ['ind', 'reg', 'tec'] } };
-    const k = KEYWORDS.find((x) => t.includes(x[0]) && !this.subject.data.interests.some((i) => i.label === x[1]));
+    const k = KEYWORDS.find((x) => t.includes(x[0]) && !this.privateData().interests.some((i) => i.label === x[1]));
     if (k) return { reply: 'That sounds like a real interest. I can save “' + k[1] + '” to your profile; it adds ' + (DOMAINS.find((d) => d[0] === k[2]) || [])[1] + ' to your ambitions cloud. What draws you to it?', interests: [{ label: k[1], domain: k[2] }], ambition: null };
     return { reply: 'Noted. What part of that would you want more of next year: the analysis, the client conversation, or leading the team?', interests: [], ambition: null };
   }
@@ -666,7 +673,7 @@ export class Logic {
   }
   saveProposal() {
     const p = this.state.proposal; if (!p || this.state.chatFor !== this.subject.id) return;
-    const id = this.subject.id, known = this.subject.data.interests;
+    const id = this.subject.id, known = this.privateData().interests;
     const amb = p.ambition;
     const fresh = p.interests.filter((i) => !known.some((x) => x.label.toLowerCase() === i.label.toLowerCase()));
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -764,7 +771,7 @@ export class Logic {
     if (this.props.liveAssistant !== false && window.claude?.complete) {
       try {
         const s = this.state;
-        const sys = 'You are the curriculum copilot of a consulting, audit, tax and legal firm. Learnings are mapped to audiences at career stages. Audiences (key = name): ' + Object.keys(AUD_INFO).map((k) => k + ' = ' + AUD_INFO[k].name + ' (' + lensOf(k)[1] + ', ' + AUD_INFO[k].reach + ' people)').join('; ') + '. Stages: ' + STAGES.join(', ') + '. Ambition and Profile audiences can only be advised, never mandatory.\nLearnings: ' + LEARN.map((r) => r[0] + ' ' + r[1] + ' (' + r[2] + ', L' + r[3] + ', ' + r[6] + ' h)').join('; ') + '.\nCurrent mappings: ' + Object.keys(s.maps).filter((k) => AUD_INFO[k] && s.maps[k].length).map((k) => k + ': ' + s.maps[k].map((m) => m[0] + '@' + m[1] + '/' + m[2]).join(' ')).join(' | ') + '.\nYearly budget: 80 h total, 40 h mandatory.\nReply ONLY with JSON {"reply": string, at most 60 words, plain matter-of-fact English, no emoji, "ops": [{"op": "add"|"remove"|"setOb", "aud": key, "lid": id, "stage": stage, "ob": "mandatory"|"advised"}]}. Propose at most 4 ops and only when the request asks for a change.';
+        const sys = 'You are the curriculum copilot of a consulting, audit, tax and legal firm. Learnings are mapped to audiences at career stages. Audiences (key = name): ' + Object.keys(AUD_INFO).map((k) => k + ' = ' + AUD_INFO[k].name + ' (' + lensOf(k)[1] + ', ' + AUD_INFO[k].reach + ' people)').join('; ') + '. Stages: ' + STAGES.join(', ') + '. Ambition and Profile audiences can only be advised, never mandatory.\nLearnings: ' + LEARN.map((r) => r[0] + ' ' + r[1] + ' (' + r[2] + ', L' + r[3] + ', ' + r[6] + ' h)').join('; ') + '.\nCurrent mappings: ' + Object.keys(s.maps).filter((k) => AUD_INFO[k] && s.maps[k].length).map((k) => k + ': ' + s.maps[k].map((m) => m[0] + '@' + m[1] + '/' + m[2]).join(' ')).join(' | ') + '.\nYearly budget: 80 h total, 40 h mandatory.\nReply ONLY with JSON {"reply": string, at most 60 words, plain matter-of-fact English, no emoji, "ops": [{"op": "add"|"remove"|"setOb", "aud": key, "lid": id, "stage": stage, "ob": "mandatory"|"advised"}]}. Propose at most 5 ops and only when the request asks for a change.';
         const out = await window.claude.complete({ system: sys, messages: [{ role: 'user', content: text }], max_tokens: 700 });
         const m = String(out).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
       } catch { res = null; }
@@ -829,8 +836,8 @@ export class Logic {
       title: msIt.title, sub: L[1] + ' · ' + ai.name + ' · ' + msM[1] + ' · ' + msIt.domLabel + ' · ' + msIt.lvlLabel + ' · ' + msIt.hoursLabel, ob: msM[2], canMand,
       setOb: (v: string) => this.applyOps([{ op: 'setOb', aud: audKey, lid: msM[0], stage: msM[1], ob: v }], 'Now ' + v + ' for ' + ai.name + ' · publish to apply'),
       touch: canMand
-        ? 'Reaches ' + this.reachAt(audKey, msM[1]) + ' people at ' + msM[1] + ' in ' + ai.name + '. ' + (msM[2] === 'mandatory' ? 'It joins their mandatory items and counts toward readiness.' : 'Advised items appear dashed on their maps; nobody is chased.')
-        : 'Reaches up to ' + this.reachAt(audKey, msM[1]) + ' people at ' + msM[1] + ' who ' + (lens === 'amb' ? 'saved this ambition' : 'shared this profile') + '. It shows in their ' + (lens === 'amb' ? 'ambitions' : 'personality') + ' cloud as a suggestion and never counts toward readiness.',
+        ? 'Reaches about ' + this.reachAt(audKey, msM[1]) + ' people (estimate) at ' + msM[1] + ' in ' + ai.name + '. ' + (msM[2] === 'mandatory' ? 'It joins their mandatory items and counts toward readiness.' : 'Advised items appear dashed on their maps; nobody is chased.')
+        : 'Reaches up to about ' + this.reachAt(audKey, msM[1]) + ' people (estimate) at ' + msM[1] + ' who ' + (lens === 'amb' ? 'saved this ambition' : 'shared this profile') + '. It shows in their ' + (lens === 'amb' ? 'ambitions' : 'personality') + ' cloud as a suggestion and never counts toward readiness.',
       also: (() => {
         const r = otherAuds(msM[0]).map((k) => { const m = maps[k].find((x) => x[0] === msM[0])!; const Lk = lensOf(k); return { color: Lk[2], text: Lk[1] + ' · ' + AUD_INFO[k].name + ' · ' + m[1] + ' · ' + (Lk[3] ? m[2] : 'suggested') }; });
         return r.length ? r : [{ color: '#d5dacf', text: 'No other audience' }];
@@ -847,7 +854,7 @@ export class Logic {
         id: g.id, kind: g.kind, st: g.st, where: lensOf(g.op.aud)[1] + ' · ' + an + (g.op.stage ? ' · ' + g.op.stage : ''), delay: (i * 60) + 'ms', hasQuote: !!g.quote, quote: g.quote,
         title: g.op.op === 'add' ? 'Add “' + it.title + '”' : g.op.op === 'remove' ? 'Remove “' + it.title + '”' : 'Make “' + it.title + '” ' + g.op.ob,
         evidence: g.evidence.replace('{mand}', String(Math.round(mine.mand))),
-        impact: g.op.op === 'remove' ? 'Removes a duplicate for ' + reach + ' people' : g.op.op === 'setOb' ? 'Frees ' + it.hours + ' mandatory h for ' + reach + ' people' : 'Reaches ' + reach + ' people · +' + it.hours + ' h each',
+        example: true, impact: (g.op.op === 'remove' ? 'Removes a duplicate for about ' + reach + ' people' : g.op.op === 'setOb' ? 'Frees ' + it.hours + ' mandatory h for about ' + reach + ' people' : 'Reaches about ' + reach + ' people · +' + it.hours + ' h each') + ' (estimate)',
         apply: () => {
           this.applyOps([g.op], 'Applied · ' + an + ' · publish to apply');
           this.setState((st) => ({ sigDone: { ...st.sigDone, [g.id]: true }, mapLens: AUD_INFO[g.op.aud].lens, mapAud: g.op.aud, mapStage: g.op.stage || null, mapSel: null }));

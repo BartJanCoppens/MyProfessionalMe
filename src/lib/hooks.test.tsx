@@ -141,21 +141,27 @@ describe('useTeam', () => {
     db.answer(() => ({ data: [{ id: 'm1', email: 'm1@example.com', full_name: null, business_line: 'Audit', career_stage: null }] }));
     vi.mocked(learner.loadLearner).mockResolvedValue(emptyData());
     const { result } = renderHook(() => useTeam('c1'));
-    expect(result.current).toBeNull();
-    await waitFor(() => expect(result.current).toEqual([{ id: 'm1', name: 'm1@example.com', stage: null, businessLine: 'Audit', data: emptyData() }]));
+    expect(result.current.members).toBeNull();
+    await waitFor(() => expect(result.current.members).toEqual([{ id: 'm1', name: 'm1@example.com', stage: null, businessLine: 'Audit', data: emptyData() }]));
+    expect(result.current.error).toBeNull();
     expect(has(db.on('profiles')[0], 'eq', 'counsellor_id', 'c1')).toBe(true);
   });
-  it('shows nobody when the team cannot load', async () => {
+  it('reports a team that cannot load, and loads it again on retry', async () => {
     db.answer(() => ({ error: { message: 'denied' } }));
     const { result } = renderHook(() => useTeam('c1'));
-    await waitFor(() => expect(result.current).toEqual([]));
+    await waitFor(() => expect(result.current.error).toBe('denied'));
+    expect(result.current.members).toBeNull();
+    db.answer(() => ({ data: [] }));
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.members).toEqual([]));
+    expect(result.current.error).toBeNull();
   });
   it('drops the previous person\'s team while the next one loads', async () => {
     db.answer(() => ({ data: [] }));
     const { result, rerender } = renderHook(({ id }) => useTeam(id), { initialProps: { id: 'c1' } });
-    await waitFor(() => expect(result.current).toEqual([]));
+    await waitFor(() => expect(result.current.members).toEqual([]));
     rerender({ id: 'c2' });
-    expect(result.current).toBeNull();
+    expect(result.current.members).toBeNull();
   });
 });
 

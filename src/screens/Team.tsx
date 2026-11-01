@@ -5,14 +5,15 @@ import type { Member } from '../logic/team';
 const ROSTER_COLS = 'minmax(0,2fr) minmax(0,1.6fr) 90px minmax(0,1.4fr) 70px';
 const HEAT_COLS = '200px repeat(9,minmax(0,1fr))';
 
-export default function TeamScreen({ vm, members, onOpen }: { vm: VM; members: Member[] | null; onOpen: (id: string) => void }) {
+export default function TeamScreen({ vm, members, error = null, onRetry, onOpen }: { vm: VM; members: Member[] | null; error?: string | null; onRetry?: () => void; onOpen: (id: string) => void }) {
   const team = members ? vm.teamRows(members, onOpen) : null;
   const note = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '18px 20px', color: '#5a6058' } as const;
   return (
     <>
       <PageTitle title="Your counsellees" lead={vm.teamLead(team?.length ?? 0)} />
       <Tabs tabs={vm.teamTabs} value={vm.teamTab} onChange={vm.setTeamTab} />
-      {!team && <div style={note}>Loading counsellees</div>}
+      {error && <div style={note}><div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>Your counsellees did not load</div>{error} · {onRetry && <LinkButton onClick={onRetry}>Try again</LinkButton>}</div>}
+      {!team && !error && <div style={note}>Loading counsellees</div>}
       {team && !team.length && (
         <div style={note}><div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>Nobody has {vm.who.readOnly ? vm.who.name : 'you'} as counsellor yet</div>An admin assigns counsellors in User management.</div>
       )}

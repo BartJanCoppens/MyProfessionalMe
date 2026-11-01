@@ -13,6 +13,7 @@ import { useContent } from './lib/useContent';
 import { useSubject } from './lib/useSubject';
 import type { Subject } from './lib/useSubject';
 import { useTeam } from './lib/useTeam';
+import type { Member } from './logic/team';
 import { db } from './test/fakeSupabase';
 import { emptyData, person, withProgress } from './test/harness';
 import type { Access } from './types';
@@ -36,13 +37,13 @@ const auth = (over: Partial<Auth> = {}, acc: Partial<Access> = {}): Auth => ({
 const loaded = { learnings: LEARN.map((r) => [r, { line: null, status: 'published' as const }] as [typeof r, { line: null; status: 'published' }]), maps: { ...MAPS0, ...AUD_MAPS0 }, bundles: BUNDLES0 };
 const subjectHook = (subject: Subject | null, over: Record<string, unknown> = {}) => ({ subject, options: [{ id: 'u1', label: 'Robin Test (you)' }], select: vi.fn(), reload: vi.fn(async () => {}), retry: vi.fn(), error: null, loading: false, ...over });
 
-function setup({ a = auth(), subject = person() as Subject | null, subj = {}, cont = {}, team = [] as ReturnType<typeof useTeam> } = {}) {
+function setup({ a = auth(), subject = person() as Subject | null, subj = {}, cont = {}, team = [] as Member[], teamError = null as string | null } = {}) {
   vi.mocked(useAuth).mockReturnValue(a);
   const s = subjectHook(subject, subj);
   vi.mocked(useSubject).mockReturnValue(s as unknown as ReturnType<typeof useSubject>);
   const c = { content: loaded, error: null, retry: vi.fn(), reload: vi.fn(async () => loaded), ...cont };
   vi.mocked(useContent).mockReturnValue(c);
-  vi.mocked(useTeam).mockReturnValue(team);
+  vi.mocked(useTeam).mockReturnValue({ members: teamError ? null : team, error: teamError, retry: vi.fn() });
   render(<App />);
   return { a, s, c };
 }
@@ -209,15 +210,14 @@ describe('a learner walking through the app', () => {
     nav('Library');
     fireEvent.click(screen.getByText('Holding scope with a procurement director'));
     button('Start a session');
-    expect(screen.getByRole('status').textContent).toMatch(/^Prototype: opens the avatar studio/);
+    expect(screen.getByRole('status').textContent).toMatch(/^Coming with the avatar studio$/);
   });
-  it('writes and posts a note on a learning', () => {
+  it('says ratings and notes are not available yet on a learning', () => {
     setup({ subject: person({ data: withProgress({ L7: ['in-progress', 40] }) }) });
     nav('Library');
     fireEvent.click(screen.getByText('Feedback that lands'));
-    button('Rate & leave a note');
-    button('Post note');
-    expect(screen.getByRole('status').textContent).toBe('Note posted · visible to colleagues on this learning');
+    expect(screen.getByText('Ratings and notes are not available yet')).toBeTruthy();
+    expect(screen.queryByText('Rate & leave a note')).toBeNull();
   });
   it('talks to the scripted assistant on the profile and saves its proposal', async () => {
     setup();

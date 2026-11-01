@@ -134,7 +134,7 @@ describe('learning detail', () => {
   });
   it('has no ratings or notes yet', () => {
     const det = detail('L1').vm().det;
-    expect(det.rating).toBe('No ratings or notes yet');
+    expect(det.rating).toBe('Ratings and notes are not available yet');
     expect(det.notes).toEqual([]);
   });
   it('opens, posts and closes a note, and keeps a rating', () => {
@@ -150,7 +150,7 @@ describe('learning detail', () => {
   it('lists the facts of the learning', () => {
     const det = detail('L17').vm().det;
     expect(det.kv).toEqual([{ k: 'Format', v: 'E-learning' }, { k: 'Source', v: 'Internal academy' }, { k: 'Effort', v: '1.5 h' }, { k: 'Level', v: 'Practitioner · L2' },
-      { k: 'CPD units', v: '1 · ACCA, ITAA' }, { k: 'Deadline', v: '30 Nov 2026' }, { k: 'Counts toward', v: 'Regulations · hours' }]);
+      { k: 'CPD units', v: '1 unit' }, { k: 'Deadline', v: '30 Nov 2026' }, { k: 'Counts toward', v: 'Regulations · hours' }]);
   });
   it('offers the right actions per state and obligation', () => {
     expect(detail('L3').vm().det).toMatchObject({ canAdd: true, canLog: true, canAsk: false });
@@ -161,9 +161,9 @@ describe('learning detail', () => {
   });
   it('explains approval per obligation, naming the counsellor', () => {
     const named = { subject: person({ counsellor: coach }) };
-    expect(detail('L7', named).vm().det.approvalNote).toBe('Mandatory items complete only after Sam Coach accepts your evidence.');
-    expect(detail('L3').vm().det.approvalNote).toBe('Open items need no approval. Adding one tells your counsellor what you are curious about.');
-    expect(detail('L20').vm().det.approvalNote).toBe('Completion is logged automatically by Internal academy where connected.');
+    expect(detail('L7', named).vm().det.approvalNote).toBe('Mandatory items complete only after Sam Coach accepts them.');
+    expect(detail('L3').vm().det.approvalNote).toBe('Open items count toward your hours and levels once your counsellor accepts them.');
+    expect(detail('L20').vm().det.approvalNote).toBe('Log your hours here; your counsellor accepts the result.');
   });
   it('explains an open learning a cloud suggests with its evidence', () => {
     const subject = person({ data: withProgress({}, { ambitions: [{ id: 'a1', text: 'Lead a team', horizon: '3 years', doms: ['lead'], from: '' }] }) });
@@ -177,7 +177,7 @@ describe('learning detail', () => {
     expect(av).toMatchObject({ persona: 'Marc Verhoeven', initials: 'MV', sub: 'No runs yet · 3 runs available', hasRuns: false });
     expect(av.skills.map((s) => [s.name, s.val])).toEqual([['Assertiveness', '—'], ['Clarity', '—'], ['Listening', '—']]);
     av.start();
-    expect(h.lastToast()).toMatch(/^Prototype: opens the avatar studio/);
+    expect(h.lastToast()).toMatch(/^Coming with the avatar studio$/);
     av.share();
     expect(h.lastToast()).toBe('Best run shared with Sam Coach · they see scores and the transcript, not the recording');
     expect(detail('L1').vm().det.av).toBeNull();
@@ -238,7 +238,7 @@ describe('adding to my path and asking approval', () => {
     h.vm().askApprove();
     await flush();
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L7', { state: 'submitted', pct: 100 });
-    expect(h.lastToast()).toBe('Sent to your counsellor · they see your evidence and the hours you logged');
+    expect(h.lastToast()).toBe('Sent to your counsellor · they see the hours you logged');
   });
 });
 

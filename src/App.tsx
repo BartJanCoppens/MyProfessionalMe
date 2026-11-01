@@ -94,7 +94,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
 
   return (
     <div data-pm-motion={vm.motionAttr} style={{ display: 'flex', minHeight: '100vh', background: '#f3f5f0', color: '#1a1d18', fontFamily: "'IBM Plex Sans',system-ui,sans-serif", fontSize: 13, lineHeight: 1.45 }}>
-      <Sidebar vm={vm} auth={auth} teamOverdue={(team || []).filter((m) => memberSummary(m, state.maps, today).overdue > 0).length} canPick={options.length > 1} onPick={() => setPicking(true)} onBackToMe={() => select(auth.profile!.id)} />
+      <Sidebar vm={vm} auth={auth} teamOverdue={(team.members || []).filter((m) => memberSummary(m, state.maps, today, cfg.businessLine || 'Consulting').overdue > 0).length} canPick={options.length > 1} onPick={() => setPicking(true)} onBackToMe={() => select(auth.profile!.id)} />
       <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <header style={{ height: 60, background: '#fff', borderBottom: '1px solid #e1e5dc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '0 32px', position: 'sticky', top: 0, zIndex: 5 }}>
           <div style={{ minWidth: 0, flex: '1 1 200px' }}>
@@ -112,7 +112,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
           {vm.screen === 'detail' && <DetailScreen vm={vm} />}
           {vm.screen === 'projects' && <ProjectsScreen vm={vm} />}
           {vm.screen === 'profile' && <ProfileScreen vm={vm} fileRef={file} chatRef={chat} />}
-          {vm.screen === 'team' && <TeamScreen vm={vm} members={team} onOpen={(id) => { select(id); logic.go('map'); }} />}
+          {vm.screen === 'team' && <TeamScreen vm={vm} members={team.members} error={team.error} onRetry={team.retry} onOpen={(id) => { select(id); logic.go('map'); }} />}
           {vm.screen === 'adminLib' && <AdminLibraryScreen vm={vm} />}
           {vm.screen === 'adminMap' && <AdminMappingScreen vm={vm} />}
           {vm.kb && <KnowledgeScreen kb={vm.kb} />}

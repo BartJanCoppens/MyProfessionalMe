@@ -178,7 +178,7 @@ describe('saving a learning', () => {
     const h = admin(domainAdmin(['Consulting']), { libForm: { ...admin().L().formFor(LEARN.find((r) => r[0] === 'L7')!), line: 'Consulting' } });
     await h.L().saveLearningForm('draft');
     expect(store.saveLearning).not.toHaveBeenCalled();
-    expect(h.lastToast()).toBe('Still mapped for Audit, Tax & Legal · ask their admins to unmap it before it becomes a draft');
+    expect(h.lastToast()).toBe('Still mapped for Audit, Tax & Legal · ask their admins to unmap it before it is hidden from learners');
     await h.L().saveLearningForm('published');
     expect(store.saveLearning).toHaveBeenCalledTimes(1);
   });

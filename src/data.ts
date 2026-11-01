@@ -95,7 +95,7 @@ export function setCatalogue(rows: [Learn, LearnMeta][]) {
 }
 // key, label, colour, canMand, who belongs, obligation policy, rule field
 export const LENSES: [string, string, string, boolean, string, string, string][] = [
- ['bl','Business line','#1a1d18',true,'Everyone whose contract sits in the business line, at their current stage.','Mandatory or advised. Mandatory items need Learning Council sign-off before they publish.','business_line'],
+ ['bl','Business line','#1a1d18',true,'Everyone whose contract sits in the business line, at their current stage.','Mandatory or advised.','business_line'],
  ['ind','Industry','#2f7fc1',true,'People with 300 or more charged hours in the sector over the last 12 months, from staffing data.','Mandatory or advised. Keep mandatory for sector regulation.','industry'],
  ['tec','Technology','#b5762a',true,'People who hold the skill tag, or charged hours on a project that uses the technology.','Mandatory or advised.','technology'],
  ['amb','Ambition','#4c7a10',false,'People who saved a matching ambition in My profile, matched on its text and domains.','Suggested only. Ambitions are personal and never create obligations.','ambition'],

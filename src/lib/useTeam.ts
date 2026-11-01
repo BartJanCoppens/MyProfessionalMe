@@ -14,9 +14,14 @@ async function fetchTeam(counsellorId: string): Promise<{ id: string; members: M
   return { id: counsellorId, members };
 }
 
-export function useTeam(counsellorId: string): Member[] | null {
-  const [team, setTeam] = useState<{ id: string; members: Member[] } | null>(null);
-  const [apply] = useState(() => latestOnly<{ id: string; members: Member[] }>((v) => setTeam(v)));
-  useEffect(() => { apply(fetchTeam(counsellorId)).catch(() => setTeam({ id: counsellorId, members: [] })); }, [apply, counsellorId]);
-  return team && team.id === counsellorId ? team.members : null;
+// members is null while loading or after a failed load; error says why, and retry loads again.
+export function useTeam(counsellorId: string): { members: Member[] | null; error: string | null; retry: () => void } {
+  const [team, setTeam] = useState<{ id: string; members: Member[] | null; error: string | null } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [apply] = useState(() => latestOnly<{ id: string; members: Member[] }>((v) => setTeam({ ...v, error: null })));
+  useEffect(() => {
+    apply(fetchTeam(counsellorId)).catch((err) => setTeam({ id: counsellorId, members: null, error: (err as Error).message }));
+  }, [apply, counsellorId, attempt]);
+  const mine = team && team.id === counsellorId ? team : null;
+  return { members: mine?.members ?? null, error: mine?.error ?? null, retry: () => { setTeam(null); setAttempt((n) => n + 1); } };
 }

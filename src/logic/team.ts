@@ -17,9 +17,10 @@ export function deadline(due: string): Date | null {
   return day ? new Date(Date.UTC(year, m, day, 23, 59)) : new Date(Date.UTC(year, m + 1, 0, 23, 59));
 }
 
-export function memberSummary(member: Member, maps: Record<string, Mapping[]>, today: Date) {
+// fallbackLine: the line a person without one is shown (Logic.bl()), so counsellor and learner see the same readiness.
+export function memberSummary(member: Member, maps: Record<string, Mapping[]>, today: Date, fallbackLine = 'Consulting') {
   const progress = member.data.progress, stage = stageIndex(member.stage);
-  const map = (member.businessLine && maps[member.businessLine]) || [];
+  const map = maps[member.businessLine || fallbackLine] || [];
   const done = (id: string, hours: number) => {
     const p = progress[id];
     return !p ? 0 : p.state === 'accepted' || p.state === 'submitted' ? hours : p.state === 'in-progress' ? hours * p.pct / 100 : 0;
@@ -30,7 +31,7 @@ export function memberSummary(member: Member, maps: Record<string, Mapping[]>, t
   map.forEach(([id, st, ob]) => {
     const row = LEARN.find((r) => r[0] === id);
     if (!row || STAGES.indexOf(st) > stage + 1) return;
-    tot += row[6]; got += done(id, row[6]);
+    tot += row[6]; got += progress[id]?.state === 'accepted' ? row[6] : 0; // readiness: accepted hours only
     const due = ob === 'mandatory' && row[8] ? deadline(row[8]) : null;
     if (due && due < today && progress[id]?.state !== 'accepted') {
       overdue++;

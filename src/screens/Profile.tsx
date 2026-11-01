@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Button, ChatBubble, Eyebrow, FilterChip, Hover, Input, LinkButton, PageTitle, PillToggle, Tag } from '../ds';
+import { Banner, Button, ChatBubble, Eyebrow, FilterChip, Hover, Input, LinkButton, PageTitle, PillToggle, Tag } from '../ds';
 import type { VM } from '../model';
 import { AvatarFace } from './AvatarFace';
 
@@ -11,6 +11,7 @@ export default function ProfileScreen({ vm, fileRef, chatRef }: Props) {
     <>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <PageTitle title="My profile" lead={vm.profLead} />
+        {vm.privateNote && <Banner tone="info">{vm.privateNote}</Banner>}
         <Button variant="secondary" onClick={vm.addTest}>+ Add a test result</Button>
       </div>
 

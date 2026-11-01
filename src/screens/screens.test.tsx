@@ -118,7 +118,7 @@ describe('the learning detail screen', () => {
     expect(screen.getAllByText(/Noah Claes/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/^Share best run with/)).toBeNull();
     click('Start a session');
-    expect(toast()).toMatch(/^Prototype: opens the avatar studio/);
+    expect(toast()).toMatch(/^Coming with the avatar studio$/);
   });
   it('asks for approval of a learning in progress', () => {
     detail('L7', person({ data: withProgress({ L7: ['in-progress', 40] }) }));
@@ -130,14 +130,10 @@ describe('the learning detail screen', () => {
     await act(async () => { click('Accept'); });
     expect(learner.acceptLearning).toHaveBeenCalledWith('u1', 'L10');
   });
-  it('rates and writes a note', () => {
+  it('offers no rating or note form until notes are stored', () => {
     detail('L1');
-    click('Rate & leave a note');
-    click('5');
-    fireEvent.change(screen.getByPlaceholderText('One or two lines that help a colleague decide'), { target: { value: 'Useful' } });
-    expect(current.myRating).toBe('5');
-    click('Post note');
-    expect(toast()).toBe('Note posted · visible to colleagues on this learning');
+    expect(screen.getByText('Ratings and notes are not available yet')).toBeTruthy();
+    expect(screen.queryByText('Rate & leave a note')).toBeNull();
   });
 });
 
@@ -198,6 +194,15 @@ describe('the projects screen', () => {
 describe('the team screen', () => {
   const team = (members: Member[] | null, tab = 'roster') => { const onOpen = vi.fn(); show((vm) => <TeamScreen vm={vm} members={members} onOpen={onOpen} />, { screen: 'team', teamTab: tab }); return onOpen; };
   const kim: Member = { id: 'm1', name: 'Kim Learner', stage: 'Analyst', businessLine: 'Consulting', data: emptyData() };
+  it('says when the counsellees did not load, and tries again', () => {
+    const onRetry = vi.fn();
+    show((vm) => <TeamScreen vm={vm} members={null} error="denied" onRetry={onRetry} onOpen={vi.fn()} />, { screen: 'team' });
+    expect(screen.getByText('Your counsellees did not load')).toBeTruthy();
+    expect(screen.queryByText('Loading counsellees')).toBeNull();
+    expect(screen.queryByText('Nobody has you as counsellor yet')).toBeNull();
+    fireEvent.click(screen.getByText('Try again'));
+    expect(onRetry).toHaveBeenCalled();
+  });
   it('waits for the counsellees and says when there are none', () => {
     team(null);
     expect(screen.getByText('Loading counsellees')).toBeTruthy();

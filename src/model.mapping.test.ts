@@ -164,7 +164,7 @@ describe('the selection dock', () => {
     const ms = curr(systemAdmin(), { mapSel: 'L7' }).vm().ms!;
     expect(ms).toMatchObject({
       title: 'Feedback that lands', ob: 'mandatory', canMand: true, sub: 'Business line · Consulting · Analyst · Personal growth · Practitioner · L2 · 1.5 h',
-      touch: 'Reaches 97 people at Analyst in Consulting. It joins their mandatory items and counts toward readiness.',
+      touch: 'Reaches about 97 people (estimate) at Analyst in Consulting. It joins their mandatory items and counts toward readiness.',
       rulePlain: 'Business line is Consulting and stage is Analyst → mandatory before the next promotion review',
       ruleExpr: 'business_line == "Consulting" && stage == "Analyst" → mandatory(L7)',
     });
@@ -186,7 +186,7 @@ describe('the selection dock', () => {
   it('keeps ambition audiences advised and describes them as suggestions', () => {
     const h = curr(systemAdmin(), { mapLens: 'amb', mapAud: 'amb:sust', mapSel: 'L34' });
     const ms = h.vm().ms!;
-    expect(ms.touch).toBe('Reaches up to 12 people at Senior consultant who saved this ambition. It shows in their ambitions cloud as a suggestion and never counts toward readiness.');
+    expect(ms.touch).toBe('Reaches up to about 12 people (estimate) at Senior consultant who saved this ambition. It shows in their ambitions cloud as a suggestion and never counts toward readiness.');
     expect(ms.ruleExpr).toBe('ambition == "Sustainability lead" && stage == "Senior consultant" → suggest(L34)');
     ms.setOb('mandatory');
     expect(mapOf(h, 'amb:sust')).toContainEqual(['L34', 'Senior consultant', 'advised']);
@@ -237,10 +237,10 @@ describe('signals', () => {
   });
   it('describe the change, where it lands and its impact', () => {
     const cards = curr().vm().sigCards;
-    expect(cards[0]).toMatchObject({ title: 'Add “Negotiating scope with procurement”', where: 'Industry · Energy & utilities · Senior consultant', impact: 'Reaches 22 people · +7 h each', hasQuote: true });
-    expect(cards[1]).toMatchObject({ title: 'Make “CSRD essentials” advised', impact: 'Frees 10 mandatory h for 22 people' });
+    expect(cards[0]).toMatchObject({ title: 'Add “Negotiating scope with procurement”', where: 'Industry · Energy & utilities · Senior consultant', impact: 'Reaches about 22 people · +7 h each (estimate)', hasQuote: true });
+    expect(cards[1]).toMatchObject({ title: 'Make “CSRD essentials” advised', impact: 'Frees 10 mandatory h for about 22 people (estimate)' });
     expect(cards[1].evidence).toMatch(/^A Senior consultant in Energy & utilities stacks 19 h of mandatory learning/);
-    expect(cards[4]).toMatchObject({ title: 'Remove “Value-chain cost modelling in Excel”', impact: 'Removes a duplicate for 25 people', hasQuote: false });
+    expect(cards[4]).toMatchObject({ title: 'Remove “Value-chain cost modelling in Excel”', impact: 'Removes a duplicate for about 25 people (estimate)', hasQuote: false });
   });
   it('apply the change and open its audience', () => {
     const h = curr();

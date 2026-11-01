@@ -123,7 +123,7 @@ describe('the road', () => {
     const vm = harness({ subject: person({ data: withProgress({ L1: 'accepted', L2: ['in-progress', 25], L3: 'submitted' }) }) }).vm();
     expect(vm.inflightCount).toBe(2);
     expect(vm.roadInflight.map((r) => r.label)).toEqual(['Value-chain cost modelling in Excel · In progress · 25%', 'Target operating model casebook · Awaiting counsellor']);
-    expect(vm.roadBehind).toBe('1 completed · 6 h since Jan 2026');
+    expect(vm.roadBehind).toBe('1 completed · 6 h accepted so far');
     expect(vm.roadLanes[0].cells.flatMap((c) => c.items.map((i) => i.id))).not.toContain('L1');
   });
   it('adds a lane per visible cloud, placed by level', () => {

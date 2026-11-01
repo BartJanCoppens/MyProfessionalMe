@@ -99,6 +99,8 @@ S: up to one week. M: two to three weeks. L: four to six weeks. One developer wo
 
 ### F1 Hardening and honest copy (S, v0.4.1)
 
+> **Shipped in v0.4.1 (1 Nov 2026)**, except change 8 (leaked-password protection: a dashboard switch for the owner, Auth → Passwords, available on paid Supabase plans) and change 12 (deferred: no browser test setup yet).
+
 **Goal.** Make what exists consistent with the owner's answers and stop the app from claiming what it does not do. Closes E2.9, E11.8, E12.9, E16.6, E16.7, E1.12, J08.7, J24.5, and the Q1, Q5 and Q8 defects (verification §1.5, N1–N3, N6–N9).
 
 **Changes.**
@@ -116,7 +118,7 @@ S: up to one week. M: two to three weeks. L: four to six weeks. One developer wo
 | 9 | RLS coverage: add the missing cases (below) and look up the System Admin id instead of hard-coding it. | `supabase/tests/rls.sql` |
 | 10 | Honest copy and labels (table below). | `src/model.ts`, `src/data.ts`, `src/kbVals.ts` |
 | 11 | The live copilot prompt asks for at most five operations, matching `validOps()`. | `Logic.askCp()` |
-| 12 | Accessibility check: an automated axe scan of the map, library and detail at 360 px in a Playwright run, plus a keyboard-only walk-through recorded in the test catalogue (NAV-15, MAP-29). | E1.12 |
+| 12 | Accessibility check: an automated axe scan of the map, library and detail at 360 px in a Playwright run, plus a keyboard-only walk-through recorded in the test catalogue (NAV-15, MAP-29). Deferred in v0.4.1 to keep it simple: the project has no browser test setup yet. | E1.12 |
 
 **Honest copy (change 10).**
 
@@ -655,6 +657,8 @@ flowchart LR
 | External hosts (IDP Studio, E5) | Features stall on operations work | Both sit at the end of the sequence; nothing earlier depends on them. |
 
 ## 6. Open questions that block implementation
+
+The owner accepted every proposed default on 1 Nov 2026. F8-a and F13-a ("owner decides") stay open until F8 and F13 start.
 
 | Id | Question | Blocks | Proposed default |
 |---|---|---|---|

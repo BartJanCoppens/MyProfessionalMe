@@ -166,7 +166,7 @@ describe('editing the overview', () => {
     const h = open('B1');
     h.kb().kbs.reindex();
     expect(h.bundle('B1').status).toBe('reindex');
-    expect(h.lastToast()).toBe('Re-indexing Operating model & cost methods · creators keep using the last index until it finishes');
+    expect(h.lastToast()).toBe('Re-indexing Operating model & cost methods (simulated) · creators keep using the last index until it finishes');
     vi.advanceTimersByTime(2200);
     expect(h.bundle('B1')).toMatchObject({ status: 'indexed', updated: '31 Oct 2026' });
     expect(h.bundle('B1').sources.map((s) => s[4])).toEqual(['31 Oct', '31 Oct', '27 Oct']);
@@ -239,9 +239,8 @@ describe('sources', () => {
     expect(h.lastToast()).toBe('Name the source first');
     expect(h.wrote('bundles')).toBe(false);
   });
-  it('adds a source, indexes it and reports passages after a moment', () => {
+  it('adds a source as not indexed, without invented passage counts', () => {
     vi.useFakeTimers();
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const h = open('B1');
     h.kb().kbSetConn('sharepoint');
     expect(h.kb().kbAddPh).toBe('SharePoint folder URL');
@@ -249,13 +248,12 @@ describe('sources', () => {
     h.kb().kbSetSens(ev('internal'));
     h.kb().kbAddSource();
     expect(h.bundle('B1').sources[3]).toEqual(['Pricing method v2', 'sharepoint', 'connected', 0, '31 Oct', 'internal']);
-    expect(h.bundle('B1').status).toBe('reindex');
-    expect(h.state.kbAdd).toEqual({ conn: 'sharepoint', name: '', sens: 'internal' });
-    expect(h.lastToast()).toBe('Added · indexing Pricing method v2 · an OKF source file was created');
-    expect(h.kb().kbs.sources[3].chunks).toBe('indexing');
-    vi.advanceTimersByTime(1800);
-    expect(h.bundle('B1').sources[3][3]).toBe(90);
     expect(h.bundle('B1').status).toBe('indexed');
+    expect(h.state.kbAdd).toEqual({ conn: 'sharepoint', name: '', sens: 'internal' });
+    expect(h.lastToast()).toBe('Added · an OKF source file was created; indexing arrives with the retrieval backend');
+    expect(h.kb().kbs.sources[3].chunks).toBe('Not indexed');
+    vi.advanceTimersByTime(1800);
+    expect(h.bundle('B1').sources[3][3]).toBe(0);
   });
   it('keeps a client source out of retrieval and a draft bundle a draft', () => {
     vi.useFakeTimers();
@@ -427,7 +425,7 @@ describe('creating and importing bundles', () => {
 describe('test retrieval', () => {
   it('ranks passages with the default model and drafts a cited answer from them', () => {
     const h = open('B2', { kbQ: q });
-    expect(h.kb().kbTestSub).toBe('Top 3 · threshold 0.80 · 70% keyword · Claude Sonnet');
+    expect(h.kb().kbTestSub).toBe('Top 3 · threshold 0.80 · 70% keyword · Claude Sonnet · simulated keyword scores');
     h.kb().kbAsk();
     const kb = h.kb();
     expect(kb.kbHasHits).toBe(true);
@@ -462,7 +460,7 @@ describe('test retrieval', () => {
     expect(h.kb().kbTestModelOptions.map((o) => o.label)).toEqual(['Legal strict · default', 'Quick answers']);
     h.kb().kbSetTestModel(ev('Mquick1'));
     expect(h.state).toMatchObject({ kbTestModel: 'Mquick1', kbHits: null, kbAnswer: '', kbBusy: false });
-    expect(h.kb().kbTestSub).toBe('Top 3 · threshold 0.65 · 40% keyword · Claude Haiku');
+    expect(h.kb().kbTestSub).toBe('Top 3 · threshold 0.65 · 40% keyword · Claude Haiku · simulated keyword scores');
     h.kb().kbSetQ(ev('hello'));
     expect(h.state.kbQ).toBe('hello');
   });

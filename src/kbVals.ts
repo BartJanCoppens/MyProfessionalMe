@@ -122,11 +122,9 @@ function kbScreen(L: Logic) {
   };
   const addSource = () => {
     const a = s.kbAdd, nm = a.name.trim(); if (!nm) { L.say('Name the source first'); return; }
-    const n = 20 + Math.floor(Math.random() * 140);
-    up({ sources: b.sources.concat([[nm, a.conn, a.conn === 'upload' ? '1 file' : 'connected', 0, '31 Oct', a.sens]]), status: b.status === 'draft' ? 'draft' : 'reindex' });
+    up({ sources: b.sources.concat([[nm, a.conn, a.conn === 'upload' ? '1 file' : 'connected', 0, '31 Oct', a.sens]]) });
     L.setState({ kbAdd: { ...a, name: '' } });
-    L.say(a.sens === 'client' || a.sens === 'licensed' ? 'Added · stored for provenance, never retrieved' : 'Added · indexing ' + nm + ' · an OKF source file was created');
-    setTimeout(() => up((x) => ({ status: x.status === 'draft' ? 'draft' : 'indexed', sources: x.sources.map((r) => (r[0] === nm && r[3] === 0 && !excluded(r) ? [r[0], r[1], r[2], n, r[4], r[5]] : r)) })), 1800);
+    L.say(a.sens === 'client' || a.sens === 'licensed' ? 'Added · stored for provenance, never retrieved' : 'Added · an OKF source file was created; indexing arrives with the retrieval backend');
   };
   const download = () => {
     const blob = new Blob([tarBytes(slugify(b.name), files) as BlobPart], { type: 'application/x-tar' }), url = URL.createObjectURL(blob), el = document.createElement('a');
@@ -135,7 +133,7 @@ function kbScreen(L: Logic) {
   };
 
   return {
-    kbLead: B.length + ' bundles across ' + TOPICS.length + ' topic areas · ' + B.reduce((a, x) => a + passages(x), 0).toLocaleString('en-GB') + ' passages indexed. Each bundle is a set of sources, RAG models and Open Knowledge Format files that creators draft from. Client-confidential material is never retrieved.',
+    kbLead: B.length + ' bundles across ' + TOPICS.length + ' topic areas · ' + B.reduce((a, x) => a + passages(x), 0).toLocaleString('en-GB') + ' passages indexed. Each bundle is a set of sources, RAG models and Open Knowledge Format files that creators draft from. Client-confidential material is never retrieved. Passage counts, indexing and similarity scores are simulated until the retrieval backend exists.',
     kbOnImport: (e: Input) => { const list = e.target.files; importFiles(L, list).finally(() => { e.target.value = ''; }); },
     kbNew: () => {
       const id = 'B' + Date.now();
@@ -155,7 +153,7 @@ function kbScreen(L: Logic) {
       name: b.name, descRaw: b.desc, desc: b.desc || 'No description yet.', owner: b.owner + ' · last indexed ' + b.updated, topicPath: tpath(b.topic), st: st[0], stLabel: st[1], stIcon: st[2], editing: s.kbEdit, editLabel: s.kbEdit ? 'Done' : 'Edit',
       toggleEdit: () => L.setState((st2) => ({ kbEdit: !st2.kbEdit })), setName: (e: Input) => up({ name: e.target.value }), setDesc: (e: Area) => up({ desc: e.target.value }),
       reindex: () => {
-        up({ status: 'reindex' }); L.say('Re-indexing ' + b.name + ' · creators keep using the last index until it finishes');
+        up({ status: 'reindex' }); L.say('Re-indexing ' + b.name + ' (simulated) · creators keep using the last index until it finishes');
         setTimeout(() => up((x) => ({ status: 'indexed', updated: '31 Oct 2026', sources: x.sources.map((r) => (excluded(r) ? r : [r[0], r[1], r[2], r[3], '31 Oct', r[5]])) })), 2200);
       },
       facts: [{ k: 'Passages', v: passages(b).toLocaleString('en-GB') }, { k: 'Concepts', v: String(b.concepts.length) }, { k: 'Sources', v: String(b.sources.length) }, { k: 'RAG models', v: String(b.models.length) }, { k: 'Used by', v: b.usedBy + ' pieces' }],
@@ -169,7 +167,7 @@ function kbScreen(L: Logic) {
         : [{ key: '-', title: 'No concepts yet', desc: 'Import OKF files or add sources and re-index', type: '', open: () => {} }],
       sources: b.sources.map((r, k) => {
         const sn = SENS[r[5]], ex = excluded(r), old = b.status === 'stale' && r[4] === '3 Mar';
-        return { key: k + r[0], name: r[0], type: KB_TYPES[r[1]], chunks: ex ? '—' : r[3] ? String(r[3]) : 'indexing', synced: r[4], sens: sn[0], tone: sn[1], op: ex ? 0.6 : 1,
+        return { key: k + r[0], name: r[0], type: KB_TYPES[r[1]], chunks: ex ? '—' : r[3] ? String(r[3]) : 'Not indexed', synced: r[4], sens: sn[0], tone: sn[1], op: ex ? 0.6 : 1,
           note: ex ? (r[5] === 'client' ? 'Excluded from retrieval · client data' : 'Retrieval blocked · licence forbids reuse') : old ? 'Older than ' + b.fresh + ' months · re-sync or replace' : r[2], noteFg: old ? '#9a3d0c' : '#8b918a',
           remove: () => up({ sources: b.sources.filter((_, j) => j !== k), chunks: b.chunks.filter((c) => c[0] !== k).map((c) => [c[0] > k ? c[0] - 1 : c[0], c[1]] as [number, string]),
             concepts: b.concepts.map((c) => [c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7].filter((x) => x !== k).map((x) => (x > k ? x - 1 : x))]) }) };
@@ -205,7 +203,7 @@ function kbScreen(L: Logic) {
     kbValidate: validate, kbValidRows: (s.kbValid || []).map((r) => ({ text: r[1], dot: r[0] ? '#86BC25' : '#e0a100', fg: r[0] ? '#3d423b' : '#7a5000' })), kbHasValid: !!s.kbValid,
     kbDownload: download,
     kbTestModelOptions: b.models.map((m) => ({ value: m.id, label: m.name + (m.def ? ' · default' : '') })), kbTestModelId: tm.id, kbSetTestModel: (e: Sel) => { askSeq++; L.setState({ kbTestModel: e.target.value, kbHits: null, kbAnswer: '', kbBusy: false }); },
-    kbTestSub: 'Top ' + tm.topk + ' · threshold ' + tm.thresh + ' · ' + tm.hybrid + '% keyword · ' + ragOptLabel('gen', tm.gen),
+    kbTestSub: 'Top ' + tm.topk + ' · threshold ' + tm.thresh + ' · ' + tm.hybrid + '% keyword · ' + ragOptLabel('gen', tm.gen) + ' · simulated keyword scores',
     kbQ: s.kbQ, kbSetQ: (e: Input) => L.setState({ kbQ: e.target.value }), kbKey: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') ask(L, b, tm, s.kbQ); }, kbAsk: () => ask(L, b, tm, s.kbQ), kbBusy: s.kbBusy,
     kbPrompts: (b.concepts.length ? b.concepts.slice(0, 3).map((c) => 'What should I know about ' + c[2].toLowerCase() + '?') : ['What does this bundle cover?']).map((l) => ({ label: l, send: () => ask(L, b, tm, l) })),
     kbHasHits: !!(hits && hits.length), kbNoHits: !!(hits && !hits.length), kbHitCount: hits ? hits.length + ' of up to ' + tm.topk + ' passages' : '',

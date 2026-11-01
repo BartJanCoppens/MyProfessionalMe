@@ -313,7 +313,7 @@ function MapAside({ vm }: { vm: VM }) {
         <div style={{ fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' }}>{vm.readinessText}</div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <StatCard label="Hours this year" value={vm.hoursYear} unit="of 80 h" />
+        <StatCard label="Hours this year" value={vm.hoursYear} unit="of 80 h" sub={vm.hoursSplit} />
         <StatCard label="CPD units · ACCA" value={vm.cpdYear} unit="of 20" sub="due 31 Dec 2026" />
       </div>
       <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>

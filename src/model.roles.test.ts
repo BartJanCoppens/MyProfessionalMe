@@ -120,13 +120,11 @@ describe('View as: someone else is read-only', () => {
     expect(learner.saveProgress).not.toHaveBeenCalled();
     expect(h.toasts()).toEqual([readOnly, readOnly, readOnly]);
   });
-  it('removes no ambitions or interests', async () => {
-    const h = view();
-    h.vm().ambitions[0].remove(); h.vm().interests[0].remove();
-    await flush();
+  it('shows no ambitions or interests, which are private (Q8)', () => {
+    const vm = view().vm();
+    expect(vm.ambitions).toEqual([]);
+    expect(vm.interests).toEqual([]);
     expect(learner.removeAmbition).not.toHaveBeenCalled();
-    expect(learner.removeInterest).not.toHaveBeenCalled();
-    expect(h.reloadSubject).not.toHaveBeenCalled();
   });
   it('changes no avatar', () => {
     const h = view();
@@ -165,7 +163,8 @@ describe('the counsellor team view', () => {
     expect(rows[0].readinessLabel).toBe(rows[0].barW);
     expect(rows[0].cells.find((c) => c.overdue)!.title).toBe('Regulations · L0');
     expect(rows[0].cells[2]).toMatchObject({ v: 'L2', title: 'Personal growth · L2' });
-    expect(rows[1]).toMatchObject({ initials: 'JD', grade: 'No stage · No line', mandLabel: 'On track', mandIcon: 'check', readinessLabel: '0%' });
+    // Without a line the counsellee is summarised for the fallback line (Consulting), as on their own map.
+    expect(rows[1]).toMatchObject({ initials: 'JD', grade: 'No stage · No line', mandLabel: '1 overdue', mandIcon: 'dot', readinessLabel: '0%' });
     rows[1].open();
     expect(opened).toEqual(['m2']);
   });
