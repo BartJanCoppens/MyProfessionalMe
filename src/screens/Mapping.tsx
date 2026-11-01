@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Banner, Button, ChatBubble, FilterChip, Hover, Input, LinkButton, PageTitle, PillToggle, SegmentedControl, StatusChip, Tag } from '../ds';
+import { Banner, Button, ChatBubble, FilterChip, Hover, Input, LinkButton, PageTitle, SegmentedControl, StatusChip, Tag } from '../ds';
 import type { VM } from '../model';
 import { STAGES } from '../data';
 
@@ -151,7 +151,6 @@ function LearnersEye({ vm }: { vm: VM }) {
     <div style={card}>
       <div style={{ ...cardHead, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600 }}>Learner's eye</div><div style={{ fontSize: 12, color: '#5a6058' }}>What one person receives this year once every audience they belong to is stacked. Duplicates count once.</div></div>
-        <PillToggle options={vm.personaOptions} value={vm.personaKey} onChange={vm.setPersona} size="sm" />
       </div>
       <div style={{ padding: '14px 18px', display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 520px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>

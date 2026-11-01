@@ -1,5 +1,5 @@
 // Seed data for the MyProfessionalMe prototype (verbatim from the Claude Design file).
-import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal, Persona } from './types';
+import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal } from './types';
 
 export const DOMAINS: [string, string, string][] = [
   ['tech','Job technical skills','Tech skills'],['acad','Academic background','Academic'],['pers','Personal growth','Personal'],
@@ -120,9 +120,6 @@ export const SIGNALS: Signal[] = [
  { id:'S5', kind:'Overlap', st:'submitted', op:{ op:'remove', aud:'ind:whole', lid:'L2', stage:'Senior consultant' }, evidence:'Value-chain cost modelling already reaches Senior consultants through the Consulting path, so people in Wholesale & retail receive it twice.', quote:'' },
  { id:'S6', kind:'Gap', st:'clarification', op:{ op:'add', aud:'pro:red', lid:'L28', stage:'Consultant', ob:'advised' }, evidence:'Among people who shared a fiery-red-first profile, evaluations mention listening or leaving room for others 2.1 times as often. Only shared profiles are counted.', quote:'' }
 ];
-// key, first name, full name, stage, audience per lens (bl null = the current business line)
-export const PERSONAS: Persona[] = [['jonas','Jonas','Jonas Peeters','Consultant',{ bl:'Consulting', ind:'ind:whole', tec:'tec:sap', amb:'amb:people', pro:'pro:green' }],
- ['amira','Amira','Amira Haddad','Analyst',{ bl:'Tax & Legal', ind:'ind:public', tec:'tec:ai', amb:'amb:expert', pro:'pro:red' }]];
 // Filled from the performance tool once it is connected; no seeded evaluations.
 export const PROJECTS: Project[] = [];
 // Personality test results are added by each person; none are seeded.

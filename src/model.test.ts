@@ -88,3 +88,11 @@ describe('the Director and Partner stages', () => {
     expect(viewModel(newcomer({ stage: 'Partner' })).who.readinessLine).toBe('Partner · top of the career path');
   });
 });
+
+describe("the learner's eye", () => {
+  it('offers only the person being viewed', () => {
+    const vm = viewModel(newcomer({ stage: 'Manager' }));
+    expect(vm).not.toHaveProperty('personaOptions');
+    expect(vm.pz).toMatchObject({ name: 'New Person', stage: 'Manager' });
+  });
+});

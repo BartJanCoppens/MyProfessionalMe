@@ -14,7 +14,7 @@
 
 - Business lines are `Consulting`, `Audit`, `Tax & Legal`. Where the design says Advisory (EXPERTS, AUDS, MAPS0, copy), use Audit.
 - Career stages are the app's seven: `Analyst`, `Consultant`, `Senior consultant`, `Manager`, `Senior manager`, `Director`, `Partner`. The design still has five. Never overwrite `STAGES`, `STAGE_FR` or `STG_SHORT` from the design. Grids that show one column per stage size from `STAGES.length`. `REVIEW_STAGES` (Draft → Published) is a different list; port it verbatim.
-- No seeded persona: `src/logic/noPersona.test.ts` must stay green (no `Lena`, `Mertens`, `Thomas`). Jonas Peeters and Amira Haddad (`PERSONAS`) and the other fictional colleagues stay as demo content.
+- No fictional people (owner's decision, 1 Nov 2026): `src/logic/noPersona.test.ts` must stay green, and the design's named colleagues (`PEERS`, `EXPERTS`, authors and reviewers in `CONTRIB0`/`REVIEWS0`/`REVIEW_WHO`, podcast and reel hosts) are not ported. Reviewers, authors and experts are real accounts; where the design shows a host or source name, use a role ("Peer contribution", "Tax & Legal expert"). The `AVATARS` role-play characters stay.
 - Viewing another user is read-only. Learner data is written only by its owner, through `persist()`. RLS and triggers enforce this; the UI only mirrors it.
 - Every new table: `revoke all … from anon, authenticated`, then minimal grants, RLS on, policies `to authenticated` with predicates, and one permissive policy per table and action. Every policy change gets a case in `supabase/tests/rls.sql`.
 - Create migrations with `perl -e 'alarm 25; exec @ARGV' supabase migration new <name>` (the CLI hangs otherwise). Push with `supabase db push`, then run `supabase db advisors --linked`.
@@ -54,9 +54,9 @@ The missing tail holds logic that Tasks 2–4 and 6–9 port. Either option belo
 
 - [ ] **Data:**
   - Add learnings `L42`–`L48` in the app's 10-column `LEARN` shape (no state or pct columns).
-  - `L45`'s source "Peer · Lena Mertens" becomes "Peer · Jonas Peeters". Drop its "Your own reel…" text.
-  - Port verbatim: `MEDIA`, `REVIEW_STAGES`, `REVIEW_WHO`, `NEW_TYPES`, `CLIENT_WORDS`, `PEERS`, `EXPERTS` (Advisory → Audit), `KB_TYPES`, `TOPICS`, `TOPIC_BY`, `RAG_PRESETS`, `RAG_OPTS`, `ragOptLabel`, `mkModels`, `BUNDLES0`, `KB_ACCESS`, `RUBRIC`, `slugify`, `isoDate`, `yamlList`, `yq`.
-  - Do not port `CONTRIB0` or `REVIEWS0`; Part C makes them real.
+  - `L45`'s source "Peer · Lena Mertens" becomes "Peer contribution". Drop its "Your own reel…" text. `MEDIA` `by` fields that name a person become a role.
+  - Port verbatim: `MEDIA` (names → roles), `REVIEW_STAGES`, `NEW_TYPES`, `CLIENT_WORDS`, `KB_TYPES`, `TOPICS`, `TOPIC_BY`, `RAG_PRESETS`, `RAG_OPTS`, `ragOptLabel`, `mkModels`, `BUNDLES0`, `KB_ACCESS`, `RUBRIC`, `slugify`, `isoDate`, `yamlList`, `yq`.
+  - Do not port `CONTRIB0`, `REVIEWS0`, `REVIEW_WHO`, `PEERS` or `EXPERTS`: they are fictional people. Part C uses real accounts. Bundle `owner` fields that name a person become the owning business line.
 - [ ] **Types** in `src/types.ts`, matching the data shapes:
   - `PodMedia = { kind: 'pod'; by; len; dur: number; ch: [number, string][] }`
   - `ReelMedia = { kind: 'reel'; by; len; dur: number; caps: string[]; take; q; opts: string[]; ans: number }`. Check the answer field name against the full source.
@@ -266,5 +266,5 @@ The missing tail holds logic that Tasks 2–4 and 6–9 port. Either option belo
 1. **Getting the full design (Task 0):** download the file into `design/`, or split the script in Claude Design. Default: download.
 2. **Reels self-complete:** a correct quiz answer marks a reel accepted without a counsellor. Default: yes, as the design shows; every other format still needs a counsellor or admin.
 3. **Knowledge bundles** stay in memory rather than in Supabase. Default: in memory.
-4. **Jonas, Amira and the other fictional colleagues** stay as demo content (learner's-eye personas, peers, review texts). Default: keep them.
+4. **Fictional colleagues** are removed (decided 1 Nov 2026); Learner's eye shows the viewed person.
 5. **Expert per domain** for review routing comes from a new `domain_experts` table that System Admins fill. Default: yes. Until it is filled, step 2 falls back to any System Admin.

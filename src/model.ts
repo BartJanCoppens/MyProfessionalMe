@@ -3,7 +3,7 @@
 import type { ChangeEvent, DragEvent, KeyboardEvent, RefObject } from 'react';
 import {
   AUD_INFO, AUD_MAPS0, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
-  OB_LABEL, OB_TONE, OUTCOMES, PERSONAS, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
+  OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
 } from './data';
 import type { Config } from './config';
 import type { Access, AppState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
@@ -28,7 +28,7 @@ export function initState(cfg: Config): AppState {
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, persona: 'me', reads: {}, readBusy: false, cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
     projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: {},
     chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
@@ -744,7 +744,7 @@ export class Logic {
         dismiss: () => this.setState((st) => ({ sigDone: { ...st.sigDone, [g.id]: true } })),
       };
     });
-    const people = [me].concat(PERSONAS); const P = people.find((p) => p[0] === s.persona) || me; const stk = this.stack(P); const scale = Math.max(80, stk.tot);
+    const P = me; const stk = this.stack(P); const scale = Math.max(80, stk.tot);
     const pz = {
       name: P[2], stage: P[3], tags: stk.layers.map((l) => ({ key: l.lens, label: l.aud, color: l.color })),
       segs: stk.layers.filter((l) => l.h > 0).map((l) => ({ key: l.lens, w: (l.h / scale * 100).toFixed(2) + '%', color: l.color, tip: l.lens + ' · ' + l.aud + ' · ' + Math.round(l.h) + ' h' })),
@@ -777,7 +777,7 @@ export class Logic {
       cpHasReply: !!s.cpReply, cpReply: s.cpReply, cpHasOps: cpOps.length > 0, cpOps,
       cpApply: () => { const n = cpOpsP.length; this.applyOps(cpOpsP, n + ' change' + (n > 1 ? 's' : '') + ' applied · publish to apply'); this.setState({ cpOpsP: null }); }, cpDrop: () => this.setState({ cpOpsP: null }),
       cpPrompts: ['What do Energy seniors still miss?', 'Where does a learning arrive twice?', 'Draft a path for the Business developer ambition'].map((l) => ({ label: l, send: () => this.askCp(l) })),
-      personaOptions: people.map((p) => opt(p[0], p[2])), personaKey: P[0], setPersona: (v: string) => this.setState({ persona: v }), pz,
+      pz,
       readAs: () => this.readAs(P, stk), readBusy: s.readBusy, readLabel: s.readBusy ? 'Reading the stack' : 'Read it as ' + P[1], read: rd || null, readHead: 'As ' + P[2] + ' would read it',
     };
   }

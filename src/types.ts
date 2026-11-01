@@ -67,8 +67,8 @@ export type AppState = {
   // Avatar edits shown before the save round-trips, for the person being edited.
   avatarEdit: { userId: string; initials?: string; bg?: string; photo?: string | null } | null;
   chat: ChatMsg[];
-  // curriculum mapping: lens, selected audience and stage, signals handled, learner's-eye persona, copilot
+  // curriculum mapping: lens, selected audience and stage, signals handled, learner's-eye reads, copilot
   mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>;
-  persona: string; reads: Record<string, Read>; readBusy: boolean;
+  reads: Record<string, Read>; readBusy: boolean;
   cpInput: string; cpBusy: boolean; cpReply: string; cpOpsP: Op[] | null;
 };
