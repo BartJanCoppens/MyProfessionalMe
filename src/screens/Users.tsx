@@ -3,11 +3,12 @@ import { Avatar, Banner, Button, Checkbox, Drawer, Field, FilterChip, Hover, Inp
 import { BUSINESS_LINES, manageUsers, PASSWORD_HINT, supabase, temporaryPassword } from '../lib/supabase';
 import type { BusinessLine, Profile, Role } from '../lib/supabase';
 import type { Access } from '../types';
+import { STAGES } from '../data';
 
 type User = Profile & { roles: Role[] };
 type Handover = { email: string; password: string; what: string };
 
-const COLS = 'minmax(0,2.2fr) 170px minmax(0,2.4fr) 160px 190px';
+const COLS = 'minmax(0,2.2fr) 150px 170px 190px minmax(0,2.4fr) 160px 190px';
 // RLS returns only the accounts this admin may manage (plus their own).
 const fetchUsers = () => supabase.from('profiles')
   .select('id, email, full_name, business_line, must_change_password, created_at, career_stage, counsellor_id, roles:user_roles!user_roles_user_id_fkey(role, business_line)')
@@ -49,6 +50,11 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
     const { data, error } = await supabase.from('profiles').update({ business_line: v }).eq('id', u.id).select('id');
     dbError(error); if (!data?.length) throw new Error('You cannot move this user to ' + v);
   }, (u.full_name || u.email) + ' moved to ' + v);
+  // Stage and counsellor: the database refuses a counsellor you do not manage, and changes to your own (System Admins excepted).
+  const setField = (u: User, patch: { career_stage?: string | null; counsellor_id?: string | null }, done: string) => run(async () => {
+    const { data, error } = await supabase.from('profiles').update(patch).eq('id', u.id).select('id');
+    dbError(error); if (!data?.length) throw new Error('You cannot change this user');
+  }, done);
   const toggleRole = (u: User, role: Role['role'], bl: BusinessLine | null, on: boolean) => run(async () => {
     if (on) {
       const { error } = await supabase.from('user_roles').insert({ user_id: u.id, role, business_line: bl, created_by: meId });
@@ -90,9 +96,9 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       </div>
       {loadError && <Banner tone="warning">{loadError}</Banner>}
       <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflowX: 'auto' }}>
-        <div style={{ minWidth: 980 }}>
+        <div style={{ minWidth: 1340 }}>
           <div style={{ display: 'grid', gridTemplateColumns: COLS, fontSize: 11.5, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em', borderBottom: '1px solid #e1e5dc', background: '#fafbf8' }}>
-            <div style={{ padding: '10px 12px' }}>Person</div><div style={{ padding: '10px 12px' }}>Business line</div><div style={{ padding: '10px 12px' }}>Roles</div>
+            <div style={{ padding: '10px 12px' }}>Person</div><div style={{ padding: '10px 12px' }}>Business line</div><div style={{ padding: '10px 12px' }}>Stage</div><div style={{ padding: '10px 12px' }}>Counsellor</div><div style={{ padding: '10px 12px' }}>Roles</div>
             <div style={{ padding: '10px 12px' }}>Sign-in</div><div style={{ padding: '10px 12px' }} />
           </div>
           {shown.map((u) => {
@@ -114,6 +120,19 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
                     ? <Select size="md" value={u.business_line || ''} onChange={(e) => setLineOf(u, e.target.value)}
                         options={(u.business_line ? [] : [{ value: '', label: 'No line' }]).concat(managed.map((l) => ({ value: l, label: l })))} />
                     : <span style={{ color: '#5a6058' }}>{u.business_line || 'No line'}</span>}
+                </div>
+                <div style={{ padding: '10px 12px' }}>
+                  {canEditLine && (!me || access.isSystem)
+                    ? <Select size="md" value={u.career_stage || ''} onChange={(e) => setField(u, { career_stage: e.target.value || null }, (u.full_name || u.email) + ' · stage ' + (e.target.value || 'cleared'))}
+                        options={[{ value: '', label: 'No stage' }].concat(STAGES.map((st) => ({ value: st, label: st })))} />
+                    : <span style={{ color: '#5a6058' }}>{u.career_stage || 'No stage'}</span>}
+                </div>
+                <div style={{ padding: '10px 12px' }}>
+                  {canEditLine && (!me || access.isSystem)
+                    ? <Select size="md" value={u.counsellor_id || ''} style={{ maxWidth: '100%' }}
+                        onChange={(e) => setField(u, { counsellor_id: e.target.value || null }, (u.full_name || u.email) + (e.target.value ? ' · counsellor set' : ' · counsellor cleared'))}
+                        options={[{ value: '', label: 'None' }].concat((users || []).filter((c) => c.id !== u.id).map((c) => ({ value: c.id, label: c.full_name || c.email })))} />
+                    : <span style={{ color: '#5a6058' }}>{(users || []).find((c) => c.id === u.counsellor_id)?.full_name || (u.counsellor_id ? 'Assigned' : 'None')}</span>}
                 </div>
                 <div style={{ padding: '8px 12px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   {access.isSystem ? (

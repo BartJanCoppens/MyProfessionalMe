@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BrandMark, Button, LinkButton, NavGroupHeader, NavItem, StatusChip, Toast } from './ds';
+import { BrandMark, Button, LinkButton, NavGroupHeader, NavItem, StatusChip, Tag, Toast } from './ds';
 import { readConfig } from './config';
 import { ADMIN_SCREENS, initState, Logic } from './model';
 import type { AppState } from './types';
@@ -13,6 +13,7 @@ import TeamScreen from './screens/Team';
 import { AdminLibraryScreen, AddLearningDrawer } from './screens/Admin';
 import AdminMappingScreen from './screens/Mapping';
 import UsersScreen from './screens/Users';
+import SubjectPicker from './screens/SubjectPicker';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
 import { useAuth } from './lib/useAuth';
 import { useSubject } from './lib/useSubject';
@@ -35,7 +36,8 @@ function Workspace({ auth }: { auth: Auth }) {
 
 type ShellProps = { auth: Auth; subject: Subject; options: { id: string; label: string }[]; select: (id: string) => void; reload: () => Promise<void> };
 
-function Shell({ auth, subject, reload }: ShellProps) {
+function Shell({ auth, subject, options, select, reload }: ShellProps) {
+  const [picking, setPicking] = useState(false);
   const cfg = useMemo(() => readConfig(), []);
   const [state, setRaw] = useState<AppState>(() => {
     const st = initState(cfg);
@@ -56,7 +58,7 @@ function Shell({ auth, subject, reload }: ShellProps) {
 
   return (
     <div data-pm-motion={vm.motionAttr} style={{ display: 'flex', minHeight: '100vh', background: '#f3f5f0', color: '#1a1d18', fontFamily: "'IBM Plex Sans',system-ui,sans-serif", fontSize: 13, lineHeight: 1.45 }}>
-      <Sidebar vm={vm} auth={auth} />
+      <Sidebar vm={vm} auth={auth} canPick={options.length > 1} onPick={() => setPicking(true)} onBackToMe={() => select(auth.profile!.id)} />
       <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <header style={{ height: 60, background: '#fff', borderBottom: '1px solid #e1e5dc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '0 32px', position: 'sticky', top: 0, zIndex: 5 }}>
           <div style={{ minWidth: 0, flex: '1 1 200px' }}>
@@ -81,6 +83,7 @@ function Shell({ auth, subject, reload }: ShellProps) {
         </div>
       </main>
       {vm.drawerOpen && <AddLearningDrawer vm={vm} />}
+      {picking && <SubjectPicker options={options} current={subject.id} onSelect={select} onClose={() => setPicking(false)} />}
       {vm.toast && <Toast>{vm.toast}</Toast>}
     </div>
   );
@@ -89,7 +92,7 @@ function Shell({ auth, subject, reload }: ShellProps) {
 const roleLabel = ({ access }: Auth) =>
   access.isSystem ? 'System Admin' : access.domains.length ? 'Domain Admin · ' + access.domains.join(', ') : 'Member';
 
-function Sidebar({ vm, auth }: { vm: VM; auth: Auth }) {
+function Sidebar({ vm, auth, canPick, onPick, onBackToMe }: { vm: VM; auth: Auth; canPick: boolean; onPick: () => void; onBackToMe: () => void }) {
   return (
     <aside style={{ width: 248, flex: 'none', background: '#171a16', color: '#c9cec5', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', overflow: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 20px 14px' }}>
@@ -100,10 +103,10 @@ function Sidebar({ vm, auth }: { vm: VM; auth: Auth }) {
         </div>
       </div>
       <div style={{ margin: '4px 12px 14px', padding: 12, borderRadius: 6, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.06)' }}>
-        <div style={{ fontWeight: 600, color: '#fff', fontSize: 13 }}>Lena Mertens</div>
-        <div style={{ fontSize: 12, color: '#858c82', marginTop: 2 }}>Senior consultant · {vm.bl} · Brussels</div>
+        <div style={{ fontWeight: 600, color: '#fff', fontSize: 13 }}>{vm.who.name}</div>
+        <div style={{ fontSize: 12, color: '#858c82', marginTop: 2 }}>{vm.who.roleLine}</div>
         <div style={{ marginTop: 10, height: 4, borderRadius: 999, background: 'rgba(255,255,255,.08)', overflow: 'hidden' }}><div style={{ height: '100%', background: '#86BC25', width: vm.readinessW }} /></div>
-        <div style={{ fontSize: 11.5, color: '#a9afa5', marginTop: 6 }}>{vm.readiness}% ready for Manager · review Sep 2027</div>
+        <div style={{ fontSize: 11.5, color: '#a9afa5', marginTop: 6 }}>{vm.readiness}% ready for {vm.who.nextStage}</div>
       </div>
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '0 8px' }}>
         <NavGroupHeader>Me</NavGroupHeader>
@@ -128,7 +131,17 @@ function Sidebar({ vm, auth }: { vm: VM; auth: Auth }) {
           background: vm.avatarBg, color: vm.avatarFg, fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,.16)' }}>
           <AvatarFace vm={vm} fontSize={12} />
         </span>
-        <div style={{ minWidth: 0 }}><div style={{ color: '#fff', fontWeight: 500, fontSize: 13 }}>Lena Mertens</div><div style={{ fontSize: 11.5, color: '#858c82' }}>Counsellor: Thomas De Smet</div></div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ color: '#fff', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.who.name}</div>
+          <div style={{ fontSize: 11.5, color: '#858c82' }}>{vm.who.counsellorLine}</div>
+          {vm.who.readOnly && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              <Tag tone="amber">Viewing · read-only</Tag>
+              <LinkButton tone="onDark" size={12} onClick={onBackToMe}>Back to me</LinkButton>
+            </div>
+          )}
+        </div>
+        {canPick && <LinkButton tone="onDark" size={12} onClick={onPick} title="View the app as another user">Change</LinkButton>}
       </div>
       <div style={{ padding: '10px 20px 14px', borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0 }}>

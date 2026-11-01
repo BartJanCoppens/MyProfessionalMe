@@ -407,6 +407,12 @@ export class Logic {
     const dock = dockIt ? { ...dockIt, kv: [{ k: 'Source', v: dockIt.source }, { k: 'Effort', v: dockIt.hoursLabel }, { k: 'Level', v: dockIt.lvlLabel }, { k: 'Deadline', v: dockIt.hasDue ? dockIt.due : 'None' }], add: () => this.addToPath(dockIt.id) } : null;
 
     return {
+      who: {
+        name: this.subject.name, readOnly: this.subject.readOnly,
+        roleLine: [this.subject.stage, this.subject.businessLine || 'No business line yet'].filter(Boolean).join(' · '),
+        nextStage: STAGES[this.myStage() + 1] || 'the next stage',
+        counsellorLine: this.subject.counsellor ? 'Counsellor: ' + this.subject.counsellor.name : 'No counsellor',
+      },
       bl, readiness, readinessW: readiness + '%', readinessFrac: readiness / 100, readinessDash: (readiness / 100 * 2 * Math.PI * 38) + ' ' + (2 * Math.PI * 38),
       readinessText: 'Readiness counts hours on mandatory and advised items up to the Manager stage in ' + bl + '. Your own choices count toward levels and hours, not readiness.',
       centerSub: 'Senior consultant → Manager · ' + readiness + '% ready', hoursYear, cpdYear, hoursChip: hoursYear + ' of 80 h this year',

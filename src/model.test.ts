@@ -26,3 +26,14 @@ describe('a person with no learning data yet', () => {
     expect(() => viewModel(newcomer({ businessLine: null, stage: null }))).not.toThrow();
   });
 });
+
+describe('the person card in the sidebar', () => {
+  it('describes stage, line, next stage and counsellor', () => {
+    const vm = viewModel(newcomer({ counsellor: { id: 'c1', name: 'Ann Peeters' } }));
+    expect(vm.who).toMatchObject({ name: 'New Person', roleLine: 'Consultant · Consulting', nextStage: 'Senior consultant', counsellorLine: 'Counsellor: Ann Peeters', readOnly: false });
+  });
+  it('says what is missing for a person without line, stage or counsellor', () => {
+    const vm = viewModel(newcomer({ businessLine: null, stage: null }));
+    expect(vm.who).toMatchObject({ roleLine: 'No business line yet', nextStage: 'Consultant', counsellorLine: 'No counsellor' });
+  });
+});

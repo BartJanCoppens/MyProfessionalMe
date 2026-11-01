@@ -27,6 +27,8 @@ export function useSubject(auth: Auth) {
   const [people, setPeople] = useState<Person[] | null>(null);
   const [picked, setPicked] = useState<string>(() => readPick() || me.id);
   const [loaded, setLoaded] = useState<{ id: string; data: LearnerData } | null>(null);
+  // Bumped to refetch the people list (stage, line and counsellor change in User management).
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -34,7 +36,7 @@ export function useSubject(auth: Auth) {
     supabase.from('profiles').select('id, email, full_name, business_line, career_stage, counsellor_id').order('full_name', { nullsFirst: false })
       .then(({ data }) => { if (live) setPeople((data as Person[]) || []); });
     return () => { live = false; };
-  }, [me.id]);
+  }, [me.id, version]);
 
   // Choosable people: yourself, plus (for admins) the accounts they manage. Your own counsellor is visible
   // to you but their learner data is not, so they are only choosable when you administer their line.
@@ -48,12 +50,14 @@ export function useSubject(auth: Auth) {
 
   const subjectId = options.some((o) => o.id === picked) ? picked : me.id;
   const apply = useRef(latestOnly<{ id: string; data: LearnerData }>((v) => setLoaded(v))).current;
-  const reload = useCallback(() => apply(loadLearner(subjectId).then((data) => ({ id: subjectId, data }))), [apply, subjectId]);
-  useEffect(() => { if (people) reload(); }, [people, reload]);
+  const load = useCallback(() => apply(loadLearner(subjectId).then((data) => ({ id: subjectId, data }))), [apply, subjectId]);
+  useEffect(() => { if (people) load(); }, [people, load]);
+  const reload = useCallback(async () => { setVersion((v) => v + 1); await load(); }, [load]);
 
   const select = (id: string) => {
     try { sessionStorage.setItem(PICK_KEY, id); } catch { /* per-tab convenience only */ }
     setPicked(id);
+    setVersion((v) => v + 1);
   };
 
   // The last fully loaded person stays on screen while a newly chosen one loads.

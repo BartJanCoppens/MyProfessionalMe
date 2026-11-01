@@ -56,11 +56,11 @@ const LINK_TONES = {
   muted: { fg: 'var(--tc-ink-4)', hoverFg: 'var(--tc-ink)', underline: false },
   onDark: { fg: 'var(--tc-shell-muted)', hoverFg: '#fff', underline: false },
 };
-export function LinkButton({ tone = 'link', strong = false, size = 13, children, onClick, style }: { tone?: keyof typeof LINK_TONES; strong?: boolean; size?: number; children?: ReactNode; onClick?: () => void; style?: CSSProperties }) {
+export function LinkButton({ tone = 'link', strong = false, size = 13, children, onClick, title, style }: { tone?: keyof typeof LINK_TONES; strong?: boolean; size?: number; children?: ReactNode; onClick?: () => void; title?: string; style?: CSSProperties }) {
   const [hover, setHover] = useState(false);
   const t = LINK_TONES[tone] || LINK_TONES.link;
   return (
-    <button type="button" onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    <button type="button" onClick={onClick} title={title} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{ background: 'none', border: 0, padding: 0, color: hover ? t.hoverFg : t.fg, fontFamily: 'inherit', fontSize: size, fontWeight: strong ? 600 : 500,
         cursor: 'pointer', textAlign: 'left', textDecoration: hover || t.underline ? 'underline' : 'none', whiteSpace: 'nowrap', ...style }}>
       {children}
