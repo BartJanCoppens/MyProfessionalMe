@@ -17,11 +17,14 @@ export default function AdminMappingScreen({ vm }: { vm: VM }) {
         <Button onClick={vm.publish} disabled={vm.noPending}>Publish {vm.pendingLabel}</Button>
       </div>
       <LensPicker vm={vm} />
+      {/* Coverage and the learner's eye stack on the left; the copilot stays in view beside them. */}
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <Coverage vm={vm} />
+        <div style={{ flex: '1 1 560px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <Coverage vm={vm} />
+          <LearnersEye vm={vm} />
+        </div>
         <Copilot vm={vm} />
       </div>
-      <LearnersEye vm={vm} />
       {!vm.editable && <Banner tone="info">{vm.readOnlyNote}</Banner>}
       <Board vm={vm} />
       <SelectionDock vm={vm} />
@@ -53,7 +56,7 @@ function LensPicker({ vm }: { vm: VM }) {
 
 function Coverage({ vm }: { vm: VM }) {
   return (
-    <div style={{ ...card, flex: '1 1 560px', minWidth: 0 }}>
+    <div style={card}>
       <div style={cardHead}>
         <div style={{ fontWeight: 600 }}>Coverage · {vm.lensLabel}</div>
         <div style={{ fontSize: 12, color: '#5a6058' }}>Learnings and hours per stage. A dash is a gap. Signals are evaluation themes the copilot found that no mapping covers yet. Click a cell to edit it below.</div>
@@ -90,7 +93,7 @@ function Coverage({ vm }: { vm: VM }) {
 
 function Copilot({ vm }: { vm: VM }) {
   return (
-    <div style={{ ...card, flex: '0 1 420px', minWidth: 320, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ ...card, flex: '0 1 420px', minWidth: 320, display: 'flex', flexDirection: 'column', position: 'sticky', top: 78, maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' }}>
       <div style={{ padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#171a16', color: '#fff', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ width: 22, height: 22, borderRadius: 5, background: '#86BC25', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10180a' }} /></span>
         <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600 }}>Curriculum copilot</div><div style={{ fontSize: 11.5, color: '#a9b0a5' }}>Reads anonymised evaluations, staffing and shared profiles. Proposes; you decide.</div></div>
