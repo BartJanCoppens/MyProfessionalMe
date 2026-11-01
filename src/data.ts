@@ -58,14 +58,6 @@ export const MAPS0: Record<string, Mapping[]> = {
  'Audit':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L31','Analyst','mandatory'],['L20','Analyst','advised'],['L10','Consultant','mandatory'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','mandatory'],['L13','Consultant','advised'],['L2','Senior consultant','mandatory'],['L23','Senior consultant','mandatory'],['L1','Senior consultant','advised'],['L8','Senior consultant','advised'],['L11','Senior consultant','advised'],['L19','Senior consultant','advised'],['L12','Manager','mandatory'],['L18','Manager','mandatory'],['L27','Manager','mandatory'],['L4','Manager','advised'],['L28','Manager','advised'],['L6','Senior manager','advised']],
  'Tax & Legal':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L31','Analyst','mandatory'],['L20','Analyst','advised'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','advised'],['L10','Consultant','advised'],['L18','Senior consultant','mandatory'],['L19','Senior consultant','mandatory'],['L2','Senior consultant','advised'],['L8','Senior consultant','advised'],['L15','Senior consultant','advised'],['L26','Senior consultant','advised'],['L12','Manager','mandatory'],['L27','Manager','mandatory'],['L28','Manager','advised'],['L22','Senior manager','advised']]
 };
-export const TEAM: [string, string, string, number, number, number, number[], string][] = [
- ['JP','Jonas Peeters','Consultant',71,54,0,[3,2,2,3,2,2,1,2,1],'Yesterday'],
- ['AH','Amira Haddad','Analyst',48,31,1,[2,2,1,2,1,1,1,2,1],'3 days ago'],
- ['WC','Wout Claes','Consultant',35,18,2,[2,3,1,2,1,1,0,1,1],'3 weeks ago'],
- ['SL','Sara Lemmens','Analyst',82,66,0,[2,2,2,2,2,1,1,3,1],'Today'],
- ['YD','Yusuf Demir','Consultant',59,47,0,[3,2,2,2,2,2,1,2,2],'Yesterday'],
- ['EV','Elise Van Damme','Analyst',64,40,0,[2,3,2,2,1,2,1,1,1],'5 days ago']
-];
 export const OUTCOMES: Record<string, string[]> = {
  tech:['Frame a client problem in the firm method within the first week','Build the deliverable with the standard templates','Defend the design choices in a steering committee'],
  acad:['Read the numbers behind a client story without help','Spot the assumption that breaks the model','Explain the concept to a client in two sentences'],

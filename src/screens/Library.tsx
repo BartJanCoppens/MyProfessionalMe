@@ -62,7 +62,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 600px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
           <Card title="Why this is on your path"><p style={{ margin: 0, textWrap: 'pretty', maxWidth: 640 }}>{det.why}</p></Card>
-          {det.av && <AvatarPractice av={det.av} />}
+          {det.av && <AvatarPractice av={det.av} counsellorFirst={vm.counsellorFirst} />}
           {det.hasSugg && (
             <Card title="Suggested by" subtitle={det.suggSub}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -127,7 +127,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
               {det.canAdd && <Button size="xl" fullWidth onClick={vm.addToPath}>+ Add to my path</Button>}
               {det.canLog && <Button size="xl" fullWidth onClick={vm.logHours}>Log 1 hour</Button>}
-              {det.canAsk && <Button size="xl" variant="secondary" fullWidth onClick={vm.askApprove}>Ask Thomas to approve</Button>}
+              {det.canAsk && <Button size="xl" variant="secondary" fullWidth onClick={vm.askApprove}>{vm.askLabel} to approve</Button>}
               <Button size="xl" variant="secondary" fullWidth onClick={vm.toggleNote}>Rate &amp; leave a note</Button>
             </div>
             <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>{det.approvalNote}</div>
@@ -146,7 +146,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
   );
 }
 
-function AvatarPractice({ av }: { av: NonNullable<VM['det']['av']> }) {
+function AvatarPractice({ av, counsellorFirst }: { av: NonNullable<VM['det']['av']>; counsellorFirst: string }) {
   return (
     <Card title="Practise with the avatar" subtitle={av.sub}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -162,7 +162,7 @@ function AvatarPractice({ av }: { av: NonNullable<VM['det']['av']> }) {
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button onClick={av.start}>Start a session</Button>
-            {av.hasRuns && <LinkButton onClick={av.share}>Share best run with Thomas</LinkButton>}
+            {av.hasRuns && <LinkButton onClick={av.share}>Share best run with {counsellorFirst}</LinkButton>}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -188,7 +188,7 @@ function AvatarPractice({ av }: { av: NonNullable<VM['det']['av']> }) {
             ))}
           </div>
         )}
-        <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>Runs are private until you share one. The avatar scores the conversation; Thomas sees scores and the transcript, never the recording.</div>
+        <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>Runs are private until you share one. The avatar scores the conversation; your counsellor sees scores and the transcript, never the recording.</div>
       </div>
     </Card>
   );

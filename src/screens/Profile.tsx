@@ -46,6 +46,12 @@ export default function ProfileScreen({ vm, fileRef, chatRef }: Props) {
         </div>
       </div>
 
+      {!vm.tests.length && (
+        <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '18px 20px', color: '#5a6058', textWrap: 'pretty' }}>
+          <div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>No personality results yet</div>
+          Add a Four Colours, MBTI, Big Five or other result and choose who may see it. Results shape the personality cloud on your map and never count toward readiness.
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 12 }}>
         {vm.tests.map((ts) => (
           <div key={ts.id} style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, display: 'flex', flexDirection: 'column', minWidth: 0 }}>

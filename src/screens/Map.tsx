@@ -75,7 +75,7 @@ function Constellation({ vm }: { vm: VM }) {
             {vm.avatarPhoto
               ? <image href={vm.avatarPhoto} x="512" y="302" width="56" height="56" preserveAspectRatio="xMidYMid slice" clipPath="url(#pmMeClip)" />
               : <text x="540" y="330" dy="5" textAnchor="middle" fontSize="13" fontWeight="600" fill={vm.avatarFg}>{vm.avatarInitials}</text>}
-            <text x="540" y="392" textAnchor="middle" fontSize="13" fontWeight="600" fill="#1a1d18">Lena Mertens</text>
+            <text x="540" y="392" textAnchor="middle" fontSize="13" fontWeight="600" fill="#1a1d18">{vm.who.name}</text>
           </g>
         </svg>
         <div style={overlay}>
@@ -138,7 +138,7 @@ function Radar({ vm }: { vm: VM }) {
       </div>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid #eef0ea', fontSize: 12, color: '#5a6058' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 18, height: 2, background: '#86BC25' }} />Level reached today</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 18, borderTop: '1.3px dashed #1a1d18' }} />Expected at Manager · {vm.bl}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 18, borderTop: '1.3px dashed #1a1d18' }} />Expected at {vm.who.nextStage} · {vm.bl}</span>
         {vm.rClouds.map((rc) => (
           <span key={rc.key} onClick={rc.select} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
             <span style={{ width: 14, height: 10, borderRadius: 3, background: rc.wash, border: '1px dashed ' + rc.color }} />{rc.legend}
@@ -162,7 +162,7 @@ function Road({ vm }: { vm: VM }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 4, height: 28, background: '#1a1d18', borderRadius: 1 }} />
-          <div><div style={{ fontSize: 12, fontWeight: 600 }}>Manager</div><div style={{ fontSize: 11, color: '#5a6058' }}>promotion review · Sep 2027</div></div>
+          <div><div style={{ fontSize: 12, fontWeight: 600 }}>{vm.who.nextStage}</div><div style={{ fontSize: 11, color: '#5a6058' }}>next promotion review</div></div>
         </div>
       </div>
       <div style={{ overflowX: 'auto' }}>
@@ -205,7 +205,7 @@ function Road({ vm }: { vm: VM }) {
         </div>
       </div>
       <div style={{ padding: '10px 18px', borderTop: '1px solid #eef0ea', fontSize: 12, color: '#5a6058' }}>
-        The firm path holds mandatory items in the quarter of their deadline and advised items where Thomas placed them. The other lanes come from your project evaluations, personality profiles and ambitions; an item on two lanes counts once.
+        The firm path holds mandatory items in the quarter of their deadline and advised items where your counsellor placed them. The other lanes come from your project evaluations, personality profiles and ambitions; an item on two lanes counts once.
       </div>
     </div>
   );
@@ -302,7 +302,7 @@ function MapAside({ vm }: { vm: VM }) {
       <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <ProgressRing value={vm.readinessFrac} size={64} />
-          <div><div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.2 }}>{vm.readiness}%</div><div style={{ fontSize: 12, color: '#5a6058' }}>ready for Manager in {vm.bl}</div></div>
+          <div><div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.2 }}>{vm.readiness}%</div><div style={{ fontSize: 12, color: '#5a6058' }}>ready for {vm.who.nextStage} in {vm.bl}</div></div>
         </div>
         <div style={{ fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' }}>{vm.readinessText}</div>
       </div>
@@ -319,15 +319,13 @@ function MapAside({ vm }: { vm: VM }) {
           </div>
         ))}
       </div>
-      {vm.showStreak && (
+      {vm.showStreak && vm.marks.length > 0 && (
         <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontWeight: 600 }}>Marks</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <Tag tone="bundle">9 weeks in a row</Tag>
-            <Tag tone="bundle">All nine domains touched</Tag>
-            <Tag tone="bundle">First certification</Tag>
+            {vm.marks.map((m) => <Tag key={m} tone="bundle">{m}</Tag>)}
           </div>
-          <div style={{ fontSize: 12, color: '#8b918a' }}>Marks are yours only. Thomas sees hours and levels, not marks.</div>
+          <div style={{ fontSize: 12, color: '#8b918a' }}>Marks are yours only. Your counsellor sees hours and levels, not marks.</div>
         </div>
       )}
     </div>

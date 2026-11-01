@@ -3,7 +3,7 @@
 import type { ChangeEvent, DragEvent, KeyboardEvent, RefObject } from 'react';
 import {
   AUD_INFO, AUD_MAPS0, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
-  OB_LABEL, OB_TONE, OUTCOMES, PERSONAS, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TEAM, TESTS,
+  OB_LABEL, OB_TONE, OUTCOMES, PERSONAS, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
 } from './data';
 import type { Config } from './config';
 import type { Access, AppState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
@@ -11,6 +11,8 @@ import { levelLabel, levelsByDomain, stageIndex } from './logic/learner';
 import type { LearnState } from './logic/learner';
 import { addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
 import { photoKey } from './lib/useSubject';
+import { memberSummary } from './logic/team';
+import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
@@ -28,9 +30,9 @@ export function initState(cfg: Config): AppState {
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
     mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, persona: 'me', reads: {}, readBusy: false, cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
-    projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: { T1: 'thomas', T2: 'me', T3: 'thomas' },
+    projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: {},
     chatInput: '', chatBusy: false, proposal: null, avatarEdit: null,
-    chat: [{ role: 'assistant', text: 'I help you put your interests and ambitions into words. Nothing is saved until you confirm it. You have two ambitions and three interests on file. What kind of work gave you the most energy this year?' }],
+    chat: [],
   };
 }
 
@@ -74,6 +76,10 @@ export class Logic {
     try { await write(); await this.reloadSubject(); if (done) this.say(done); } catch (err) { this.say((err as Error).message); }
   }
   myStage() { return stageIndex(this.subject.stage); }
+  nextStage() { return STAGES[this.myStage() + 1] || 'the next stage'; }
+  // How copy names the viewed person's counsellor.
+  counsellorFull() { return this.subject.counsellor?.name || 'your counsellor'; }
+  counsellorFirst() { return this.subject.counsellor ? this.subject.counsellor.name.split(' ')[0] : 'your counsellor'; }
   avatar() {
     const e = this.state.avatarEdit && this.state.avatarEdit.userId === this.subject.id ? this.state.avatarEdit : null;
     const fallback = this.subject.name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
@@ -125,12 +131,12 @@ export class Logic {
     return {
       id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
-      stateLabel: state === 'in-progress' ? 'In progress · ' + pct + '%' : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
+      stateLabel: state === 'in-progress' ? 'In progress · ' + pct + '%' : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
       dueLabel: hasDue ? 'Due ' + due : (m && m.si <= this.myStage() + 1 ? 'By ' + m.stage + ' stage' : ''), dueColor: hasDue ? (dueSoon ? '#9a3d0c' : '#7a5000') : '#8b918a',
       meta: source + ' · ' + hoursLabel + ' · ' + LEVELS[lvl - 1] + ' · L' + lvl + (cpd ? ' · ' + cpd + ' CPD' : ''),
       why: why || (m ? (ob === 'mandatory' ? 'Mandatory' : ob === 'advised' ? 'Advised' : 'Mapped') + ' for the ' + m.stage + ' stage in ' + this.bl() + '. ' : '')
-        + (ob === 'open' ? 'Not on any ' + this.bl() + ' path at your stage. Add it if it serves where you want to go; it still counts toward your hours and levels.' : 'Thomas can tell you how it fits your next engagement.'),
+        + (ob === 'open' ? 'Not on any ' + this.bl() + ' path at your stage. Add it if it serves where you want to go; it still counts toward your hours and levels.' : 'Your counsellor can tell you how it fits your next engagement.'),
       stage: m ? m.stage : null, mapped: m,
       open: () => this.openDetail(id, (['map', 'projects', 'profile'] as Screen[]).includes(this.state.screen) ? this.state.screen : 'library'),
     };
@@ -198,7 +204,7 @@ export class Logic {
       const lx = p.x + 96 * Math.cos(p.a), ly = p.y + 96 * Math.sin(p.a); const anchor = this.anchorFor(p.a);
       hubs.push({
         delay: (i * 70) + 'ms', id: d[0], x: p.x, y: p.y, xP: this.pct(p.x, 1080), yP: this.pct(p.y, 660), lxP: this.pct(lx, 1080), lyP: this.pct(ly, 660), tf: this.tfFor(anchor), ta: this.taFor(anchor),
-        label: d[1], cur: 'L' + this.levels[i], lvl: levelLabel(this.levels[i]) + ' → L' + TARGET[i] + ' at Manager',
+        label: d[1], cur: 'L' + this.levels[i], lvl: levelLabel(this.levels[i]) + ' → L' + TARGET[i] + ' at ' + this.nextStage(),
         stroke: hubSel ? '#1a1d18' : '#c8cdc3', sw: hubSel ? 2 : 1.3, op: hubRel ? 1 : 0.3, onClick: () => this.setState({ sel: { type: 'hub', id: d[0] } }),
       });
     });
@@ -231,7 +237,7 @@ export class Logic {
     }));
     return {
       clouds: rc, rings, axes, cur: cur.map((p) => p.join(',')).join(' '), target: tgt.map((p) => p.join(',')).join(' '), dots: cur.map((p, k) => ({ x: p[0], y: p[1], delay: (450 + k * 45) + 'ms' })),
-      gapText: 'Largest gaps: ' + (big.length ? big.join(', ') : 'none') + ' · ' + gaps.filter((g) => g <= 0).length + ' of 9 domains already at the Manager level',
+      gapText: 'Largest gaps: ' + (big.length ? big.join(', ') : 'none') + ' · ' + gaps.filter((g) => g <= 0).length + ' of 9 domains already at the ' + this.nextStage() + ' level',
     };
   }
   road(items: Item[], clouds: Cloud[]) {
@@ -249,7 +255,7 @@ export class Logic {
     const firmIds = upcoming.map((it) => it.id), byId: Record<string, Item> = {}; items.forEach((it) => { byId[it.id] = it; });
     const quarters = cols.map((c) => c.label);
     const lanes: { key: string; label: string; sub: string; color: string; cells: { items: RoadItem[] }[]; select: () => void; delay?: string }[] = [
-      { key: 'firm', label: 'Firm path to Manager', sub: upcoming.length + ' learnings · mandatory and advised · review Sep 2027', color: '#1a1d18', cells: cols.map((c) => ({ items: c.items })), select: () => this.setState({ sel: null }) },
+      { key: 'firm', label: 'Firm path to ' + this.nextStage(), sub: upcoming.length + ' learnings · mandatory and advised', color: '#1a1d18', cells: cols.map((c) => ({ items: c.items })), select: () => this.setState({ sel: null }) },
     ];
     clouds.filter((x) => x.on).forEach((x) => {
       const cells = quarters.map(() => ({ items: [] as RoadItem[] }));
@@ -301,21 +307,20 @@ export class Logic {
     const det = {
       ...d0,
       outcomes: OUTCOMES[d0.dom].map((t) => ({ t })),
-      levelSub: LEVELS[d0.lvl - 1] + ' · L' + d0.lvl + ' in ' + d0.domLabel + '. You are at L' + myLvl + '; Manager expects L' + TARGET[d0.di] + '.',
+      levelSub: LEVELS[d0.lvl - 1] + ' · L' + d0.lvl + ' in ' + d0.domLabel + '. You are at L' + myLvl + '; ' + this.nextStage() + ' expects L' + TARGET[d0.di] + '.',
       ladder: LEVELS.map((lab, i) => {
         const n = i + 1; const isThis = n === d0.lvl, mine = n <= myLvl, tgt = n === TARGET[d0.di];
-        return { n, label: lab, note: isThis ? 'This learning' : tgt ? 'Manager' : mine ? 'Reached' : '', bg: isThis ? '#1a1d18' : mine ? '#eef7dc' : '#fff', fg: isThis ? '#fff' : mine ? '#3f6a0a' : '#8b918a', bd: isThis ? '#1a1d18' : tgt ? '#1a1d18' : mine ? '#c9e39a' : '#e1e5dc' };
+        return { n, label: lab, note: isThis ? 'This learning' : tgt ? this.nextStage() : mine ? 'Reached' : '', bg: isThis ? '#1a1d18' : mine ? '#eef7dc' : '#fff', fg: isThis ? '#fff' : mine ? '#3f6a0a' : '#8b918a', bd: isThis ? '#1a1d18' : tgt ? '#1a1d18' : mine ? '#c9e39a' : '#e1e5dc' };
       }),
       rating: 'Rated 4.6 by 38 colleagues · 2 notes',
       notes: [
         { initials: 'YD', who: 'Yusuf Demir · Consultant · 2 Oct 2026', text: 'Dense but worth it. Do the exercises on a live client file rather than the sample data.' },
-        { initials: 'TD', who: 'Thomas De Smet · Senior manager · 19 Aug 2026', text: 'If you did the classroom version as a Consultant, skip the first module and go straight to the case.' },
       ],
       frac: d0.pct / 100, hoursDone: (Math.round(d0.hours * d0.pct / 100 * 10) / 10) + ' h', hoursText: 'logged of ' + d0.hoursLabel,
       kv: [{ k: 'Format', v: d0.format }, { k: 'Source', v: d0.source }, { k: 'Effort', v: d0.hoursLabel }, { k: 'Level', v: d0.lvlLabel }, { k: 'CPD units', v: d0.cpd ? d0.cpd + ' · ACCA, ITAA' : 'None' }, { k: 'Deadline', v: d0.hasDue ? d0.due : 'None set' }, { k: 'Counts toward', v: d0.domLabel + ' · hours' }],
       canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || d0.state === 'in-progress',
       canAsk: d0.state === 'in-progress',
-      approvalNote: d0.ob === 'mandatory' ? 'Mandatory items complete only after Thomas accepts your evidence.' : d0.ob === 'open' ? 'Open items need no approval. Adding one tells Thomas what you are curious about.' : 'Completion is logged automatically by ' + d0.source + ' where connected.',
+      approvalNote: d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts your evidence.' : d0.ob === 'open' ? 'Open items need no approval. Adding one tells ' + this.counsellorFull() + ' what you are curious about.' : 'Completion is logged automatically by ' + d0.source + ' where connected.',
       paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
       av: AVATARS[d0.id] ? (() => {
         const AV = AVATARS[d0.id]; const best = AV.skills.map((_sk, k) => Math.max(0, ...AV.attempts.map((a) => a[1][k])));
@@ -324,23 +329,12 @@ export class Logic {
           skills: AV.skills.map((sk, k) => ({ name: sk, w: (best[k] / 5 * 100) + '%', val: best[k] ? best[k] + ' / 5' : '—', color: best[k] >= AV.target ? '#86BC25' : '#e0a100', tgt: (AV.target / 5 * 100) + '%' })),
           hasRuns: AV.attempts.length > 0, runs: AV.attempts.slice().reverse().map((a) => ({ date: a[0], scores: AV.skills.map((sk, k) => sk + ' ' + a[1][k]).join(' · '), note: a[2] })),
           start: () => this.say('Prototype: opens the avatar studio · voice or text, about 10 minutes · the run stays private until you share it'),
-          share: () => this.say('Best run shared with Thomas De Smet · he sees scores and the transcript, not the recording'),
+          share: () => this.say('Best run shared with ' + this.counsellorFull() + ' · they see scores and the transcript, not the recording'),
         };
       })() : null,
     };
     if (d0.ob === 'open' && det.hasSugg) det.why = det.sugg[0].text + ' Suggested by ' + det.sugg[0].src + '. Not on a ' + bl + ' path at your stage; it counts toward your hours and levels once added.';
 
-    // team
-    const team = TEAM.map((p) => {
-      const [initials, name, grade, ready, hours, overdue, lv, last] = p;
-      return {
-        initials, name, grade, readiness: ready, readinessLabel: ready + '%', barW: ready + '%', hours, last,
-        mandStatus: overdue ? 'clarification' : 'accepted', mandLabel: overdue ? overdue + ' overdue' : 'On track', mandIcon: overdue ? 'dot' : 'check',
-        cells: lv.map((v, i) => ({ v: 'L' + v, bg: HEAT[v], fg: v >= 4 ? '#fff' : v >= 2 ? '#1a1d18' : '#5a6058', overdue: overdue > 0 && i === 5, title: DOMAINS[i][1] + ' · L' + v })),
-        open: () => this.say('Prototype: opens ' + name.split(' ')[0] + '’s growth map in counsellor mode · read-only, with your notes'),
-      };
-    });
-    const teamOverdue = TEAM.filter((p) => p[5] > 0).length;
 
     // admin library
     const aq = s.adminQ.toLowerCase();
@@ -388,7 +382,7 @@ export class Logic {
       bars: t.bars.map((b) => ({ label: b[0], w: b[1] + '%', val: b[1] + t.unit, color: b[2] || '#5a6058' })),
       sugg: t.sugg.map((x) => ({ id: x[0], title: byId[x[0]].title, text: x[1], open: byId[x[0]].open })),
       share: s.share[t.id],
-      setShare: (v: string) => { this.setState((st) => ({ share: Object.assign({}, st.share, { [t.id]: v }) })); this.say(v === 'thomas' ? t.name + ' result shared with Thomas De Smet' : t.name + ' result is now visible to you only'); },
+      setShare: (v: string) => { this.setState((st) => ({ share: Object.assign({}, st.share, { [t.id]: v }) })); this.say(v === 'counsellor' ? t.name + ' result shared with ' + this.counsellorFull() : t.name + ' result is now visible to you only'); },
     }));
     const domName = (k: string) => (DOMAINS.find((d) => d[0] === k) || [k, k])[1];
     const ambitions = this.subject.data.ambitions.map((a) => ({ id: a.id, text: a.text, meta: [a.horizon, a.from].filter(Boolean).join(' · '), doms: a.doms.map((d) => ({ key: d, label: domName(d) })), remove: () => this.persist(() => removeAmbition(a.id), 'Ambition removed') }));
@@ -396,12 +390,12 @@ export class Logic {
     const pp = s.proposal;
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
-      projects: ['Me · Projects & evaluations', 'Projects & evaluations'], profile: ['Me · My profile', 'My profile'], map: ['Me · Senior consultant · ' + bl, 'My growth map'], library: ['Me · Library', 'Library'],
-      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · 6 counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'],
+      projects: ['Me · Projects & evaluations', 'Projects & evaluations'], profile: ['Me · My profile', 'My profile'], map: ['Me · ' + [this.subject.stage, bl].filter(Boolean).join(' · '), 'My growth map'], library: ['Me · Library', 'Library'],
+      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'],
     };
     const hubDock = sel && sel.type === 'hub' ? (() => {
       const di = DOMAINS.findIndex((d) => d[0] === sel.id); const list = items.filter((it) => it.dom === sel.id);
-      return { label: DOMAINS[di][1], sub: 'You are at ' + levelLabel(this.levels[di]) + '. Manager in ' + bl + ' expects L' + TARGET[di] + ' · ' + list.filter((it) => it.state === 'accepted').length + ' of ' + list.length + ' completed', items: list };
+      return { label: DOMAINS[di][1], sub: 'You are at ' + levelLabel(this.levels[di]) + '. ' + this.nextStage() + ' in ' + bl + ' expects L' + TARGET[di] + ' · ' + list.filter((it) => it.state === 'accepted').length + ' of ' + list.length + ' completed', items: list };
     })() : null;
     const dockIt = sel && sel.type === 'node' ? byId[sel.id] : null;
     const dock = dockIt ? { ...dockIt, kv: [{ k: 'Source', v: dockIt.source }, { k: 'Effort', v: dockIt.hoursLabel }, { k: 'Level', v: dockIt.lvlLabel }, { k: 'Deadline', v: dockIt.hasDue ? dockIt.due : 'None' }], add: () => this.addToPath(dockIt.id) } : null;
@@ -414,49 +408,64 @@ export class Logic {
         counsellorLine: this.subject.counsellor ? 'Counsellor: ' + this.subject.counsellor.name : 'No counsellor',
       },
       bl, readiness, readinessW: readiness + '%', readinessFrac: readiness / 100, readinessDash: (readiness / 100 * 2 * Math.PI * 38) + ' ' + (2 * Math.PI * 38),
-      readinessText: 'Readiness counts hours on mandatory and advised items up to the Manager stage in ' + bl + '. Your own choices count toward levels and hours, not readiness.',
-      centerSub: 'Senior consultant → Manager · ' + readiness + '% ready', hoursYear, cpdYear, hoursChip: hoursYear + ' of 80 h this year',
-      mapLead: 'You sit in the middle. The nine domains around you hold every learning the firm knows about; your ' + bl + ' affiliation decides which ones are mandatory, Thomas advises some, the rest is yours to choose. Clouds show where your projects, personality and ambitions pull you.',
+      readinessText: 'Readiness counts hours on mandatory and advised items up to the ' + this.nextStage() + ' stage in ' + bl + '. Your own choices count toward levels and hours, not readiness.',
+      centerSub: (this.subject.stage || STAGES[0]) + ' → ' + this.nextStage() + ' · ' + readiness + '% ready', hoursYear, cpdYear, hoursChip: hoursYear + ' of 80 h this year',
+      mapLead: 'You sit in the middle. The nine domains around you hold every learning the firm knows about; your ' + bl + ' affiliation decides which ones are mandatory, your counsellor advises some, the rest is yours to choose. Clouds show where your projects, personality and ambitions pull you.',
       crumb: titles[s.screen][0], headerTitle: titles[s.screen][1], screen: s.screen,
       navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), goUsers: () => this.go('users'),
       navProj: s.screen === 'projects' || (s.screen === 'detail' && s.origin === 'projects'), navProfile: s.screen === 'profile' || (s.screen === 'detail' && s.origin === 'profile'),
       goMap: () => this.go('map'), goLibrary: () => this.go('library'), goTeam: () => this.go('team'), goAdminLib: () => this.go('adminLib'), goAdminMap: () => this.go('adminMap'), goProj: () => this.go('projects'), goProfile: () => this.go('profile'),
       goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : '← Back to library',
-      libCount: String(LEARN.length), projCount: String(PROJECTS.length), teamOverdue, pendingLabel: pendingN ? pendingN + ' pending' : '', noPending: pendingN === 0,
-      toastHelp: () => this.say('Prototype: opens a message to Thomas De Smet, your counsellor · he answers within two working days'),
+      libCount: String(LEARN.length), projCount: String(PROJECTS.length), pendingLabel: pendingN ? pendingN + ' pending' : '', noPending: pendingN === 0,
+      toastHelp: () => this.say(this.subject.counsellor ? 'Prototype: opens a message to ' + this.counsellorFull() + ', your counsellor' : 'No counsellor yet · an admin can assign one in User management'),
+      askLabel: this.subject.counsellor ? 'Ask ' + this.counsellorFirst() : 'Ask your counsellor',
+      counsellorFirst: this.counsellorFirst(),
       // map
       view: s.view, setView: (v: string) => this.setState({ view: v as AppState['view'], sel: null }), viewOptions: [opt('constellation', 'Constellation'), opt('radar', 'Radar'), opt('road', 'Road')],
-      legendItems: [{ status: 'accepted' as const, label: 'Completed' }, { status: 'in-progress' as const, label: 'In progress' }, { status: 'submitted' as const, label: 'Awaiting Thomas' }, { color: '#fff', label: 'Not started' }],
+      legendItems: [{ status: 'accepted' as const, label: 'Completed' }, { status: 'in-progress' as const, label: 'In progress' }, { status: 'submitted' as const, label: 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') }, { color: '#fff', label: 'Not started' }],
       cEdges: c.edges, cHubs: c.hubs, cNodes: c.nodes, cClouds: c.clouds, clearSel: () => this.setState({ sel: null }), selectMe: () => this.setState({ sel: null, view: 'radar' }),
       rRings: r.rings, rAxes: r.axes, rCur: r.cur, rTarget: r.target, rDots: r.dots, rClouds: r.clouds, radarGapText: r.gapText,
       roadLanes: rd.lanes, roadQuarters: rd.quarters, roadInflight: rd.inflight, roadBehind: rd.behind, inflightCount: rd.inflightCount,
       cloudChips, cloudRowLabel: s.view === 'road' ? 'Paths' : 'Learning clouds', cloudRowHint: s.view === 'road' ? 'Each cloud adds its own lane next to the firm path.' : 'Click a cloud label to see what put it there.',
       cloudDock, dock, hubDock, nextUp, showStreak: this.props.showMarks !== false,
+      // Earned marks only; private to the person.
+      marks: [this.levels.every((l) => l > 0) ? 'All nine domains touched' : '', items.some((it) => it.state === 'accepted' && it.format === 'Certification') ? 'First certification' : ''].filter(Boolean),
       // library
       libLead: LEARN.length + ' learnings across nine domains · 6 connected programs · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),
       obOptions: [opt('all', 'All'), opt('mandatory', 'Mandatory'), opt('advised', 'Advised'), opt('chosen', 'Chosen'), opt('open', 'Open')], libOb: s.libOb, setLibOb: (v: string) => this.setState({ libOb: v }),
       levelOptions: [opt('0', 'Any level')].concat(LEVELS.map((l, i) => opt(String(i + 1), 'L' + (i + 1) + ' · ' + l))), libLevel: s.libLevel, setLibLevel: (e: ChangeEvent<HTMLSelectElement>) => this.setState({ libLevel: e.target.value }),
       formatOptions: [opt('all', 'Any format')].concat(formats.map((f) => opt(f, f))), libFormat: s.libFormat, setLibFormat: (e: ChangeEvent<HTMLSelectElement>) => this.setState({ libFormat: e.target.value }),
-      domChips, libItems, libResultText: libItems.length + ' of ' + LEARN.length + ' learnings' + (s.libOb === 'mandatory' ? ' · mandatory for ' + bl + ' up to the Manager stage' : ''),
+      domChips, libItems, libResultText: libItems.length + ' of ' + LEARN.length + ' learnings' + (s.libOb === 'mandatory' ? ' · mandatory for ' + bl + ' up to the ' + this.nextStage() + ' stage' : ''),
       // detail
       det, noteOpen: s.noteOpen, toggleNote: () => this.setState({ noteOpen: !s.noteOpen }), saveNote: () => { this.setState({ noteOpen: false }); this.say('Note posted · visible to colleagues on this learning'); },
       ratingOptions: [1, 2, 3, 4, 5].map((n) => opt(String(n), String(n))), myRating: s.myRating, setRating: (v: string) => this.setState({ myRating: v }),
       addToPath: () => this.addToPath(d0.id), logHours: () => this.logHours(d0),
-      askApprove: () => this.persist(() => saveProgress(this.subject.id, d0.id, { state: 'submitted', pct: 100 }), 'Sent to Thomas De Smet · he sees your evidence and the hours you logged'),
+      askApprove: () => this.persist(() => saveProgress(this.subject.id, d0.id, { state: 'submitted', pct: 100 }), 'Sent to ' + this.counsellorFull() + ' · they see your evidence and the hours you logged'),
       // projects & profile
       projLead: PROJECTS.length + ' engagements since Sep 2025 · ' + PROJECTS.filter((p) => p.dims).length + ' evaluated · synced from staffing and the performance tool. Advice from each evaluation lands in the projects cloud on your map.',
       projList, pr, requestEval: () => this.say('Prototype: sends an evaluation request through the performance tool · the evaluator is reminded after 10 days'),
-      profLead: 'Profiles, ambitions and interests are yours. You decide what Thomas sees. None of this counts toward readiness; it shapes the clouds and paths on your map.',
-      tests, shareOptions: [opt('me', 'Only me'), opt('thomas', 'Thomas')], addTest: () => this.say('Prototype: upload a report or enter results · Four Colours, MBTI, Big Five, DISC, Belbin team roles, Hogan'),
+      profLead: 'Profiles, ambitions and interests are yours. You decide what your counsellor sees. None of this counts toward readiness; it shapes the clouds and paths on your map.',
+      tests, shareOptions: [opt('me', 'Only me'), opt('counsellor', this.subject.counsellor ? this.counsellorFirst() : 'Counsellor')], addTest: () => this.say('Prototype: upload a report or enter results · Four Colours, MBTI, Big Five, DISC, Belbin team roles, Hogan'),
       ambitions, interests,
-      chat: s.chat, chatBusy: s.chatBusy, chatInput: s.chatInput, setChatInput: (e: ChangeEvent<HTMLInputElement>) => this.setState({ chatInput: e.target.value }),
+      chat: ([{ role: 'assistant', text: this.greeting() }] as ChatMsg[]).concat(s.chat), chatBusy: s.chatBusy, chatInput: s.chatInput, setChatInput: (e: ChangeEvent<HTMLInputElement>) => this.setState({ chatInput: e.target.value }),
       chatKey: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') this.send(s.chatInput); }, sendChat: () => this.send(s.chatInput),
       chatPrompts: ['Where could I be in five years?', 'I enjoyed the energy client most', 'What do my evaluations say?'].map((l) => ({ label: l, send: () => this.send(l) })),
       chatSub: (this.props.liveAssistant === false || !window.claude?.complete ? 'Scripted assistant' : 'AI assistant') + ' · reads your projects and profiles · saves nothing until you confirm',
       hasProposal: !!pp, proposalItems, saveProposal: () => this.saveProposal(), dropProposal: () => this.setState({ proposal: null }),
       // team
-      teamLead: 'Six people name you as counsellor. Readiness is measured against the next stage in ' + bl + '; mandatory items are the ones the firm chases.',
-      teamTabs: [opt('roster', 'Roster'), opt('heat', 'Levels by domain')], teamTab: s.teamTab, setTeamTab: (v: string) => this.setState({ teamTab: v }), team,
+      teamLead: (n: number) => (n === 0 ? 'Nobody names ' : n === 1 ? 'One person names ' : n + ' people name ') + (this.subject.readOnly ? this.subject.name : 'you') + ' as counsellor. Readiness is measured against each person\'s next stage in their business line; mandatory items are the ones the firm chases.',
+      // Rows for the counsellor screen, from real counsellees; opening one shows their app read-only.
+      teamRows: (members: Member[], open: (id: string) => void) => members.map((m) => {
+        const t = memberSummary(m, s.maps, new Date());
+        const initials = m.name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+        return {
+          id: m.id, initials, name: m.name, grade: [m.stage || 'No stage', m.businessLine || 'No line'].join(' · '), readinessLabel: t.readiness + '%', barW: t.readiness + '%', hours: t.hours,
+          mandStatus: t.overdue ? 'clarification' : 'accepted', mandLabel: t.overdue ? t.overdue + ' overdue' : 'On track', mandIcon: t.overdue ? 'dot' : 'check',
+          cells: t.levels.map((v, i) => ({ v: 'L' + v, bg: HEAT[v], fg: v >= 4 ? '#fff' : v >= 2 ? '#1a1d18' : '#5a6058', overdue: t.overdueDomains.includes(DOMAINS[i][0]), title: DOMAINS[i][1] + ' · L' + v })),
+          open: () => open(m.id),
+        };
+      }),
+      teamTabs: [opt('roster', 'Roster'), opt('heat', 'Levels by domain')], teamTab: s.teamTab, setTeamTab: (v: string) => this.setState({ teamTab: v }),
       domShort: DOMAINS.map((d) => d[2]), heatTargets: [2, 2, 2, 3, 2, 2, 1, 2, 2].map((v) => 'L' + v),
       // admin library
       adminLead: LEARN.length + ' learnings · 6 connected programs · 3 need attention · last sync 28 Oct 2026 07:10', programs, adminQ: s.adminQ, setAdminQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ adminQ: e.target.value }),
@@ -489,20 +498,27 @@ export class Logic {
   logHours(it: Item) {
     const np = Math.min(100, Math.round(it.pct + 100 / it.hours));
     this.persist(() => saveProgress(this.subject.id, it.id, { state: np >= 100 ? 'submitted' : 'in-progress', pct: np }),
-      np >= 100 ? 'All hours logged · sent to Thomas for acceptance' : '1 hour logged · ' + np + '% of ' + it.hoursLabel);
+      np >= 100 ? 'All hours logged · sent to ' + this.counsellorFull() + ' for acceptance' : '1 hour logged · ' + np + '% of ' + it.hoursLabel);
+  }
+  greeting() {
+    const a = this.subject.data.ambitions.length, i = this.subject.data.interests.length;
+    const plural = (n: number, w: string) => n + ' ' + w + (n === 1 ? '' : 's');
+    return 'I help you put your interests and ambitions into words. Nothing is saved until you confirm it. '
+      + (a || i ? 'You have ' + plural(a, 'ambition') + ' and ' + plural(i, 'interest') + ' on file. ' : '')
+      + 'What kind of work gave you the most energy this year?';
   }
   sysPrompt() {
     const who = this.subject;
     return 'You are the growth assistant inside MyProfessionalMe, the learning platform of a consulting, audit, tax and legal firm. You talk with ' + who.name + ', ' + (who.stage || 'a professional') + ' in ' + this.bl() + '. Help them put their interests and ambitions into words. Plain, warm, matter-of-fact English. At most 70 words. One question at a time. No emoji, no exclamation marks, no lists.\n'
       + 'Known ambitions: ' + (who.data.ambitions.map((a) => a.text + ' (' + a.horizon + ')').join('; ') || 'none yet') + '.\nKnown interests: ' + (who.data.interests.map((i) => i.label).join(', ') || 'none yet') + '.\n'
       + 'Domain codes: ' + DOMAINS.map((d) => d[0] + '=' + d[1]).join(', ') + '.\n'
-      + 'Reply ONLY with JSON: {"reply": string, "interests": [{"label": string, "domain": code}], "ambition": null or {"text": string, "horizon": "1 year"|"3 years"|"5 years", "domains": [codes]}}. Propose an interest or ambition only when Lena clearly stated it in her last message and it is not already known; otherwise use [] and null. Interest labels are short noun phrases; ambitions start with a verb.';
+      + 'Reply ONLY with JSON: {"reply": string, "interests": [{"label": string, "domain": code}], "ambition": null or {"text": string, "horizon": "1 year"|"3 years"|"5 years", "domains": [codes]}}. Propose an interest or ambition only when they clearly stated it in their last message and it is not already known; otherwise use [] and null. Interest labels are short noun phrases; ambitions start with a verb.';
   }
   scripted(text: string): ChatReply {
     const t = text.toLowerCase();
-    if (t.includes('five years') || t.includes('5 years')) return { reply: 'Two directions fit what is on file: leading sustainability transformations for industrial clients, or running operating-model programmes as a manager. Which would you rather be known for in 2031, and what would a normal week look like?', interests: [], ambition: null };
-    if (t.includes('evaluation')) return { reply: 'Three evaluations repeat two themes: delegate earlier, and get involved in scoping and pricing. Thomas and Inès both point to proposal work; Karel asked you to get closer to the data yourself. Which of those do you want to get better at, rather than feel told to?', interests: [], ambition: null };
-    if (t.includes('energy')) return { reply: 'Brabant Energy is also where Inès rated your problem solving highest. Shall I save this as an ambition for the next three years? It pulls Industry & market, Regulations and Technology into your ambitions cloud.', interests: [], ambition: { text: 'Work mainly with energy-transition clients', horizon: '3 years', domains: ['ind', 'reg', 'tec'] } };
+    if (t.includes('five years') || t.includes('5 years')) return { reply: 'Picture a normal week five years from now: which clients, which kind of work, and how much of it is leading others? Your answer is a good start for an ambition.', interests: [], ambition: null };
+    if (t.includes('evaluation')) return { reply: 'No project evaluations are on file yet. Once the performance tool is connected I can summarise the themes they repeat. Meanwhile, what feedback from your last project do you remember most?', interests: [], ambition: null };
+    if (t.includes('energy')) return { reply: 'Energy-transition work is a clear direction. Shall I save it as an ambition for the next three years? It pulls Industry & market, Regulations and Technology into your ambitions cloud.', interests: [], ambition: { text: 'Work mainly with energy-transition clients', horizon: '3 years', domains: ['ind', 'reg', 'tec'] } };
     const k = KEYWORDS.find((x) => t.includes(x[0]) && !this.subject.data.interests.some((i) => i.label === x[1]));
     if (k) return { reply: 'That sounds like a real interest. I can save “' + k[1] + '” to your profile; it adds ' + (DOMAINS.find((d) => d[0] === k[2]) || [])[1] + ' to your ambitions cloud. What draws you to it?', interests: [{ label: k[1], domain: k[2] }], ambition: null };
     return { reply: 'Noted. What part of that would you want more of next year: the analysis, the client conversation, or leading the team?', interests: [], ambition: null };
@@ -514,7 +530,7 @@ export class Logic {
     let res: ChatReply | null = null;
     if (this.props.liveAssistant !== false && window.claude?.complete) {
       try {
-        const out = await window.claude.complete({ system: this.sysPrompt(), messages: chat.slice(1).map((m) => ({ role: m.role, content: m.text })), max_tokens: 600 });
+        const out = await window.claude.complete({ system: this.sysPrompt(), messages: chat.map((m) => ({ role: m.role, content: m.text })), max_tokens: 600 });
         const m = String(out).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
       } catch { res = null; }
     }

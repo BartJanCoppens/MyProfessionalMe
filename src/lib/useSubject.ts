@@ -1,6 +1,6 @@
 // The subject: the person whose growth map, library and profile the app shows.
 // Everyone sees themselves; System and Domain Admins can choose someone they manage (read-only).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabase';
 import { loadLearner } from './learnerStore';
 import type { LearnerData } from './learnerStore';
@@ -38,18 +38,18 @@ export function useSubject(auth: Auth) {
     return () => { live = false; };
   }, [me.id, version]);
 
-  // Choosable people: yourself, plus (for admins) the accounts they manage. Your own counsellor is visible
+  // Choosable people: yourself, your counsellees, plus (for admins) the accounts they manage. Your own counsellor is visible
   // to you but their learner data is not, so they are only choosable when you administer their line.
   const options = useMemo(() => {
     const list = people || [];
     const self = list.find((p) => p.id === me.id);
-    const others = !isAdmin ? [] : list.filter((p) => p.id !== me.id
-      && (auth.access.isSystem || p.id !== me.counsellor_id || auth.access.domains.includes(p.business_line || '')));
+    const others = list.filter((p) => p.id !== me.id && (p.counsellor_id === me.id || (isAdmin
+      && (auth.access.isSystem || p.id !== me.counsellor_id || auth.access.domains.includes(p.business_line || '')))));
     return (self ? [self] : []).concat(others).map((p) => ({ id: p.id, label: nameOf(p) + (p.id === me.id ? ' (you)' : '') }));
   }, [people, me.id, me.counsellor_id, isAdmin, auth.access]);
 
   const subjectId = options.some((o) => o.id === picked) ? picked : me.id;
-  const apply = useRef(latestOnly<{ id: string; data: LearnerData }>((v) => setLoaded(v))).current;
+  const [apply] = useState(() => latestOnly<{ id: string; data: LearnerData }>((v) => setLoaded(v)));
   const load = useCallback(() => apply(loadLearner(subjectId).then((data) => ({ id: subjectId, data }))), [apply, subjectId]);
   useEffect(() => { if (people) load(); }, [people, load]);
   const reload = useCallback(async () => { setVersion((v) => v + 1); await load(); }, [load]);

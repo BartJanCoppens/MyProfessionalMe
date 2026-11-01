@@ -37,3 +37,11 @@ describe('the person card in the sidebar', () => {
     expect(vm.who).toMatchObject({ roleLine: 'No business line yet', nextStage: 'Consultant', counsellorLine: 'No counsellor' });
   });
 });
+
+describe('marks', () => {
+  it('are none for a newcomer', () => { expect(viewModel(newcomer()).marks).toEqual([]); });
+  it('include a first certification once one is accepted', () => {
+    const vm = viewModel(newcomer({ data: { progress: { L23: { state: 'accepted', pct: 100, chosen: false } }, ambitions: [], interests: [], prefs: { initials: '', color: '' } } }));
+    expect(vm.marks).toEqual(['First certification']);
+  });
+});

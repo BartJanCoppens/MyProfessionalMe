@@ -17,6 +17,8 @@ import SubjectPicker from './screens/SubjectPicker';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
 import { useAuth } from './lib/useAuth';
 import { useSubject } from './lib/useSubject';
+import { useTeam } from './lib/useTeam';
+import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import type { Auth } from './lib/useAuth';
 
@@ -38,6 +40,8 @@ type ShellProps = { auth: Auth; subject: Subject; options: { id: string; label: 
 
 function Shell({ auth, subject, options, select, reload }: ShellProps) {
   const [picking, setPicking] = useState(false);
+  const team = useTeam(subject.id);
+  const [today] = useState(() => new Date());
   const cfg = useMemo(() => readConfig(), []);
   const [state, setRaw] = useState<AppState>(() => {
     const st = initState(cfg);
@@ -58,7 +62,7 @@ function Shell({ auth, subject, options, select, reload }: ShellProps) {
 
   return (
     <div data-pm-motion={vm.motionAttr} style={{ display: 'flex', minHeight: '100vh', background: '#f3f5f0', color: '#1a1d18', fontFamily: "'IBM Plex Sans',system-ui,sans-serif", fontSize: 13, lineHeight: 1.45 }}>
-      <Sidebar vm={vm} auth={auth} canPick={options.length > 1} onPick={() => setPicking(true)} onBackToMe={() => select(auth.profile!.id)} />
+      <Sidebar vm={vm} auth={auth} teamOverdue={(team || []).filter((m) => memberSummary(m, state.maps, today).overdue > 0).length} canPick={options.length > 1} onPick={() => setPicking(true)} onBackToMe={() => select(auth.profile!.id)} />
       <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <header style={{ height: 60, background: '#fff', borderBottom: '1px solid #e1e5dc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '0 32px', position: 'sticky', top: 0, zIndex: 5 }}>
           <div style={{ minWidth: 0, flex: '1 1 200px' }}>
@@ -67,7 +71,7 @@ function Shell({ auth, subject, options, select, reload }: ShellProps) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
             <StatusChip status="in-progress" size="md" label={vm.hoursChip} />
-            <Button variant="secondary" onClick={vm.toastHelp}>Ask Thomas</Button>
+            <Button variant="secondary" onClick={vm.toastHelp}>{vm.askLabel}</Button>
           </div>
         </header>
         <div style={{ padding: '26px 32px 140px', maxWidth: 1260, width: '100%', display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -76,7 +80,7 @@ function Shell({ auth, subject, options, select, reload }: ShellProps) {
           {vm.screen === 'detail' && <DetailScreen vm={vm} />}
           {vm.screen === 'projects' && <ProjectsScreen vm={vm} />}
           {vm.screen === 'profile' && <ProfileScreen vm={vm} fileRef={file} chatRef={chat} />}
-          {vm.screen === 'team' && <TeamScreen vm={vm} />}
+          {vm.screen === 'team' && <TeamScreen vm={vm} members={team} onOpen={(id) => { select(id); logic.go('map'); }} />}
           {vm.screen === 'adminLib' && <AdminLibraryScreen vm={vm} />}
           {vm.screen === 'adminMap' && <AdminMappingScreen vm={vm} />}
           {vm.screen === 'users' && <UsersScreen access={auth.access} meId={auth.profile!.id} say={(m) => logic.say(m)} />}
@@ -92,7 +96,7 @@ function Shell({ auth, subject, options, select, reload }: ShellProps) {
 const roleLabel = ({ access }: Auth) =>
   access.isSystem ? 'System Admin' : access.domains.length ? 'Domain Admin · ' + access.domains.join(', ') : 'Member';
 
-function Sidebar({ vm, auth, canPick, onPick, onBackToMe }: { vm: VM; auth: Auth; canPick: boolean; onPick: () => void; onBackToMe: () => void }) {
+function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: VM; auth: Auth; teamOverdue: number; canPick: boolean; onPick: () => void; onBackToMe: () => void }) {
   return (
     <aside style={{ width: 248, flex: 'none', background: '#171a16', color: '#c9cec5', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', overflow: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 20px 14px' }}>
@@ -115,7 +119,7 @@ function Sidebar({ vm, auth, canPick, onPick, onBackToMe }: { vm: VM; auth: Auth
         <NavItem label="Projects & evaluations" count={vm.projCount} active={vm.navProj} onClick={vm.goProj} />
         <NavItem label="My profile" active={vm.navProfile} onClick={vm.goProfile} />
         <NavGroupHeader>Counsellor</NavGroupHeader>
-        <NavItem label="My team" badge={vm.teamOverdue} active={vm.navTeam} onClick={vm.goTeam} />
+        <NavItem label="My team" badge={teamOverdue} active={vm.navTeam} onClick={vm.goTeam} />
         {vm.showAdmin && (
           <>
             <NavGroupHeader>Administration</NavGroupHeader>
