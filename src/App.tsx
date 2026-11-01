@@ -31,9 +31,25 @@ export default function App() {
 }
 
 function Workspace({ auth }: { auth: Auth }) {
-  const { subject, options, select, reload } = useSubject(auth);
+  const { subject, options, select, reload, retry, error } = useSubject(auth);
+  if (error) return <LoadError message={error} onRetry={retry} onSignOut={auth.signOut} />;
   if (!subject) return <div style={{ minHeight: '100vh', background: '#f3f5f0' }} />;
   return <Shell auth={auth} subject={subject} options={options} select={select} reload={reload} />;
+}
+
+function LoadError({ message, onRetry, onSignOut }: { message: string; onRetry: () => void; onSignOut: () => void }) {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: '#f3f5f0', fontFamily: "'IBM Plex Sans',system-ui,sans-serif", fontSize: 13, color: '#1a1d18' }}>
+      <div style={{ maxWidth: 420, background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ fontWeight: 600, fontSize: 18 }}>Your learning data did not load</div>
+        <div style={{ color: '#5a6058', textWrap: 'pretty' }}>{message}</div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <Button onClick={onRetry}>Try again</Button>
+          <LinkButton tone="muted" onClick={onSignOut}>Sign out</LinkButton>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 type ShellProps = { auth: Auth; subject: Subject; options: { id: string; label: string }[]; select: (id: string) => void; reload: () => Promise<void> };

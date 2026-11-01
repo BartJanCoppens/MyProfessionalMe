@@ -49,6 +49,7 @@ export function useAuth(): Auth {
   const current = account && account.userId === userId ? account : null;
   const roles = current?.roles || [];
   const access: Access = {
+    userId: userId || '',
     isSystem: roles.some((r) => r.role === 'system_admin'),
     domains: roles.filter((r) => r.role === 'domain_admin').map((r) => r.business_line as string),
   };

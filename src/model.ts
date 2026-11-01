@@ -9,7 +9,7 @@ import type { Config } from './config';
 import type { Access, AppState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
 import { levelLabel, levelsByDomain, stageIndex } from './logic/learner';
 import type { LearnState } from './logic/learner';
-import { addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
+import { acceptLearning, addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
 import { photoKey } from './lib/useSubject';
 import { memberSummary } from './logic/team';
 import type { Member } from './logic/team';
@@ -31,7 +31,7 @@ export function initState(cfg: Config): AppState {
     mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, persona: 'me', reads: {}, readBusy: false, cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
     projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: {},
-    chatInput: '', chatBusy: false, proposal: null, avatarEdit: null,
+    chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
     chat: [],
   };
 }
@@ -76,6 +76,19 @@ export class Logic {
     try { await write(); await this.reloadSubject(); if (done) this.say(done); } catch (err) { this.say((err as Error).message); }
   }
   myStage() { return stageIndex(this.subject.stage); }
+  // A counsellor or an admin who manages the viewed person may accept their submitted learning.
+  canAccept(state: string) {
+    const s = this.subject;
+    return s.readOnly && state === 'submitted'
+      && (s.counsellor?.id === this.access.userId || this.access.isSystem || (!!s.businessLine && this.access.domains.includes(s.businessLine)));
+  }
+  accept(learningId: string, title: string) {
+    acceptLearning(this.subject.id, learningId).then(this.reloadSubject)
+      .then(() => this.say('Accepted · “' + title + '” now counts toward ' + this.subject.name.split(' ')[0] + '’s levels'))
+      .catch((err) => this.say((err as Error).message));
+  }
+  // The chat and proposal shown are the viewed person's own; another person's conversation never carries over.
+  myChat() { return this.state.chatFor === this.subject.id ? this.state.chat : []; }
   nextStage() { return STAGES[this.myStage() + 1] || 'the next stage'; }
   // How copy names the viewed person's counsellor.
   counsellorFull() { return this.subject.counsellor?.name || 'your counsellor'; }
@@ -321,7 +334,7 @@ export class Logic {
       canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || d0.state === 'in-progress',
       canAsk: d0.state === 'in-progress',
       approvalNote: d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts your evidence.' : d0.ob === 'open' ? 'Open items need no approval. Adding one tells ' + this.counsellorFull() + ' what you are curious about.' : 'Completion is logged automatically by ' + d0.source + ' where connected.',
-      paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
+      canAcceptIt: this.canAccept(d0.state), paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
       av: AVATARS[d0.id] ? (() => {
         const AV = AVATARS[d0.id]; const best = AV.skills.map((_sk, k) => Math.max(0, ...AV.attempts.map((a) => a[1][k])));
         return {
@@ -387,7 +400,7 @@ export class Logic {
     const domName = (k: string) => (DOMAINS.find((d) => d[0] === k) || [k, k])[1];
     const ambitions = this.subject.data.ambitions.map((a) => ({ id: a.id, text: a.text, meta: [a.horizon, a.from].filter(Boolean).join(' · '), doms: a.doms.map((d) => ({ key: d, label: domName(d) })), remove: () => this.persist(() => removeAmbition(a.id), 'Ambition removed') }));
     const interests = this.subject.data.interests.map((i) => ({ label: i.label, dom: domName(i.dom), remove: () => this.persist(() => removeInterest(this.subject.id, i.label), 'Interest removed') }));
-    const pp = s.proposal;
+    const pp = s.chatFor === this.subject.id ? s.proposal : null;
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
       projects: ['Me · Projects & evaluations', 'Projects & evaluations'], profile: ['Me · My profile', 'My profile'], map: ['Me · ' + [this.subject.stage, bl].filter(Boolean).join(' · '), 'My growth map'], library: ['Me · Library', 'Library'],
@@ -410,6 +423,7 @@ export class Logic {
       bl, readiness, readinessW: readiness + '%', readinessFrac: readiness / 100, readinessDash: (readiness / 100 * 2 * Math.PI * 38) + ' ' + (2 * Math.PI * 38),
       readinessText: 'Readiness counts hours on mandatory and advised items up to the ' + this.nextStage() + ' stage in ' + bl + '. Your own choices count toward levels and hours, not readiness.',
       centerSub: (this.subject.stage || STAGES[0]) + ' → ' + this.nextStage() + ' · ' + readiness + '% ready', hoursYear, cpdYear, hoursChip: hoursYear + ' of 80 h this year',
+      noLineNote: this.subject.businessLine ? '' : (this.subject.readOnly ? this.subject.name + ' has' : 'You have') + ' no business line yet, so mandatory and advised items are shown for ' + bl + '. An admin sets the line in User management.',
       mapLead: 'You sit in the middle. The nine domains around you hold every learning the firm knows about; your ' + bl + ' affiliation decides which ones are mandatory, your counsellor advises some, the rest is yours to choose. Clouds show where your projects, personality and ambitions pull you.',
       crumb: titles[s.screen][0], headerTitle: titles[s.screen][1], screen: s.screen,
       navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), goUsers: () => this.go('users'),
@@ -439,7 +453,7 @@ export class Logic {
       // detail
       det, noteOpen: s.noteOpen, toggleNote: () => this.setState({ noteOpen: !s.noteOpen }), saveNote: () => { this.setState({ noteOpen: false }); this.say('Note posted · visible to colleagues on this learning'); },
       ratingOptions: [1, 2, 3, 4, 5].map((n) => opt(String(n), String(n))), myRating: s.myRating, setRating: (v: string) => this.setState({ myRating: v }),
-      addToPath: () => this.addToPath(d0.id), logHours: () => this.logHours(d0),
+      acceptIt: () => this.accept(d0.id, d0.title), addToPath: () => this.addToPath(d0.id), logHours: () => this.logHours(d0),
       askApprove: () => this.persist(() => saveProgress(this.subject.id, d0.id, { state: 'submitted', pct: 100 }), 'Sent to ' + this.counsellorFull() + ' · they see your evidence and the hours you logged'),
       // projects & profile
       projLead: PROJECTS.length + ' engagements since Sep 2025 · ' + PROJECTS.filter((p) => p.dims).length + ' evaluated · synced from staffing and the performance tool. Advice from each evaluation lands in the projects cloud on your map.',
@@ -447,7 +461,7 @@ export class Logic {
       profLead: 'Profiles, ambitions and interests are yours. You decide what your counsellor sees. None of this counts toward readiness; it shapes the clouds and paths on your map.',
       tests, shareOptions: [opt('me', 'Only me'), opt('counsellor', this.subject.counsellor ? this.counsellorFirst() : 'Counsellor')], addTest: () => this.say('Prototype: upload a report or enter results · Four Colours, MBTI, Big Five, DISC, Belbin team roles, Hogan'),
       ambitions, interests,
-      chat: ([{ role: 'assistant', text: this.greeting() }] as ChatMsg[]).concat(s.chat), chatBusy: s.chatBusy, chatInput: s.chatInput, setChatInput: (e: ChangeEvent<HTMLInputElement>) => this.setState({ chatInput: e.target.value }),
+      chat: ([{ role: 'assistant', text: this.greeting() }] as ChatMsg[]).concat(this.myChat()), chatBusy: s.chatBusy, chatInput: s.chatInput, setChatInput: (e: ChangeEvent<HTMLInputElement>) => this.setState({ chatInput: e.target.value }),
       chatKey: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') this.send(s.chatInput); }, sendChat: () => this.send(s.chatInput),
       chatPrompts: ['Where could I be in five years?', 'I enjoyed the energy client most', 'What do my evaluations say?'].map((l) => ({ label: l, send: () => this.send(l) })),
       chatSub: (this.props.liveAssistant === false || !window.claude?.complete ? 'Scripted assistant' : 'AI assistant') + ' · reads your projects and profiles · saves nothing until you confirm',
@@ -524,9 +538,9 @@ export class Logic {
     return { reply: 'Noted. What part of that would you want more of next year: the analysis, the client conversation, or leading the team?', interests: [], ambition: null };
   }
   async send(raw: string) {
-    const text = (raw || '').trim(); if (!text || this.state.chatBusy) return;
-    const chat: ChatMsg[] = this.state.chat.concat([{ role: 'user', text }]);
-    this.setState({ chat, chatInput: '', chatBusy: true, proposal: null });
+    const text = (raw || '').trim(); if (!text || this.state.chatBusy || this.readOnly()) return;
+    const chat: ChatMsg[] = this.myChat().concat([{ role: 'user', text }]);
+    this.setState({ chat, chatFor: this.subject.id, chatInput: '', chatBusy: true, proposal: null });
     let res: ChatReply | null = null;
     if (this.props.liveAssistant !== false && window.claude?.complete) {
       try {
@@ -542,7 +556,7 @@ export class Logic {
     this.setState((st) => ({ chat: st.chat.concat([{ role: 'assistant', text: reply }]), chatBusy: false, proposal: ints.length || amb ? { interests: ints, ambition: amb } : null }));
   }
   saveProposal() {
-    const p = this.state.proposal; if (!p) return;
+    const p = this.state.proposal; if (!p || this.state.chatFor !== this.subject.id) return;
     const id = this.subject.id, known = this.subject.data.interests;
     const amb = p.ambition;
     const fresh = p.interests.filter((i) => !known.some((x) => x.label.toLowerCase() === i.label.toLowerCase()));
@@ -550,7 +564,7 @@ export class Logic {
     this.persist(async () => {
       if (amb) await addAmbition(id, { text: amb.text, horizon: amb.horizon || '3 years', doms: (amb.domains || []).filter((d) => DOMAINS.some((x) => x[0] === d)), from: 'Assistant conversation · ' + today });
       for (const i of fresh) await addInterest(id, { label: i.label, dom: i.domain });
-      this.setState({ proposal: null, clouds: Object.assign({}, this.state.clouds, { amb: true }) });
+      this.setState((st) => ({ proposal: null, clouds: { ...st.clouds, amb: true } }));
     }, 'Saved to your profile · the ambitions cloud on your growth map now reflects it');
   }
 

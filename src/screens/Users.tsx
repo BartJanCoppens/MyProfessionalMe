@@ -9,8 +9,14 @@ type User = Profile & { roles: Role[] };
 type Handover = { email: string; password: string; what: string };
 
 const COLS = 'minmax(0,2.2fr) 150px 170px 190px minmax(0,2.4fr) 160px 190px';
-// RLS returns only the accounts this admin may manage (plus their own).
-const fetchUsers = () => supabase.from('profiles')
+// RLS also returns counsellees and your own counsellor; manageable_user_ids() narrows to accounts you may manage.
+const fetchUsers = async () => {
+  const [people, ids] = await Promise.all([fetchProfiles(), supabase.rpc('manageable_user_ids')]);
+  if (people.error || ids.error) return { data: null, error: people.error || ids.error };
+  const ok = new Set((ids.data as string[]) || []);
+  return { data: (people.data || []).filter((p) => ok.has(p.id)), error: null };
+};
+const fetchProfiles = () => supabase.from('profiles')
   .select('id, email, full_name, business_line, must_change_password, created_at, career_stage, counsellor_id, roles:user_roles!user_roles_user_id_fkey(role, business_line)')
   .order('full_name', { ascending: true, nullsFirst: false });
 const initials = (u: User) => (u.full_name || u.email).split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');

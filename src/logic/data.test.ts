@@ -5,6 +5,7 @@ describe('seed data', () => {
   it('holds no personal data about a seeded learner or their counsellor', () => {
     const text = JSON.stringify(Object.values(data).filter((v) => typeof v !== 'function'));
     expect(text).not.toMatch(/Lena|Mertens|Thomas/);
+    expect(text).not.toMatch(/your 2024 certificate/);
   });
   it('keeps learnings free of progress columns', () => {
     for (const row of data.LEARN) expect(row).toHaveLength(10);

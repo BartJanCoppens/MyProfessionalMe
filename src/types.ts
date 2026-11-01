@@ -44,7 +44,7 @@ export type CloudMeta = {
 export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'adminLib' | 'adminMap' | 'users';
 
 // What the signed-in account may administer (from public.user_roles).
-export type Access = { isSystem: boolean; domains: string[] };
+export type Access = { isSystem: boolean; domains: string[]; userId: string };
 export type View = 'constellation' | 'radar' | 'road';
 export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | null;
 
@@ -62,7 +62,8 @@ export type AppState = {
   blState: string | null; maps: Record<string, Mapping[]>; pending: Record<string, boolean>; mapSel: string | null; overStage: string | null;
   toast: string | null; noteOpen: boolean; myRating: string;
   projSel: string; clouds: Record<CloudKey, boolean>; share: Record<string, string>;
-  chatInput: string; chatBusy: boolean; proposal: Proposal | null;
+  // The assistant chat and its proposal belong to one person (chatFor), never to whoever is viewed next.
+  chatInput: string; chatBusy: boolean; proposal: Proposal | null; chatFor: string | null;
   // Avatar edits shown before the save round-trips, for the person being edited.
   avatarEdit: { userId: string; initials?: string; bg?: string; photo?: string | null } | null;
   chat: ChatMsg[];

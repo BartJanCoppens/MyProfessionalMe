@@ -125,6 +125,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
             </div>
             <KeyValueList rows={det.kv} labelWidth={96} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
+              {det.canAcceptIt && <Button size="xl" fullWidth onClick={vm.acceptIt}>Accept</Button>}
               {det.canAdd && <Button size="xl" fullWidth onClick={vm.addToPath}>+ Add to my path</Button>}
               {det.canLog && <Button size="xl" fullWidth onClick={vm.logHours}>Log 1 hour</Button>}
               {det.canAsk && <Button size="xl" variant="secondary" fullWidth onClick={vm.askApprove}>{vm.askLabel} to approve</Button>}

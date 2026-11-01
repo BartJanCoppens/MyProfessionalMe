@@ -27,6 +27,7 @@ export function useSubject(auth: Auth) {
   const [people, setPeople] = useState<Person[] | null>(null);
   const [picked, setPicked] = useState<string>(() => readPick() || me.id);
   const [loaded, setLoaded] = useState<{ id: string; data: LearnerData } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   // Bumped to refetch the people list (stage, line and counsellor change in User management).
   const [version, setVersion] = useState(0);
 
@@ -34,7 +35,7 @@ export function useSubject(auth: Auth) {
     let live = true;
     // RLS returns yourself, people you manage, your counsellees and your counsellor.
     supabase.from('profiles').select('id, email, full_name, business_line, career_stage, counsellor_id').order('full_name', { nullsFirst: false })
-      .then(({ data }) => { if (live) setPeople((data as Person[]) || []); });
+      .then(({ data, error: e }) => { if (!live) return; if (e) setError(e.message); else setPeople((data as Person[]) || []); });
     return () => { live = false; };
   }, [me.id, version]);
 
@@ -49,7 +50,7 @@ export function useSubject(auth: Auth) {
   }, [people, me.id, me.counsellor_id, isAdmin, auth.access]);
 
   const subjectId = options.some((o) => o.id === picked) ? picked : me.id;
-  const [apply] = useState(() => latestOnly<{ id: string; data: LearnerData }>((v) => setLoaded(v)));
+  const [apply] = useState(() => latestOnly<{ id: string; data: LearnerData }>((v) => { setError(null); setLoaded(v); }, (e) => setError((e as Error).message)));
   const load = useCallback(() => apply(loadLearner(subjectId).then((data) => ({ id: subjectId, data }))), [apply, subjectId]);
   useEffect(() => { if (people) load(); }, [people, load]);
   const reload = useCallback(async () => { setVersion((v) => v + 1); await load(); }, [load]);
@@ -69,5 +70,6 @@ export function useSubject(auth: Auth) {
     readOnly: person.id !== me.id, data: loaded.data, photo: readPhoto(person.id),
   } : null;
 
-  return { subject, options, select, reload, loading: !loaded || loaded.id !== subjectId };
+  // retry refetches the people list and the subject's data after a failed load.
+  return { subject, options, select, reload, retry: () => { setError(null); setVersion((v) => v + 1); }, error, loading: !loaded || loaded.id !== subjectId };
 }

@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Button, DotLegend, Eyebrow, FilterChip, Hover, KeyValueList, LinkButton, PageTitle, ProgressRing, SegmentedControl, StatCard, StatusChip, Tag } from '../ds';
+import { Banner, Button, DotLegend, Eyebrow, FilterChip, Hover, KeyValueList, LinkButton, PageTitle, ProgressRing, SegmentedControl, StatCard, StatusChip, Tag } from '../ds';
 import type { VM } from '../model';
 
 const card: CSSProperties = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' };
@@ -11,6 +11,7 @@ export default function MapScreen({ vm }: { vm: VM }) {
   return (
     <>
       <PageTitle title="Your growth map" lead={vm.mapLead} />
+      {vm.noLineNote && <Banner tone="info">{vm.noLineNote}</Banner>}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <SegmentedControl options={vm.viewOptions} value={vm.view} onChange={vm.setView} size="base" />
         <DotLegend items={vm.legendItems} />

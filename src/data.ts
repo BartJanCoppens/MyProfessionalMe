@@ -27,7 +27,7 @@ export const LEARN: Learn[] = [
  ['L14','Energy transition: market players','ind',3,'E-learning','Coursera',6,0,'',''],
  ['L15','Life sciences value chains','ind',3,'Book','O’Reilly',9,0,'',''],
  ['L16','Independence & ethics annual','reg',1,'E-learning','Internal academy',1,1,'',''],
- ['L17','GDPR for consultants','reg',2,'E-learning','Internal academy',1.5,1,'30 Nov 2026','Mandatory for everyone who handles client data. Renewed every two years; your 2024 certificate expires on 30 Nov 2026.'],
+ ['L17','GDPR for consultants','reg',2,'E-learning','Internal academy',1.5,1,'30 Nov 2026','Mandatory for everyone who handles client data. Renewed every two years.'],
  ['L18','CSRD essentials','reg',3,'Certification','ITAA',10,10,'','Sustainability reporting now shapes most Manager-level proposals. Counts for 10 ITAA or ACCA units.'],
  ['L19','EU AI Act in practice','reg',3,'E-learning','edX',4,0,'',''],
  ['L20','How finance closes the books','corp',1,'E-learning','Internal academy',2,0,'',''],

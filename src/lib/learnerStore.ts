@@ -26,14 +26,17 @@ export async function loadLearner(userId: string): Promise<LearnerData> {
   };
 }
 
-// Update the row if it exists, otherwise insert it (the update grant excludes the key columns, so no upsert).
-export async function saveProgress(userId: string, learningId: string, patch: Partial<{ state: LearnState; pct: number; chosen: boolean }>) {
-  const { data, error } = await supabase.from('learner_learnings').update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('user_id', userId).eq('learning_id', learningId).select('learning_id');
+// Atomic insert-or-update of your own progress row (save_learning); only the given fields change.
+export async function saveProgress(_userId: string, learningId: string, patch: Partial<{ state: LearnState; pct: number; chosen: boolean }>) {
+  fail((await supabase.rpc('save_learning', { p_learning_id: learningId, p_state: patch.state ?? null, p_pct: patch.pct ?? null, p_chosen: patch.chosen ?? null })).error);
+}
+
+// A counsellor or managing admin accepts a submitted learning; the database allows nothing else.
+export async function acceptLearning(userId: string, learningId: string) {
+  const { data, error } = await supabase.from('learner_learnings').update({ state: 'accepted' })
+    .eq('user_id', userId).eq('learning_id', learningId).eq('state', 'submitted').select('learning_id');
   fail(error);
-  if (data && data.length) return;
-  const ins = await supabase.from('learner_learnings').insert({ user_id: userId, learning_id: learningId, ...patch });
-  fail(ins.error);
+  if (!data || !data.length) throw new Error('This learning is no longer waiting for acceptance');
 }
 
 export async function addAmbition(userId: string, a: Omit<Ambition, 'id'>): Promise<Ambition> {
@@ -55,10 +58,8 @@ export async function removeInterest(userId: string, label: string) {
   fail((await supabase.from('interests').delete().eq('user_id', userId).eq('label', label)).error);
 }
 
+// Every profile has a learner_prefs row (created with the account), so this is a plain update.
 export async function savePrefs(userId: string, prefs: { initials?: string; color?: string }) {
   const row = { ...(prefs.initials !== undefined && { avatar_initials: prefs.initials }), ...(prefs.color !== undefined && { avatar_color: prefs.color }) };
-  const { data, error } = await supabase.from('learner_prefs').update(row).eq('user_id', userId).select('user_id');
-  fail(error);
-  if (data && data.length) return;
-  fail((await supabase.from('learner_prefs').insert({ user_id: userId, ...row })).error);
+  fail((await supabase.from('learner_prefs').update(row).eq('user_id', userId)).error);
 }
