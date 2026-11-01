@@ -12,4 +12,8 @@ npm run dev
 
 Sign-in is required. Accounts are created by a System Admin or a Domain Admin in **Administration → User management**; there is no self sign-up.
 
+The app shows one person at a time: yourself, or (for admins and counsellors) someone you choose with **View as** in the sidebar, read-only. Progress, ambitions, interests and counsellor are stored per person.
+
+Tests: `npm test` (unit) and `npm run test:db` (row-level security against the linked Supabase project).
+
 URL options: `?bl=Consulting|Audit|Tax%20%26%20Legal`, `?screen=map|library|projects|profile|team|adminLib|adminMap|users` (admin screens need an admin role), `?view=constellation|radar|road`, `?marks=off`, `?live=off`, `?motion=off`.

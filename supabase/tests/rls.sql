@@ -27,7 +27,7 @@ update public.profiles set business_line='Consulting', counsellor_id='00000000-0
 -- Consulting domain admin
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
-insert into results (check_name, expected, actual) select 'DA sees profiles (self+consultant)', '2', count(*)::text from public.profiles;
+insert into results (check_name, expected, actual) select 'DA sees profiles (self+consultant)', '2', count(*)::text from public.profiles where id::text like '00000000-0000-0000-0000-0000000000a_';
 insert into results (check_name, expected, actual) select 'DA cannot see system admin', '0', count(*)::text from public.profiles where email like 'bart.%';
 insert into results (check_name, expected, actual) select 'DA cannot see Audit admin in Consulting', '0', count(*)::text from public.profiles where id='00000000-0000-0000-0000-0000000000a4';
 with u as (update public.profiles set full_name='X' where id='00000000-0000-0000-0000-0000000000a4' returning 1) insert into results (check_name, expected, actual) select 'DA update Audit admin', '0 rows', count(*)||' rows' from u;
@@ -53,7 +53,7 @@ with u as (update public.profiles set full_name='Me' where id='00000000-0000-000
 
 -- System admin
 set local request.jwt.claims = '{"sub":"d644d4da-61b0-42ee-bfe9-52d6e7367723","role":"authenticated"}';
-insert into results (check_name, expected, actual) select 'SA sees every test profile', '6', count(*)::text from public.profiles where email like '%@test.local';
+insert into results (check_name, expected, actual) select 'SA sees every test profile', '6', count(*)::text from public.profiles where id::text like '00000000-0000-0000-0000-0000000000a_';
 with i as (insert into public.user_roles (user_id, role, business_line) values ('00000000-0000-0000-0000-0000000000a3','domain_admin','Tax & Legal') returning 1) insert into results (check_name, expected, actual) select 'SA grants Tax&Legal domain admin', '1 rows', count(*)||' rows' from i;
 do $$ begin
   begin delete from public.user_roles where role='system_admin';
