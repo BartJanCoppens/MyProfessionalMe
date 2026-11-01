@@ -26,3 +26,6 @@ dist-ssr
 # Playwright MCP artefacts
 .playwright-mcp
 .vercel
+
+# Plan execution workspaces
+.superpowers/

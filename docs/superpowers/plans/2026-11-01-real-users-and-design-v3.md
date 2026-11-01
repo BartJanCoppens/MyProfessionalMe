@@ -50,7 +50,7 @@ Part A does not depend on this task.
 
 # Part A: Real users instead of Lena (release v0.4.0)
 
-### Task A1: Test harness and learner derivations
+### Task 1 · A1: Test harness and learner derivations
 
 **Files:**
 - Modify: `package.json` (devDependency `vitest`, pinned exact; script `"test": "vitest run"`)
@@ -70,7 +70,7 @@ Part A does not depend on this task.
 - [ ] **Step 4:** `npm test`. Expected: PASS.
 - [ ] **Step 5:** Commit: `test: add vitest and learner derivations`.
 
-### Task A2: Learner data in Supabase
+### Task 2 · A2: Learner data in Supabase
 
 **Files:**
 - Create: `supabase/migrations/<ts>_learner_data.sql` (with `supabase migration new learner_data`; never invent the timestamp)
@@ -101,7 +101,7 @@ Part A does not depend on this task.
 - [ ] **Step 4:** `supabase db push`, rerun the tests (all PASS), then `supabase db advisors --linked` (no new warnings).
 - [ ] **Step 5:** Commit: `feat(db): per-user learner data with RLS`.
 
-### Task A3: Strip Lena from the seed data
+### Task 3 · A3: Strip Lena from the seed data
 
 **Files:**
 - Modify: `src/data.ts`, `src/types.ts`, `src/logic/learner.test.ts`
@@ -116,7 +116,7 @@ Part A does not depend on this task.
 - [ ] **Step 3:** Edit `src/data.ts` and `src/types.ts` as specified.
 - [ ] **Step 4:** `npm test` PASS. `npx tsc -b` will now fail in `model.ts`; that is Task A4's starting point. Do not commit a broken build: continue straight into A4 and commit them together.
 
-### Task A4: The subject: whose app you are looking at
+### Task 4 · A4: The subject: whose app you are looking at
 
 **Files:**
 - Create: `src/lib/learnerStore.ts`, `src/lib/useSubject.ts`, `src/lib/useSubject.test.ts`
@@ -139,7 +139,7 @@ Part A does not depend on this task.
 - [ ] **Step 5:** `npm test`, `npx tsc -b`, `npm run lint`. All clean.
 - [ ] **Step 6:** Commit A3 and A4 together: `feat: learner app follows a real user; remove Lena seed data`.
 
-### Task A5: Sidebar subject picker and counsellor assignment
+### Task 5 · A5: Sidebar subject picker and counsellor assignment
 
 **Files:**
 - Modify: `src/App.tsx` (sidebar top card and footer card), `src/screens/Users.tsx`
@@ -157,7 +157,7 @@ Part A does not depend on this task.
 - [ ] **Step 3:** Playwright: sign in as a throwaway System Admin, create a user with stage Consultant and counsellor = the admin, pick them in "View as", and check name, stage and the read-only tag. "Back to me" returns. Delete the throwaway accounts afterwards.
 - [ ] **Step 4:** Commit: `feat: choose the viewed user; stage and counsellor in user management`.
 
-### Task A6: Copy and empty states without Lena or Thomas
+### Task 6 · A6: Copy and empty states without Lena or Thomas
 
 **Files:**
 - Modify: `src/model.ts`, `src/screens/Map.tsx`, `src/screens/Library.tsx`, `src/screens/Projects.tsx`, `src/screens/Profile.tsx`, `src/screens/Team.tsx`, `src/data.ts` (`STATE_LABEL`)
@@ -175,7 +175,7 @@ Part A does not depend on this task.
 - [ ] **Step 3:** `npm test`, `npx tsc -b`, `npm run lint` clean.
 - [ ] **Step 4:** Commit: `feat: counsellor and empty states from real data`.
 
-### Task A7: Verify, document, release v0.4.0
+### Task 7 · A7: Verify, document, release v0.4.0
 
 - [ ] **Step 1:** Playwright sweep against the dev server with throwaway accounts (System Admin, Consulting Domain Admin, plain member with and without stage and line):
   - every screen renders with a clean console
@@ -190,7 +190,7 @@ Part A does not depend on this task.
 
 All of Part B needs Task 0. Port names come from the template (`fmtTiles`, `reelStrip`, `zm`, `det.pod`, `det.reel`). Logic comes from the full design source, adapted to the Part A subject model.
 
-### Task B1: v3 seed data, keyframes and DS Stepper
+### Task 8 · B1: v3 seed data, keyframes and DS Stepper
 
 **Files:** `src/data.ts`, `src/types.ts`, `src/styles/index.css`, `src/ds/index.tsx`, `src/logic/data.test.ts`
 - Add learnings `L42`–`L48` (without the removed state and pct columns). Change `L45`'s source from "Peer · Lena Mertens" to a non-Lena peer, and drop its "Your own reel…" text. Add `MEDIA`, `REVIEW_STAGES`, `REVIEW_WHO`, `NEW_TYPES`, `CLIENT_WORDS`, `PEERS`, `EXPERTS` (with Advisory → Audit), `KB_TYPES`, `TOPICS`, `TOPIC_BY`, `RAG_PRESETS`, `RAG_OPTS`, `ragOptLabel`, `mkModels`, `BUNDLES0`, `KB_ACCESS`, `RUBRIC`, `slugify`, `isoDate`, `yamlList`, `yq` verbatim. `CONTRIB0` and `REVIEWS0` are not ported (Part C makes them real).
@@ -208,7 +208,7 @@ All of Part B needs Task 0. Port names come from the template (`fmtTiles`, `reel
   - `yamlList(['a', 'b:c']) === '[a, "b:c"]'`
 - [ ] Commit: `feat(data): design v3 seed data, keyframes, Stepper`.
 
-### Task B2: Library: format tiles, quick-learning reels, illustrated covers
+### Task 9 · B2: Library: format tiles, quick-learning reels, illustrated covers
 
 **Files:** `src/logic/covers.ts`, `src/logic/covers.test.ts`, `src/model.ts`, `src/screens/Library.tsx`
 - **Interfaces:** `cover(row: Learn, index: number, state: LearnState): Cover`, ported from the design's `cover(r, i)`. `Cover` carries `kind: 'pod' | 'reel' | 'avatar' | 'game' | 'book' | 'class' | 'elearn' | 'mentor' | 'web' | 'cert'` plus the per-kind fields the template binds (`cvTag`, `cvBg`, `cvFg`, `cvLine`, `cvMeta`, `tiles`, `lvDots`, `seats`, `segs`, `cvDone`). `fmtTiles` replaces the format `Select` (one tile per format plus "All", with counts; clicking toggles `libFormat`).
@@ -219,7 +219,7 @@ All of Part B needs Task 0. Port names come from the template (`fmtTiles`, `reel
   - Review Focus: a combined filter that yields nothing shows the "No learnings match" empty state (Playwright)
 - [ ] Commit: `feat(library): format tiles, reels strip, covers`.
 
-### Task B3: Detail: podcast player and reel viewer
+### Task 10 · B3: Detail: podcast player and reel viewer
 
 **Files:** `src/logic/media.ts`, `src/logic/media.test.ts`, `src/lib/usePlayer.ts`, `src/model.ts`, `src/screens/Library.tsx`
 - **Interfaces:**
@@ -235,7 +235,7 @@ All of Part B needs Task 0. Port names come from the template (`fmtTiles`, `reel
   - the RLS test: an owner can accept a Reel but not a Classroom item
 - [ ] Commit: `feat(detail): podcast player and reel viewer`.
 
-### Task B4: Growth map domain zoom and avatar SVG photo
+### Task 11 · B4: Growth map domain zoom and avatar SVG photo
 
 **Files:** `src/logic/zoom.ts`, `src/logic/zoom.test.ts`, `src/model.ts`, `src/screens/Map.tsx`
 - **Interfaces:** `zoomView(domainIndex: number, items: Item[], levels: number[], targets: number[]): Zoom`, ported from the design (`zm`: `origin`, `clouds`, `band`, `rings`, `nodes`, `cur`, `name`, `levelText`, `hoursText`, `pulls`, `nextTitle`), plus `prev` and `next` that wrap 0↔8. `AppState.zoom: number | null`. Double-clicking a hub or clicking its zoom button sets it; "← All domains" clears it. `cHint` copy comes from the design. `avatarSvgC` and `avatarSvgR` render the photo `<image>` with clip paths when a photo exists.
@@ -251,7 +251,7 @@ All of Part B needs Task 0. Port names come from the template (`fmtTiles`, `reel
 
 Reviews are done by other people, so this part persists in Supabase. Reviewers are real users.
 
-### Task C1: Contributions and reviews in the database
+### Task 12 · C1: Contributions and reviews in the database
 
 **Files:** `supabase/migrations/<ts>_contributions.sql`, `supabase/tests/rls.sql`
 - **Tables:**
@@ -266,7 +266,7 @@ Reviews are done by other people, so this part persists in Supabase. Reviewers a
   - the author's counsellor is never assigned
 - [ ] Commit.
 
-### Task C2: Create & share screen
+### Task 13 · C2: Create & share screen
 
 **Files:** `src/logic/content.ts`, `src/logic/content.test.ts`, `src/lib/contributionStore.ts`, `src/screens/Create.tsx`, `src/model.ts`, `src/App.tsx` (nav item "Create & share" with `reviewBadge` = open reviews for the signed-in user)
 - **Interfaces:**
@@ -284,7 +284,7 @@ Reviews are done by other people, so this part persists in Supabase. Reviewers a
 
 # Part D: Knowledge library (admin; release v0.7.0)
 
-### Task D1: Bundle list and detail (Overview, Sources, Models)
+### Task 14 · D1: Bundle list and detail (Overview, Sources, Models)
 
 **Files:** `src/logic/kb.ts`, `src/logic/kb.test.ts`, `src/screens/Knowledge.tsx`, `src/screens/KnowledgeBundle.tsx`, `src/model.ts`, `src/App.tsx` (Administration nav "Knowledge library", count = bundles; add `'kb'` to `ADMIN_SCREENS` and the `config.ts` screens)
 - **Interfaces:**
@@ -298,7 +298,7 @@ Reviews are done by other people, so this part persists in Supabase. Reviewers a
   - deleting the only model is refused
 - [ ] Commit.
 
-### Task D2: OKF files, import and download
+### Task 15 · D2: OKF files, import and download
 
 **Files:** `src/logic/okf.ts`, `src/logic/okf.test.ts`, `src/logic/tar.ts`, `src/logic/tar.test.ts`
 - **Interfaces:**
@@ -312,7 +312,7 @@ Reviews are done by other people, so this part persists in Supabase. Reviewers a
   - the tar header checksum is correct for one file, and the archive length is a multiple of 512 with two trailing zero blocks
 - [ ] Commit.
 
-### Task D3: Test retrieval
+### Task 16 · D3: Test retrieval
 
 **Files:** `src/logic/retrieval.ts`, `src/logic/retrieval.test.ts`, `src/screens/KnowledgeBundle.tsx`
 - **Interfaces:**
