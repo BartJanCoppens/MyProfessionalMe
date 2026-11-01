@@ -18,7 +18,7 @@ type Account = { userId: string; profile: Profile | null; roles: Role[] };
 
 async function fetchAccount(userId: string): Promise<Account> {
   const [p, r] = await Promise.all([
-    supabase.from('profiles').select('id, email, full_name, business_line, must_change_password, created_at').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('id, email, full_name, business_line, must_change_password, created_at, career_stage, counsellor_id').eq('id', userId).maybeSingle(),
     supabase.from('user_roles').select('role, business_line').eq('user_id', userId),
   ]);
   return { userId, profile: (p.data as Profile) || null, roles: (r.data as Role[]) || [] };

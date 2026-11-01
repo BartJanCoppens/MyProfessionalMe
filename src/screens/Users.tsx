@@ -10,7 +10,7 @@ type Handover = { email: string; password: string; what: string };
 const COLS = 'minmax(0,2.2fr) 170px minmax(0,2.4fr) 160px 190px';
 // RLS returns only the accounts this admin may manage (plus their own).
 const fetchUsers = () => supabase.from('profiles')
-  .select('id, email, full_name, business_line, must_change_password, created_at, roles:user_roles!user_roles_user_id_fkey(role, business_line)')
+  .select('id, email, full_name, business_line, must_change_password, created_at, career_stage, counsellor_id, roles:user_roles!user_roles_user_id_fkey(role, business_line)')
   .order('full_name', { ascending: true, nullsFirst: false });
 const initials = (u: User) => (u.full_name || u.email).split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 

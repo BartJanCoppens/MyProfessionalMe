@@ -1,5 +1,5 @@
-// id, title, dom, lvl, format, source, hours, cpd, state, pct, due, why
-export type Learn = [string, string, string, number, string, string, number, number, string, number, string, string];
+// id, title, dom, lvl, format, source, hours, cpd, due, why
+export type Learn = [string, string, string, number, string, string, number, number, string, string];
 // learning id, stage, obligation
 export type Mapping = [string, string, string];
 
@@ -57,14 +57,15 @@ export type AvatarState = { initials: string; bg: string; photo: string | null }
 
 export type AppState = {
   screen: Screen; view: View; sel: Sel; detailId: string | null; origin: Screen;
-  chosen: string[]; states: Record<string, string>; pcts: Record<string, number>;
   libQ: string; libOb: string; libLevel: string; libFormat: string; libDom: string;
   teamTab: string; adminQ: string; adminStatus: string; drawerOpen: boolean; importQ: string;
   blState: string | null; maps: Record<string, Mapping[]>; pending: Record<string, boolean>; mapSel: string | null; overStage: string | null;
   toast: string | null; noteOpen: boolean; myRating: string;
   projSel: string; clouds: Record<CloudKey, boolean>; share: Record<string, string>;
-  ambitions: Ambition[]; interests: Interest[]; chatInput: string; chatBusy: boolean; proposal: Proposal | null;
-  avatar: AvatarState; chat: ChatMsg[];
+  chatInput: string; chatBusy: boolean; proposal: Proposal | null;
+  // Avatar edits shown before the save round-trips, for the person being edited.
+  avatarEdit: { userId: string; initials?: string; bg?: string; photo?: string | null } | null;
+  chat: ChatMsg[];
   // curriculum mapping: lens, selected audience and stage, signals handled, learner's-eye persona, copilot
   mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>;
   persona: string; reads: Record<string, Read>; readBusy: boolean;

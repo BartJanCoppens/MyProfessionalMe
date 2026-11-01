@@ -15,6 +15,8 @@ import AdminMappingScreen from './screens/Mapping';
 import UsersScreen from './screens/Users';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
 import { useAuth } from './lib/useAuth';
+import { useSubject } from './lib/useSubject';
+import type { Subject } from './lib/useSubject';
 import type { Auth } from './lib/useAuth';
 
 export default function App() {
@@ -26,6 +28,14 @@ export default function App() {
 }
 
 function Workspace({ auth }: { auth: Auth }) {
+  const { subject, options, select, reload } = useSubject(auth);
+  if (!subject) return <div style={{ minHeight: '100vh', background: '#f3f5f0' }} />;
+  return <Shell auth={auth} subject={subject} options={options} select={select} reload={reload} />;
+}
+
+type ShellProps = { auth: Auth; subject: Subject; options: { id: string; label: string }[]; select: (id: string) => void; reload: () => Promise<void> };
+
+function Shell({ auth, subject, reload }: ShellProps) {
   const cfg = useMemo(() => readConfig(), []);
   const [state, setRaw] = useState<AppState>(() => {
     const st = initState(cfg);
@@ -38,7 +48,7 @@ function Workspace({ auth }: { auth: Auth }) {
   const file = useRef<HTMLInputElement | null>(null);
   const chat = useRef<HTMLDivElement | null>(null);
 
-  const logic = new Logic(state, (p) => setRaw((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, auth.access);
+  const logic = new Logic(state, (p) => setRaw((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, auth.access, subject, reload);
   const vm = logic.renderVals();
 
   useEffect(() => { if (chat.current) chat.current.scrollTop = 1e6; }, [state.chat, state.chatBusy, state.proposal]);

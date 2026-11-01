@@ -10,6 +10,12 @@ export default function ProjectsScreen({ vm }: { vm: VM }) {
         <PageTitle title="Projects & evaluations" lead={vm.projLead} />
         <Button variant="secondary" onClick={vm.requestEval}>Request an evaluation</Button>
       </div>
+      {!pr ? (
+        <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '22px 22px', color: '#5a6058', textWrap: 'pretty' }}>
+          <div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>No evaluations yet</div>
+          Project evaluations appear here once the performance tool is connected. Their advice then feeds the projects cloud on your growth map.
+        </div>
+      ) : (
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '0 1 300px', minWidth: 260, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {vm.projList.map((pj) => (
@@ -73,6 +79,7 @@ export default function ProjectsScreen({ vm }: { vm: VM }) {
           )}
         </div>
       </div>
+      )}
     </>
   );
 }

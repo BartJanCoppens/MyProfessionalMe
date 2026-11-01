@@ -17,6 +17,8 @@ export type Profile = {
   business_line: BusinessLine | null;
   must_change_password: boolean;
   created_at: string;
+  career_stage: string | null;
+  counsellor_id: string | null;
 };
 export type Role = { role: 'system_admin' | 'domain_admin'; business_line: BusinessLine | null };
 

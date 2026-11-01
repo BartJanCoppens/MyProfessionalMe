@@ -2,13 +2,17 @@
 // everything the screens render from AppState, and the action methods patch state the same way the prototype did.
 import type { ChangeEvent, DragEvent, KeyboardEvent, RefObject } from 'react';
 import {
-  AMB0, AUD_INFO, AUD_MAPS0, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, CUR, DOMAINS, FILL, HEAT, IMPORT_RESULTS, INT0, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
-  MY_STAGE, OB_LABEL, OB_TONE, OUTCOMES, PERSONAS, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TEAM, TESTS,
+  AUD_INFO, AUD_MAPS0, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
+  OB_LABEL, OB_TONE, OUTCOMES, PERSONAS, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TEAM, TESTS,
 } from './data';
 import type { Config } from './config';
-import type { Access, AppState, AvatarState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
+import type { Access, AppState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
+import { levelLabel, levelsByDomain, stageIndex } from './logic/learner';
+import type { LearnState } from './logic/learner';
+import { addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
+import { photoKey } from './lib/useSubject';
+import type { Subject } from './lib/useSubject';
 
-const AVATAR_KEY = 'mpm-avatar';
 const opt = (v: string, l: string) => ({ value: v, label: l });
 export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'users'];
 const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!;
@@ -17,19 +21,15 @@ type Evidence = { id: string; text: string; src: string };
 type ChatReply = { reply: string; interests?: { label: string; domain: string }[]; ambition?: Proposal['ambition'] };
 
 export function initState(cfg: Config): AppState {
-  let avatar: AvatarState = { initials: 'LM', bg: '#1a1d18', photo: null };
-  try { avatar = Object.assign(avatar, JSON.parse(localStorage.getItem(AVATAR_KEY) || '{}')); } catch { /* keep default */ }
   return {
     screen: cfg.startScreen, view: cfg.homeView, sel: null, detailId: null, origin: 'library',
-    chosen: ['L9', 'L14', 'L26', 'L38', 'L41'], states: {}, pcts: {},
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, persona: 'lena', reads: {}, readBusy: false, cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, persona: 'me', reads: {}, readBusy: false, cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
     projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: { T1: 'thomas', T2: 'me', T3: 'thomas' },
-    ambitions: AMB0.slice(), interests: INT0.slice(), chatInput: '', chatBusy: false, proposal: null,
-    avatar,
+    chatInput: '', chatBusy: false, proposal: null, avatarEdit: null,
     chat: [{ role: 'assistant', text: 'I help you put your interests and ambitions into words. Nothing is saved until you confirm it. You have two ambitions and three interests on file. What kind of work gave you the most energy this year?' }],
   };
 }
@@ -52,13 +52,47 @@ export class Logic {
   readonly access: Access;
   readonly refs: Refs;
   readonly setState: SetState;
-  constructor(state: AppState, setState: SetState, props: Config, refs: Refs, access: Access) {
+  readonly subject: Subject;
+  readonly reloadSubject: () => Promise<void>;
+  // Level reached per domain (DOMAINS order) from the subject's accepted learnings.
+  readonly levels: number[];
+  constructor(state: AppState, setState: SetState, props: Config, refs: Refs, access: Access, subject: Subject, reloadSubject: () => Promise<void>) {
     this.state = state; this.setState = setState; this.props = props; this.refs = refs; this.access = access;
+    this.subject = subject; this.reloadSubject = reloadSubject;
+    this.levels = levelsByDomain(subject.data.progress, LEARN);
   }
 
-  setAvatar(patch: Partial<AvatarState>) {
-    const avatar = Object.assign({}, this.state.avatar, patch); this.setState({ avatar });
-    try { localStorage.setItem(AVATAR_KEY, JSON.stringify(avatar)); } catch { this.say('Photo too large to keep after reload'); }
+  // Viewing someone else is read-only; returns true (and says so) when a write must not happen.
+  readOnly() {
+    if (!this.subject.readOnly) return false;
+    this.say('Viewing ' + this.subject.name + ' · read-only');
+    return true;
+  }
+  // Saves to Supabase, then reloads the subject; failures surface as a toast.
+  async persist(write: () => Promise<unknown>, done?: string) {
+    if (this.readOnly()) return;
+    try { await write(); await this.reloadSubject(); if (done) this.say(done); } catch (err) { this.say((err as Error).message); }
+  }
+  myStage() { return stageIndex(this.subject.stage); }
+  avatar() {
+    const e = this.state.avatarEdit && this.state.avatarEdit.userId === this.subject.id ? this.state.avatarEdit : null;
+    const fallback = this.subject.name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+    return {
+      initials: e?.initials ?? (this.subject.data.prefs.initials || fallback),
+      bg: e?.bg ?? (this.subject.data.prefs.color || '#1a1d18'),
+      photo: e && e.photo !== undefined ? e.photo : this.subject.photo,
+    };
+  }
+  setAvatar(patch: { initials?: string; bg?: string; photo?: string | null }) {
+    if (this.readOnly()) return;
+    const id = this.subject.id;
+    this.setState((st) => ({ avatarEdit: { ...(st.avatarEdit && st.avatarEdit.userId === id ? st.avatarEdit : {}), ...patch, userId: id } }));
+    if (patch.photo !== undefined) {
+      try { if (patch.photo) localStorage.setItem(photoKey(id), patch.photo); else localStorage.removeItem(photoKey(id)); } catch { this.say('Photo too large to keep after reload'); }
+    }
+    if (patch.initials !== undefined || patch.bg !== undefined) {
+      savePrefs(id, { initials: patch.initials, color: patch.bg }).catch((err) => this.say((err as Error).message));
+    }
   }
   onAvatarFile(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -70,7 +104,7 @@ export class Logic {
     };
     img.src = url;
   }
-  bl() { return this.state.blState || this.props.businessLine || 'Consulting'; }
+  bl() { return this.state.blState || this.subject.businessLine || this.props.businessLine || 'Consulting'; }
   say(msg: string) {
     clearTimeout(this.refs.toastTimer.current); this.setState({ toast: msg });
     this.refs.toastTimer.current = window.setTimeout(() => this.setState({ toast: null }), 2800);
@@ -78,12 +112,13 @@ export class Logic {
   mapping(id: string) { const m = this.state.maps[this.bl()].find((x) => x[0] === id); return m ? { stage: m[1], ob: m[2], si: STAGES.indexOf(m[1]) } : null; }
   obFor(id: string) {
     const m = this.mapping(id);
-    if (m && m.si <= MY_STAGE + 1) return m.ob;
-    return this.state.chosen.includes(id) ? 'chosen' : 'open';
+    if (m && m.si <= this.myStage() + 1) return m.ob;
+    return this.subject.data.progress[id]?.chosen ? 'chosen' : 'open';
   }
   item(row: Learn) {
-    const [id, title, dom, lvl, format, source, hours, cpd, state0, pct0, due, why] = row;
-    const state = this.state.states[id] || state0; const pct = this.state.pcts[id] != null ? this.state.pcts[id] : (state === 'accepted' || state === 'submitted' ? 100 : pct0);
+    const [id, title, dom, lvl, format, source, hours, cpd, due, why] = row;
+    const own = this.subject.data.progress[id];
+    const state: LearnState = own?.state || 'not-started'; const pct = state === 'accepted' || state === 'submitted' ? 100 : own?.pct || 0;
     const ob = this.obFor(id); const m = this.mapping(id); const di = DOMAINS.findIndex((d) => d[0] === dom);
     const hasDue = ob === 'mandatory' && !!due; const dueSoon = due === '30 Nov 2026';
     const hoursLabel = (hours % 1 ? hours.toFixed(1) : hours) + ' h';
@@ -92,7 +127,7 @@ export class Logic {
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
       stateLabel: state === 'in-progress' ? 'In progress · ' + pct + '%' : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
-      dueLabel: hasDue ? 'Due ' + due : (m && m.si <= MY_STAGE + 1 ? 'By ' + m.stage + ' stage' : ''), dueColor: hasDue ? (dueSoon ? '#9a3d0c' : '#7a5000') : '#8b918a',
+      dueLabel: hasDue ? 'Due ' + due : (m && m.si <= this.myStage() + 1 ? 'By ' + m.stage + ' stage' : ''), dueColor: hasDue ? (dueSoon ? '#9a3d0c' : '#7a5000') : '#8b918a',
       meta: source + ' · ' + hoursLabel + ' · ' + LEVELS[lvl - 1] + ' · L' + lvl + (cpd ? ' · ' + cpd + ' CPD' : ''),
       why: why || (m ? (ob === 'mandatory' ? 'Mandatory' : ob === 'advised' ? 'Advised' : 'Mapped') + ' for the ' + m.stage + ' stage in ' + this.bl() + '. ' : '')
         + (ob === 'open' ? 'Not on any ' + this.bl() + ' path at your stage. Add it if it serves where you want to go; it still counts toward your hours and levels.' : 'Thomas can tell you how it fits your next engagement.'),
@@ -108,7 +143,7 @@ export class Logic {
   canEditAud(aud: string) { return this.access.isSystem || (AUD_INFO[aud]?.lens === 'bl' && this.access.domains.includes(aud)); }
   progressHours(it: Item) { return it.state === 'accepted' || it.state === 'submitted' ? it.hours : it.state === 'in-progress' ? it.hours * it.pct / 100 : 0; }
   readiness(items: Item[]) {
-    const rel = items.filter((it) => it.mapped && it.mapped.si <= MY_STAGE + 1 && (it.ob === 'mandatory' || it.ob === 'advised'));
+    const rel = items.filter((it) => it.mapped && it.mapped.si <= this.myStage() + 1 && (it.ob === 'mandatory' || it.ob === 'advised'));
     const tot = rel.reduce((a, it) => a + it.hours, 0), done = rel.reduce((a, it) => a + this.progressHours(it), 0);
     return tot ? Math.round(100 * done / tot) : 0;
   }
@@ -129,8 +164,8 @@ export class Logic {
     const pers: Evidence[] = []; TESTS.forEach((t) => t.sugg.forEach((x) => pers.push({ id: x[0], text: x[1], src: t.name })));
     const amb: Evidence[] = [], seen = new Set<string>();
     const pick = (doms: string[]) => doms.map((d) => items.filter((x) => x.dom === d && x.state !== 'accepted' && x.ob !== 'mandatory' && !seen.has(x.id)).sort((a, b) => b.lvl - a.lvl)[0]).filter(Boolean).map((x) => x.id);
-    s.ambitions.forEach((a) => (a.ids || pick(a.doms)).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Ambition · ' + a.text, text: 'Builds ' + byId[id].domLabel.toLowerCase() + ', which this ambition depends on.' }); }));
-    s.interests.forEach((i) => (i.ids || pick([i.dom])).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Interest · ' + i.label, text: 'Matches an interest you named.' }); }));
+    this.subject.data.ambitions.forEach((a) => (a.ids || pick(a.doms)).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Ambition · ' + a.text, text: 'Builds ' + byId[id].domLabel.toLowerCase() + ', which this ambition depends on.' }); }));
+    this.subject.data.interests.forEach((i) => (i.ids || pick([i.dom])).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Interest · ' + i.label, text: 'Matches an interest you named.' }); }));
     return [mk('proj', proj), mk('pers', pers), mk('amb', amb)];
   }
   constellation(items: Item[], clouds: Cloud[]) {
@@ -163,7 +198,7 @@ export class Logic {
       const lx = p.x + 96 * Math.cos(p.a), ly = p.y + 96 * Math.sin(p.a); const anchor = this.anchorFor(p.a);
       hubs.push({
         delay: (i * 70) + 'ms', id: d[0], x: p.x, y: p.y, xP: this.pct(p.x, 1080), yP: this.pct(p.y, 660), lxP: this.pct(lx, 1080), lyP: this.pct(ly, 660), tf: this.tfFor(anchor), ta: this.taFor(anchor),
-        label: d[1], cur: 'L' + CUR[i], lvl: LEVELS[CUR[i] - 1] + ' → L' + TARGET[i] + ' at Manager',
+        label: d[1], cur: 'L' + this.levels[i], lvl: levelLabel(this.levels[i]) + ' → L' + TARGET[i] + ' at Manager',
         stroke: hubSel ? '#1a1d18' : '#c8cdc3', sw: hubSel ? 2 : 1.3, op: hubRel ? 1 : 0.3, onClick: () => this.setState({ sel: { type: 'hub', id: d[0] } }),
       });
     });
@@ -184,14 +219,14 @@ export class Logic {
     const rings = [1, 2, 3, 4, 5].map((k) => ({ points: DOMAINS.map((_d, i) => pt(i, k).join(',')).join(' '), lxP: this.pct(cx - 6, 1080), lyP: this.pct(cy - R * k / 5 - 2, 560), label: 'L' + k }));
     const axes = DOMAINS.map((d, i) => {
       const p = this.polar(cx, cy, R, R, i, 9); const l = this.polar(cx, cy, R + 26, R + 26, i, 9); const anchor = this.anchorFor(p.a);
-      return { x: p.x, y: p.y, lxP: this.pct(l.x, 1080), lyP: this.pct(l.y + 6, 560), tf: this.tfFor(anchor), ta: this.taFor(anchor), label: d[1], sub: 'L' + CUR[i] + ' of L' + TARGET[i] };
+      return { x: p.x, y: p.y, lxP: this.pct(l.x, 1080), lyP: this.pct(l.y + 6, 560), tf: this.tfFor(anchor), ta: this.taFor(anchor), label: d[1], sub: 'L' + this.levels[i] + ' of L' + TARGET[i] };
     });
-    const cur = DOMAINS.map((_d, i) => pt(i, CUR[i])), tgt = DOMAINS.map((_d, i) => pt(i, TARGET[i]));
-    const gaps = DOMAINS.map((_d, i) => TARGET[i] - CUR[i]); const big = gaps.map((g, i) => [g, i]).filter((x) => x[0] >= 2).map((x) => DOMAINS[x[1]][1]);
+    const cur = DOMAINS.map((_d, i) => pt(i, this.levels[i])), tgt = DOMAINS.map((_d, i) => pt(i, TARGET[i]));
+    const gaps = DOMAINS.map((_d, i) => TARGET[i] - this.levels[i]); const big = gaps.map((g, i) => [g, i]).filter((x) => x[0] >= 2).map((x) => DOMAINS[x[1]][1]);
     const sel = this.state.sel;
     const rc = clouds.filter((x) => x.on).map((x, k) => ({
       key: x.key, delay: (0.25 + k * 0.12) + 's, ' + (1.2 + k * 1.5) + 's', color: x.color, wash: x.wash, fo: sel && sel.type === 'cloud' && sel.id === x.key ? 0.22 : 0.08, legend: x.long,
-      points: DOMAINS.map((d, i) => pt(i, Math.min(5, CUR[i] + (x.w[d[0]] ? Math.min(2, x.w[d[0]]) : 0))).join(',')).join(' '),
+      points: DOMAINS.map((d, i) => pt(i, Math.min(5, this.levels[i] + (x.w[d[0]] ? Math.min(2, x.w[d[0]]) : 0))).join(',')).join(' '),
       select: () => this.setState({ sel: { type: 'cloud', id: x.key } }),
     }));
     return {
@@ -236,7 +271,7 @@ export class Logic {
   }
 
   renderVals() {
-    const s = this.state, bl = this.bl(), items = this.items();
+    const s = this.state, bl = this.bl(), items = this.items(), av = this.avatar();
     const byId: Record<string, Item> = {}; items.forEach((it) => { byId[it.id] = it; });
     const readiness = this.readiness(items);
     const hoursYear = Math.round(items.reduce((a, it) => a + this.progressHours(it), 0));
@@ -257,7 +292,7 @@ export class Logic {
 
     // detail
     const d0 = byId[s.detailId || ''] || items[0];
-    const myLvl = CUR[d0.di];
+    const myLvl = this.levels[d0.di];
     const sugg: { src: string; text: string; color: string }[] = [];
     clouds.forEach((cl) => cl.evidence.forEach((e) => { if (e.id === d0.id) sugg.push({ src: e.src, text: e.text, color: cl.color }); }));
     let paths = BLS.map((b) => { const m = s.maps[b].find((x) => x[0] === d0.id); return m ? { bl: b, stage: m[1], ob: OB_LABEL[m[2]] } : null; })
@@ -333,13 +368,13 @@ export class Logic {
       toggle: () => this.setState({ clouds: Object.assign({}, s.clouds, { [cl.key]: !cl.on }), sel: csel && csel.key === cl.key ? null : s.sel }),
     }));
     const scaleL = ['Developing', 'Meets', 'Exceeds'];
-    const p0 = PROJECTS.find((p) => p.id === s.projSel) || PROJECTS[0];
+    const p0 = PROJECTS.find((p) => p.id === s.projSel) || PROJECTS[0] || null;
     const projList = PROJECTS.map((p) => {
-      const on = p.id === p0.id;
+      const on = p.id === p0?.id;
       return { id: p.id, client: p.client, period: p.period, name: p.name, role: p.role, st: p.dims ? 'accepted' : 'in-progress', stLabel: p.dims ? p.overall.replace(' expectations', '') : 'Evaluation pending', stIcon: p.dims ? 'check' : 'dot',
         bd: on ? '#1a1d18' : '#e1e5dc', ring: on ? '0 0 0 3px rgba(134,188,37,.45)' : 'none', open: () => this.setState({ projSel: p.id }) };
     });
-    const pr = {
+    const pr = !p0 ? null : {
       client: p0.client, period: p0.period, name: p0.name, summary: p0.summary, evaluated: !!p0.dims, pending: !p0.dims,
       kv: [{ k: 'Role', v: p0.role }, { k: 'Hours', v: p0.hours + ' h charged' }, { k: 'Lead', v: p0.lead }, { k: 'Evaluator', v: p0.evaluator }],
       evalSub: p0.dims ? p0.overall + ' · ' + p0.evalDate : '', evaluator: p0.evaluator, evalDate: p0.evalDate,
@@ -356,8 +391,8 @@ export class Logic {
       setShare: (v: string) => { this.setState((st) => ({ share: Object.assign({}, st.share, { [t.id]: v }) })); this.say(v === 'thomas' ? t.name + ' result shared with Thomas De Smet' : t.name + ' result is now visible to you only'); },
     }));
     const domName = (k: string) => (DOMAINS.find((d) => d[0] === k) || [k, k])[1];
-    const ambitions = s.ambitions.map((a) => ({ id: a.id, text: a.text, meta: a.horizon + ' · ' + a.from, doms: a.doms.map((d) => ({ key: d, label: domName(d) })), remove: () => this.setState((st) => ({ ambitions: st.ambitions.filter((x) => x.id !== a.id) })) }));
-    const interests = s.interests.map((i) => ({ label: i.label, dom: domName(i.dom), remove: () => this.setState((st) => ({ interests: st.interests.filter((x) => x.label !== i.label) })) }));
+    const ambitions = this.subject.data.ambitions.map((a) => ({ id: a.id, text: a.text, meta: [a.horizon, a.from].filter(Boolean).join(' · '), doms: a.doms.map((d) => ({ key: d, label: domName(d) })), remove: () => this.persist(() => removeAmbition(a.id), 'Ambition removed') }));
+    const interests = this.subject.data.interests.map((i) => ({ label: i.label, dom: domName(i.dom), remove: () => this.persist(() => removeInterest(this.subject.id, i.label), 'Interest removed') }));
     const pp = s.proposal;
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
@@ -366,7 +401,7 @@ export class Logic {
     };
     const hubDock = sel && sel.type === 'hub' ? (() => {
       const di = DOMAINS.findIndex((d) => d[0] === sel.id); const list = items.filter((it) => it.dom === sel.id);
-      return { label: DOMAINS[di][1], sub: 'You are at ' + LEVELS[CUR[di] - 1] + ' · L' + CUR[di] + '. Manager in ' + bl + ' expects L' + TARGET[di] + ' · ' + list.filter((it) => it.state === 'accepted').length + ' of ' + list.length + ' completed', items: list };
+      return { label: DOMAINS[di][1], sub: 'You are at ' + levelLabel(this.levels[di]) + '. Manager in ' + bl + ' expects L' + TARGET[di] + ' · ' + list.filter((it) => it.state === 'accepted').length + ' of ' + list.length + ' completed', items: list };
     })() : null;
     const dockIt = sel && sel.type === 'node' ? byId[sel.id] : null;
     const dock = dockIt ? { ...dockIt, kv: [{ k: 'Source', v: dockIt.source }, { k: 'Effort', v: dockIt.hoursLabel }, { k: 'Level', v: dockIt.lvlLabel }, { k: 'Deadline', v: dockIt.hasDue ? dockIt.due : 'None' }], add: () => this.addToPath(dockIt.id) } : null;
@@ -401,7 +436,7 @@ export class Logic {
       det, noteOpen: s.noteOpen, toggleNote: () => this.setState({ noteOpen: !s.noteOpen }), saveNote: () => { this.setState({ noteOpen: false }); this.say('Note posted · visible to colleagues on this learning'); },
       ratingOptions: [1, 2, 3, 4, 5].map((n) => opt(String(n), String(n))), myRating: s.myRating, setRating: (v: string) => this.setState({ myRating: v }),
       addToPath: () => this.addToPath(d0.id), logHours: () => this.logHours(d0),
-      askApprove: () => { const states = Object.assign({}, s.states); states[d0.id] = 'submitted'; this.setState({ states }); this.say('Sent to Thomas De Smet · he sees your evidence and the hours you logged'); },
+      askApprove: () => this.persist(() => saveProgress(this.subject.id, d0.id, { state: 'submitted', pct: 100 }), 'Sent to Thomas De Smet · he sees your evidence and the hours you logged'),
       // projects & profile
       projLead: PROJECTS.length + ' engagements since Sep 2025 · ' + PROJECTS.filter((p) => p.dims).length + ' evaluated · synced from staffing and the performance tool. Advice from each evaluation lands in the projects cloud on your map.',
       projList, pr, requestEval: () => this.say('Prototype: sends an evaluation request through the performance tool · the evaluator is reminded after 10 days'),
@@ -433,26 +468,27 @@ export class Logic {
       toast: s.toast,
       motionAttr: this.props.motion === false ? 'off' : 'on',
       // avatar
-      avatarBg: s.avatar.bg, avatarFg: (AV_SWATCHES.find((w) => w[0] === s.avatar.bg) || AV_SWATCHES[0])[1], avatarInitials: s.avatar.initials || '', avatarPhoto: s.avatar.photo,
-      avatarSwatches: AV_SWATCHES.map((w) => ({ bg: w[0], label: w[2], ring: s.avatar.bg === w[0] ? '0 0 0 2px #1a1d18' : '0 0 0 1px #d5dacf', pick: () => this.setAvatar({ bg: w[0] }) })),
+      avatarBg: av.bg, avatarFg: (AV_SWATCHES.find((w) => w[0] === av.bg) || AV_SWATCHES[0])[1], avatarInitials: av.initials, avatarPhoto: av.photo,
+      avatarSwatches: AV_SWATCHES.map((w) => ({ bg: w[0], label: w[2], ring: av.bg === w[0] ? '0 0 0 2px #1a1d18' : '0 0 0 1px #d5dacf', pick: () => this.setAvatar({ bg: w[0] }) })),
       setInitials: (e: ChangeEvent<HTMLInputElement>) => this.setAvatar({ initials: (e.target.value || '').toUpperCase().slice(0, 2) }),
       pickAvatarFile: () => this.refs.file.current && this.refs.file.current.click(), onAvatarFile: (e: ChangeEvent<HTMLInputElement>) => this.onAvatarFile(e),
-      uploadLabel: s.avatar.photo ? 'Change photo' : 'Upload a photo', removePhoto: () => this.setAvatar({ photo: null }),
+      uploadLabel: av.photo ? 'Change photo' : 'Upload a photo', removePhoto: () => this.setAvatar({ photo: null }),
     };
   }
 
-  addToPath(id: string) { if (this.state.chosen.includes(id)) return; this.setState({ chosen: this.state.chosen.concat([id]) }); this.say('Added to your path · it now shows on your map with a green ring'); }
+  addToPath(id: string) {
+    if (this.subject.data.progress[id]?.chosen) return;
+    this.persist(() => saveProgress(this.subject.id, id, { chosen: true }), 'Added to your path · it now shows on your map with a green ring');
+  }
   logHours(it: Item) {
-    const states = Object.assign({}, this.state.states), pcts = Object.assign({}, this.state.pcts); const np = Math.min(100, Math.round(it.pct + 100 / it.hours));
-    pcts[it.id] = np; states[it.id] = np >= 100 ? 'submitted' : 'in-progress'; this.setState({ states, pcts });
-    this.say(np >= 100 ? 'All hours logged · sent to Thomas for acceptance' : '1 hour logged · ' + np + '% of ' + it.hoursLabel);
+    const np = Math.min(100, Math.round(it.pct + 100 / it.hours));
+    this.persist(() => saveProgress(this.subject.id, it.id, { state: np >= 100 ? 'submitted' : 'in-progress', pct: np }),
+      np >= 100 ? 'All hours logged · sent to Thomas for acceptance' : '1 hour logged · ' + np + '% of ' + it.hoursLabel);
   }
   sysPrompt() {
-    const s = this.state;
-    return 'You are the growth assistant inside MyProfessionalMe, the learning platform of a consulting, audit, tax and legal firm. You talk with Lena Mertens, senior consultant in ' + this.bl() + ', Brussels, aiming for Manager at the Sep 2027 review. Help her put her interests and ambitions into words. Plain, warm, matter-of-fact English. At most 70 words. One question at a time. No emoji, no exclamation marks, no lists.\n'
-      + 'Known ambitions: ' + s.ambitions.map((a) => a.text + ' (' + a.horizon + ')').join('; ') + '.\nKnown interests: ' + s.interests.map((i) => i.label).join(', ') + '.\n'
-      + 'Personality: Four Colours cool blue then earth green; MBTI INTJ; Big Five high openness and conscientiousness, low extraversion.\n'
-      + 'Project feedback: ' + PROJECTS.filter((p) => p.dims).map((p) => p.client + ' (' + p.lead + '): ' + p.quote).join(' ') + '\n'
+    const who = this.subject;
+    return 'You are the growth assistant inside MyProfessionalMe, the learning platform of a consulting, audit, tax and legal firm. You talk with ' + who.name + ', ' + (who.stage || 'a professional') + ' in ' + this.bl() + '. Help them put their interests and ambitions into words. Plain, warm, matter-of-fact English. At most 70 words. One question at a time. No emoji, no exclamation marks, no lists.\n'
+      + 'Known ambitions: ' + (who.data.ambitions.map((a) => a.text + ' (' + a.horizon + ')').join('; ') || 'none yet') + '.\nKnown interests: ' + (who.data.interests.map((i) => i.label).join(', ') || 'none yet') + '.\n'
       + 'Domain codes: ' + DOMAINS.map((d) => d[0] + '=' + d[1]).join(', ') + '.\n'
       + 'Reply ONLY with JSON: {"reply": string, "interests": [{"label": string, "domain": code}], "ambition": null or {"text": string, "horizon": "1 year"|"3 years"|"5 years", "domains": [codes]}}. Propose an interest or ambition only when Lena clearly stated it in her last message and it is not already known; otherwise use [] and null. Interest labels are short noun phrases; ambitions start with a verb.';
   }
@@ -461,7 +497,7 @@ export class Logic {
     if (t.includes('five years') || t.includes('5 years')) return { reply: 'Two directions fit what is on file: leading sustainability transformations for industrial clients, or running operating-model programmes as a manager. Which would you rather be known for in 2031, and what would a normal week look like?', interests: [], ambition: null };
     if (t.includes('evaluation')) return { reply: 'Three evaluations repeat two themes: delegate earlier, and get involved in scoping and pricing. Thomas and Inès both point to proposal work; Karel asked you to get closer to the data yourself. Which of those do you want to get better at, rather than feel told to?', interests: [], ambition: null };
     if (t.includes('energy')) return { reply: 'Brabant Energy is also where Inès rated your problem solving highest. Shall I save this as an ambition for the next three years? It pulls Industry & market, Regulations and Technology into your ambitions cloud.', interests: [], ambition: { text: 'Work mainly with energy-transition clients', horizon: '3 years', domains: ['ind', 'reg', 'tec'] } };
-    const k = KEYWORDS.find((x) => t.includes(x[0]) && !this.state.interests.some((i) => i.label === x[1]));
+    const k = KEYWORDS.find((x) => t.includes(x[0]) && !this.subject.data.interests.some((i) => i.label === x[1]));
     if (k) return { reply: 'That sounds like a real interest. I can save “' + k[1] + '” to your profile; it adds ' + (DOMAINS.find((d) => d[0] === k[2]) || [])[1] + ' to your ambitions cloud. What draws you to it?', interests: [{ label: k[1], domain: k[2] }], ambition: null };
     return { reply: 'Noted. What part of that would you want more of next year: the analysis, the client conversation, or leading the team?', interests: [], ambition: null };
   }
@@ -485,10 +521,15 @@ export class Logic {
   }
   saveProposal() {
     const p = this.state.proposal; if (!p) return;
-    const ambitions = p.ambition ? this.state.ambitions.concat([{ id: 'A' + Date.now(), text: p.ambition.text, horizon: p.ambition.horizon || '3 years', doms: (p.ambition.domains || []).filter((d) => DOMAINS.some((x) => x[0] === d)), from: 'Assistant conversation · 29 Oct 2026' }]) : this.state.ambitions;
-    const interests = this.state.interests.concat(p.interests.filter((i) => !this.state.interests.some((x) => x.label.toLowerCase() === i.label.toLowerCase())).map((i) => ({ label: i.label, dom: i.domain })));
-    this.setState({ ambitions, interests, proposal: null, clouds: Object.assign({}, this.state.clouds, { amb: true }) });
-    this.say('Saved to your profile · the ambitions cloud on your growth map now reflects it');
+    const id = this.subject.id, known = this.subject.data.interests;
+    const amb = p.ambition;
+    const fresh = p.interests.filter((i) => !known.some((x) => x.label.toLowerCase() === i.label.toLowerCase()));
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    this.persist(async () => {
+      if (amb) await addAmbition(id, { text: amb.text, horizon: amb.horizon || '3 years', doms: (amb.domains || []).filter((d) => DOMAINS.some((x) => x[0] === d)), from: 'Assistant conversation · ' + today });
+      for (const i of fresh) await addInterest(id, { label: i.label, dom: i.domain });
+      this.setState({ proposal: null, clouds: Object.assign({}, this.state.clouds, { amb: true }) });
+    }, 'Saved to your profile · the ambitions cloud on your growth map now reflects it');
   }
 
   // ---------- curriculum mapping (audiences per lens) ----------
@@ -513,13 +554,17 @@ export class Logic {
   }
   sigValid(g: Signal) { const cur = (this.state.maps[g.op.aud] || []).find((m) => m[0] === g.op.lid); return g.op.op === 'add' ? !cur : g.op.op === 'remove' ? !!cur : !!(cur && cur[2] !== g.op.ob); }
   reachAt(k: string, st?: string) { return Math.round(AUD_INFO[k].reach * STAGE_FR[Math.max(0, STAGES.indexOf(st || ''))]); }
+  // The viewed person as a learner's-eye persona: their business line only, until other audiences are recorded per person.
+  mePersona(): Persona {
+    return ['me', this.subject.name.split(' ')[0], this.subject.name, this.subject.stage || STAGES[0], { bl: this.subject.businessLine, ind: null, tec: null, amb: null, pro: null }];
+  }
   // Everything one person receives at their stage, stacked across the audiences they belong to. Duplicates count once.
   stack(p: Persona) {
     const s = this.state, st = p[3], seen: Record<string, string[]> = {};
     const layers: { lens: string; color: string; key: string; aud: string; n: number; h: number; titles: string[] }[] = [];
     let tot = 0, mand = 0;
     LENSES.forEach((L) => {
-      const key = L[0] === 'bl' ? (p[4].bl || this.bl()) : p[4][L[0]]!; const list = (s.maps[key] || []).filter((m) => m[1] === st); let h = 0, n = 0; const titles: string[] = [];
+      const key = L[0] === 'bl' ? (p[4].bl || this.bl()) : p[4][L[0]]; if (!key || !AUD_INFO[key]) return; const list = (s.maps[key] || []).filter((m) => m[1] === st); let h = 0, n = 0; const titles: string[] = [];
       list.forEach((m) => {
         const it = LEARN_BY[m[0]]; if (!it) return; if (seen[m[0]]) { seen[m[0]].push(AUD_INFO[key].name); return; }
         seen[m[0]] = [AUD_INFO[key].name]; h += it[6]; n++; titles.push(it[1] + (L[3] && m[2] === 'mandatory' ? ' (mandatory)' : '')); if (L[3] && m[2] === 'mandatory') mand += it[6];
@@ -647,13 +692,13 @@ export class Logic {
       remove: () => { this.applyOps([{ op: 'remove', aud: audKey, lid: msM[0] }], 'Removed from ' + ai.name + ' · publish to apply'); this.setState({ mapSel: null }); },
       openLib: () => this.openDetail(msM[0], 'adminMap'),
     } : null;
-    const lena = this.stack(PERSONAS[0]);
+    const me = this.mePersona(); const mine = this.stack(me);
     const sigCards = sigOpen.map((g, i) => {
       const it = byId[g.op.lid], an = AUD_INFO[g.op.aud].name, reach = this.reachAt(g.op.aud, g.op.stage);
       return {
         id: g.id, kind: g.kind, st: g.st, where: lensOf(g.op.aud)[1] + ' · ' + an + (g.op.stage ? ' · ' + g.op.stage : ''), delay: (i * 60) + 'ms', hasQuote: !!g.quote, quote: g.quote,
         title: g.op.op === 'add' ? 'Add “' + it.title + '”' : g.op.op === 'remove' ? 'Remove “' + it.title + '”' : 'Make “' + it.title + '” ' + g.op.ob,
-        evidence: g.evidence.replace('{mand}', String(Math.round(lena.mand))),
+        evidence: g.evidence.replace('{mand}', String(Math.round(mine.mand))),
         impact: g.op.op === 'remove' ? 'Removes a duplicate for ' + reach + ' people' : g.op.op === 'setOb' ? 'Frees ' + it.hours + ' mandatory h for ' + reach + ' people' : 'Reaches ' + reach + ' people · +' + it.hours + ' h each',
         apply: () => {
           this.applyOps([g.op], 'Applied · ' + an + ' · publish to apply');
@@ -662,7 +707,7 @@ export class Logic {
         dismiss: () => this.setState((st) => ({ sigDone: { ...st.sigDone, [g.id]: true } })),
       };
     });
-    const P = PERSONAS.find((p) => p[0] === s.persona) || PERSONAS[0]; const stk = this.stack(P); const scale = Math.max(80, stk.tot);
+    const people = [me].concat(PERSONAS); const P = people.find((p) => p[0] === s.persona) || me; const stk = this.stack(P); const scale = Math.max(80, stk.tot);
     const pz = {
       name: P[2], stage: P[3], tags: stk.layers.map((l) => ({ key: l.lens, label: l.aud, color: l.color })),
       segs: stk.layers.filter((l) => l.h > 0).map((l) => ({ key: l.lens, w: (l.h / scale * 100).toFixed(2) + '%', color: l.color, tip: l.lens + ' · ' + l.aud + ' · ' + Math.round(l.h) + ' h' })),
@@ -695,7 +740,7 @@ export class Logic {
       cpHasReply: !!s.cpReply, cpReply: s.cpReply, cpHasOps: cpOps.length > 0, cpOps,
       cpApply: () => { const n = cpOpsP.length; this.applyOps(cpOpsP, n + ' change' + (n > 1 ? 's' : '') + ' applied · publish to apply'); this.setState({ cpOpsP: null }); }, cpDrop: () => this.setState({ cpOpsP: null }),
       cpPrompts: ['What do Energy seniors still miss?', 'Where does a learning arrive twice?', 'Draft a path for the Business developer ambition'].map((l) => ({ label: l, send: () => this.askCp(l) })),
-      personaOptions: PERSONAS.map((p) => opt(p[0], p[2])), personaKey: P[0], setPersona: (v: string) => this.setState({ persona: v }), pz,
+      personaOptions: people.map((p) => opt(p[0], p[2])), personaKey: P[0], setPersona: (v: string) => this.setState({ persona: v }), pz,
       readAs: () => this.readAs(P, stk), readBusy: s.readBusy, readLabel: s.readBusy ? 'Reading the stack' : 'Read it as ' + P[1], read: rd || null, readHead: 'As ' + P[2] + ' would read it',
     };
   }
