@@ -3,6 +3,7 @@ import { initState, Logic } from './model';
 import type { Config } from './config';
 import type { Subject } from './lib/useSubject';
 import type { Access, AppState } from './types';
+import { DOMAINS, LEARN } from './data';
 
 const cfg: Config = { businessLine: 'Consulting', startScreen: 'map', homeView: 'constellation', showMarks: true, liveAssistant: false, motion: false };
 const ref = <T,>(current: T) => ({ current });
@@ -169,3 +170,51 @@ describe('the Knowledge library over time', () => {
     expect(kb.get().bundles).toHaveLength(initState(cfg).bundles.length);
   });
 });
+
+describe('the library filters', () => {
+  it('say so when nothing matches, and clear back to everything', () => {
+    let patch: Partial<AppState> = {};
+    const subject = newcomer();
+    const vm = new Logic({ ...initState(cfg), libQ: 'zzzz', libFormat: 'Reel', libDom: 'pers' }, (p) => { patch = typeof p === 'function' ? {} : p; }, cfg,
+      { toastTimer: ref(undefined), drag: ref(null), file: ref(null), chat: ref(null) }, { isSystem: false, domains: [], userId: subject.id }, subject, async () => {}).renderVals();
+    expect(vm.libItems).toHaveLength(0);
+    expect(vm.libEmpty).toBe(true);
+    vm.clearLibFilters();
+    expect(patch).toMatchObject({ libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all' });
+  });
+});
+
+describe('domain zoom', () => {
+  const sinkOf = (state: Partial<AppState>) => {
+    const sink: Partial<AppState>[] = []; const subject = newcomer();
+    const vm = new Logic({ ...initState(cfg), ...state }, (p) => { sink.push(typeof p === 'function' ? {} : p); }, cfg,
+      { toastTimer: ref(undefined), drag: ref(null), file: ref(null), chat: ref(null) }, { isSystem: false, domains: [], userId: subject.id }, subject, async () => {}).renderVals();
+    return { vm, sink };
+  };
+  it('shows one node per learning in the domain', () => {
+    const { vm } = sinkOf({ zoom: 'pers' });
+    expect(vm.isZoom).toBe(true);
+    expect(vm.zm!.nodes).toHaveLength(LEARN.filter((r) => r[2] === 'pers').length);
+  });
+  it('wraps around from the first domain to the last and back', () => {
+    const first = sinkOf({ zoom: DOMAINS[0][0] });
+    first.vm.zm!.prev();
+    expect(first.sink[0]).toMatchObject({ zoom: DOMAINS[8][0] });
+    const last = sinkOf({ zoom: DOMAINS[8][0] });
+    last.vm.zm!.next();
+    expect(last.sink[0]).toMatchObject({ zoom: DOMAINS[0][0] });
+  });
+  it('reads "Not started" for a domain with nothing accepted', () => {
+    const { vm } = sinkOf({ zoom: 'pers' });
+    expect(vm.zm!.levelText).toMatch(/^Not started → L\d$/);
+    expect(vm.zm!.levelSub).toMatch(/to go for Senior consultant$/);
+    expect(vm.zm!.band).toBeNull();
+  });
+  it('zooms in from a hub and back out', () => {
+    const { vm, sink } = sinkOf({});
+    vm.cHubs[2].zoom();
+    vm.zoomOut();
+    expect(sink).toEqual([{ zoom: DOMAINS[2][0], sel: null }, { zoom: null, sel: null }]);
+  });
+});
+

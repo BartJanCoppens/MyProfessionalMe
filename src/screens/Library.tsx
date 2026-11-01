@@ -1,6 +1,7 @@
 import { Avatar, Button, Card, Eyebrow, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
 import { AvatarBadge } from './Map';
+import { CoverArt } from './Cover';
 
 export function LibraryScreen({ vm }: { vm: VM }) {
   return (
@@ -10,16 +11,32 @@ export function LibraryScreen({ vm }: { vm: VM }) {
         <div style={{ flex: '1 1 240px', maxWidth: 320 }}><Input placeholder="Search title, source or topic" value={vm.libQ} onChange={vm.setLibQ} /></div>
         <SegmentedControl options={vm.obOptions} value={vm.libOb} onChange={vm.setLibOb} size="lg" />
         <Select options={vm.levelOptions} value={vm.libLevel} onChange={vm.setLibLevel} />
-        <Select options={vm.formatOptions} value={vm.libFormat} onChange={vm.setLibFormat} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(112px,1fr))', gap: 8 }}>
+        {vm.fmtTiles.map((ft) => (
+          <Hover key={ft.key} as="button" type="button" onClick={ft.pick} hoverStyle={{ transform: 'translateY(-2px)', borderColor: '#1a1d18' }}
+            style={{ textAlign: 'left', borderRadius: 6, border: '1px solid ' + ft.bd, background: ft.bg, color: ft.fg, padding: '9px 11px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: 2, transition: 'transform .15s,border-color .15s' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: ft.sw, border: '1px solid ' + ft.swBd, flex: 'none' }} /><span style={{ fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>{ft.label}</span></span>
+            <span style={{ fontSize: 11.5, opacity: 0.75 }}>{ft.count}</span>
+          </Hover>
+        ))}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {vm.domChips.map((dc) => <FilterChip key={dc.key} selected={dc.on} onClick={dc.onClick}>{dc.label}</FilterChip>)}
       </div>
       <div style={{ fontSize: 12.5, color: '#5a6058' }}>{vm.libResultText}</div>
+      {vm.libEmpty && (
+        <div style={{ background: '#fff', border: '1px dashed #c8cdc3', borderRadius: 6, padding: '18px 20px', color: '#5a6058' }}>
+          <div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>No learnings match these filters</div>
+          Try another format or domain, or <LinkButton onClick={vm.clearLibFilters}>clear all filters</LinkButton>.
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 12 }}>
         {vm.libItems.map((it) => (
-          <Hover key={it.id} onClick={it.open} hoverStyle={{ borderColor: '#b9bfb5' }}
-            style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer', minHeight: 150 }}>
+          <Hover key={it.id} onClick={it.open} hoverStyle={{ borderColor: '#b9bfb5', transform: 'translateY(-2px)' }}
+            style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, display: 'flex', flexDirection: 'column', cursor: 'pointer', overflow: 'hidden', transition: 'transform .15s,border-color .15s', animation: 'pmFadeUp .35s ease-out backwards', animationDelay: it.cardDelay }}>
+            <CoverArt cv={it} title={it.title} avInit={it.avInit} />
+            <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <Eyebrow tone="muted" size={11}>{it.domLabel} · {it.format}</Eyebrow>
               <Tag tone={it.obTone}>{it.obLabel}</Tag>
@@ -36,6 +53,7 @@ export function LibraryScreen({ vm }: { vm: VM }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <StatusChip status={it.state} label={it.stateLabel} icon={it.stateIcon} />
               <span style={{ fontSize: 12, color: it.dueColor, fontWeight: 500 }}>{it.dueLabel}</span>
+            </div>
             </div>
           </Hover>
         ))}
@@ -98,6 +116,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
           </Card>
           <Card title="Colleague notes" subtitle={det.rating}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {!det.notes.length && !vm.noteOpen && <div style={{ color: '#5a6058' }}>Be the first to rate it or leave a note for colleagues.</div>}
               {det.notes.map((nt) => (
                 <div key={nt.who} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <Avatar initials={nt.initials} />

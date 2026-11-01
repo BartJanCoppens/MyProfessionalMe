@@ -41,6 +41,7 @@ export default function MapScreen({ vm }: { vm: VM }) {
 function Constellation({ vm }: { vm: VM }) {
   return (
     <div style={card}>
+      {vm.zm ? <Zoom zm={vm.zm} vm={vm} /> : (
       <div style={{ position: 'relative', containerType: 'inline-size' }}>
         <svg viewBox="0 0 1080 660" width="100%" style={{ display: 'block', fontFamily: 'inherit' }}>
           <defs><clipPath id="pmMeClip"><circle cx="540" cy="330" r="28" /></clipPath></defs>
@@ -52,7 +53,7 @@ function Constellation({ vm }: { vm: VM }) {
           ))}
           {vm.cEdges.map((e, i) => <line key={i} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={e.stroke} strokeWidth={e.w} opacity={e.op} style={{ transition: 'opacity .15s' }} />)}
           {vm.cHubs.map((h) => (
-            <g key={h.id} opacity={h.op} onClick={h.onClick} style={{ cursor: 'pointer', transition: 'opacity .15s', transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmPop .45s cubic-bezier(.2,.7,.3,1) backwards', animationDelay: h.delay }}>
+            <g key={h.id} opacity={h.op} onClick={h.onClick} onDoubleClick={h.zoom} style={{ cursor: 'pointer', transition: 'opacity .15s', transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmPop .45s cubic-bezier(.2,.7,.3,1) backwards', animationDelay: h.delay }}>
               <circle cx={h.x} cy={h.y} r="15" fill="#fff" stroke={h.stroke} strokeWidth={h.sw} />
             </g>
           ))}
@@ -90,7 +91,10 @@ function Constellation({ vm }: { vm: VM }) {
           {vm.cHubs.map((h) => (
             <div key={h.id}>
               <div style={{ position: 'absolute', left: h.xP, top: h.yP, transform: 'translate(-50%,-50%)', fontSize: '.85em', fontWeight: 600, color: '#1a1d18', opacity: h.op, transition: 'opacity .15s' }}>{h.cur}</div>
-              <div style={{ position: 'absolute', left: h.lxP, top: h.lyP, transform: h.tf, textAlign: h.ta, maxWidth: '11em', opacity: h.op, transition: 'opacity .15s', lineHeight: 1.2 }}>
+              <Hover as="button" type="button" onClick={h.zoom} title={h.zoomTitle} hoverStyle={{ borderColor: '#86BC25', background: '#fbfdf6' }}
+                style={{ position: 'absolute', left: 'calc(' + h.xP + ' + 1.05em)', top: 'calc(' + h.yP + ' - 1.05em)', transform: 'translate(-50%,-50%)', width: '1.5em', height: '1.5em', borderRadius: '50%', border: '1px solid #d5dacf', background: '#fff', color: '#1a1d18',
+                  fontFamily: 'inherit', fontSize: '1em', fontWeight: 600, lineHeight: 1, padding: 0, cursor: 'zoom-in', pointerEvents: 'auto', opacity: h.op, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</Hover>
+              <div onClick={h.zoom} style={{ position: 'absolute', left: h.lxP, top: h.lyP, transform: h.tf, textAlign: h.ta, maxWidth: '11em', opacity: h.op, transition: 'opacity .15s', lineHeight: 1.2, pointerEvents: 'auto', cursor: 'zoom-in' }}>
                 <div style={{ fontSize: '1em', fontWeight: 600, color: '#1a1d18', textWrap: 'balance' }}>{h.label}</div>
                 <div style={{ fontSize: '.88em', color: '#5a6058', textWrap: 'balance' }}>{h.lvl}</div>
               </div>
@@ -98,9 +102,10 @@ function Constellation({ vm }: { vm: VM }) {
           ))}
         </div>
       </div>
+      )}
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', padding: '10px 18px', borderTop: '1px solid #eef0ea', fontSize: 12, color: '#5a6058' }}>
         <span>Ring = obligation: solid ink is mandatory, dashed is advised, thin grey is your own choice. Size = level, L1 to L5. An orbiting dot marks avatar practice. Clouds = where projects, personality and ambitions pull you.</span>
-        <span>Click a dot or a domain. Click the background to reset.</span>
+        <span>{vm.cHint}</span>
       </div>
     </div>
   );
@@ -330,5 +335,62 @@ function MapAside({ vm }: { vm: VM }) {
         </div>
       )}
     </div>
+  );
+}
+
+const capsLabel: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
+
+// One domain up close: learnings sit on rings by level; the green band is the level now, the dashed ring the target.
+function Zoom({ zm, vm }: { zm: NonNullable<VM['zm']>; vm: VM }) {
+  return (
+    <>
+      <div style={{ overflow: 'hidden' }}>
+        <div key={zm.name} style={{ position: 'relative', containerType: 'inline-size', transformOrigin: zm.origin, animation: 'pmZoomIn .55s cubic-bezier(.2,.7,.3,1)' }}>
+          <svg viewBox="0 0 1080 660" width="100%" style={{ display: 'block', fontFamily: 'inherit' }}>
+            <rect x="0" y="0" width="1080" height="660" fill="#fff" onClick={vm.clearSel} />
+            {zm.clouds.map((zc) => <ellipse key={zc.key} cx={zc.x} cy={zc.y} rx={zc.rx} ry={zc.ry} fill={zc.color} opacity={0.06} style={{ pointerEvents: 'none', transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmBreathe 8s ease-in-out infinite', animationDelay: zc.delay }} />)}
+            {zm.band && <ellipse cx="540" cy="330" rx={zm.band.rx} ry={zm.band.ry} fill="none" stroke="#86BC25" strokeOpacity={0.13} strokeWidth={30} style={{ pointerEvents: 'none' }} />}
+            {zm.rings.map((zr) => <ellipse key={zr.k} cx="540" cy="330" rx={zr.rx} ry={zr.ry} fill="none" stroke={zr.stroke} strokeWidth={zr.sw} strokeDasharray={zr.dash} style={{ pointerEvents: 'none' }} />)}
+            {zm.nodes.map((zn) => <line key={zn.id} x1="540" y1="330" x2={zn.x} y2={zn.y} stroke="#e1e5dc" strokeWidth={1} opacity={zn.op} style={{ pointerEvents: 'none' }} />)}
+            <circle cx="540" cy="330" r="46" fill="#fff" stroke="#1a1d18" strokeWidth={2} />
+            <circle cx="540" cy="330" r="46" fill="none" stroke="#86BC25" strokeWidth={1.5} style={{ pointerEvents: 'none', transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmPulse 3.6s ease-out 1s infinite', opacity: 0 }} />
+            {zm.nodes.map((zn) => (
+              <g key={zn.id} opacity={zn.op} onClick={zn.onClick} style={{ cursor: 'pointer', transition: 'opacity .15s', transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmPop .4s cubic-bezier(.2,.7,.3,1) backwards', animationDelay: zn.delay }}>
+                <circle cx={zn.x} cy={zn.y} r={15} fill="none" stroke="rgba(134,188,37,.45)" strokeWidth={4} opacity={zn.ringOp} />
+                <circle cx={zn.x} cy={zn.y} r={11} fill={zn.fill} stroke={zn.stroke} strokeWidth={zn.sw} strokeDasharray={zn.dash} />
+                {zn.isAvatar && <g style={{ transformOrigin: zn.orbO, animation: 'pmSpin 7s linear infinite' }}><circle cx={zn.orbX} cy={zn.y} r={3} fill="#1a1d18" stroke="#fff" strokeWidth={1} /></g>}
+                <title>{zn.full}</title>
+              </g>
+            ))}
+          </svg>
+          <div style={overlay}>
+            {zm.rings.map((zr) => <div key={zr.k} style={{ position: 'absolute', left: '50%', top: zr.lyP, transform: 'translate(-50%,-50%)', fontSize: '.8em', fontWeight: zr.lw, color: zr.lc, background: '#fff', padding: '0 6px', borderRadius: 999, whiteSpace: 'nowrap' }}>{zr.label}</div>)}
+            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', lineHeight: 1.15 }}><div style={{ fontSize: '1.9em', fontWeight: 600 }}>{zm.cur}</div><div style={{ fontSize: '.78em', color: '#5a6058' }}>now</div></div>
+            {zm.nodes.map((zn) => (
+              <div key={zn.id} onClick={zn.onClick} style={{ position: 'absolute', left: zn.lxP, top: zn.lyP, transform: zn.tf, textAlign: zn.ta, maxWidth: '10.5em', opacity: zn.op, transition: 'opacity .15s', lineHeight: 1.2, pointerEvents: 'auto', cursor: 'pointer', animation: 'pmFadeUp .4s ease-out backwards', animationDelay: zn.delay }}>
+                <div style={{ fontSize: '.92em', fontWeight: 600, color: '#1a1d18', textWrap: 'balance' }}>{zn.title}</div>
+                <div style={{ fontSize: '.8em', color: '#5a6058', whiteSpace: 'nowrap' }}>{zn.sub}</div>
+              </div>
+            ))}
+            <div style={{ position: 'absolute', left: 14, top: 12, right: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, pointerEvents: 'auto', fontSize: 13 }}>
+              <Button variant="secondary" size="sm" onClick={vm.zoomOut}>← All domains</Button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Button variant="secondary" size="sm" onClick={zm.prev}>‹</Button>
+                <span style={{ fontWeight: 600, minWidth: '9em', textAlign: 'center' }}>{zm.name}</span>
+                <Button variant="secondary" size="sm" onClick={zm.next}>›</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', borderTop: '1px solid #eef0ea' }}>
+        <div style={{ padding: '12px 18px', borderRight: '1px solid #eef0ea', minWidth: 0 }}><div style={capsLabel}>Level</div><div style={{ fontWeight: 600, fontSize: 15, marginTop: 2 }}>{zm.levelText}</div><div style={{ fontSize: 12, color: '#5a6058' }}>{zm.levelSub}</div></div>
+        <div style={{ padding: '12px 18px', borderRight: '1px solid #eef0ea', minWidth: 0 }}><div style={capsLabel}>Hours in this domain</div><div style={{ fontWeight: 600, fontSize: 15, marginTop: 2 }}>{zm.hoursText}</div>
+          <div style={{ height: 5, borderRadius: 999, background: '#eef0ec', marginTop: 6, overflow: 'hidden' }}><div style={{ height: '100%', width: zm.hoursW, background: '#86BC25', transition: 'width .3s' }} /></div></div>
+        <div style={{ padding: '12px 18px', borderRight: '1px solid #eef0ea', minWidth: 0 }}><div style={capsLabel}>Pulled by</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>{zm.pulls.map((zp) => <span key={zp.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: zp.text }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: zp.color }} />{zp.label}</span>)}</div></div>
+        <Hover onClick={zm.nextOpen} hoverStyle={{ background: '#fafbf8' }} style={{ padding: '12px 18px', minWidth: 0, cursor: 'pointer' }}><div style={capsLabel}>Next step</div><div style={{ fontWeight: 600, marginTop: 2, textWrap: 'pretty' }}>{zm.nextTitle}</div><div style={{ fontSize: 12, color: '#5a6058' }}>{zm.nextSub}</div></Hover>
+      </div>
+    </>
   );
 }

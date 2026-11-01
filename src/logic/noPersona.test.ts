@@ -6,7 +6,7 @@ const sources = import.meta.glob(['../**/*.ts', '../**/*.tsx', '!../**/*.test.ts
 
 describe('source code', () => {
   it('names no seeded learner, counsellor or colleague', () => {
-    const hits = Object.entries(sources).filter(([, text]) => /Lena|Mertens|Thomas|Jonas|Peeters|Amira|Haddad/.test(text)).map(([path]) => path);
+    const hits = Object.entries(sources).filter(([, text]) => /Lena|Mertens|Thomas|Jonas|Peeters|Amira|Haddad|Sofie|Elise|Janssens|Inès|Dubois|Karel|Yusuf|Demir/.test(text)).map(([path]) => path);
     expect(hits).toEqual([]);
   });
 });

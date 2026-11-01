@@ -70,6 +70,8 @@ export type AppState = {
   // curriculum mapping: lens, selected audience and stage, signals handled, learner's-eye reads, copilot
   mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>;
   reads: Record<string, Read>; readBusy: boolean;
+  // growth map: the domain zoomed into (domain key), or null for all domains
+  zoom: string | null;
   // Knowledge library (admin): bundles are in memory this session, like the learning catalogue
   bundles: Bundle[]; kbSel: string; kbOpen: boolean; kbTopic: string; kbSearch: string; kbTagF: string | null; kbSort: string; kbTab: string; kbFile: string;
   kbModel: string | null; kbTestModel: string | null; kbTagIn: string; kbValid: [boolean, string][] | null; kbEdit: boolean; kbAdd: { conn: string; name: string; sens: string };

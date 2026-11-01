@@ -15,6 +15,7 @@ import { memberSummary } from './logic/team';
 import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import { kbVals } from './kbVals';
+import { cover, formatTiles, lengthLabel } from './logic/covers';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
 export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'adminKb', 'users'];
@@ -29,7 +30,7 @@ export function initState(cfg: Config): AppState {
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false,
+    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, zoom: null,
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
     kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
@@ -145,7 +146,7 @@ export class Logic {
     const state: LearnState = own?.state || 'not-started'; const pct = state === 'accepted' || state === 'submitted' ? 100 : own?.pct || 0;
     const ob = this.obFor(id); const m = this.mapping(id); const di = DOMAINS.findIndex((d) => d[0] === dom);
     const hasDue = ob === 'mandatory' && !!due; const dueSoon = due === '30 Nov 2026';
-    const hoursLabel = (hours % 1 ? hours.toFixed(1) : hours) + ' h';
+    const hoursLabel = lengthLabel(row);
     return {
       id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
@@ -159,7 +160,7 @@ export class Logic {
       open: () => this.openDetail(id, (['map', 'projects', 'profile'] as Screen[]).includes(this.state.screen) ? this.state.screen : 'library'),
     };
   }
-  items() { return LEARN.map((r) => this.item(r)); }
+  items() { return LEARN.map((r, i) => { const it = this.item(r); return { ...it, ...cover(r, i, it.state, it.pct) }; }); }
   openDetail(id: string, origin?: Screen) { this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0); }
   go(screen: Screen) { this.setState({ screen: ADMIN_SCREENS.includes(screen) && !this.isAdmin() ? 'map' : screen, sel: null, mapSel: null }); window.scrollTo(0, 0); }
   isAdmin() { return this.access.isSystem || this.access.domains.length > 0; }
@@ -192,11 +193,46 @@ export class Logic {
     this.subject.data.interests.forEach((i) => (i.ids || pick([i.dom])).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Interest · ' + i.label, text: 'Matches an interest you named.' }); }));
     return [mk('proj', proj), mk('pers', pers), mk('amb', amb)];
   }
+  // One domain up close (design v3): rings are levels L1–L5, green is the person's level now, dashed the next stage's target.
+  zoomVals(items: Item[], clouds: Cloud[]) {
+    const s = this.state, i = Math.max(0, DOMAINS.findIndex((d) => d[0] === s.zoom)), d = DOMAINS[i], sel = s.sel, cur = this.levels[i], tgt = TARGET[i];
+    const list = items.filter((it) => it.dom === d[0]), R = (k: number) => 52 + k * 43, RX = (k: number) => R(k) * 1.55;
+    const hub = this.polar(540, 330, 272, 186, i, 9);
+    const rings = [5, 4, 3, 2, 1].map((k) => ({ k, rx: RX(k), ry: R(k), stroke: k === tgt ? '#1a1d18' : k === cur ? '#86BC25' : '#e1e5dc', sw: k === tgt || k === cur ? 1.5 : 1, dash: k === tgt && k !== cur ? '4 3' : 'none',
+      lyP: this.pct(330 - R(k), 660), label: 'L' + k + (k === cur ? ' · now' : k === tgt ? ' · target' : ''), lw: k === cur || k === tgt ? 600 : 500, lc: k === cur ? '#3f6a0a' : k === tgt ? '#1a1d18' : '#8b918a' }));
+    const nodes: { id: string; x: number; y: number; lxP: string; lyP: string; tf: string; ta: 'left' | 'right' | 'center'; title: string; full: string; sub: string; ringOp: number; fill: string; stroke: string; sw: number; dash: string; op: number; delay: string; isAvatar: boolean; orbX: number; orbO: string; onClick: () => void }[] = [];
+    [1, 2, 3, 4, 5].forEach((k) => {
+      const lv = list.filter((it) => it.lvl === k), m = lv.length;
+      lv.forEach((it, j) => {
+        const a = (-66 + 312 * (j + 0.5 + (k % 2 ? 0.22 : -0.22) * (m > 1 ? 1 : 0)) / m) * Math.PI / 180, x = 540 + RX(k) * Math.cos(a), y = 330 + R(k) * Math.sin(a), off = m > 3 && j % 2 ? 40 : 17;
+        const lx = 540 + (RX(k) + off) * Math.cos(a), ly = 330 + (R(k) + off) * Math.sin(a), anchor = this.anchorFor(a), isSel = !!sel && sel.type === 'node' && sel.id === it.id;
+        nodes.push({ id: it.id, x, y, lxP: this.pct(lx, 1080), lyP: this.pct(ly, 660), tf: this.tfFor(anchor), ta: this.taFor(anchor), title: it.title, full: it.title + ' · ' + it.meta, sub: it.format + ' · ' + it.hoursLabel + ' · ' + it.obLabel,
+          ringOp: isSel ? 1 : 0, fill: FILL[it.state], stroke: it.ob === 'chosen' ? '#4c7a10' : it.ob === 'open' ? '#b3b8ae' : '#1a1d18', sw: it.ob === 'mandatory' ? 2.2 : it.ob === 'open' ? 1 : 1.5, dash: it.ob === 'advised' ? '3 2' : 'none',
+          op: !sel || sel.type !== 'node' || isSel ? 1 : 0.35, delay: (120 + nodes.length * 45) + 'ms', isAvatar: it.isAvatar, orbX: x + 15, orbO: x + 'px ' + y + 'px', onClick: () => this.setState({ sel: isSel ? null : { type: 'node', id: it.id, dom: d[0] } }) });
+      });
+    });
+    const done = list.reduce((a, it) => a + this.progressHours(it), 0), tot = list.reduce((a, it) => a + it.hours, 0);
+    const pulls = clouds.filter((c) => c.on && c.w[d[0]]);
+    const rank = (it: Item) => (it.ob === 'mandatory' ? 0 : it.ob === 'advised' ? 1 : pulls.some((c) => c.ids.includes(it.id)) ? 2 : it.ob === 'chosen' ? 3 : 4);
+    const nx = list.filter((it) => it.state !== 'accepted' && it.state !== 'submitted').sort((a, b) => Number(b.state === 'in-progress') - Number(a.state === 'in-progress') || rank(a) - rank(b) || a.lvl - b.lvl)[0];
+    const fmtH = (h: number) => (h % 1 ? h.toFixed(1) : h) + ' h', stage = this.nextStage();
+    return {
+      name: d[1], cur: 'L' + cur, origin: this.pct(hub.x, 1080) + ' ' + this.pct(hub.y, 660), band: cur ? { rx: RX(cur), ry: R(cur) } : null,
+      clouds: pulls.map((c, k) => ({ key: c.key, x: 540 + (k - (pulls.length - 1) / 2) * 120, y: 330, rx: RX(5) * (0.55 + 0.1 * Math.min(3, c.w[d[0]])), ry: R(5) * (0.55 + 0.1 * Math.min(3, c.w[d[0]])), color: c.color, delay: (-2.7 * k) + 's' })),
+      rings, nodes, levelText: (cur ? 'L' + cur + ' ' + LEVELS[cur - 1] : 'Not started') + ' → L' + tgt,
+      levelSub: tgt > cur ? (tgt - cur) + ' level' + (tgt - cur > 1 ? 's' : '') + ' to go for ' + stage : 'At target for ' + stage,
+      hoursText: fmtH(Math.round(done * 10) / 10) + ' of ' + fmtH(Math.round(tot * 10) / 10) + ' · ' + list.length + ' learnings', hoursW: (tot ? done / tot * 100 : 0).toFixed(1) + '%',
+      pulls: pulls.length ? pulls.map((c) => ({ label: c.label, color: c.color, text: c.text })) : [{ label: 'Firm path only', color: '#d5dacf', text: '#5a6058' }],
+      nextTitle: nx ? nx.title : 'Everything here is done', nextSub: nx ? nx.obLabel + ' · L' + nx.lvl + ' · ' + nx.hoursLabel + (nx.hasDue ? ' · due ' + nx.due : '') + ' →' : 'Pick a stretch item in the library',
+      nextOpen: nx ? nx.open : () => this.go('library'),
+      prev: () => this.setState({ zoom: DOMAINS[(i + 8) % 9][0], sel: null }), next: () => this.setState({ zoom: DOMAINS[(i + 1) % 9][0], sel: null }),
+    };
+  }
   constellation(items: Item[], clouds: Cloud[]) {
     const cx = 540, cy = 330, rx = 272, ry = 186, sel = this.state.sel;
     const cs = sel && sel.type === 'cloud' ? clouds.find((x) => x.key === sel.id) : null;
     const edges: { x1: number; y1: number; x2: number; y2: number; stroke: string; w: number; op: number }[] = [];
-    const hubs: { delay: string; id: string; x: number; y: number; xP: string; yP: string; lxP: string; lyP: string; tf: string; ta: 'left' | 'right' | 'center'; label: string; cur: string; lvl: string; stroke: string; sw: number; op: number; onClick: () => void }[] = [];
+    const hubs: { delay: string; id: string; x: number; y: number; xP: string; yP: string; lxP: string; lyP: string; tf: string; ta: 'left' | 'right' | 'center'; label: string; cur: string; lvl: string; stroke: string; sw: number; op: number; onClick: () => void; zoom: () => void; zoomTitle: string }[] = [];
     const nodes: { delay: string; isAvatar: boolean; orbX: number; orbO: string; orbD: string; id: string; x: number; y: number; r: number; ring: number; ringOp: number; fill: string; stroke: string; sw: number; dash: string; op: number; title: string; onClick: () => void }[] = [];
     DOMAINS.forEach((d, i) => {
       const p = this.polar(cx, cy, rx, ry, i, 9);
@@ -224,6 +260,7 @@ export class Logic {
         delay: (i * 70) + 'ms', id: d[0], x: p.x, y: p.y, xP: this.pct(p.x, 1080), yP: this.pct(p.y, 660), lxP: this.pct(lx, 1080), lyP: this.pct(ly, 660), tf: this.tfFor(anchor), ta: this.taFor(anchor),
         label: d[1], cur: 'L' + this.levels[i], lvl: levelLabel(this.levels[i]) + ' → L' + TARGET[i] + ' at ' + this.nextStage(),
         stroke: hubSel ? '#1a1d18' : '#c8cdc3', sw: hubSel ? 2 : 1.3, op: hubRel ? 1 : 0.3, onClick: () => this.setState({ sel: { type: 'hub', id: d[0] } }),
+        zoom: () => this.setState({ zoom: d[0], sel: null }), zoomTitle: 'Zoom into ' + d[1],
       });
     });
     const cl = clouds.filter((x) => x.on).map((x) => {
@@ -330,10 +367,8 @@ export class Logic {
         const n = i + 1; const isThis = n === d0.lvl, mine = n <= myLvl, tgt = n === TARGET[d0.di];
         return { n, label: lab, note: isThis ? 'This learning' : tgt ? this.nextStage() : mine ? 'Reached' : '', bg: isThis ? '#1a1d18' : mine ? '#eef7dc' : '#fff', fg: isThis ? '#fff' : mine ? '#3f6a0a' : '#8b918a', bd: isThis ? '#1a1d18' : tgt ? '#1a1d18' : mine ? '#c9e39a' : '#e1e5dc' };
       }),
-      rating: 'Rated 4.6 by 38 colleagues · 2 notes',
-      notes: [
-        { initials: 'YD', who: 'Yusuf Demir · Consultant · 2 Oct 2026', text: 'Dense but worth it. Do the exercises on a live client file rather than the sample data.' },
-      ],
+      // Ratings and notes come from colleagues once they are stored; none are seeded.
+      rating: 'No ratings or notes yet', notes: [] as { initials: string; who: string; text: string }[],
       frac: d0.pct / 100, hoursDone: (Math.round(d0.hours * d0.pct / 100 * 10) / 10) + ' h', hoursText: 'logged of ' + d0.hoursLabel,
       kv: [{ k: 'Format', v: d0.format }, { k: 'Source', v: d0.source }, { k: 'Effort', v: d0.hoursLabel }, { k: 'Level', v: d0.lvlLabel }, { k: 'CPD units', v: d0.cpd ? d0.cpd + ' · ACCA, ITAA' : 'None' }, { k: 'Deadline', v: d0.hasDue ? d0.due : 'None set' }, { k: 'Counts toward', v: d0.domLabel + ' · hours' }],
       canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || d0.state === 'in-progress',
@@ -443,7 +478,8 @@ export class Logic {
       // map
       view: s.view, setView: (v: string) => this.setState({ view: v as AppState['view'], sel: null }), viewOptions: [opt('constellation', 'Constellation'), opt('radar', 'Radar'), opt('road', 'Road')],
       legendItems: [{ status: 'accepted' as const, label: 'Completed' }, { status: 'in-progress' as const, label: 'In progress' }, { status: 'submitted' as const, label: 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') }, { color: '#fff', label: 'Not started' }],
-      cEdges: c.edges, cHubs: c.hubs, cNodes: c.nodes, cClouds: c.clouds, clearSel: () => this.setState({ sel: null }), selectMe: () => this.setState({ sel: null, view: 'radar' }),
+      cEdges: c.edges, cHubs: c.hubs, cNodes: c.nodes, cClouds: c.clouds, isZoom: !!s.zoom, zm: s.zoom ? this.zoomVals(items, clouds) : null, zoomOut: () => this.setState({ zoom: null, sel: null }),
+      cHint: s.zoom ? 'Rings are levels L1 (inner) to L5: green is your level now, dashed is the level needed for ' + this.nextStage() + '. Click a learning for details.' : 'Click a dot or a domain. Press + or double-click a domain to zoom in.', clearSel: () => this.setState({ sel: null }), selectMe: () => this.setState({ sel: null, view: 'radar' }),
       rRings: r.rings, rAxes: r.axes, rCur: r.cur, rTarget: r.target, rDots: r.dots, rClouds: r.clouds, radarGapText: r.gapText,
       roadLanes: rd.lanes, roadQuarters: rd.quarters, roadInflight: rd.inflight, roadBehind: rd.behind, inflightCount: rd.inflightCount,
       cloudChips, cloudRowLabel: s.view === 'road' ? 'Paths' : 'Learning clouds', cloudRowHint: s.view === 'road' ? 'Each cloud adds its own lane next to the firm path.' : 'Click a cloud label to see what put it there.',
@@ -455,7 +491,8 @@ export class Logic {
       libLead: LEARN.length + ' learnings across nine domains · 6 connected programs · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),
       obOptions: [opt('all', 'All'), opt('mandatory', 'Mandatory'), opt('advised', 'Advised'), opt('chosen', 'Chosen'), opt('open', 'Open')], libOb: s.libOb, setLibOb: (v: string) => this.setState({ libOb: v }),
       levelOptions: [opt('0', 'Any level')].concat(LEVELS.map((l, i) => opt(String(i + 1), 'L' + (i + 1) + ' · ' + l))), libLevel: s.libLevel, setLibLevel: (e: ChangeEvent<HTMLSelectElement>) => this.setState({ libLevel: e.target.value }),
-      formatOptions: [opt('all', 'Any format')].concat(formats.map((f) => opt(f, f))), libFormat: s.libFormat, setLibFormat: (e: ChangeEvent<HTMLSelectElement>) => this.setState({ libFormat: e.target.value }),
+      fmtTiles: formatTiles(LEARN, s.libFormat, (f) => this.setState({ libFormat: f })),
+      libEmpty: libItems.length === 0, clearLibFilters: () => this.setState({ libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all' }),
       domChips, libItems, libResultText: libItems.length + ' of ' + LEARN.length + ' learnings' + (s.libOb === 'mandatory' ? ' · mandatory for ' + bl + ' up to the ' + this.nextStage() + ' stage' : ''),
       // detail
       det, noteOpen: s.noteOpen, toggleNote: () => this.setState({ noteOpen: !s.noteOpen }), saveNote: () => { this.setState({ noteOpen: false }); this.say('Note posted · visible to colleagues on this learning'); },
