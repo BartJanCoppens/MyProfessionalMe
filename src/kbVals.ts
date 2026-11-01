@@ -13,7 +13,9 @@ const passages = (x: Bundle) => x.sources.filter((r) => !excluded(r)).reduce((a,
 const tpath = (k: string) => (TOPIC_BY[k] ? TOPIC_BY[k].groupLabel + ' · ' + TOPIC_BY[k].label : 'Unclassified');
 const inTopic = (x: Bundle, k: string) => k === 'all' || [x.topic].concat(x.topics2).some((tk) => tk === k || (TOPIC_BY[tk] && TOPIC_BY[tk].group === k));
 const opts = (k: string) => RAG_OPTS[k].map((o) => ({ value: o[0], label: o[1] }));
-const fresh = { kbValid: null, kbHits: null, kbAnswer: '' };
+const fresh = { kbValid: null, kbHits: null, kbAnswer: '', kbBusy: false };
+// Each test question gets a number; an answer that arrives after another question or bundle is dropped.
+let askSeq = 0;
 
 // The bundle being edited, updated from the latest state (also from timers and after awaits).
 const patchBundle = (L: Logic, id: string, patch: Partial<Bundle> | ((x: Bundle) => Partial<Bundle>)) =>
@@ -21,7 +23,7 @@ const patchBundle = (L: Logic, id: string, patch: Partial<Bundle> | ((x: Bundle)
 
 async function ask(L: Logic, b: Bundle, m: RagModel, q0: string) {
   const q = (q0 || '').trim(); if (!q || L.state.kbBusy) return;
-  const hits = rankHits([b], m, q);
+  const seq = ++askSeq, hits = rankHits([b], m, q);
   L.setState({ kbQ: q, kbHits: hits, kbAnswer: '', kbBusy: hits.length > 0 }); if (!hits.length) return;
   let ans = '';
   if (L.props.liveAssistant !== false && window.claude?.complete) {
@@ -29,14 +31,19 @@ async function ask(L: Logic, b: Bundle, m: RagModel, q0: string) {
       ans = await window.claude.complete({ messages: [{ role: 'user', content: 'Answer using ONLY these numbered passages. Citation rule: ' + ragOptLabel('cite', m.cite).toLowerCase() + ' carries a citation like [1]. At most 60 words, plain English, no emoji. If the passages do not answer it, say so.\n' + hits.map((h, k) => '[' + (k + 1) + '] ' + h.text).join('\n') + '\nQuestion: ' + q }], max_tokens: 250 });
     } catch { ans = ''; }
   }
+  if (seq !== askSeq) return;
   if (!ans) ans = hits[0].text + ' [1]' + (hits[1] ? ' ' + hits[1].text + ' [2]' : '');
   L.setState({ kbBusy: false, kbAnswer: String(ans).trim() });
 }
 
 async function importFiles(L: Logic, list: FileList | null) {
   const fl = Array.from(list || []); if (!fl.length) return;
-  const files = await Promise.all(fl.map(async (f) => ({ file: f.name, text: await f.text() })));
-  const r = importBundle(files, L.state.kbTopic, 'B' + Date.now()), id = r.bundle.id;
+  const topic = L.state.kbTopic;
+  let files: { file: string; text: string }[];
+  try {
+    files = await Promise.all(fl.map(async (f) => ({ file: f.name, text: await f.text().catch(() => { throw new Error('Could not read ' + f.name); }) })));
+  } catch (err) { L.say((err as Error).message + ' · nothing was imported'); return; }
+  const r = importBundle(files, topic, 'B' + Date.now()), id = r.bundle.id;
   L.setState((s) => ({ bundles: [r.bundle].concat(s.bundles), kbSel: id, kbOpen: true, kbTab: 'overview', kbFile: 'index.md', ...fresh }));
   L.say('Imported ' + fl.length + ' file' + (fl.length > 1 ? 's' : '') + ' · ' + r.concepts + ' concepts' + (r.skipped ? ' · ' + r.skipped + ' skipped without a type field' : ''));
   setTimeout(() => patchBundle(L, id, { status: 'indexed' }), 1600);
@@ -62,7 +69,7 @@ function kbScreen(L: Logic) {
   const tagCount: Record<string, number> = {}; B.filter((x) => inTopic(x, s.kbTopic)).forEach((x) => x.tags.forEach((tg) => { tagCount[tg] = (tagCount[tg] || 0) + 1; }));
   const kbTagChips = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a] || a.localeCompare(b)).slice(0, 14)
     .map((tg) => ({ label: tg, count: String(tagCount[tg]), on: s.kbTagF === tg, pick: () => L.setState({ kbTagF: s.kbTagF === tg ? null : tg }) }));
-  const openB = (id: string) => () => L.setState({ kbSel: id, kbOpen: true, kbTab: 'overview', kbFile: 'index.md', kbEdit: false, kbModel: null, kbTestModel: null, ...fresh });
+  const openB = (id: string) => () => { askSeq++; L.setState({ kbSel: id, kbOpen: true, kbTab: 'overview', kbFile: 'index.md', kbEdit: false, kbModel: null, kbTestModel: null, ...fresh }); };
   const kbCards = shown.map((x, i) => {
     const st = ST[x.status];
     return { id: x.id, name: x.name, desc: x.desc, topic: tpath(x.topic), st: st[0], stLabel: st[1], stIcon: st[2], delay: Math.min(i, 10) * 35 + 'ms', tags: x.tags.slice(0, 4),
@@ -124,7 +131,7 @@ function kbScreen(L: Logic) {
       L.setState((st2) => ({ bundles: [{ id, name: 'New bundle', owner: 'You · admin', topic: TOPIC_BY[st2.kbTopic] ? st2.kbTopic : 'cons.opm', topics2: [], desc: '', access: 'admins', fresh: '12', status: 'draft', updated: '31 Oct 2026', usedBy: 0, tags: [], sugg: [], models: mkModels(['precise']), sources: [], chunks: [], concepts: [] } as Bundle].concat(st2.bundles),
         kbSel: id, kbOpen: true, kbEdit: true, kbTab: 'overview', kbFile: 'index.md', kbModel: null, ...fresh }));
     },
-    kbListMode: !s.kbOpen, kbDetailMode: !!s.kbOpen, kbBack: () => L.setState({ kbOpen: false, kbEdit: false }),
+    kbListMode: !s.kbOpen, kbDetailMode: !!s.kbOpen, kbBack: () => { askSeq++; L.setState({ kbOpen: false, kbEdit: false, kbBusy: false }); },
     kbTree, kbTagChips, kbCards, kbSearch: s.kbSearch, kbSetSearch: (e: Input) => L.setState({ kbSearch: e.target.value }), kbSort: s.kbSort, kbSetSort: (e: Sel) => L.setState({ kbSort: e.target.value }),
     kbSortOptions: [{ value: 'recent', label: 'Recently indexed' }, { value: 'used', label: 'Most used' }, { value: 'name', label: 'Name A–Z' }],
     kbResultText: shown.length + ' of ' + B.length + ' bundles' + (s.kbTopic !== 'all' ? ' · ' + (TOPIC_BY[s.kbTopic] ? TOPIC_BY[s.kbTopic].label : (TOPICS.find((g) => g[0] === s.kbTopic) || ['', ''])[1]) : '') + (s.kbTagF ? ' · #' + s.kbTagF : ''),
@@ -183,7 +190,7 @@ function kbScreen(L: Logic) {
     kbOkfRoot: slugify(b.name) + '/', kbTreeFiles, kbFileView: { path: fsel.path, type: fsel.type, front: fsel.front.trim(), body: fsel.body.trim() },
     kbValidate: validate, kbValidRows: (s.kbValid || []).map((r) => ({ text: r[1], dot: r[0] ? '#86BC25' : '#e0a100', fg: r[0] ? '#3d423b' : '#7a5000' })), kbHasValid: !!s.kbValid,
     kbDownload: download,
-    kbTestModelOptions: b.models.map((m) => ({ value: m.id, label: m.name + (m.def ? ' · default' : '') })), kbTestModelId: tm.id, kbSetTestModel: (e: Sel) => L.setState({ kbTestModel: e.target.value, kbHits: null, kbAnswer: '' }),
+    kbTestModelOptions: b.models.map((m) => ({ value: m.id, label: m.name + (m.def ? ' · default' : '') })), kbTestModelId: tm.id, kbSetTestModel: (e: Sel) => { askSeq++; L.setState({ kbTestModel: e.target.value, kbHits: null, kbAnswer: '', kbBusy: false }); },
     kbTestSub: 'Top ' + tm.topk + ' · threshold ' + tm.thresh + ' · ' + tm.hybrid + '% keyword · ' + ragOptLabel('gen', tm.gen),
     kbQ: s.kbQ, kbSetQ: (e: Input) => L.setState({ kbQ: e.target.value }), kbKey: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') ask(L, b, tm, s.kbQ); }, kbAsk: () => ask(L, b, tm, s.kbQ), kbBusy: s.kbBusy,
     kbPrompts: (b.concepts.length ? b.concepts.slice(0, 3).map((c) => 'What should I know about ' + c[2].toLowerCase() + '?') : ['What does this bundle cover?']).map((l) => ({ label: l, send: () => ask(L, b, tm, l) })),

@@ -138,3 +138,34 @@ describe('the Knowledge library', () => {
   });
 });
 
+
+describe('the Knowledge library over time', () => {
+  const admin: Access = { isSystem: true, domains: [], userId: 'u1' };
+  const live = (state: Partial<AppState>) => {
+    let st: AppState = { ...initState(cfg), screen: 'adminKb', ...state };
+    const set = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => { st = { ...st, ...(typeof p === 'function' ? p(st) : p) }; };
+    const vm = () => new Logic(st, set, { ...cfg, liveAssistant: true }, { toastTimer: ref(undefined), drag: ref(null), file: ref(null), chat: ref(null) }, admin, newcomer(), async () => {}).renderVals().kb!;
+    return { vm, get: () => st };
+  };
+  it('drops a late answer once another bundle is open', async () => {
+    let answer: (v: string) => void = () => {};
+    vi.stubGlobal('window', { setTimeout, clearTimeout, scrollTo: () => {}, claude: { complete: () => new Promise<string>((r) => { answer = r; }) } });
+    const kb = live({ kbOpen: true, kbSel: 'B2', kbTestModel: 'Mquick1', kbQ: 'Pillar Two groups consolidated revenue' });
+    kb.vm().kbAsk();
+    expect(kb.get().kbBusy).toBe(true);
+    kb.vm().kbBack(); kb.vm().kbCards.find((c) => c.id === 'B1')!.open();
+    expect(kb.get().kbBusy).toBe(false);
+    answer('A late answer about Pillar Two [1]');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(kb.get().kbAnswer).toBe('');
+  });
+  it('says so when an imported file cannot be read', async () => {
+    vi.stubGlobal('window', { setTimeout, clearTimeout, scrollTo: () => {} });
+    const kb = live({});
+    const target = { files: [{ name: 'x.md', text: () => Promise.reject(new Error('unreadable')) }], value: 'x.md' };
+    kb.vm().kbOnImport({ target } as never);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(kb.get().toast).toMatch(/^Could not read x\.md/);
+    expect(kb.get().bundles).toHaveLength(initState(cfg).bundles.length);
+  });
+});

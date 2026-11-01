@@ -87,13 +87,15 @@ export function importBundle(files: { file: string; text: string }[], topic: str
   const cs = docs.filter((d) => d !== idx && d.fm.type && d.fm.type !== 'source' && d.fm.type !== 'retrieval-profile');
   const tagsOf = (v: string | string[] | undefined) => (Array.isArray(v) ? v : v ? [v] : []);
   const tags = Array.from(new Set(docs.flatMap((d) => tagsOf(d.fm.tags)))).slice(0, 8);
-  const chunks: [number, string][] = [];
+  const chunks: [number, string][] = [], seen = new Set<string>();
+  // Two files with the same title still get distinct slugs (file names and list keys).
+  const uniq = (slug: string) => { let s = slug, n = 2; while (seen.has(s)) s = slug + '-' + n++; seen.add(s); return s; };
   cs.forEach((d) => d.body.split(/\n\s*\n/).map((p) => p.replace(/^#+\s.*$/gm, '').replace(/^-\s.*$/gm, '').trim()).filter((p) => p.length > 30).slice(0, 2).forEach((p) => chunks.push([0, p.slice(0, 260)])));
   const bundle: Bundle = {
     id, name: str(idx?.fm.title) || files[0].file.replace(/\.(md|markdown)$/i, ''), owner: 'Imported by you · system admin', topic: TOPIC_BY[topic] ? topic : 'cons.opm', topics2: [],
     desc: str(idx?.fm.description) || 'Imported from ' + files.length + ' OKF file' + (files.length > 1 ? 's' : '') + '.', access: 'admins', fresh: '12', status: 'reindex', updated: '31 Oct 2026', usedBy: 0,
     tags, sugg: [], models: mkModels(['precise']), sources: [['Imported OKF files', 'upload', files.length + ' files', chunks.length, '31 Oct', 'internal']], chunks,
-    concepts: cs.map((d) => [slugify(str(d.fm.title) || d.file.replace(/\.md$/i, '')), str(d.fm.type), str(d.fm.title) || d.file, str(d.fm.description), d.body.replace(/^#.*$/m, '').trim().slice(0, 400), [], tagsOf(d.fm.tags), [0]]),
+    concepts: cs.map((d) => [uniq(slugify(str(d.fm.title) || d.file.replace(/\.md$/i, ''))), str(d.fm.type), str(d.fm.title) || d.file, str(d.fm.description), d.body.replace(/^#.*$/m, '').trim().slice(0, 400), [], tagsOf(d.fm.tags), [0]]),
   };
   return { bundle, concepts: cs.length, skipped };
 }

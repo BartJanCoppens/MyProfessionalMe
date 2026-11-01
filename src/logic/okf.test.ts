@@ -69,3 +69,11 @@ describe('retrieval', () => {
     expect(rankHits([b1], strict, q).length).toBeLessThanOrEqual(rankHits([b1], loose, q).length);
   });
 });
+
+describe('importBundle keys', () => {
+  it('gives concepts with the same title distinct slugs', () => {
+    const f = (n: number) => ({ file: 'c' + n + '.md', text: '---\ntype: concept\ntitle: Same title\n---\nA paragraph that is long enough to become a passage of its own.' });
+    const slugs = importBundle([f(1), f(2)], 'cons.opm', 'B1').bundle.concepts.map((c) => c[0]);
+    expect(new Set(slugs).size).toBe(2);
+  });
+});
