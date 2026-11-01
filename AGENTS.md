@@ -10,6 +10,7 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 - `npm run build`: `tsc -b` then Vite build (use this as the typecheck)
 - `npm run lint`: oxlint
 - `supabase db push` / `supabase config push` / `supabase functions deploy manage-users --use-api`: apply migrations, auth config and the edge function to the linked project (no Docker needed). `supabase db advisors --linked` after schema changes.
+- `npm test`: Vitest unit tests (`src/**/*.test.ts`). `npm run test:db`: row-level security checks in `supabase/tests/rls.sql` against the linked project, inside a transaction that rolls back; add a case there for every policy change.
 - `npm run agents`: regenerate `AGENTS.md` from this file. Run it after every edit to `CLAUDE.md`; never edit `AGENTS.md` by hand.
 
 ## Layout
@@ -42,6 +43,7 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 - Sign-up is closed; admins create accounts with a temporary password (`must_change_password`), which the user replaces at first sign-in. `[auth.email] enable_signup` must stay `true`: false disables email/password login entirely.
 - Never use `user_metadata` for authorization; never put a secret or `service_role` key in the app. `.env.local` holds only the URL and publishable key (see `.env.example`).
 - `private.bootstrap_admins` is one-shot: a listed email becomes System Admin only while none exists, and the row is consumed (it is empty now). The database refuses to remove the last System Admin.
+- Learner data is per user: `learner_learnings` (state, pct, chosen), `ambitions`, `interests`, `learner_prefs`, plus `profiles.career_stage` and `profiles.counsellor_id`. Read: the person, admins who manage them, their counsellor (`private.can_view_learner`). Write: only the person; only a counsellor or managing admin may set `accepted` (`private.can_accept`). Keep one permissive policy per table and action (merge with OR).
 - Nobody but a System Admin may manage a person who is Domain Admin for a line the caller does not administer (`private.can_manage_user` and `manage-users` both enforce it).
 - This project still applies Supabase's default table grants; every new table needs an explicit `revoke all … from anon, authenticated` plus the minimal grants (see `20261030210928_tighten_table_grants.sql`).
 
