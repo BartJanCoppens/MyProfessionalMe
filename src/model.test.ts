@@ -87,6 +87,13 @@ describe('the Director and Partner stages', () => {
   it('is the top of the career path', () => {
     expect(viewModel(newcomer({ stage: 'Partner' })).who.readinessLine).toBe('Partner · top of the career path');
   });
+  it('copy for a Partner names Partner instead of a next stage', () => {
+    const vm = viewModel(newcomer({ stage: 'Partner' }));
+    const text = JSON.stringify(vm);
+    expect(text).not.toContain('the next stage');
+    expect(text).not.toContain('Partner → Partner');
+    expect(vm.centerSub).toBe('Partner · top of the career path');
+  });
 });
 
 describe("the learner's eye", () => {

@@ -89,7 +89,9 @@ export class Logic {
   }
   // The chat and proposal shown are the viewed person's own; another person's conversation never carries over.
   myChat() { return this.state.chatFor === this.subject.id ? this.state.chat : []; }
-  nextStage() { return STAGES[this.myStage() + 1] || 'the next stage'; }
+  // The stage whose expectations apply: the next one, or Partner itself at the top.
+  nextStage() { return STAGES[Math.min(this.myStage() + 1, STAGES.length - 1)]; }
+  atTop() { return this.myStage() === STAGES.length - 1; }
   // How copy names the viewed person's counsellor.
   counsellorFull() { return this.subject.counsellor?.name || 'your counsellor'; }
   counsellorFirst() { return this.subject.counsellor ? this.subject.counsellor.name.split(' ')[0] : 'your counsellor'; }
@@ -417,13 +419,13 @@ export class Logic {
       who: {
         name: this.subject.name, readOnly: this.subject.readOnly,
         roleLine: [this.subject.stage, this.subject.businessLine || 'No business line yet'].filter(Boolean).join(' · '),
-        nextStage: STAGES[this.myStage() + 1] || 'the next stage',
-        readinessLine: STAGES[this.myStage() + 1] ? readiness + '% ready for ' + STAGES[this.myStage() + 1] : STAGES[this.myStage()] + ' · top of the career path',
+        nextStage: this.nextStage(),
+        readinessLine: this.atTop() ? this.nextStage() + ' · top of the career path' : readiness + '% ready for ' + this.nextStage(),
         counsellorLine: this.subject.counsellor ? 'Counsellor: ' + this.subject.counsellor.name : 'No counsellor',
       },
       bl, readiness, readinessW: readiness + '%', readinessFrac: readiness / 100, readinessDash: (readiness / 100 * 2 * Math.PI * 38) + ' ' + (2 * Math.PI * 38),
       readinessText: 'Readiness counts hours on mandatory and advised items up to the ' + this.nextStage() + ' stage in ' + bl + '. Your own choices count toward levels and hours, not readiness.',
-      centerSub: (this.subject.stage || STAGES[0]) + ' → ' + this.nextStage() + ' · ' + readiness + '% ready', hoursYear, cpdYear, hoursChip: hoursYear + ' of 80 h this year',
+      centerSub: this.atTop() ? this.nextStage() + ' · top of the career path' : (this.subject.stage || STAGES[0]) + ' → ' + this.nextStage() + ' · ' + readiness + '% ready', hoursYear, cpdYear, hoursChip: hoursYear + ' of 80 h this year',
       noLineNote: this.subject.businessLine ? '' : (this.subject.readOnly ? this.subject.name + ' has' : 'You have') + ' no business line yet, so mandatory and advised items are shown for ' + bl + '. An admin sets the line in User management.',
       mapLead: 'You sit in the middle. The nine domains around you hold every learning the firm knows about; your ' + bl + ' affiliation decides which ones are mandatory, your counsellor advises some, the rest is yours to choose. Clouds show where your projects, personality and ambitions pull you.',
       crumb: titles[s.screen][0], headerTitle: titles[s.screen][1], screen: s.screen,
