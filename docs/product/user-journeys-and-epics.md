@@ -1043,24 +1043,26 @@ Effort is a rough size for the current team (one developer working with agents):
 
 **Recommendation as product owner.** Keep Roadmap §1 first, then insert the "learning record" work (items 2, 3, 5 and 6) before Create & share and the RAG work. An LXP in a professional-services firm is judged first on mandatory compliance, evidence and reporting; Create & share and the logic engine are strong differentiators but only pay off once completions are trustworthy and reach the right people. Move the server-side AI proxy ahead of Create & share, and run podcasts and reels in parallel as the quick visible win.
 
-## 7. Open questions for the owner
+## 7. Owner's answers (1 Nov 2026)
 
-| Id | Question | Context |
-|---|---|---|
-| Q1 | Should "Needs review" learnings be visible to learners? | Roadmap §1; today only drafts are hidden (E2.9) |
-| Q2 | May a Domain Admin map another line's published learning into their own line? | Roadmap §1; allowed today (E6.9) |
-| Q3 | Does a correct reel answer complete the reel without a counsellor (trust-based)? | v3-remaining open decision 2 (E9.4) |
-| Q4 | Who decides membership of industry, technology, ambition and profile audiences: the learner, admins, staffing data, or a mix per lens? | Gap 1 (E5.9) |
-| Q5 | Should readiness count submitted hours before they are accepted? | Today it does (`progressHours`), so readiness can rise without acceptance (E1.3) |
-| Q6 | Are next-stage targets firm-wide, or per stage and per business line? | One constant `TARGET` today (E1.2) |
-| Q7 | What evidence does each format need (certificate, attendance, reflection), and may a General Admin accept? | E3.6; today only the counsellor, a Domain Admin of the line or a System Admin accept |
-| Q8 | What may a counsellor see by default: everything, or only what the learner shares? | Profile copy and RLS disagree (E11.8) |
-| Q9 | Are ratings and notes public to all colleagues, and are they moderated? | E2.6 |
-| Q10 | Who is a "creator": everyone, or people who opt in? Do authors and reviewers earn CPD or recognition? | E8.9; bundle access already distinguishes "All creators" and "Tax & Legal creators" |
-| Q11 | Which reports are needed first, for whom, and under which privacy rules (works council, minimum group size)? | E14 |
-| Q12 | Which notification channel: email, Microsoft Teams or in-app only? | E15 |
-| Q13 | When are single sign-on and HR provisioning needed: for the pilot or only for the firm-wide roll-out? | E12.12 |
-| Q14 | Should Domain Admins see curriculum signals for their own line? | Today none of the seeded signals reach a Domain Admin (CUR-19) |
-| Q15 | Is the 80-hour annual goal firm policy, and does it vary by stage or professional body? | Constant in `renderVals()` (E1.8) |
-| Q16 | Avatar studio: build, buy or park? Evaluations and personality data: connector or manual upload for the pilot? | E10, E11.5–E11.7 |
-| Q17 | Is the `domain_experts` table (filled by System Admins) the right source for expert reviewers, with any System Admin as fallback? | v3-remaining open decision 5 |
+Overall: keep it simple and do not over-engineer. It is a proof of concept, but whatever is there must work and be consistent.
+
+| Id | Question | Context | Answer |
+|---|---|---|---|
+| Q1 | Should "Needs review" learnings be visible to learners? | Roadmap §1; today only drafts are hidden (E2.9) | No: hide them from learners, like drafts. |
+| Q2 | May a Domain Admin map another line's published learning into their own line? | Roadmap §1; allowed today (E6.9) | Yes. |
+| Q3 | Does a correct reel answer complete the reel without a counsellor (trust-based)? | v3-remaining open decision 2 (E9.4) | Yes. |
+| Q4 | Who decides membership of industry, technology, ambition and profile audiences: the learner, admins, staffing data, or a mix per lens? | Gap 1 (E5.9) | The System Admin configures it in a matrix of roles (learner, Domain Admin, General Admin, counsellor) against audiences. |
+| Q5 | Should readiness count submitted hours before they are accepted? | Today it does (`progressHours`), so readiness can rise without acceptance (E1.3) | No: only accepted hours count. |
+| Q6 | Are next-stage targets firm-wide, or per stage and per business line? | One constant `TARGET` today (E1.2) | Per stage and per business line. |
+| Q7 | What evidence does each format need (certificate, attendance, reflection), and may a General Admin accept? | E3.6; today only the counsellor, a Domain Admin of the line or a System Admin accept | Depends on the learning type; a General Admin can also accept. |
+| Q8 | What may a counsellor see by default: everything, or only what the learner shares? | Profile copy and RLS disagree (E11.8) | The counsellor sees the formal learning track, not the personality and ambition parts. |
+| Q9 | Are ratings and notes public to all colleagues, and are they moderated? | E2.6 | Yes. |
+| Q10 | Who is a "creator": everyone, or people who opt in? Do authors and reviewers earn CPD or recognition? | E8.9; bundle access already distinguishes "All creators" and "Tax & Legal creators" | Everyone. |
+| Q11 | Which reports are needed first, for whom, and under which privacy rules (works council, minimum group size)? | E14 | Keep it minimal (proof of concept). |
+| Q12 | Which notification channel: email, Microsoft Teams or in-app only? | E15 | Keep it simple. |
+| Q13 | When are single sign-on and HR provisioning needed: for the pilot or only for the firm-wide roll-out? | E12.12 | Keep it simple; not now. |
+| Q14 | Should Domain Admins see curriculum signals for their own line? | Today none of the seeded signals reach a Domain Admin (CUR-19) | Yes. |
+| Q15 | Is the 80-hour annual goal firm policy, and does it vary by stage or professional body? | Constant in `renderVals()` (E1.8) | It varies; make it configurable, simply. |
+| Q16 | Avatar studio: build, buy or park? Evaluations and personality data: connector or manual upload for the pilot? | E10, E11.5–E11.7 | Park the avatar studio; it will later be integrated with the Taxatar project. Keep evaluations and personality simple. |
+| Q17 | Is the `domain_experts` table (filled by System Admins) the right source for expert reviewers, with any System Admin as fallback? | v3-remaining open decision 5 | Yes. |
