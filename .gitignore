@@ -29,3 +29,6 @@ dist-ssr
 
 # Plan execution workspaces
 .superpowers/
+
+# Claude Design export: references the TaxConnect design system; keep out of the public repo.
+Design/

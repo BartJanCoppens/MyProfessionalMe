@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { initState, Logic } from './model';
 import type { Config } from './config';
 import type { Subject } from './lib/useSubject';
@@ -103,3 +103,38 @@ describe("the learner's eye", () => {
     expect(vm.pz).toMatchObject({ name: 'New Person', stage: 'Manager' });
   });
 });
+
+describe('the Knowledge library', () => {
+  vi.stubGlobal('window', { setTimeout, clearTimeout, scrollTo: () => {} });
+  const admin: Access = { isSystem: true, domains: [], userId: 'u1' };
+  const kb = (state: Partial<AppState>, access = admin) => {
+    const sink: Partial<AppState>[] = []; const subject = newcomer(); const st = { ...initState(cfg), screen: 'adminKb' as const, ...state };
+    const vm = new Logic(st, (p) => { sink.push(typeof p === 'function' ? p(st) : p); }, cfg,
+      { toastTimer: ref(undefined), drag: ref(null), file: ref(null), chat: ref(null) }, access, subject, async () => {}).renderVals();
+    return { vm, sink };
+  };
+  it('finds bundles by concept title and by tag', () => {
+    expect(kb({ kbSearch: 'qdmtt' }).vm.kb!.kbCards.map((c) => c.name)).toEqual(['Belgian tax updates 2026']);
+    expect(kb({ kbSearch: 'sbi' }).vm.kb!.kbCards.map((c) => c.name)).toEqual(['Communication & feedback']);
+  });
+  it('counts a bundle under its secondary topics too', () => {
+    const industries = kb({}).vm.kb!.kbTree.find((t) => t.label === 'Industries')!;
+    expect(industries.count).toBe('2');
+  });
+  it('refuses to delete the last RAG model and promotes a new default', () => {
+    const one = kb({ kbOpen: true, kbSel: 'B5' });
+    one.vm.kb!.km.del();
+    expect(one.sink.some((p) => 'bundles' in p)).toBe(false);
+    const two = kb({ kbOpen: true, kbSel: 'B2' });
+    two.vm.kb!.km.del();
+    const b2 = two.sink.find((p) => 'bundles' in p)!.bundles!.find((b) => b.id === 'B2')!;
+    expect(b2.models).toHaveLength(1);
+    expect(b2.models[0].def).toBe(true);
+  });
+  it('is for admins only', () => {
+    const user = kb({ screen: 'map' }, { isSystem: false, domains: [], userId: 'u1' });
+    user.vm.goKb();
+    expect(user.sink[0]).toMatchObject({ screen: 'map' });
+  });
+});
+

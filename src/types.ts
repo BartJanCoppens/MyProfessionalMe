@@ -41,7 +41,7 @@ export type CloudMeta = {
   anchor: number; frac: number; screen: Screen; goLabel: string;
 };
 
-export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'adminLib' | 'adminMap' | 'users';
+export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'adminLib' | 'adminMap' | 'adminKb' | 'users';
 
 // What the signed-in account may administer (from public.user_roles).
 export type Access = { isSystem: boolean; domains: string[]; userId: string };
@@ -70,5 +70,21 @@ export type AppState = {
   // curriculum mapping: lens, selected audience and stage, signals handled, learner's-eye reads, copilot
   mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>;
   reads: Record<string, Read>; readBusy: boolean;
+  // Knowledge library (admin): bundles are in memory this session, like the learning catalogue
+  bundles: Bundle[]; kbSel: string; kbOpen: boolean; kbTopic: string; kbSearch: string; kbTagF: string | null; kbSort: string; kbTab: string; kbFile: string;
+  kbModel: string | null; kbTestModel: string | null; kbTagIn: string; kbValid: [boolean, string][] | null; kbEdit: boolean; kbAdd: { conn: string; name: string; sens: string };
+  kbQ: string; kbBusy: boolean; kbHits: { text: string; src: string; score: number; disp?: number }[] | null; kbAnswer: string;
   cpInput: string; cpBusy: boolean; cpReply: string; cpOpsP: Op[] | null;
+};
+
+// Knowledge library: retrieval models and bundles
+export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };
+export type RagModel = RagPreset & { id: string; def: boolean };
+// name, connector, size, chunks, last sync, sensitivity (public, internal, client, licensed)
+export type BundleSource = [string, string, string, number, string, string];
+// slug, kind, title, summary, body, related slugs, tags, source indexes
+export type Concept = [string, string, string, string, string, string[], string[], number[]];
+export type Bundle = {
+  id: string; name: string; owner: string; topic: string; topics2: string[]; desc: string; access: string; fresh: string; status: string; updated: string; usedBy: number;
+  tags: string[]; sugg: [string, number][]; models: RagModel[]; sources: BundleSource[]; chunks: [number, string][]; concepts: Concept[];
 };

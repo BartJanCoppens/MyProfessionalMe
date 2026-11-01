@@ -2,7 +2,7 @@
 // everything the screens render from AppState, and the action methods patch state the same way the prototype did.
 import type { ChangeEvent, DragEvent, KeyboardEvent, RefObject } from 'react';
 import {
-  AUD_INFO, AUD_MAPS0, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
+  AUD_INFO, AUD_MAPS0, BUNDLES0, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
   OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
 } from './data';
 import type { Config } from './config';
@@ -14,9 +14,10 @@ import { photoKey } from './lib/useSubject';
 import { memberSummary } from './logic/team';
 import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
+import { kbVals } from './kbVals';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
-export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'users'];
+export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'adminKb', 'users'];
 const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!;
 
 type Evidence = { id: string; text: string; src: string };
@@ -28,7 +29,9 @@ export function initState(cfg: Config): AppState {
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false,
+    bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
+    kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
     projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: {},
     chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
@@ -406,7 +409,7 @@ export class Logic {
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
       projects: ['Me · Projects & evaluations', 'Projects & evaluations'], profile: ['Me · My profile', 'My profile'], map: ['Me · ' + [this.subject.stage, bl].filter(Boolean).join(' · '), 'My growth map'], library: ['Me · Library', 'Library'],
-      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'],
+      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminKb: ['Administration · Knowledge library', 'Knowledge library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'],
     };
     const hubDock = sel && sel.type === 'hub' ? (() => {
       const di = DOMAINS.findIndex((d) => d[0] === sel.id); const list = items.filter((it) => it.dom === sel.id);
@@ -447,6 +450,7 @@ export class Logic {
       cloudDock, dock, hubDock, nextUp, showStreak: this.props.showMarks !== false,
       // Earned marks only; private to the person.
       marks: [this.levels.every((l) => l > 0) ? 'All nine domains touched' : '', items.some((it) => it.state === 'accepted' && it.format === 'Certification') ? 'First certification' : ''].filter(Boolean),
+      ...kbVals(this),
       // library
       libLead: LEARN.length + ' learnings across nine domains · 6 connected programs · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),
       obOptions: [opt('all', 'All'), opt('mandatory', 'Mandatory'), opt('advised', 'Advised'), opt('chosen', 'Chosen'), opt('open', 'Open')], libOb: s.libOb, setLibOb: (v: string) => this.setState({ libOb: v }),

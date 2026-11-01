@@ -12,6 +12,7 @@ import ProfileScreen from './screens/Profile';
 import TeamScreen from './screens/Team';
 import { AdminLibraryScreen, AddLearningDrawer } from './screens/Admin';
 import AdminMappingScreen from './screens/Mapping';
+import KnowledgeScreen from './screens/Knowledge';
 import UsersScreen from './screens/Users';
 import SubjectPicker from './screens/SubjectPicker';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
@@ -99,6 +100,7 @@ function Shell({ auth, subject, options, select, reload }: ShellProps) {
           {vm.screen === 'team' && <TeamScreen vm={vm} members={team} onOpen={(id) => { select(id); logic.go('map'); }} />}
           {vm.screen === 'adminLib' && <AdminLibraryScreen vm={vm} />}
           {vm.screen === 'adminMap' && <AdminMappingScreen vm={vm} />}
+          {vm.kb && <KnowledgeScreen kb={vm.kb} />}
           {vm.screen === 'users' && <UsersScreen access={auth.access} meId={auth.profile!.id} say={(m) => logic.say(m)} />}
         </div>
       </main>
@@ -141,6 +143,7 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
             <NavGroupHeader>Administration</NavGroupHeader>
             <NavItem label="Learning library" active={vm.navAdminLib} onClick={vm.goAdminLib} />
             <NavItem label="Curriculum mapping" count={vm.pendingLabel} active={vm.navAdminMap} onClick={vm.goAdminMap} />
+            <NavItem label="Knowledge library" count={vm.kbCount} active={vm.navKb} onClick={vm.goKb} />
             <NavItem label="User management" active={vm.navUsers} onClick={vm.goUsers} />
           </>
         )}
