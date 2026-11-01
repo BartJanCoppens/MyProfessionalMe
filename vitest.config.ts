@@ -1,8 +1,8 @@
 import { defineConfig, mergeConfig } from 'vitest/config';
 import viteConfig from './vite.config.ts';
 
-// Unit and component tests. Nothing here reaches Supabase: src/test/setup.ts swaps the client for an in-memory fake,
-// and the env points at an unroutable URL in case anything slips past it (.env.local is not used).
+// Unit and component tests. Nothing here reaches Supabase: src/test/setup.ts swaps the client for an in-memory fake.
+// The env gives src/lib/supabase.ts the variables it requires, so tests also run in a checkout without .env.local.
 export default mergeConfig(viteConfig, defineConfig({
   test: {
     include: ['src/**/*.test.{ts,tsx}'],

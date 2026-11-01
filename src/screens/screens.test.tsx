@@ -311,6 +311,7 @@ describe('the Knowledge library screen', () => {
     expect(content.saveBundleSoon).toHaveBeenCalled();
   });
   it('adds a source on the sources tab', () => {
+    vi.useFakeTimers();
     kb({ kbOpen: true, kbSel: 'B8', kbTab: 'sources' });
     fireEvent.change(screen.getByPlaceholderText('File name, e.g. Pricing method v2.pdf'), { target: { value: 'Agenda v3.docx' } });
     click('Add');
@@ -326,6 +327,7 @@ describe('the Knowledge library screen', () => {
     expect(current.bundles.find((b) => b.id === 'B1')!.models.map((m) => m.name)).toEqual(['Precise · cite everything', 'Broad exploration', 'New model']);
   });
   it('validates and downloads on the files tab', () => {
+    vi.useFakeTimers();
     URL.createObjectURL = vi.fn(() => 'blob:x');
     URL.revokeObjectURL = vi.fn();
     kb({ kbOpen: true, kbSel: 'B8', kbTab: 'files' });
