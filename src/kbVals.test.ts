@@ -517,7 +517,7 @@ describe('bundles of another line', () => {
 
 describe('an empty Knowledge library', () => {
   // Bug: kbScreen falls back to B[0] for the selected bundle, so with no bundles at all (a fresh database) the screen throws.
-  it.fails('renders without bundles', () => {
+  it('renders without bundles', () => {
     expect(() => kbh({ bundles: [] }).kb()).not.toThrow();
   });
 });

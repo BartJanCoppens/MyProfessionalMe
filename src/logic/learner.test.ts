@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEARN } from '../data';
-import { levelLabel, levelsByDomain, stageIndex } from './learner';
+import { levelLabel, levelsByDomain, stageIndex, dueQuarter } from './learner';
 
 describe('levelsByDomain', () => {
   it('is all zeros for a learner with no progress', () => {
@@ -30,4 +30,13 @@ describe('stageIndex', () => {
 describe('levelLabel', () => {
   it('reads Not started for level 0', () => { expect(levelLabel(0)).toBe('Not started'); });
   it('names a reached level', () => { expect(levelLabel(3)).toBe('Advanced · L3'); });
+});
+
+describe('dueQuarter', () => {
+  it('places a due date in its road quarter, from Q4 2026 to Q3 2027', () => {
+    expect(['30 Nov 2026', 'Jan 2027', 'Mar 2027', 'Jun 2027', '15 Sep 2027'].map(dueQuarter)).toEqual([0, 1, 1, 2, 3]);
+  });
+  it('keeps overdue and far-off dates on the road, and unreadable ones first', () => {
+    expect(['3 Mar 2026', 'Dec 2028', 'asap', ''].map(dueQuarter)).toEqual([0, 3, 0, 0]);
+  });
 });

@@ -7,7 +7,7 @@ import {
 } from './data';
 import type { Config } from './config';
 import type { Access, AppState, ChatMsg, CloudKey, Learn, LearnForm, LearnMeta, Op, Persona, Proposal, Read, Screen, Signal } from './types';
-import { levelLabel, levelsByDomain, stageIndex } from './logic/learner';
+import { dueQuarter, levelLabel, levelsByDomain, stageIndex } from './logic/learner';
 import type { LearnState } from './logic/learner';
 import { acceptLearning, addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
 import { photoKey } from './lib/useSubject';
@@ -353,14 +353,13 @@ export class Logic {
     };
   }
   road(items: Item[], clouds: Cloud[]) {
-    const DUE_Q: Record<string, number> = { '30 Nov 2026': 0, 'Jan 2027': 1, 'Mar 2027': 1, 'Jun 2027': 2 };
     type RoadItem = { id: string; av: boolean; avInit: string; title: string; sub: string; ringCss: string; onClick: () => void; delay?: string };
     const cols = ['Q4 2026', 'Q1 2027', 'Q2 2027', 'Q3 2027'].map((label) => ({ label, items: [] as RoadItem[], count: '' }));
     const upcoming = items.filter((it) => it.state !== 'accepted' && it.state !== 'submitted' && it.state !== 'in-progress' && (it.ob === 'mandatory' || it.ob === 'advised'))
       .sort((a, b) => (a.ob === 'mandatory' ? 0 : 1) - (b.ob === 'mandatory' ? 0 : 1));
     let free = 0;
     upcoming.forEach((it) => {
-      const q = it.hasDue ? DUE_Q[it.due] : (free++ % 4);
+      const q = it.hasDue ? dueQuarter(it.due) : (free++ % 4);
       cols[q].items.push({ id: it.id, av: it.isAvatar, avInit: it.avInit, title: it.title, sub: (it.hasDue ? 'Due ' + it.due : 'Advised · ' + it.stage) + ' · ' + it.hoursLabel, ringCss: it.ob === 'mandatory' ? '2px solid #1a1d18' : '1.5px dashed #1a1d18', onClick: it.open });
     });
     cols.forEach((c) => { c.count = c.items.length ? c.items.length + (c.items.length === 1 ? ' item' : ' items') : 'nothing due'; });
@@ -374,7 +373,7 @@ export class Logic {
       const list = x.ids.map((id) => byId[id]).filter((it) => it && it.state !== 'accepted' && it.state !== 'submitted')
         .sort((a, b) => Number(b.state === 'in-progress') - Number(a.state === 'in-progress') || a.lvl - b.lvl);
       list.forEach((it, k) => {
-        const q = it.state === 'in-progress' ? 0 : it.hasDue ? DUE_Q[it.due] : Math.min(3, Math.floor(k * 4 / list.length));
+        const q = it.state === 'in-progress' ? 0 : it.hasDue ? dueQuarter(it.due) : Math.min(3, Math.floor(k * 4 / list.length));
         cells[q].items.push({ id: it.id, av: it.isAvatar, avInit: it.avInit, title: it.title, sub: (it.state === 'in-progress' ? it.stateLabel : it.obLabel) + ' · ' + it.hoursLabel + (firmIds.includes(it.id) ? ' · also on firm path' : ''), ringCss: '1.5px dashed ' + x.color, onClick: it.open });
       });
       lanes.push({ key: x.key, label: x.laneLabel, sub: list.length + ' learnings · ' + Math.round(list.reduce((a, it) => a + it.hours, 0)) + ' h · ' + x.laneSub, color: x.color, cells, select: () => this.setState({ sel: { type: 'cloud', id: x.key } }) });
@@ -409,7 +408,9 @@ export class Logic {
     const formats = Array.from(new Set(LEARN.map((l) => l[4])));
 
     // detail
-    const d0 = byId[s.detailId || ''] || items[0];
+    // With no learnings at all (a fresh catalogue) the detail view gets a blank stand-in; nothing links to it.
+    const blank: Learn = ['', 'No learnings yet', DOMAINS[0][0], 1, 'E-learning', '', 1, 0, '', ''];
+    const d0 = byId[s.detailId || ''] || items[0] || { ...this.item(blank), ...cover(blank, 0, 'not-started', 0) };
     const myLvl = this.levels[d0.di];
     const sugg: { src: string; text: string; color: string }[] = [];
     clouds.forEach((cl) => cl.evidence.forEach((e) => { if (e.id === d0.id) sugg.push({ src: e.src, text: e.text, color: cl.color }); }));
@@ -581,7 +582,7 @@ export class Logic {
         };
       }),
       teamTabs: [opt('roster', 'Roster'), opt('heat', 'Levels by domain')], teamTab: s.teamTab, setTeamTab: (v: string) => this.setState({ teamTab: v }),
-      domShort: DOMAINS.map((d) => d[2]), heatTargets: [2, 2, 2, 3, 2, 2, 1, 2, 2].map((v) => 'L' + v),
+      domShort: DOMAINS.map((d) => d[2]), heatTargets: TARGET.map((v) => 'L' + v),
       // admin library
       adminLead: LEARN.length + ' learnings · 6 connected programs · 3 need attention · last sync 28 Oct 2026 07:10', programs, adminQ: s.adminQ, setAdminQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ adminQ: e.target.value }),
       pubOptions: [opt('all', 'All'), opt('Published', 'Published'), opt('Needs review', 'Needs review'), opt('Draft', 'Draft')], adminStatus: s.adminStatus, setAdminStatus: (v: string) => this.setState({ adminStatus: v }), adminRows,
@@ -738,7 +739,7 @@ export class Logic {
     if (!res || !res.text) res = this.scriptedRead(P, st);
     const read = res;
     // functional update: this.state is stale after the await
-    this.setState((s) => ({ readBusy: false, reads: { ...s.reads, [P[0]]: read } }));
+    this.setState((s) => ({ readBusy: false, reads: { ...s.reads, [this.subject.id + '|' + P[0]]: read } }));
   }
   validOps(ops?: Op[]) {
     return (ops || []).filter((o) => o && AUD_INFO[o.aud] && LEARN_BY[o.lid] && ['add', 'remove', 'setOb'].includes(o.op) && (o.op === 'remove' || STAGES.includes(o.stage || '') || o.op === 'setOb'))
@@ -780,7 +781,7 @@ export class Logic {
     const audKey = s.mapAud && AUD_INFO[s.mapAud] && AUD_INFO[s.mapAud].lens === lens ? s.mapAud : (lens === 'bl' ? ownLine : auds[0][0]);
     const editable = this.canEditAud(audKey);
     const ai = AUD_INFO[audKey], canMand = L[3], map = maps[audKey] || [], mappedIds = map.map((m) => m[0]);
-    const sigOpen = SIGNALS.filter((g) => !s.sigDone[g.id] && this.sigValid(g) && this.canEditAud(g.op.aud));
+    const sigOpen = SIGNALS.filter((g) => !s.sigDone[g.id] && LEARN_BY[g.op.lid] && this.sigValid(g) && this.canEditAud(g.op.aud));
     const pick = (k: string, st?: string) => () => this.setState({ mapAud: k, mapStage: st || null, mapSel: null });
     const covRows = auds.map((a) => {
       const sig = sigOpen.filter((g) => g.op.aud === a[0]).length;
@@ -863,14 +864,14 @@ export class Logic {
       layers: stk.layers.map((l) => ({ key: l.lens, lens: l.lens, color: l.color, aud: l.aud, meta: l.n ? l.n + ' learning' + (l.n > 1 ? 's' : '') + ' · ' + Math.round(l.h) + ' h' : 'Nothing at ' + P[3] })),
       hasDup: stk.dups.length > 0, dupText: stk.dups.map((d) => d.title + ' via ' + d.via.join(' and ')).join('; ') + '. Counted once.',
     };
-    const rd = s.reads[P[0]];
+    const rd = s.reads[this.subject.id + '|' + P[0]];
     const cpOpsP = s.cpOpsP || [];
     const cpOps = cpOpsP.map((o) => ({
       verb: o.op === 'add' ? 'Add' : o.op === 'remove' ? 'Remove' : 'Make ' + o.ob,
       text: '“' + LEARN_BY[o.lid][1] + '” ' + (o.op === 'remove' ? 'from ' : '→ ') + AUD_INFO[o.aud].name + (o.stage && o.op !== 'remove' ? ' · ' + o.stage : '') + (o.op === 'add' ? ' · ' + o.ob : ''),
     }));
     return {
-      editable, readOnlyNote: editable ? '' : 'Read-only: you administer ' + this.access.domains.join(', ') + '. Only a System Admin edits ' + ai.name + '.',
+      editable, readOnlyNote: editable ? '' : 'Read-only: you administer ' + this.access.domains.join(', ') + '. ' + (AUD_INFO[audKey]?.lens === 'bl' ? this.whoEdits(ai.name) : 'A General or System Admin edits ' + ai.name) + '.',
       mapLens: lens, lensOptions: LENSES.map((l) => opt(l[0], l[1])), setLens: (v: string) => this.setState({ mapLens: v, mapAud: null, mapStage: null, mapSel: null }),
       lensLabel: L[1], lensColor: L[2], lensRule: L[4], lensPolicy: L[5], audName: ai.name, audSummary: map.length + ' learnings · ' + ai.reach + ' people',
       audChips: auds.map((a) => ({ key: a[0], label: a[1], reach: String(a[2]), on: a[0] === audKey, pick: pick(a[0]) })),

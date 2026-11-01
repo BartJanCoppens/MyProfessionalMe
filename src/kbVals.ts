@@ -85,7 +85,8 @@ function kbScreen(L: Logic) {
       stats: [{ k: 'sources', v: String(x.sources.length) }, { k: 'concepts', v: String(x.concepts.length) }, { k: 'RAG models', v: String(x.models.length) }, { k: 'used by', v: String(x.usedBy) }], open: openB(x.id) };
   });
 
-  const b = B.find((x) => x.id === s.kbSel) || B[0];
+  // With no bundles at all the screen stays in list mode; the detail is computed from an empty stand-in nobody sees.
+  const b = B.find((x) => x.id === s.kbSel) || B[0] || { id: '', name: '', owner: '', topic: 'cons.opm', topics2: [], desc: '', access: 'admins', fresh: '12', status: 'draft', updated: '', usedBy: 0, tags: [], sugg: [], models: mkModels(['precise']), sources: [], chunks: [], concepts: [], line: null };
   const editable = L.canEditLine(b.line), readOnlyNote = L.lineName(b.line) + ' bundle · read-only for you; ' + L.whoEdits(b.line) + '.';
   const up = (patch: Partial<Bundle> | ((x: Bundle) => Partial<Bundle>)) => (editable ? patchBundle(L, b.id, patch) : L.say(readOnlyNote));
   const st = ST[b.status], files = okfFiles(b), fsel = files.find((f) => f.path === s.kbFile) || files[0];
@@ -143,7 +144,7 @@ function kbScreen(L: Logic) {
       L.setState((st2) => ({ bundles: [nb].concat(st2.bundles),
         kbSel: id, kbOpen: true, kbEdit: true, kbTab: 'overview', kbFile: 'index.md', kbModel: null, ...fresh }));
     },
-    kbListMode: !s.kbOpen, kbDetailMode: !!s.kbOpen, kbBack: () => { askSeq++; L.setState({ kbOpen: false, kbEdit: false, kbBusy: false }); },
+    kbListMode: !s.kbOpen || !B.length, kbDetailMode: !!s.kbOpen && B.length > 0, kbBack: () => { askSeq++; L.setState({ kbOpen: false, kbEdit: false, kbBusy: false }); },
     kbTree, kbTagChips, kbCards, kbSearch: s.kbSearch, kbSetSearch: (e: Input) => L.setState({ kbSearch: e.target.value }), kbSort: s.kbSort, kbSetSort: (e: Sel) => L.setState({ kbSort: e.target.value }),
     kbSortOptions: [{ value: 'recent', label: 'Recently indexed' }, { value: 'used', label: 'Most used' }, { value: 'name', label: 'Name A–Z' }],
     kbResultText: shown.length + ' of ' + B.length + ' bundles' + (s.kbTopic !== 'all' ? ' · ' + (TOPIC_BY[s.kbTopic] ? TOPIC_BY[s.kbTopic].label : (TOPICS.find((g) => g[0] === s.kbTopic) || ['', ''])[1]) : '') + (s.kbTagF ? ' · #' + s.kbTagF : ''),

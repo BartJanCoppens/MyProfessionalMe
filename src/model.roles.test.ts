@@ -177,7 +177,7 @@ describe('the counsellor team view', () => {
     expect(h.vm().domShort).toEqual(DOMAINS.map((d) => d[2]));
   });
   // Bug: the heat-map footer "Expected at next stage" is a hard-coded list that disagrees with TARGET, the firm's next-stage expectation.
-  it.fails('shows the firm\'s next-stage targets in the heat-map footer', () => {
+  it('shows the firm\'s next-stage targets in the heat-map footer', () => {
     expect(harness().vm().heatTargets).toEqual(TARGET.map((v) => 'L' + v));
   });
 });

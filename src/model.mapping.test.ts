@@ -214,7 +214,7 @@ describe('editing rights on the board', () => {
     expect(h.lastToast()).toBe('Outside your domain: Audit');
   });
   // Bug: the read-only note says only a System Admin edits the audience, but its Domain Admins and General Admins do too (kbVals uses whoEdits()).
-  it.fails('names who can edit a read-only audience', () => {
+  it('names who can edit a read-only audience', () => {
     expect(curr(domainAdmin(['Consulting']), { mapAud: 'Audit' }).vm().readOnlyNote).not.toMatch(/Only a System Admin/);
   });
   it('applies the allowed part of a mixed change and says what was refused', () => {
@@ -375,8 +375,8 @@ describe('the learner\'s eye', () => {
     const h = curr();
     expect(h.vm().readLabel).toBe('Read it as Robin');
     await h.vm().readAs();
-    expect(h.state.reads.me).toEqual({ text: 'This looks like a plan I can finish. The business-line items set the floor and the rest follows what I asked for.', fix: 'No change needed; check again after the next evaluation round.' });
-    expect(h.vm().read).toEqual(h.state.reads.me);
+    expect(h.vm().read).toEqual({ text: 'This looks like a plan I can finish. The business-line items set the floor and the rest follows what I asked for.', fix: 'No change needed; check again after the next evaluation round.' });
+    expect(Object.keys(h.state.reads)).toHaveLength(1);
     expect(h.state.readBusy).toBe(false);
   });
   it('does not read twice at once', async () => {
@@ -389,7 +389,7 @@ describe('the learner\'s eye', () => {
     stubWindow({ claude: { complete: async () => '{"text":"Too much.","fix":"Drop one."}' } });
     const h = harness({ access: systemAdmin(), config: { liveAssistant: true }, state: { screen: 'adminMap' } });
     await h.vm().readAs();
-    expect(h.state.reads.me).toEqual({ text: 'Too much.', fix: 'Drop one.' });
+    expect(h.vm().read).toEqual({ text: 'Too much.', fix: 'Drop one.' });
   });
   const persona = (stage: string, aud: Partial<Persona[4]>): Persona => ['p', 'Kim', 'Kim Learner', stage, { bl: 'Consulting', ind: null, tec: null, amb: null, pro: null, ...aud }];
   it('counts a learning that arrives through two audiences once', () => {

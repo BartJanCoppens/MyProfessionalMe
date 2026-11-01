@@ -38,19 +38,25 @@ describe('a catalogue loaded from the database', () => {
     expect(harness().vm().libItems.find((i) => i.id === 'L16')!.hoursLabel).toBe('30 min');
   });
   // Bug: renderVals() falls back to items[0] for the detail; with an empty catalogue (a fresh database) it throws on d0.di.
-  it.fails('renders with an empty catalogue', () => {
+  it('renders with an empty catalogue', () => {
     catalogue([]);
     expect(() => harness().vm()).not.toThrow();
   });
   // Bug: road() maps due dates through a fixed table (30 Nov 2026, Jan/Mar/Jun 2027); any other due date of a mandatory
   // item on the path (learnings.due is free text) gives cols[undefined] and the whole view-model throws.
-  it.fails('renders a mandatory learning due outside the four road quarters', () => {
+  it('renders a mandatory learning due outside the four road quarters', () => {
     catalogue(LEARN.map((r) => (r[0] === 'L17' ? ['L17', r[1], r[2], r[3], r[4], r[5], r[6], r[7], 'Dec 2026', r[9]] as Learn : r)));
     expect(() => harness().vm()).not.toThrow();
   });
   // Bug: curriculum() builds signal cards with byId[g.op.lid].title; once a learning a signal names (here L32) is removed from
   // the catalogue, renderVals() throws for every System or General Admin, on every screen.
-  it.fails('renders for an admin when a signal names a learning that was removed', () => {
+  it('places a cloud lane item due outside the four road quarters', () => {
+    catalogue(LEARN.map((r) => (r[0] === 'L17' ? ['L17', r[1], r[2], r[3], r[4], r[5], r[6], r[7], 'Dec 2028', r[9]] as Learn : r)));
+    const subject = person({ data: withProgress({}, { ambitions: [{ id: '1', text: 'Write better', horizon: '', doms: ['pers'], from: '', ids: ['L17'] }] }) });
+    const lane = harness({ subject, state: { view: 'road' } }).vm().roadLanes.find((l) => l.key === 'amb')!;
+    expect(lane.cells[3].items.map((i) => i.id)).toContain('L17');
+  });
+  it('renders for an admin when a signal names a learning that was removed', () => {
     catalogue(LEARN.filter((r) => r[0] !== 'L32'));
     expect(() => harness({ access: systemAdmin() }).vm()).not.toThrow();
   });
@@ -81,7 +87,7 @@ describe('results that arrive for someone else', () => {
   });
   // Bug: learner's-eye readings are stored under the persona key 'me' for every person, so after "View as" another
   // person the reading made for the previous one is still shown (the chat guards against this with chatFor).
-  it.fails('does not show a learner\'s-eye reading made for someone else', async () => {
+  it('does not show a learner\'s-eye reading made for someone else', async () => {
     const mine = harness({ access: systemAdmin(), state: { screen: 'adminMap' } });
     await mine.vm().readAs();
     await flush();

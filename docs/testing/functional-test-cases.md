@@ -11,7 +11,7 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 
 **Roles:** Learner (any signed-in person viewing themselves), Counsellor (viewing a counsellee), Domain Admin (one or more business lines), General Admin (all content, no users), System Admin (everything), No line/stage (a person whose profile has no business line or career stage).
 
-**Size:** 289 cases: 276 automated (7 of them document bugs with `it.fails`; two edge-case rows point to the cases that cover them) and 13 manual. Every one of the 511 tests is named at least once below.
+**Size:** 289 cases: 276 automated (7 of them documented bugs with `it.fails`, all fixed since; two edge-case rows point to the cases that cover them) and 13 manual. Every one of the 511 tests is named at least once below.
 
 ## 1. Sign-in and account (AUTH)
 
@@ -177,7 +177,7 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 | TEAM-03 | Counsellor | Counsellees, one with an overdue mandatory item | Open the roster | Initials, grade, readiness, hours, "1 overdue" or "On track" | `model.roles.test.ts › the counsellor team view › summarises each counsellee: initials, grade, readiness, hours and overdue items`<br>`logic/team.test.ts › memberSummary › is all zero for a counsellee without progress`<br>`logic/team.test.ts › memberSummary › counts a mandatory item past its deadline as overdue in its domain`<br>`logic/team.test.ts › memberSummary › does not count an accepted item as overdue`<br>`logic/team.test.ts › memberSummary › raises readiness and hours with progress on mapped items` |
 | TEAM-04 | Counsellor | — | "Open" a counsellee | Their app opens read-only on the map | `screens/screens.test.tsx › the team screen › lists counsellees and opens one`<br>`App.test.tsx › View as › opens a counsellee from My team` |
 | TEAM-05 | Counsellor | Overdue item | "Levels by domain" tab | Heat cells per domain with an overdue dot; back to roster | `model.roles.test.ts › the counsellor team view › switches between roster and levels by domain`<br>`screens/screens.test.tsx › the team screen › shows levels by domain with overdue items` |
-| TEAM-06 | Counsellor | — | Read "Expected at next stage" | The firm's next-stage targets (`TARGET`) | **bug** `model.roles.test.ts › the counsellor team view › shows the firm's next-stage targets in the heat-map footer` |
+| TEAM-06 | Counsellor | — | Read "Expected at next stage" | The firm's next-stage targets (`TARGET`) | `model.roles.test.ts › the counsellor team view › shows the firm's next-stage targets in the heat-map footer` |
 | TEAM-07 | Counsellor | Overdue counsellee | Look at the sidebar | "My team" badge with the number overdue | `App.test.tsx › the sidebar › badges counsellees with overdue mandatory items` |
 | TEAM-08 | Counsellor | — | Load counsellees; failure; switch person | Members with data; empty on failure; previous team dropped | `lib/hooks.test.tsx › useTeam › loads the counsellees with their learner data`<br>`lib/hooks.test.tsx › useTeam › shows nobody when the team cannot load`<br>`lib/hooks.test.tsx › useTeam › drops the previous person's team while the next one loads` |
 
@@ -195,7 +195,7 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 | VIEW-08 | Admin | Viewing someone | Change initials, colour, photo | Nothing saved or stored | `model.roles.test.ts › View as: someone else is read-only › changes no avatar` |
 | VIEW-09 | Admin | Viewing someone | Chat, save a proposal | Nothing sent or saved; another person's chat is never shown | `model.roles.test.ts › View as: someone else is read-only › starts no chat and saves no proposal`<br>`model.test.ts › the assistant chat › belongs to the person it was started for`<br>`model.edge.test.ts › results that arrive for someone else › shows the assistant chat only for the person it was started for` |
 | VIEW-10 | Admin | Viewing someone | Read copy | Names the viewed person ("Nobody names Kim …", "Kim has no business line yet") | `model.roles.test.ts › View as: someone else is read-only › names the viewed person in copy`<br>`model.map.test.ts › map copy › tells a viewer that the person they view has no line` |
-| VIEW-11 | Admin | Reading made for yourself in the learner's eye | View someone else on Curriculum mapping | Their own reading or none | **bug** `model.edge.test.ts › results that arrive for someone else › does not show a learner's-eye reading made for someone else` |
+| VIEW-11 | Admin | Reading made for yourself in the learner's eye | View someone else on Curriculum mapping | Their own reading or none | `model.edge.test.ts › results that arrive for someone else › does not show a learner's-eye reading made for someone else` |
 | VIEW-12 | Admin | Load fails | View as | Error, "Try again" works; people list reloads after changes | `lib/hooks.test.tsx › useSubject › reports a failed load and retries`<br>`lib/hooks.test.tsx › useSubject › reports learner data that does not load`<br>`lib/hooks.test.tsx › useSubject › reloads the people list and the subject` |
 | VIEW-13 | Admin | Real project | Try a direct write to someone else's rows | Refused by RLS | manual: covered by `supabase/tests/rls.sql`, which is not run in unit tests |
 
@@ -247,7 +247,7 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 | CUR-14 | Admin | Ambition or profile audience | Try mandatory | Stays advised, described as a suggestion | `model.mapping.test.ts › the selection dock › keeps ambition audiences advised and describes them as suggestions` |
 | CUR-15 | Admin | Card selected | "Open in library →" | Detail with back to mapping | `model.mapping.test.ts › the selection dock › opens the learning in the library and returns to mapping` |
 | CUR-16 | Domain Admin | Another line's audience | Drop or change | Read-only; "Outside your domain: …"; mixed changes apply the allowed part | `model.mapping.test.ts › editing rights on the board › lets a Domain Admin read another line without changing it`<br>`model.mapping.test.ts › editing rights on the board › applies the allowed part of a mixed change and says what was refused`<br>`model.test.ts › content admins › a General Admin maps for every business line and audience; a Domain Admin only for their own line` |
-| CUR-17 | Domain Admin | Another line's audience | Read the read-only note | Names who can edit it (its Domain Admins or a General Admin) | **bug** `model.mapping.test.ts › editing rights on the board › names who can edit a read-only audience` |
+| CUR-17 | Domain Admin | Another line's audience | Read the read-only note | Names who can edit it (its Domain Admins or a General Admin) | `model.mapping.test.ts › editing rights on the board › names who can edit a read-only audience` |
 | CUR-18 | General Admin | — | Open every lens | Editable everywhere | `model.mapping.test.ts › editing rights on the board › lets a General Admin edit every lens` |
 | CUR-19 | Each admin role | — | Read signals | All open signals for System/General; none for Domain Admins | `model.mapping.test.ts › signals › show every open signal to a System or General Admin and none to a Domain Admin` |
 | CUR-20 | Admin | — | Read a signal | Change, where, impact and evidence | `model.mapping.test.ts › signals › describe the change, where it lands and its impact` |
@@ -266,7 +266,7 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 | CUR-33 | Admin | — | Click "Publish" twice quickly | Published once | `model.mapping.test.ts › publishing › publishes once when clicked twice` |
 | CUR-34 | Admin | Unsent edits, reload after publishing or saving | Reload | Stored maps with unsent edits laid over; unknown learnings dropped | `lib/contentStore.test.ts › mergeMaps › lays unsent local edits over the reloaded maps and drops unknown learnings`<br>`lib/contentStore.test.ts › mappingChanges › writes what the map holds for each pending key and deletes what it dropped`<br>`lib/stores.test.ts › publishing mappings › upserts changes and deletes dropped mappings`<br>`lib/stores.test.ts › publishing mappings › accepts a delete of a mapping that was never stored` |
 | CUR-35 | Admin | Mapping to a learning the viewer cannot see | Open mapping | Renders without it | `model.test.ts › mappings to learnings the viewer cannot see › render without crashing`<br>`model.edge.test.ts › a catalogue loaded from the database › drops mappings to learnings that are gone from every screen` |
-| CUR-36 | System or General Admin | A learning a signal names was removed | Open any screen | App renders, the signal is skipped | **bug** `model.edge.test.ts › a catalogue loaded from the database › renders for an admin when a signal names a learning that was removed` |
+| CUR-36 | System or General Admin | A learning a signal names was removed | Open any screen | App renders, the signal is skipped | `model.edge.test.ts › a catalogue loaded from the database › renders for an admin when a signal names a learning that was removed` |
 | CUR-37 | Admin | — | Drag with a mouse in a real browser | Drop target highlights, card moves | manual: native HTML5 drag-and-drop visuals need a real browser; the handlers are tested in CUR-06 to CUR-10 |
 
 ## 12. Knowledge library (KB), Domain, General and System Admin
@@ -284,7 +284,7 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 | KB-09 | Admin | — | Open a bundle; back | Overview with fresh test state; list again | `kbVals.test.ts › opening a bundle › opens on the overview with fresh test state, and goes back to the list`<br>`App.test.tsx › an admin walking through the administration › browses the Knowledge library, opens a bundle and every tab` |
 | KB-10 | Admin | Bundle open | Read tabs and facts; open a concept | Counts on tabs; facts; concept opens its file | `kbVals.test.ts › opening a bundle › labels the tabs with counts`<br>`kbVals.test.ts › opening a bundle › shows the facts of the bundle`<br>`kbVals.test.ts › opening a bundle › opens a concept file from the overview` |
 | KB-11 | Admin | Unknown selection | Open | Falls back to the first bundle | `kbVals.test.ts › opening a bundle › falls back to the first bundle for an unknown selection` |
-| KB-12 | Admin | No bundles at all (fresh database) | Open the Knowledge library | Empty list | **bug** `kbVals.test.ts › an empty Knowledge library › renders without bundles` |
+| KB-12 | Admin | No bundles at all (fresh database) | Open the Knowledge library | Empty list | `kbVals.test.ts › an empty Knowledge library › renders without bundles` |
 | KB-13 | Admin | Own bundle | Edit; rename, describe, access, freshness | Saved shortly after, last edit wins | `kbVals.test.ts › editing the overview › toggles edit mode`<br>`kbVals.test.ts › editing the overview › renames, describes and re-scopes a bundle and saves it shortly after`<br>`screens/screens.test.tsx › the Knowledge library screen › searches, opens a bundle and edits its overview`<br>`lib/stores.test.ts › saving bundles › waits for a burst of edits and saves the latest version once`<br>`lib/stores.test.ts › saving bundles › skips a bundle that is gone when the timer fires` |
 | KB-14 | Admin | — | Main and secondary topics | Distinct; add, refuse duplicates, remove | `kbVals.test.ts › editing the overview › moves the main topic and keeps secondary topics distinct` |
 | KB-15 | General/System Admin | — | Give a bundle to a line / firm-wide | Line set or cleared | `kbVals.test.ts › editing the overview › gives a bundle to a line` |
@@ -372,8 +372,8 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 
 | ID | Role | Preconditions | Steps | Expected | Covered by |
 |---|---|---|---|---|---|
-| EDGE-01 | Any | Fresh database: no learnings | Open the app | Renders an empty library and map | **bug** `model.edge.test.ts › a catalogue loaded from the database › renders with an empty catalogue` |
-| EDGE-02 | Learner | A mandatory learning on the path is due on a date outside 30 Nov 2026, Jan, Mar and Jun 2027 | Open the app | Renders; the item lands in a quarter | **bug** `model.edge.test.ts › a catalogue loaded from the database › renders a mandatory learning due outside the four road quarters` |
+| EDGE-01 | Any | Fresh database: no learnings | Open the app | Renders an empty library and map | `model.edge.test.ts › a catalogue loaded from the database › renders with an empty catalogue` |
+| EDGE-02 | Learner | A mandatory learning on the path is due on a date outside 30 Nov 2026, Jan, Mar and Jun 2027 | Open the app | Renders; the item lands in a quarter | `model.edge.test.ts › a catalogue loaded from the database › renders a mandatory learning due outside the four road quarters` |
 | EDGE-03 | Learner | Progress on a learning that no longer exists | Open the map | Ignored | `model.edge.test.ts › unknown ids and empty data › ignores progress on a learning that no longer exists` |
 | EDGE-04 | Any | Selection of an unknown learning | Open map / mapping | No dock | `model.edge.test.ts › unknown ids and empty data › shows no selection dock for an unknown selection` |
 | EDGE-05 | Learner | Ambition with an unknown domain key | Open the profile | Key shown as the label | `model.edge.test.ts › unknown ids and empty data › names an unknown domain in an ambition by its key` |
@@ -382,9 +382,9 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 | EDGE-08 | Admin | Double clicks | Save, publish, accept | Covered in ADM-17, CUR-33, DET-18 | see ADM-17, CUR-33, DET-18 |
 | EDGE-09 | Admin | Stale async results | Late chat, retrieval and team results | Covered in VIEW-09, VIEW-11, KB-38, TEAM-08, STORE-06 | see those cases |
 
-## Bugs found
+## Bugs found and fixed
 
-Each one has an `it.fails` test, named in the case above. App code was left unchanged.
+Each one first had an `it.fails` test, named in the case above. All seven were fixed on 1 Nov 2026 (branch `fix/functional-bugs`) and their tests are plain `it` now. EDGE-02 had a second occurrence in the road's cloud lanes, covered by `model.edge.test.ts › places a cloud lane item due outside the four road quarters`.
 
 | Case | What goes wrong | Where | Reproduce |
 |---|---|---|---|
