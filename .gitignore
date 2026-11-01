@@ -32,3 +32,6 @@ dist-ssr
 
 # Claude Design export: references the TaxConnect design system; keep out of the public repo.
 Design/
+
+# Test coverage reports
+coverage
