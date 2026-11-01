@@ -126,7 +126,7 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
         <div style={{ fontWeight: 600, color: '#fff', fontSize: 13 }}>{vm.who.name}</div>
         <div style={{ fontSize: 12, color: '#858c82', marginTop: 2 }}>{vm.who.roleLine}</div>
         <div style={{ marginTop: 10, height: 4, borderRadius: 999, background: 'rgba(255,255,255,.08)', overflow: 'hidden' }}><div style={{ height: '100%', background: '#86BC25', width: vm.readinessW }} /></div>
-        <div style={{ fontSize: 11.5, color: '#a9afa5', marginTop: 6 }}>{vm.readiness}% ready for {vm.who.nextStage}</div>
+        <div style={{ fontSize: 11.5, color: '#a9afa5', marginTop: 6 }}>{vm.who.readinessLine}</div>
       </div>
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '0 8px' }}>
         <NavGroupHeader>Me</NavGroupHeader>

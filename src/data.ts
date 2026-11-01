@@ -6,7 +6,7 @@ export const DOMAINS: [string, string, string][] = [
   ['prof','Professional skills','Prof. skills'],['ind','Industry & market','Industry'],['reg','Regulations','Regulation'],
   ['corp','Corporate functions','Corp. fn.'],['tec','Technology','Technol.'],['lead','Leadership','Leading']];
 export const LEVELS = ['Foundation','Practitioner','Advanced','Expert','Thought leader'];
-export const STAGES = ['Analyst','Consultant','Senior consultant','Manager','Senior manager'];
+export const STAGES = ['Analyst','Consultant','Senior consultant','Manager','Senior manager','Director','Partner'];
 export const BLS = ['Consulting','Audit','Tax & Legal'];
 export const TARGET = [4,3,3,4,3,3,2,3,3];
 // id,title,dom,lvl,format,source,hours,cpd,due,why (progress is per person, in Supabase)
@@ -102,8 +102,9 @@ export const AUDS: Record<string, [string, string, number][]> = {
  pro: [['pro:blue','Cool blue first',121],['pro:red','Fiery red first',74],['pro:green','Earth green first',96],['pro:yellow','Sunshine yellow first',83]]
 };
 export const AUD_INFO: Record<string, { lens: string; name: string; reach: number }> = {}; Object.keys(AUDS).forEach((l) => AUDS[l].forEach((a) => { AUD_INFO[a[0]] = { lens: l, name: a[1], reach: a[2] }; }));
-export const STAGE_FR = [.19,.25,.28,.17,.11];
-export const STG_SHORT = ['Analyst','Consultant','Senior','Manager','Sr manager'];
+// Share of an audience at each stage, for reach estimates (sums to 1).
+export const STAGE_FR = [.19,.25,.26,.15,.08,.04,.03];
+export const STG_SHORT = ['Analyst','Consultant','Senior','Manager','Sr manager','Director','Partner'];
 export const AUD_MAPS0: Record<string, Mapping[]> = {
  'ind:energy':[['L14','Consultant','advised'],['L38','Senior consultant','advised'],['L34','Senior consultant','advised'],['L18','Senior consultant','mandatory']],
  'ind:health':[['L22','Consultant','advised']], 'ind:whole':[['L2','Senior consultant','advised']], 'ind:public':[],

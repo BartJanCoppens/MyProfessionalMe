@@ -418,6 +418,7 @@ export class Logic {
         name: this.subject.name, readOnly: this.subject.readOnly,
         roleLine: [this.subject.stage, this.subject.businessLine || 'No business line yet'].filter(Boolean).join(' · '),
         nextStage: STAGES[this.myStage() + 1] || 'the next stage',
+        readinessLine: STAGES[this.myStage() + 1] ? readiness + '% ready for ' + STAGES[this.myStage() + 1] : STAGES[this.myStage()] + ' · top of the career path',
         counsellorLine: this.subject.counsellor ? 'Counsellor: ' + this.subject.counsellor.name : 'No counsellor',
       },
       bl, readiness, readinessW: readiness + '%', readinessFrac: readiness / 100, readinessDash: (readiness / 100 * 2 * Math.PI * 38) + ' ' + (2 * Math.PI * 38),

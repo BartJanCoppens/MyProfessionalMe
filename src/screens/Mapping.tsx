@@ -1,12 +1,13 @@
 import type { CSSProperties } from 'react';
 import { Banner, Button, ChatBubble, FilterChip, Hover, Input, LinkButton, PageTitle, PillToggle, SegmentedControl, StatusChip, Tag } from '../ds';
 import type { VM } from '../model';
+import { STAGES } from '../data';
 
 const card: CSSProperties = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' };
 const cardHead: CSSProperties = { padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#fafbf8' };
 const label: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
 const ellipsis = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } as const;
-const COV_COLS = 'minmax(130px,1.3fr) repeat(5,minmax(0,1fr)) 62px';
+const COV_COLS = 'minmax(130px,1.3fr) repeat(' + STAGES.length + ',minmax(0,1fr)) 62px';
 
 export default function AdminMappingScreen({ vm }: { vm: VM }) {
   return (
@@ -218,7 +219,7 @@ function Board({ vm }: { vm: VM }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: vm.lensColor }} /><span style={{ fontWeight: 600 }}>{vm.lensLabel} · {vm.audName}</span><span style={{ fontSize: 12, color: '#5a6058' }}>{vm.audSummary}</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(176px,1fr))', gap: 10, minWidth: 920 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + STAGES.length + ',minmax(176px,1fr))', gap: 10, minWidth: STAGES.length * 186 }}>
           {vm.stageCols.map((sc) => (
             <div key={sc.name} onDragOver={sc.onDragOver} onDragLeave={sc.onDragLeave} onDrop={sc.onDrop}
               style={{ background: sc.bg, border: '1px ' + sc.bdStyle + ' ' + sc.bd, boxShadow: sc.ring, borderRadius: 6, display: 'flex', flexDirection: 'column', minHeight: 360, transition: 'border-color .15s,box-shadow .15s' }}>

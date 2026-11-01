@@ -55,6 +55,8 @@ with u as (update public.profiles set full_name='Me' where id='00000000-0000-000
 set local request.jwt.claims = '{"sub":"d644d4da-61b0-42ee-bfe9-52d6e7367723","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'SA sees every test profile', '6', count(*)::text from public.profiles where id::text like '00000000-0000-0000-0000-0000000000a_';
 with i as (insert into public.user_roles (user_id, role, business_line) values ('00000000-0000-0000-0000-0000000000a3','domain_admin','Tax & Legal') returning 1) insert into results (check_name, expected, actual) select 'SA grants Tax&Legal domain admin', '1 rows', count(*)||' rows' from i;
+with u as (update public.profiles set career_stage='Director' where id='00000000-0000-0000-0000-0000000000a3' returning 1) insert into results (check_name, expected, actual) select 'SA sets stage Director', '1 rows', count(*)||' rows' from u;
+with u as (update public.profiles set career_stage='Partner' where id='00000000-0000-0000-0000-0000000000a3' returning 1) insert into results (check_name, expected, actual) select 'SA sets stage Partner', '1 rows', count(*)||' rows' from u;
 do $$ begin
   begin delete from public.user_roles where role='system_admin';
     insert into results (check_name, expected, actual) values ('Delete last system admin', 'blocked', 'allowed');

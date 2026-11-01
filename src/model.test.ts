@@ -74,3 +74,17 @@ describe('a person without a business line', () => {
     expect(viewModel(newcomer()).noLineNote).toBe('');
   });
 });
+
+describe('the Director and Partner stages', () => {
+  it('Director follows Senior manager', () => {
+    const vm = viewModel(newcomer({ stage: 'Senior manager' }));
+    expect(vm.who.nextStage).toBe('Director');
+    expect(vm.who.readinessLine).toBe('0% ready for Director');
+  });
+  it('Partner follows Director', () => {
+    expect(viewModel(newcomer({ stage: 'Director' })).who.readinessLine).toBe('0% ready for Partner');
+  });
+  it('is the top of the career path', () => {
+    expect(viewModel(newcomer({ stage: 'Partner' })).who.readinessLine).toBe('Partner · top of the career path');
+  });
+});

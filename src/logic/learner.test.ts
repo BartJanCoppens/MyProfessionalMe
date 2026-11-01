@@ -18,10 +18,12 @@ describe('levelsByDomain', () => {
 describe('stageIndex', () => {
   it('defaults to the first stage when unknown', () => {
     expect(stageIndex(null)).toBe(0);
-    expect(stageIndex('Partner')).toBe(0);
+    expect(stageIndex('Chairman')).toBe(0);
   });
   it('finds a known stage', () => {
     expect(stageIndex('Senior consultant')).toBe(2);
+    expect(stageIndex('Director')).toBe(5);
+    expect(stageIndex('Partner')).toBe(6);
   });
 });
 
