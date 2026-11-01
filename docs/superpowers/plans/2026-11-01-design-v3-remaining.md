@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status (1 Nov 2026, owner's call):** Part D (Knowledge library) ships first, on branch `feature/knowledge-library`. Podcasts and reels are for later: Tasks 1–4 are built and reviewed on the parked branch `feature/design-v3-b`, whose migration `20261101095403_self_complete_media.sql` must not be pushed until that branch ships. Part C waits.
+
 **Goal:** Implement the parts of Claude Design v3 not yet in the app: learner media and domain zoom (Part B), Create & share with peer review (Part C), and the admin Knowledge library (Part D).
 
 **Architecture:** As before: design data goes verbatim into `src/data.ts`; logic lives in small pure modules under `src/logic/`, unit-tested and called by `Logic.renderVals()`; screens are transcribed from the template. Everything works on the *subject* model from Part A (`useSubject`, `persist()`, read-only View as). Data that other people act on (contributions and reviews) goes into Supabase. Catalogue-like data (bundles) stays in memory.

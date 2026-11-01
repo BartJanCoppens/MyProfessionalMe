@@ -25,6 +25,7 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 - `src/lib/supabase.ts` (client, `manageUsers()`, password rule), `src/lib/useAuth.ts` (session, profile, roles → `Access`).
 - The **subject** is the person the app shows: `src/lib/useSubject.ts` (who, chosen via "View as"; read-only when not yourself), `src/lib/learnerStore.ts` (their progress, ambitions, interests, avatar prefs), `src/lib/useTeam.ts` (their counsellees). `Logic` takes the subject and writes through `persist()`, which refuses when read-only.
 - `src/logic/`: pure, unit-tested derivations (`learner.ts` levels and stage, `team.ts` counsellee summary). `src/screens/SignIn.tsx`, `src/screens/Users.tsx` (User management).
+- Knowledge library (admin, design v3): `src/kbVals.ts` builds `vm.kb` (null off-screen), `src/screens/Knowledge.tsx` renders it, `src/logic/okf.ts` holds retrieval (never reads client or licensed sources), OKF v0.2 files, import and the tar download. Bundles are in memory like the catalogue. The full design export lives in `Design/` (git-ignored; the design tool's reader stops at 256 KB). Podcasts, reels, library covers and the map zoom are parked on branch `feature/design-v3-b`.
 - `supabase/migrations/`: `profiles`, `user_roles`, RLS, private helper functions, first-admin bootstrap. `supabase/functions/manage-users/`: create / remove / reset password / change own password via the auth admin API.
 
 ## Conventions
@@ -53,4 +54,4 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 
 ## Assistants
 
-Three features call `window.claude.complete` when it exists (only inside Claude Design): the profile chat ("Talk it through"), the curriculum copilot, and "Read it as …" in the learner's eye. Elsewhere they fall back to scripted replies in `Logic.scripted()`, `scriptedCp()` and `scriptedRead()`. To make it live, add a server-side proxy to the Claude API; never put an API key in the client bundle.
+Four features call `window.claude.complete` when it exists (only inside Claude Design): the profile chat ("Talk it through"), the curriculum copilot, "Read it as …" in the learner's eye, and the Knowledge library's test retrieval. Elsewhere they fall back to scripted replies in `Logic.scripted()`, `scriptedCp()`, `scriptedRead()` and the top passages (`kbVals.ts`). To make it live, add a server-side proxy to the Claude API; never put an API key in the client bundle.
