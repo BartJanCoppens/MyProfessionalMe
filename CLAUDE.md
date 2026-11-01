@@ -10,7 +10,7 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 - `npm run build`: `tsc -b` then Vite build (use this as the typecheck)
 - `npm run lint`: oxlint
 - `supabase db push` / `supabase config push` / `supabase functions deploy manage-users --use-api`: apply migrations, auth config and the edge function to the linked project (no Docker needed). `supabase db advisors --linked` after schema changes.
-- `npm test`: Vitest unit tests (`src/**/*.test.ts`). `npm run test:db`: row-level security checks in `supabase/tests/rls.sql` against the linked project, inside a transaction that rolls back; add a case there for every policy change.
+- `npm test`: Vitest tests (`src/**/*.test.ts`, plus `*.test.tsx` screen tests on jsdom); `npm run test:coverage` adds a v8 coverage report. Tests never reach Supabase (`src/test/setup.ts` swaps in a fake client); `src/test/harness.ts` builds a `Logic` for view-model tests. What each test covers is catalogued in `docs/testing/functional-test-cases.md`. `npm run test:db`: row-level security checks in `supabase/tests/rls.sql` against the linked project, inside a transaction that rolls back; add a case there for every policy change.
 - `npm run agents`: regenerate `AGENTS.md` from this file. Run it after every edit to `CLAUDE.md`; never edit `AGENTS.md` by hand.
 
 ## Layout

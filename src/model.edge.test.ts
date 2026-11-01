@@ -29,7 +29,7 @@ describe('a catalogue loaded from the database', () => {
     expect(vm.covRows[0].cells[0].label).toBe('4');
     expect(vm.libItems.map((i) => i.id)).not.toContain('L7');
   });
-  it('shows a draft only to admins who can see it', () => {
+  it('counts only the learnings in the loaded catalogue', () => {
     catalogue(LEARN.filter((r) => r[0] !== 'L22'));
     expect(harness().vm().libCount).toBe(String(LEARN.length));
   });
