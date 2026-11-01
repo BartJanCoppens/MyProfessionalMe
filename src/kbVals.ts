@@ -3,7 +3,7 @@ import type { ChangeEvent, KeyboardEvent } from 'react';
 import { KB_ACCESS, KB_TYPES, RAG_OPTS, RAG_PRESETS, TOPIC_BY, TOPICS, isoDate, mkModels, ragOptLabel, slugify } from './data';
 import type { Logic } from './model';
 import { importBundle, okfFiles, rankHits, tarBytes } from './logic/okf';
-import { saveBundleSoon } from './lib/contentStore';
+import { saveBundleNow, saveBundleSoon } from './lib/contentStore';
 import type { AppState, Bundle, BundleSource, RagModel } from './types';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
@@ -18,14 +18,16 @@ const fresh = { kbValid: null, kbHits: null, kbAnswer: '', kbBusy: false };
 // Each test question gets a number; an answer that arrives after another question or bundle is dropped.
 let askSeq = 0;
 
-// The bundle being edited, updated from the latest state (also from timers and after awaits) and saved to the database shortly after.
-const patchBundle = (L: Logic, id: string, patch: Partial<Bundle> | ((x: Bundle) => Partial<Bundle>)) =>
-  L.setState((s) => ({ bundles: s.bundles.map((x) => {
-    if (x.id !== id) return x;
-    const nb = { ...x, ...(typeof patch === 'function' ? patch(x) : patch) }; saveBundleSoon(nb, (m) => L.say('Not saved · ' + m)); return nb;
-  }) }));
-// A new bundle belongs to the first line this admin edits (firm-wide for General and System Admins).
-const addBundle = (L: Logic, b: Bundle) => { saveBundleSoon(b, (m) => L.say('Not saved · ' + m), 0); return b; };
+// Bundles as last rendered; a scheduled save writes the latest version.
+const LATEST = new Map<string, Bundle>();
+const notSaved = (L: Logic) => (m: string) => L.say('Not saved · ' + m + ' · your change is still on screen; edit again to retry');
+// The bundle being edited, updated from the latest state (also from timers and after awaits) and saved shortly after.
+const patchBundle = (L: Logic, id: string, patch: Partial<Bundle> | ((x: Bundle) => Partial<Bundle>)) => {
+  L.setState((s) => ({ bundles: s.bundles.map((x) => (x.id === id ? { ...x, ...(typeof patch === 'function' ? patch(x) : patch) } : x)) }));
+  saveBundleSoon(id, () => LATEST.get(id), notSaved(L));
+};
+// A new bundle belongs to the first line this admin edits (firm-wide for General and System Admins) and is stored at once.
+const addBundle = (L: Logic, b: Bundle) => { saveBundleNow(b, notSaved(L)); return b; };
 
 async function ask(L: Logic, b: Bundle, m: RagModel, q0: string) {
   const q = (q0 || '').trim(); if (!q || L.state.kbBusy) return;
@@ -57,6 +59,7 @@ async function importFiles(L: Logic, list: FileList | null) {
 
 export function kbVals(L: Logic) {
   const s = L.state;
+  s.bundles.forEach((b) => LATEST.set(b.id, b));
   return { navKb: s.screen === 'adminKb', goKb: () => { L.go('adminKb'); L.setState({ kbOpen: false }); }, kbCount: String(s.bundles.length), kb: s.screen === 'adminKb' ? kbScreen(L) : null };
 }
 

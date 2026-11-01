@@ -6,7 +6,7 @@ import type { Access, AppState } from './types';
 import { DOMAINS, LEARN } from './data';
 import * as store from './lib/contentStore';
 
-vi.mock('./lib/contentStore', async (orig) => ({ ...(await orig<object>()), saveLearning: vi.fn(async () => {}), publishMappings: vi.fn(async () => {}), saveBundleSoon: vi.fn() }));
+vi.mock('./lib/contentStore', async (orig) => ({ ...(await orig<object>()), saveLearning: vi.fn(async () => {}), removeLearning: vi.fn(async () => {}), publishMappings: vi.fn(async () => {}), saveBundleSoon: vi.fn(), saveBundleNow: vi.fn() }));
 
 const cfg: Config = { businessLine: 'Consulting', startScreen: 'map', homeView: 'constellation', showMarks: true, liveAssistant: false, motion: false };
 const ref = <T,>(current: T) => ({ current });
@@ -262,7 +262,15 @@ describe('content admins', () => {
     const { L, reload } = build(consulting, { libForm: { ...build(consulting).L.blankForm(), title: 'Pricing basics', hours: '1,5' } });
     await L.saveLearningForm('draft');
     expect(store.saveLearning).toHaveBeenCalledWith(expect.objectContaining({ title: 'Pricing basics', hours: 1.5, business_line: 'Consulting', status: 'draft' }), undefined);
-    expect(reload).toHaveBeenCalledWith('catalogue');
+    expect(reload).toHaveBeenCalledWith();
+  });
+  it('will not remove a learning that another line still uses', async () => {
+    vi.mocked(store.removeLearning).mockClear();
+    const maps = { ...initState(cfg).maps, Audit: [['L30', 'Analyst', 'advised']] as [string, string, string][] };
+    const { L, sink } = build(consulting, { maps, libForm: { ...build(consulting).L.blankForm(), id: 'L30', title: 'Own learning' } });
+    await L.removeLearningForm();
+    expect(store.removeLearning).not.toHaveBeenCalled();
+    expect(sink.find((p) => 'toast' in p)!.toast).toMatch(/^Still mapped for Audit, Tax & Legal · ask their admins to unmap it before you remove it$/);
   });
   it('publishes pending curriculum changes to the database', async () => {
     vi.mocked(store.publishMappings).mockClear();
@@ -270,7 +278,7 @@ describe('content admins', () => {
     const { L, reload } = build(consulting, { maps, pending: { 'Consulting|L5': true, 'Consulting|L7': true } });
     await L.publish();
     expect(store.publishMappings).toHaveBeenCalledWith({ upserts: [{ audience: 'Consulting', learning_id: 'L5', stage: 'Partner', obligation: 'advised' }], deletes: [{ audience: 'Consulting', learning_id: 'L7' }] });
-    expect(reload).toHaveBeenCalledWith('maps');
+    expect(reload).toHaveBeenCalledWith(['Consulting|L5', 'Consulting|L7']);
   });
   it('lets a Domain Admin edit only their own line\'s bundles', () => {
     const bundles = initState(cfg).bundles.map((b) => ({ ...b, line: b.id === 'B1' ? 'Consulting' : 'Tax & Legal' }));
@@ -283,5 +291,13 @@ describe('content admins', () => {
     own.L.renderVals().kb!.kbs.reindex();
     expect(own.sink.some((p) => 'bundles' in p)).toBe(true);
     expect(store.saveBundleSoon).toHaveBeenCalled();
+  });
+});
+
+describe('mappings to learnings the viewer cannot see', () => {
+  it('render without crashing', () => {
+    const maps = { ...initState(cfg).maps, 'Tax & Legal': [['L999', 'Senior manager', 'mandatory']] as [string, string, string][] };
+    expect(() => viewModel(newcomer(), undefined, { maps, screen: 'adminMap' })).not.toThrow();
+    expect(() => viewModel(newcomer(), undefined, { maps })).not.toThrow();
   });
 });

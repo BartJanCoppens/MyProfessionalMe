@@ -25,6 +25,8 @@ const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!
 type Evidence = { id: string; text: string; src: string };
 type ChatReply = { reply: string; interests?: { label: string; domain: string }[]; ambition?: Proposal['ambition'] };
 
+// Saves in flight (learning form, publishing); a second click while one runs does nothing.
+const BUSY = new Set<string>();
 // Publication status in the admin library: chip status and label.
 const PUB_STATUS: Record<LearnMeta['status'], [string, string]> = { published: ['accepted', 'Published'], review: ['clarification', 'Needs review'], draft: ['not-started', 'Draft'] };
 
@@ -66,8 +68,8 @@ export class Logic {
   readonly reloadSubject: () => Promise<void>;
   // Level reached per domain (DOMAINS order) from the subject's accepted learnings.
   readonly levels: number[];
-  readonly reloadContent: (what: 'catalogue' | 'maps') => Promise<void>;
-  constructor(state: AppState, setState: SetState, props: Config, refs: Refs, access: Access, subject: Subject, reloadSubject: () => Promise<void>, reloadContent: (what: 'catalogue' | 'maps') => Promise<void> = async () => {}) {
+  readonly reloadContent: (sent?: string[]) => Promise<void>;
+  constructor(state: AppState, setState: SetState, props: Config, refs: Refs, access: Access, subject: Subject, reloadSubject: () => Promise<void>, reloadContent: (sent?: string[]) => Promise<void> = async () => {}) {
     this.state = state; this.setState = setState; this.props = props; this.refs = refs; this.access = access;
     this.subject = subject; this.reloadSubject = reloadSubject; this.reloadContent = reloadContent;
     this.levels = levelsByDomain(subject.data.progress, LEARN);
@@ -182,29 +184,42 @@ export class Logic {
     const m = LEARN_META[r[0]] || { line: null, status: 'published' };
     return { id: r[0], title: r[1], domain: r[2], level: String(r[3]), format: r[4], source: r[5], hours: String(r[6]), cpd: r[7] ? String(r[7]) : '', why: r[9], line: m.line || '', status: m.status };
   }
+  // Audiences this learning is mapped to that this admin cannot edit: removing it or making it a draft would change their paths.
+  foreignAudiences(id: string) { return Object.keys(this.state.maps).filter((a) => this.state.maps[a].some((m) => m[0] === id) && !this.canEditAud(a)).map((a) => AUD_INFO[a]?.name || a); }
   async saveLearningForm(status: LearnMeta['status']) {
-    const f = this.state.libForm; if (!f) return;
+    const f = this.state.libForm; if (!f || BUSY.has('learning')) return;
     const hours = Number(f.hours.replace(',', '.')), cpd = Number((f.cpd || '0').replace(',', '.'));
     if (!f.title.trim()) { this.say('Give the learning a title'); return; }
     if (!(hours > 0)) { this.say('Effort must be a number of hours above zero'); return; }
     if (!(cpd >= 0)) { this.say('CPD units must be a number'); return; }
+    const foreign = f.id && status === 'draft' ? this.foreignAudiences(f.id) : [];
+    if (foreign.length) { this.say('Still mapped for ' + foreign.join(', ') + ' · ask their admins to unmap it before it becomes a draft'); return; }
     const old = f.id ? LEARN_BY[f.id] : null;
+    BUSY.add('learning');
     try {
       await saveLearning({ title: f.title.trim(), domain: f.domain, level: +f.level, format: f.format, source: f.source.trim(), hours, cpd, due: old ? old[8] : '', why: f.why.trim(), business_line: f.line || null, status }, f.id || undefined);
-      await this.reloadContent('catalogue');
+      await this.reloadContent();
       this.setState({ drawerOpen: false, libForm: null });
       this.say((status === 'draft' ? 'Saved as draft · visible to admins only' : status === 'review' ? 'Saved · marked as needing review' : 'Published · learners see it in the library') + ' · ' + this.lineName(f.line || null));
     } catch (err) { this.say((err as Error).message); }
+    finally { BUSY.delete('learning'); }
   }
   async removeLearningForm() {
-    const f = this.state.libForm; if (!f?.id) return;
-    try { await removeLearning(f.id); await this.reloadContent('catalogue'); this.setState({ drawerOpen: false, libForm: null }); this.say('Removed “' + f.title + '” and its curriculum mappings'); }
+    const f = this.state.libForm; if (!f?.id || BUSY.has('learning')) return;
+    const foreign = this.foreignAudiences(f.id);
+    if (foreign.length) { this.say('Still mapped for ' + foreign.join(', ') + ' · ask their admins to unmap it before you remove it'); return; }
+    BUSY.add('learning');
+    try { await removeLearning(f.id); await this.reloadContent(); this.setState({ drawerOpen: false, libForm: null }); this.say('Removed “' + f.title + '” and its curriculum mappings'); }
     catch (err) { this.say((err as Error).message); }
+    finally { BUSY.delete('learning'); }
   }
   async publish() {
-    const ch = mappingChanges(this.state.maps, this.state.pending), n = ch.upserts.length + ch.deletes.length;
-    try { await publishMappings(ch); await this.reloadContent('maps'); this.say('Published · ' + n + ' change' + (n > 1 ? 's' : '') + ' now live on every map they reach'); }
+    const sent = Object.keys(this.state.pending), ch = mappingChanges(this.state.maps, this.state.pending), n = ch.upserts.length + ch.deletes.length;
+    if (!n || BUSY.has('publish')) return;
+    BUSY.add('publish');
+    try { await publishMappings(ch); await this.reloadContent(sent); this.say('Published · ' + n + ' change' + (n > 1 ? 's' : '') + ' now live on every map they reach'); }
     catch (err) { this.say((err as Error).message); }
+    finally { BUSY.delete('publish'); }
   }
   // System Admins edit every audience; Domain Admins only the business-line audiences they administer.
   canEditAud(aud: string) { return AUD_INFO[aud]?.lens === 'bl' ? this.canEditLine(aud) : this.access.isSystem || !!this.access.isGeneral; }
@@ -756,12 +771,15 @@ export class Logic {
     if (!res || !res.reply) res = this.scriptedCp(text);
     this.setState({ cpBusy: false, cpReply: res.reply, cpOpsP: this.validOps(res.ops) });
   }
+  // Mappings whose learning this viewer can see (drafts are hidden from those who cannot edit them).
+  visibleMaps() { return Object.fromEntries(Object.entries(this.state.maps).map(([k, v]) => [k, v.filter((m) => LEARN_BY[m[0]])])); }
   curriculum(items: Item[], byId: Record<string, Item>) {
     const s = this.state, lens = s.mapLens, L = LENSES.find((l) => l[0] === lens)!, auds = AUDS[lens];
+    const maps = this.visibleMaps();
     const ownLine = this.access.isSystem || this.access.domains.includes(this.bl()) ? this.bl() : this.access.domains[0] || this.bl();
     const audKey = s.mapAud && AUD_INFO[s.mapAud] && AUD_INFO[s.mapAud].lens === lens ? s.mapAud : (lens === 'bl' ? ownLine : auds[0][0]);
     const editable = this.canEditAud(audKey);
-    const ai = AUD_INFO[audKey], canMand = L[3], map = s.maps[audKey] || [], mappedIds = map.map((m) => m[0]);
+    const ai = AUD_INFO[audKey], canMand = L[3], map = maps[audKey] || [], mappedIds = map.map((m) => m[0]);
     const sigOpen = SIGNALS.filter((g) => !s.sigDone[g.id] && this.sigValid(g) && this.canEditAud(g.op.aud));
     const pick = (k: string, st?: string) => () => this.setState({ mapAud: k, mapStage: st || null, mapSel: null });
     const covRows = auds.map((a) => {
@@ -769,7 +787,7 @@ export class Logic {
       return {
         key: a[0], name: a[1], reach: a[2] + ' people', rowBg: a[0] === audKey ? '#f3f5f0' : 'transparent', hasSig: sig > 0, sig: String(sig), pick: pick(a[0]),
         cells: STAGES.map((st) => {
-          const list = (s.maps[a[0]] || []).filter((m) => m[1] === st); const h = list.reduce((x, m) => x + byId[m[0]].hours, 0); const nm = canMand ? list.filter((m) => m[2] === 'mandatory').length : 0;
+          const list = (maps[a[0]] || []).filter((m) => m[1] === st); const h = list.reduce((x, m) => x + byId[m[0]].hours, 0); const nm = canMand ? list.filter((m) => m[2] === 'mandatory').length : 0;
           const on = a[0] === audKey && s.mapStage === st; const k = Math.min(list.length, 4);
           return {
             stage: st, label: list.length ? String(list.length) : '—', sub: list.length ? Math.round(h) + ' h' : '', bg: list.length ? 'rgba(134,188,37,' + (0.14 + k * 0.14).toFixed(2) + ')' : '#fafbf8',
@@ -786,7 +804,7 @@ export class Logic {
       if (c && c[1] === st) { this.setState({ overStage: null }); return; }
       this.applyOps([{ op: 'add', aud: audKey, lid, stage: st, ob: c ? c[2] : 'advised' }], 'Mapped to ' + ai.name + ' · ' + st + ' · publish to apply'); this.setState({ overStage: null });
     };
-    const otherAuds = (lid: string) => Object.keys(s.maps).filter((k) => AUD_INFO[k] && k !== audKey && s.maps[k].some((x) => x[0] === lid));
+    const otherAuds = (lid: string) => Object.keys(maps).filter((k) => AUD_INFO[k] && k !== audKey && maps[k].some((x) => x[0] === lid));
     const stageCols = STAGES.map((st) => {
       const list = map.filter((m) => m[1] === st); const mand = list.filter((m) => m[2] === 'mandatory').length; const hrs = list.reduce((a, m) => a + byId[m[0]].hours, 0); const over = s.overStage === st;
       return {
@@ -813,7 +831,7 @@ export class Logic {
         ? 'Reaches ' + this.reachAt(audKey, msM[1]) + ' people at ' + msM[1] + ' in ' + ai.name + '. ' + (msM[2] === 'mandatory' ? 'It joins their mandatory items and counts toward readiness.' : 'Advised items appear dashed on their maps; nobody is chased.')
         : 'Reaches up to ' + this.reachAt(audKey, msM[1]) + ' people at ' + msM[1] + ' who ' + (lens === 'amb' ? 'saved this ambition' : 'shared this profile') + '. It shows in their ' + (lens === 'amb' ? 'ambitions' : 'personality') + ' cloud as a suggestion and never counts toward readiness.',
       also: (() => {
-        const r = otherAuds(msM[0]).map((k) => { const m = s.maps[k].find((x) => x[0] === msM[0])!; const Lk = lensOf(k); return { color: Lk[2], text: Lk[1] + ' · ' + AUD_INFO[k].name + ' · ' + m[1] + ' · ' + (Lk[3] ? m[2] : 'suggested') }; });
+        const r = otherAuds(msM[0]).map((k) => { const m = maps[k].find((x) => x[0] === msM[0])!; const Lk = lensOf(k); return { color: Lk[2], text: Lk[1] + ' · ' + AUD_INFO[k].name + ' · ' + m[1] + ' · ' + (Lk[3] ? m[2] : 'suggested') }; });
         return r.length ? r : [{ color: '#d5dacf', text: 'No other audience' }];
       })(),
       rulePlain: L[1] + ' is ' + ai.name + ' and stage is ' + msM[1] + ' → ' + (canMand ? (msM[2] === 'mandatory' ? 'mandatory before the next promotion review' : 'advised, no deadline') : 'suggested in their cloud, never required'),

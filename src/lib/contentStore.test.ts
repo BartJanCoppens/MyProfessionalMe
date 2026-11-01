@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BUNDLES0 } from '../data';
 
 vi.mock('./supabase', () => ({ supabase: {} }));
-const { bundleFrom, bundleRow, mappingChanges, mapsFrom, toLearn } = await import('./contentStore');
+const { bundleFrom, bundleRow, mappingChanges, mapsFrom, mergeMaps, toLearn } = await import('./contentStore');
 
 describe('content rows', () => {
   it('turns a learning row into a catalogue entry and its meta', () => {
@@ -31,5 +31,16 @@ describe('mappingChanges', () => {
     const ch = mappingChanges(maps, { 'Consulting|L1': true, 'ind:energy|L14': true });
     expect(ch.upserts).toEqual([{ audience: 'Consulting', learning_id: 'L1', stage: 'Manager', obligation: 'advised' }]);
     expect(ch.deletes).toEqual([{ audience: 'ind:energy', learning_id: 'L14' }]);
+  });
+});
+
+describe('mergeMaps', () => {
+  it('lays unsent local edits over the reloaded maps and drops unknown learnings', () => {
+    const reloaded = { Consulting: [['L1', 'Analyst', 'mandatory'], ['L2', 'Analyst', 'advised']] as [string, string, string][], Audit: [] as [string, string, string][] };
+    const local = { Consulting: [['L1', 'Manager', 'mandatory'], ['L9', 'Analyst', 'advised']] as [string, string, string][], Audit: [['L3', 'Analyst', 'advised'], ['L404', 'Analyst', 'advised']] as [string, string, string][] };
+    const r = mergeMaps(reloaded, local, { 'Consulting|L1': true, 'Consulting|L2': true, 'Audit|L3': true, 'Audit|L404': true }, new Set(['L1', 'L2', 'L3', 'L9']));
+    expect(r.maps.Consulting).toEqual([['L1', 'Manager', 'mandatory']]);
+    expect(r.maps.Audit).toEqual([['L3', 'Analyst', 'advised']]);
+    expect(Object.keys(r.pending).sort()).toEqual(['Audit|L3', 'Consulting|L1', 'Consulting|L2']);
   });
 });

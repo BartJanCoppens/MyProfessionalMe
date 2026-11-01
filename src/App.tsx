@@ -19,7 +19,9 @@ import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
 import { useAuth } from './lib/useAuth';
 import { useSubject } from './lib/useSubject';
 import { useContent } from './lib/useContent';
+import { mergeMaps } from './lib/contentStore';
 import type { Content } from './lib/contentStore';
+import { LEARN_BY } from './data';
 import { useTeam } from './lib/useTeam';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
@@ -75,10 +77,14 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   const file = useRef<HTMLInputElement | null>(null);
   const chat = useRef<HTMLDivElement | null>(null);
 
-  // After an admin saves: the catalogue reloads in place; published mappings replace the local map (unpublished edits are kept).
-  const refreshContent = async (what: 'catalogue' | 'maps') => {
+  // After an admin saves: the catalogue reloads in place; the stored maps come back with every edit not yet published laid over them.
+  const refreshContent = async (sent: string[] = []) => {
     const c = await reloadContent();
-    setRaw((s) => ({ ...s, maps: what === 'maps' || !Object.keys(s.pending).length ? c.maps : s.maps, pending: what === 'maps' ? {} : s.pending }));
+    setRaw((s) => {
+      const left = { ...s.pending }; sent.forEach((k) => delete left[k]);
+      const r = mergeMaps(c.maps, s.maps, left, new Set(Object.keys(LEARN_BY)));
+      return { ...s, maps: r.maps, pending: r.pending };
+    });
   };
   const logic = new Logic(state, (p) => setRaw((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, auth.access, subject, reload, refreshContent);
   const vm = logic.renderVals();
@@ -121,7 +127,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
 }
 
 const roleLabel = ({ access }: Auth) =>
-  access.isSystem ? 'System Admin' : access.domains.length ? 'Domain Admin · ' + access.domains.join(', ') : 'Member';
+  access.isSystem ? 'System Admin' : access.isGeneral ? 'General Admin' + (access.domains.length ? ' · Domain Admin · ' + access.domains.join(', ') : '') : access.domains.length ? 'Domain Admin · ' + access.domains.join(', ') : 'Member';
 
 function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: VM; auth: Auth; teamOverdue: number; canPick: boolean; onPick: () => void; onBackToMe: () => void }) {
   return (
