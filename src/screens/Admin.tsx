@@ -50,12 +50,14 @@ export function AdminLibraryScreen({ vm }: { vm: VM }) {
 }
 
 export function AddLearningDrawer({ vm }: { vm: VM }) {
+  const f = vm.lf, set = vm.lfSet;
+  if (!f) return null;
   const section = { border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' } as const;
   const sectionHead = { padding: '12px 14px', background: '#fafbf8', borderBottom: '1px solid #eef0ea', fontWeight: 600 } as const;
   return (
-    <Drawer title="Add a learning" subtitle="Import from a connected program first; describe it yourself if it is not there." onClose={vm.closeDrawer} width={520}>
+    <Drawer title={vm.lfTitle} subtitle={f.id ? 'Changes reach every path this learning is on.' : 'Import from a connected program first; describe it yourself if it is not there.'} onClose={vm.closeDrawer} width={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={section}>
+        {!f.id && <div style={section}>
           <div style={sectionHead}>1 · Import from a program</div>
           <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.4fr)', gap: 8 }}>
@@ -69,26 +71,32 @@ export function AddLearningDrawer({ vm }: { vm: VM }) {
               </div>
             ))}
           </div>
-        </div>
+        </div>}
         <div style={section}>
-          <div style={sectionHead}>2 · Or describe it yourself</div>
+          <div style={sectionHead}>{f.id ? 'Details' : '2 · Or describe it yourself'}</div>
           <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Field label="Title"><Input placeholder="e.g. Negotiating scope with procurement" /></Field>
+            <Field label="Title"><Input placeholder="e.g. Negotiating scope with procurement" value={f.title} onChange={set.title} /></Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <Field label="Domain"><Select options={vm.domainOptions} /></Field>
-              <Field label="Level"><Select options={vm.levelOnlyOptions} /></Field>
-              <Field label="Format"><Select options={vm.formatOnlyOptions} /></Field>
-              <Field label="Source"><Input placeholder="Publisher or provider" /></Field>
-              <Field label="Effort" hint="Hours, decimals allowed"><Input placeholder="4" /></Field>
-              <Field label="CPD units" hint="Leave empty if none"><Input placeholder="0" /></Field>
+              <Field label="Domain"><Select options={vm.domainOptions} value={f.domain} onChange={set.domain} /></Field>
+              <Field label="Level"><Select options={vm.levelOnlyOptions} value={f.level} onChange={set.level} /></Field>
+              <Field label="Format"><Select options={vm.formatOnlyOptions} value={f.format} onChange={set.format} /></Field>
+              <Field label="Source"><Input placeholder="Publisher or provider" value={f.source} onChange={set.source} /></Field>
+              <Field label="Effort" hint="Hours, decimals allowed"><Input placeholder="4" inputMode="decimal" value={f.hours} onChange={set.hours} /></Field>
+              <Field label="CPD units" hint="Leave empty if none"><Input placeholder="0" inputMode="decimal" value={f.cpd} onChange={set.cpd} /></Field>
             </div>
-            <Field label="Why we recommend it" hint="Shown on every path it lands on. Plain language, two sentences."><Textarea rows={3} /></Field>
+            <Field label="Why we recommend it" hint="Shown on every path it lands on. Plain language, two sentences."><Textarea rows={3} value={f.why} onChange={set.why} /></Field>
+            <Field label="Available to" hint="A business line's learning is edited by its Domain Admins; firm-wide learning by a General or System Admin. Curriculum mapping decides who it is mandatory or advised for."><Select options={vm.lineOptions} value={f.line} onChange={set.line} /></Field>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Button size="lg" onClick={vm.saveDraft}>Save as draft</Button>
-          <Button size="lg" variant="secondary" onClick={vm.closeDrawer}>Cancel</Button>
-          <span style={{ fontSize: 12, color: '#8b918a' }}>Drafts are visible to admins only until published.</span>
+          <Button size="lg" onClick={vm.savePublish}>Publish</Button>
+          <Button size="lg" variant="secondary" onClick={vm.saveDraft}>Save as draft</Button>
+          <LinkButton onClick={vm.saveReview}>Mark for review</LinkButton>
+          <div style={{ flex: 1 }} />
+          {f.id && <LinkButton tone="muted" onClick={vm.removeLearning}>Remove</LinkButton>}
+          <LinkButton tone="muted" onClick={vm.closeDrawer}>Cancel</LinkButton>
+        </div>
+        <div style={{ fontSize: 12, color: '#8b918a', marginTop: -8 }}>Drafts are visible to admins only until published.
         </div>
       </div>
     </Drawer>

@@ -4,6 +4,9 @@ import type { Config } from './config';
 import type { Subject } from './lib/useSubject';
 import type { Access, AppState } from './types';
 import { DOMAINS, LEARN } from './data';
+import * as store from './lib/contentStore';
+
+vi.mock('./lib/contentStore', async (orig) => ({ ...(await orig<object>()), saveLearning: vi.fn(async () => {}), publishMappings: vi.fn(async () => {}), saveBundleSoon: vi.fn() }));
 
 const cfg: Config = { businessLine: 'Consulting', startScreen: 'map', homeView: 'constellation', showMarks: true, liveAssistant: false, motion: false };
 const ref = <T,>(current: T) => ({ current });
@@ -218,3 +221,67 @@ describe('domain zoom', () => {
   });
 });
 
+
+describe('content admins', () => {
+  vi.stubGlobal('window', { setTimeout, clearTimeout, scrollTo: () => {} });
+  const general: Access = { isSystem: false, isGeneral: true, domains: [], userId: 'u1' };
+  const consulting: Access = { isSystem: false, domains: ['Consulting'], userId: 'u1' };
+  const build = (access: Access, state: Partial<AppState> = {}, reload = vi.fn(async () => {})) => {
+    const sink: Partial<AppState>[] = []; const st = { ...initState(cfg), ...state };
+    const L = new Logic(st, (p) => { sink.push(typeof p === 'function' ? p(st) : p); }, cfg, { toastTimer: ref(undefined), drag: ref(null), file: ref(null), chat: ref(null) }, access, newcomer(), async () => {}, reload);
+    return { L, sink, reload };
+  };
+  it('a General Admin maps for every business line and audience; a Domain Admin only for their own line', () => {
+    expect(['Consulting', 'Audit', 'Tax & Legal', 'ind:energy'].map((a) => build(general).L.canEditAud(a))).toEqual([true, true, true, true]);
+    expect(['Consulting', 'Audit', 'ind:energy'].map((a) => build(consulting).L.canEditAud(a))).toEqual([true, false, false]);
+  });
+  it('a General Admin manages no users', () => {
+    const { L, sink } = build(general);
+    expect(L.canManageUsers()).toBe(false);
+    L.go('users');
+    expect(sink[0]).toMatchObject({ screen: 'map' });
+  });
+  it('a Domain Admin opens their own learnings but not firm-wide ones', () => {
+    const { L, sink } = build(consulting, { screen: 'adminLib' });
+    L.renderVals().adminRows.find((r) => r.id === 'L1')!.edit();
+    expect(sink.some((p) => 'libForm' in p)).toBe(false);
+    expect(sink.find((p) => 'toast' in p)!.toast).toMatch(/^Firm-wide learning · a General or System Admin edits it/);
+    const g = build(general, { screen: 'adminLib' });
+    g.L.renderVals().adminRows.find((r) => r.id === 'L1')!.edit();
+    expect(g.sink[0].libForm).toMatchObject({ id: 'L1', title: LEARN[0][1], line: '' });
+  });
+  it('checks the learning form before saving', async () => {
+    vi.mocked(store.saveLearning).mockClear();
+    const { L, sink } = build(general, { libForm: { ...build(general).L.blankForm(), title: 'Pricing basics', hours: 'abc' } });
+    await L.saveLearningForm('published');
+    expect(store.saveLearning).not.toHaveBeenCalled();
+    expect(sink.find((p) => 'toast' in p)!.toast).toBe('Effort must be a number of hours above zero');
+  });
+  it('saves a learning for the chosen line and reloads the catalogue', async () => {
+    vi.mocked(store.saveLearning).mockClear();
+    const { L, reload } = build(consulting, { libForm: { ...build(consulting).L.blankForm(), title: 'Pricing basics', hours: '1,5' } });
+    await L.saveLearningForm('draft');
+    expect(store.saveLearning).toHaveBeenCalledWith(expect.objectContaining({ title: 'Pricing basics', hours: 1.5, business_line: 'Consulting', status: 'draft' }), undefined);
+    expect(reload).toHaveBeenCalledWith('catalogue');
+  });
+  it('publishes pending curriculum changes to the database', async () => {
+    vi.mocked(store.publishMappings).mockClear();
+    const maps = { ...initState(cfg).maps, Consulting: [['L5', 'Partner', 'advised']] as [string, string, string][] };
+    const { L, reload } = build(consulting, { maps, pending: { 'Consulting|L5': true, 'Consulting|L7': true } });
+    await L.publish();
+    expect(store.publishMappings).toHaveBeenCalledWith({ upserts: [{ audience: 'Consulting', learning_id: 'L5', stage: 'Partner', obligation: 'advised' }], deletes: [{ audience: 'Consulting', learning_id: 'L7' }] });
+    expect(reload).toHaveBeenCalledWith('maps');
+  });
+  it('lets a Domain Admin edit only their own line\'s bundles', () => {
+    const bundles = initState(cfg).bundles.map((b) => ({ ...b, line: b.id === 'B1' ? 'Consulting' : 'Tax & Legal' }));
+    const other = build(consulting, { screen: 'adminKb', kbOpen: true, kbSel: 'B2', bundles });
+    const kb = other.L.renderVals().kb!;
+    expect(kb.kbs.editable).toBe(false);
+    kb.kbs.reindex();
+    expect(other.sink.some((p) => 'bundles' in p)).toBe(false);
+    const own = build(consulting, { screen: 'adminKb', kbOpen: true, kbSel: 'B1', bundles });
+    own.L.renderVals().kb!.kbs.reindex();
+    expect(own.sink.some((p) => 'bundles' in p)).toBe(true);
+    expect(store.saveBundleSoon).toHaveBeenCalled();
+  });
+});

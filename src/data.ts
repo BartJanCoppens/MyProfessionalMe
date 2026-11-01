@@ -1,5 +1,5 @@
 // Seed data for the MyProfessionalMe prototype (verbatim from the Claude Design file).
-import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal, RagPreset, RagModel, Bundle } from './types';
+import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal, RagPreset, RagModel, Bundle, LearnMeta } from './types';
 
 export const DOMAINS: [string, string, string][] = [
   ['tech','Job technical skills','Tech skills'],['acad','Academic background','Academic'],['pers','Personal growth','Personal'],
@@ -85,6 +85,14 @@ export const AVATARS: Record<string, AvatarSpec> = {
  L41:{ persona:'Pieter Wouters', role:'Operations director, logistics client', initials:'PW', brief:'A go-live slipped and he is under pressure from his own board.', skills:['Calm','Empathy','Ownership'], target:4, attempts:[] }
 };
 export const LEARN_BY: Record<string, Learn> = {}; LEARN.forEach((r) => { LEARN_BY[r[0]] = r; });
+// Owning business line and status per learning; filled from the database (seed data: firm-wide, published).
+export const LEARN_META: Record<string, LearnMeta> = {};
+// The catalogue lives in Supabase. Loading it replaces LEARN, LEARN_BY and LEARN_META in place, so every module keeps its import.
+export function setCatalogue(rows: [Learn, LearnMeta][]) {
+  LEARN.splice(0, LEARN.length, ...rows.map((r) => r[0]));
+  [LEARN_BY, LEARN_META].forEach((o) => Object.keys(o).forEach((k) => delete o[k]));
+  rows.forEach(([r, m]) => { LEARN_BY[r[0]] = r; LEARN_META[r[0]] = m; });
+}
 // key, label, colour, canMand, who belongs, obligation policy, rule field
 export const LENSES: [string, string, string, boolean, string, string, string][] = [
  ['bl','Business line','#1a1d18',true,'Everyone whose contract sits in the business line, at their current stage.','Mandatory or advised. Mandatory items need Learning Council sign-off before they publish.','business_line'],

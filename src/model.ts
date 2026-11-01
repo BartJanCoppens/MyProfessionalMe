@@ -2,11 +2,11 @@
 // everything the screens render from AppState, and the action methods patch state the same way the prototype did.
 import type { ChangeEvent, DragEvent, KeyboardEvent, RefObject } from 'react';
 import {
-  AUD_INFO, AUD_MAPS0, BUNDLES0, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
-  OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, PROJECTS, PUB, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
+  AUD_INFO, AUD_MAPS0, BUNDLES0, LEARN_META, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
+  OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, PROJECTS, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
 } from './data';
 import type { Config } from './config';
-import type { Access, AppState, ChatMsg, CloudKey, Learn, Op, Persona, Proposal, Read, Screen, Signal } from './types';
+import type { Access, AppState, ChatMsg, CloudKey, Learn, LearnForm, LearnMeta, Op, Persona, Proposal, Read, Screen, Signal } from './types';
 import { levelLabel, levelsByDomain, stageIndex } from './logic/learner';
 import type { LearnState } from './logic/learner';
 import { acceptLearning, addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
@@ -15,6 +15,7 @@ import { memberSummary } from './logic/team';
 import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import { kbVals } from './kbVals';
+import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel } from './logic/covers';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
@@ -24,13 +25,16 @@ const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!
 type Evidence = { id: string; text: string; src: string };
 type ChatReply = { reply: string; interests?: { label: string; domain: string }[]; ambition?: Proposal['ambition'] };
 
+// Publication status in the admin library: chip status and label.
+const PUB_STATUS: Record<LearnMeta['status'], [string, string]> = { published: ['accepted', 'Published'], review: ['clarification', 'Needs review'], draft: ['not-started', 'Draft'] };
+
 export function initState(cfg: Config): AppState {
   return {
     screen: cfg.startScreen, view: cfg.homeView, sel: null, detailId: null, origin: 'library',
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, zoom: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, zoom: null, libForm: null,
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
     kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
@@ -62,9 +66,10 @@ export class Logic {
   readonly reloadSubject: () => Promise<void>;
   // Level reached per domain (DOMAINS order) from the subject's accepted learnings.
   readonly levels: number[];
-  constructor(state: AppState, setState: SetState, props: Config, refs: Refs, access: Access, subject: Subject, reloadSubject: () => Promise<void>) {
+  readonly reloadContent: (what: 'catalogue' | 'maps') => Promise<void>;
+  constructor(state: AppState, setState: SetState, props: Config, refs: Refs, access: Access, subject: Subject, reloadSubject: () => Promise<void>, reloadContent: (what: 'catalogue' | 'maps') => Promise<void> = async () => {}) {
     this.state = state; this.setState = setState; this.props = props; this.refs = refs; this.access = access;
-    this.subject = subject; this.reloadSubject = reloadSubject;
+    this.subject = subject; this.reloadSubject = reloadSubject; this.reloadContent = reloadContent;
     this.levels = levelsByDomain(subject.data.progress, LEARN);
   }
 
@@ -162,10 +167,47 @@ export class Logic {
   }
   items() { return LEARN.map((r, i) => { const it = this.item(r); return { ...it, ...cover(r, i, it.state, it.pct) }; }); }
   openDetail(id: string, origin?: Screen) { this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0); }
-  go(screen: Screen) { this.setState({ screen: ADMIN_SCREENS.includes(screen) && !this.isAdmin() ? 'map' : screen, sel: null, mapSel: null }); window.scrollTo(0, 0); }
-  isAdmin() { return this.access.isSystem || this.access.domains.length > 0; }
+  go(screen: Screen) { this.setState({ screen: (ADMIN_SCREENS.includes(screen) && !this.isAdmin()) || (screen === 'users' && !this.canManageUsers()) ? 'map' : screen, sel: null, mapSel: null }); window.scrollTo(0, 0); }
+  // User management: System Admins and Domain Admins. A General Admin edits content only.
+  canManageUsers() { return this.access.isSystem || this.access.domains.length > 0; }
+  isAdmin() { return this.access.isSystem || !!this.access.isGeneral || this.access.domains.length > 0; }
+  // Content of a business line: its Domain Admins, General and System Admins. Firm-wide content (no line) only the latter two.
+  canEditLine(line: string | null | undefined) { return this.access.isSystem || !!this.access.isGeneral || (!!line && this.access.domains.includes(line)); }
+  // Lines this person may give a learning or bundle; '' is firm-wide.
+  editableLines() { return (this.access.isSystem || this.access.isGeneral ? [''] : []).concat(BLS.filter((b) => this.canEditLine(b))); }
+  lineName(line: string | null | undefined) { return line || 'Firm-wide'; }
+  whoEdits(line: string | null | undefined) { return line ? line + ' Domain Admins or a General Admin edit it' : 'a General or System Admin edits it'; }
+  blankForm(): LearnForm { return { id: null, title: '', domain: 'prof', level: '2', format: 'E-learning', source: '', hours: '', cpd: '', why: '', line: this.editableLines()[0] ?? '', status: 'draft' }; }
+  formFor(r: Learn): LearnForm {
+    const m = LEARN_META[r[0]] || { line: null, status: 'published' };
+    return { id: r[0], title: r[1], domain: r[2], level: String(r[3]), format: r[4], source: r[5], hours: String(r[6]), cpd: r[7] ? String(r[7]) : '', why: r[9], line: m.line || '', status: m.status };
+  }
+  async saveLearningForm(status: LearnMeta['status']) {
+    const f = this.state.libForm; if (!f) return;
+    const hours = Number(f.hours.replace(',', '.')), cpd = Number((f.cpd || '0').replace(',', '.'));
+    if (!f.title.trim()) { this.say('Give the learning a title'); return; }
+    if (!(hours > 0)) { this.say('Effort must be a number of hours above zero'); return; }
+    if (!(cpd >= 0)) { this.say('CPD units must be a number'); return; }
+    const old = f.id ? LEARN_BY[f.id] : null;
+    try {
+      await saveLearning({ title: f.title.trim(), domain: f.domain, level: +f.level, format: f.format, source: f.source.trim(), hours, cpd, due: old ? old[8] : '', why: f.why.trim(), business_line: f.line || null, status }, f.id || undefined);
+      await this.reloadContent('catalogue');
+      this.setState({ drawerOpen: false, libForm: null });
+      this.say((status === 'draft' ? 'Saved as draft · visible to admins only' : status === 'review' ? 'Saved · marked as needing review' : 'Published · learners see it in the library') + ' · ' + this.lineName(f.line || null));
+    } catch (err) { this.say((err as Error).message); }
+  }
+  async removeLearningForm() {
+    const f = this.state.libForm; if (!f?.id) return;
+    try { await removeLearning(f.id); await this.reloadContent('catalogue'); this.setState({ drawerOpen: false, libForm: null }); this.say('Removed “' + f.title + '” and its curriculum mappings'); }
+    catch (err) { this.say((err as Error).message); }
+  }
+  async publish() {
+    const ch = mappingChanges(this.state.maps, this.state.pending), n = ch.upserts.length + ch.deletes.length;
+    try { await publishMappings(ch); await this.reloadContent('maps'); this.say('Published · ' + n + ' change' + (n > 1 ? 's' : '') + ' now live on every map they reach'); }
+    catch (err) { this.say((err as Error).message); }
+  }
   // System Admins edit every audience; Domain Admins only the business-line audiences they administer.
-  canEditAud(aud: string) { return this.access.isSystem || (AUD_INFO[aud]?.lens === 'bl' && this.access.domains.includes(aud)); }
+  canEditAud(aud: string) { return AUD_INFO[aud]?.lens === 'bl' ? this.canEditLine(aud) : this.access.isSystem || !!this.access.isGeneral; }
   progressHours(it: Item) { return it.state === 'accepted' || it.state === 'submitted' ? it.hours : it.state === 'in-progress' ? it.hours * it.pct / 100 : 0; }
   readiness(items: Item[]) {
     const rel = items.filter((it) => it.mapped && it.mapped.si <= this.myStage() + 1 && (it.ob === 'mandatory' || it.ob === 'advised'));
@@ -391,11 +433,11 @@ export class Logic {
 
     // admin library
     const aq = s.adminQ.toLowerCase();
-    const adminRows = items.filter((it) => (!aq || (it.title + ' ' + it.source).toLowerCase().includes(aq)) && (s.adminStatus === 'all' || (PUB[it.id] ? PUB[it.id][1] : 'Published') === s.adminStatus))
+    const adminRows = items.filter((it) => (!aq || (it.title + ' ' + it.source).toLowerCase().includes(aq)) && (s.adminStatus === 'all' || PUB_STATUS[LEARN_META[it.id]?.status || 'published'][1] === s.adminStatus))
       .map((it) => {
         const ps = BLS.map((b) => { const m = s.maps[b].find((x) => x[0] === it.id); return m ? b + ' · ' + m[1] : null; }).filter(Boolean);
-        return { ...it, effort: it.hoursLabel + (it.cpd ? ' · ' + it.cpd + ' CPD' : ''), paths: ps.length ? ps.join(' · ') : 'Not on a path', pubStatus: PUB[it.id] ? PUB[it.id][0] : 'accepted', pubLabel: PUB[it.id] ? PUB[it.id][1] : 'Published',
-          edit: () => this.say('Prototype: edit form opens for “' + it.title + '” · changes are logged with your name and time') };
+        return { ...it, effort: it.hoursLabel + (it.cpd ? ' · ' + it.cpd + ' CPD' : ''), paths: ps.length ? ps.join(' · ') : 'Not on a path', pubStatus: PUB_STATUS[LEARN_META[it.id]?.status || 'published'][0], pubLabel: PUB_STATUS[LEARN_META[it.id]?.status || 'published'][1] + (LEARN_META[it.id]?.line ? ' · ' + LEARN_META[it.id].line : ''),
+          edit: () => (this.canEditLine(LEARN_META[it.id]?.line) ? this.setState({ drawerOpen: true, libForm: this.formFor(LEARN_BY[it.id]) }) : this.say(this.lineName(LEARN_META[it.id]?.line) + ' learning · ' + this.whoEdits(LEARN_META[it.id]?.line))) };
       });
     const programs = PROGRAMS.map((p) => ({ name: p[0], sync: p[1], dot: p[2], count: LEARN.filter((l) => PROGRAM_OF[l[5]] === p[0]).length }));
 
@@ -467,7 +509,7 @@ export class Logic {
       noLineNote: this.subject.businessLine ? '' : (this.subject.readOnly ? this.subject.name + ' has' : 'You have') + ' no business line yet, so mandatory and advised items are shown for ' + bl + '. An admin sets the line in User management.',
       mapLead: 'You sit in the middle. The nine domains around you hold every learning the firm knows about; your ' + bl + ' affiliation decides which ones are mandatory, your counsellor advises some, the rest is yours to choose. Clouds show where your projects, personality and ambitions pull you.',
       crumb: titles[s.screen][0], headerTitle: titles[s.screen][1], screen: s.screen,
-      navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), goUsers: () => this.go('users'),
+      navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), canManageUsers: this.canManageUsers(), goUsers: () => this.go('users'),
       navProj: s.screen === 'projects' || (s.screen === 'detail' && s.origin === 'projects'), navProfile: s.screen === 'profile' || (s.screen === 'detail' && s.origin === 'profile'),
       goMap: () => this.go('map'), goLibrary: () => this.go('library'), goTeam: () => this.go('team'), goAdminLib: () => this.go('adminLib'), goAdminMap: () => this.go('adminMap'), goProj: () => this.go('projects'), goProfile: () => this.go('profile'),
       goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : '← Back to library',
@@ -529,13 +571,20 @@ export class Logic {
       adminLead: LEARN.length + ' learnings · 6 connected programs · 3 need attention · last sync 28 Oct 2026 07:10', programs, adminQ: s.adminQ, setAdminQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ adminQ: e.target.value }),
       pubOptions: [opt('all', 'All'), opt('Published', 'Published'), opt('Needs review', 'Needs review'), opt('Draft', 'Draft')], adminStatus: s.adminStatus, setAdminStatus: (v: string) => this.setState({ adminStatus: v }), adminRows,
       syncNow: () => this.say('Sync started · Internal academy, Coursera / edX and Microsoft Learn · usually under a minute'),
-      drawerOpen: s.drawerOpen, openDrawer: () => this.setState({ drawerOpen: true }), closeDrawer: () => this.setState({ drawerOpen: false }),
+      drawerOpen: s.drawerOpen, openDrawer: () => (this.editableLines().length ? this.setState({ drawerOpen: true, libForm: this.blankForm() }) : this.say('Only admins add learnings')), closeDrawer: () => this.setState({ drawerOpen: false, libForm: null }),
       programOptions: PROGRAMS.map((p) => opt(p[0], p[0])), importQ: s.importQ, setImportQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ importQ: e.target.value }),
-      importResults: IMPORT_RESULTS.filter((ir) => !s.importQ || ir[0].toLowerCase().includes(s.importQ.toLowerCase())).map((ir) => ({ title: ir[0], sub: ir[1], import: () => { this.setState({ drawerOpen: false }); this.say('Imported “' + ir[0] + '” as a draft · map it to a path to publish'); } })),
+      importResults: IMPORT_RESULTS.filter((ir) => !s.importQ || ir[0].toLowerCase().includes(s.importQ.toLowerCase())).map((ir) => ({ title: ir[0], sub: ir[1], import: () => {
+        // "Coursera · 6 h · Professional skills" fills the form below; the admin checks it and saves.
+        const [src, eff, dom] = ir[1].split(' · '), d = DOMAINS.find((x) => x[1] === dom);
+        this.setState((st) => ({ libForm: { ...(st.libForm || this.blankForm()), title: ir[0], source: src || '', hours: (eff || '').replace(/[^0-9.,]/g, ''), domain: d ? d[0] : (st.libForm || this.blankForm()).domain } }));
+      } })),
       domainOptions: DOMAINS.map((d) => opt(d[0], d[1])), levelOnlyOptions: LEVELS.map((l, i) => opt(String(i + 1), 'L' + (i + 1) + ' · ' + l)), formatOnlyOptions: formats.map((f) => opt(f, f)),
-      saveDraft: () => { this.setState({ drawerOpen: false }); this.say('Saved as draft · visible to admins only'); },
+      lf: s.libForm, lfTitle: s.libForm?.id ? 'Edit learning' : 'Add a learning',
+      lfSet: Object.fromEntries((['title', 'domain', 'level', 'format', 'source', 'hours', 'cpd', 'why', 'line'] as const).map((k) => [k, (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { const v = e.target.value; this.setState((st) => ({ libForm: st.libForm && { ...st.libForm, [k]: v } })); }])) as Record<'title' | 'domain' | 'level' | 'format' | 'source' | 'hours' | 'cpd' | 'why' | 'line', (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void>,
+      lineOptions: this.editableLines().map((l) => opt(l, l ? l + ' only' : 'Firm-wide · all business lines')),
+      saveDraft: () => this.saveLearningForm('draft'), saveReview: () => this.saveLearningForm('review'), savePublish: () => this.saveLearningForm('published'), removeLearning: () => this.removeLearningForm(),
       // admin mapping
-      publish: () => { this.setState({ pending: {} }); this.say('Published · ' + pendingN + ' change' + (pendingN > 1 ? 's' : '') + ' now live on every ' + bl + ' map'); },
+      publish: () => this.publish(),
       obSetOptions: [opt('mandatory', 'Mandatory'), opt('advised', 'Advised')],
       ...cur,
       toast: s.toast,

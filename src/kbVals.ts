@@ -3,6 +3,7 @@ import type { ChangeEvent, KeyboardEvent } from 'react';
 import { KB_ACCESS, KB_TYPES, RAG_OPTS, RAG_PRESETS, TOPIC_BY, TOPICS, isoDate, mkModels, ragOptLabel, slugify } from './data';
 import type { Logic } from './model';
 import { importBundle, okfFiles, rankHits, tarBytes } from './logic/okf';
+import { saveBundleSoon } from './lib/contentStore';
 import type { AppState, Bundle, BundleSource, RagModel } from './types';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
@@ -17,9 +18,14 @@ const fresh = { kbValid: null, kbHits: null, kbAnswer: '', kbBusy: false };
 // Each test question gets a number; an answer that arrives after another question or bundle is dropped.
 let askSeq = 0;
 
-// The bundle being edited, updated from the latest state (also from timers and after awaits).
+// The bundle being edited, updated from the latest state (also from timers and after awaits) and saved to the database shortly after.
 const patchBundle = (L: Logic, id: string, patch: Partial<Bundle> | ((x: Bundle) => Partial<Bundle>)) =>
-  L.setState((s) => ({ bundles: s.bundles.map((x) => (x.id === id ? { ...x, ...(typeof patch === 'function' ? patch(x) : patch) } : x)) }));
+  L.setState((s) => ({ bundles: s.bundles.map((x) => {
+    if (x.id !== id) return x;
+    const nb = { ...x, ...(typeof patch === 'function' ? patch(x) : patch) }; saveBundleSoon(nb, (m) => L.say('Not saved · ' + m)); return nb;
+  }) }));
+// A new bundle belongs to the first line this admin edits (firm-wide for General and System Admins).
+const addBundle = (L: Logic, b: Bundle) => { saveBundleSoon(b, (m) => L.say('Not saved · ' + m), 0); return b; };
 
 async function ask(L: Logic, b: Bundle, m: RagModel, q0: string) {
   const q = (q0 || '').trim(); if (!q || L.state.kbBusy) return;
@@ -43,8 +49,8 @@ async function importFiles(L: Logic, list: FileList | null) {
   try {
     files = await Promise.all(fl.map(async (f) => ({ file: f.name, text: await f.text().catch(() => { throw new Error('Could not read ' + f.name); }) })));
   } catch (err) { L.say((err as Error).message + ' · nothing was imported'); return; }
-  const r = importBundle(files, topic, 'B' + Date.now()), id = r.bundle.id;
-  L.setState((s) => ({ bundles: [r.bundle].concat(s.bundles), kbSel: id, kbOpen: true, kbTab: 'overview', kbFile: 'index.md', ...fresh }));
+  const r = importBundle(files, topic, 'B' + Date.now()), id = r.bundle.id, nb = addBundle(L, { ...r.bundle, line: L.editableLines()[0] || null });
+  L.setState((s) => ({ bundles: [nb].concat(s.bundles), kbSel: id, kbOpen: true, kbTab: 'overview', kbFile: 'index.md', ...fresh }));
   L.say('Imported ' + fl.length + ' file' + (fl.length > 1 ? 's' : '') + ' · ' + r.concepts + ' concepts' + (r.skipped ? ' · ' + r.skipped + ' skipped without a type field' : ''));
   setTimeout(() => patchBundle(L, id, { status: 'indexed' }), 1600);
 }
@@ -77,7 +83,8 @@ function kbScreen(L: Logic) {
   });
 
   const b = B.find((x) => x.id === s.kbSel) || B[0];
-  const up = (patch: Partial<Bundle> | ((x: Bundle) => Partial<Bundle>)) => patchBundle(L, b.id, patch);
+  const editable = L.canEditLine(b.line), readOnlyNote = L.lineName(b.line) + ' bundle · read-only for you; ' + L.whoEdits(b.line) + '.';
+  const up = (patch: Partial<Bundle> | ((x: Bundle) => Partial<Bundle>)) => (editable ? patchBundle(L, b.id, patch) : L.say(readOnlyNote));
   const st = ST[b.status], files = okfFiles(b), fsel = files.find((f) => f.path === s.kbFile) || files[0];
   const kbTreeFiles = [{ key: '/', name: slugify(b.name) + '/', icon: '▾', pad: '8px', bg: 'transparent', hover: 'transparent', fg: '#1a1d18', fw: 600, cursor: 'default', open: () => {} }];
   let lastDir = '';
@@ -128,7 +135,9 @@ function kbScreen(L: Logic) {
     kbOnImport: (e: Input) => { const list = e.target.files; importFiles(L, list).finally(() => { e.target.value = ''; }); },
     kbNew: () => {
       const id = 'B' + Date.now();
-      L.setState((st2) => ({ bundles: [{ id, name: 'New bundle', owner: 'You · admin', topic: TOPIC_BY[st2.kbTopic] ? st2.kbTopic : 'cons.opm', topics2: [], desc: '', access: 'admins', fresh: '12', status: 'draft', updated: '31 Oct 2026', usedBy: 0, tags: [], sugg: [], models: mkModels(['precise']), sources: [], chunks: [], concepts: [] } as Bundle].concat(st2.bundles),
+      const line = L.editableLines()[0] || null;
+      const nb = addBundle(L, { id, name: 'New bundle', owner: (line || 'Firm-wide') + ' · admin', topic: TOPIC_BY[s.kbTopic] ? s.kbTopic : 'cons.opm', topics2: [], desc: '', access: 'admins', fresh: '12', status: 'draft', updated: '31 Oct 2026', usedBy: 0, tags: [], sugg: [], models: mkModels(['precise']), sources: [], chunks: [], concepts: [], line });
+      L.setState((st2) => ({ bundles: [nb].concat(st2.bundles),
         kbSel: id, kbOpen: true, kbEdit: true, kbTab: 'overview', kbFile: 'index.md', kbModel: null, ...fresh }));
     },
     kbListMode: !s.kbOpen, kbDetailMode: !!s.kbOpen, kbBack: () => { askSeq++; L.setState({ kbOpen: false, kbEdit: false, kbBusy: false }); },
@@ -138,6 +147,7 @@ function kbScreen(L: Logic) {
     kbTabs: [{ value: 'overview', label: 'Overview & tags' }, { value: 'sources', label: 'Sources · ' + b.sources.length }, { value: 'models', label: 'RAG models · ' + b.models.length }, { value: 'files', label: 'OKF files · ' + files.length }, { value: 'test', label: 'Test retrieval' }],
     kbTab: s.kbTab, kbSetTab: (v: string) => L.setState({ kbTab: v }),
     kbs: {
+      editable, readOnlyNote, line: b.line || '', setLine: (e: Sel) => up({ line: e.target.value || null }), lineOptions: L.editableLines().map((l) => ({ value: l, label: l || 'Firm-wide' })),
       name: b.name, descRaw: b.desc, desc: b.desc || 'No description yet.', owner: b.owner + ' · last indexed ' + b.updated, topicPath: tpath(b.topic), st: st[0], stLabel: st[1], stIcon: st[2], editing: s.kbEdit, editLabel: s.kbEdit ? 'Done' : 'Edit',
       toggleEdit: () => L.setState((st2) => ({ kbEdit: !st2.kbEdit })), setName: (e: Input) => up({ name: e.target.value }), setDesc: (e: Area) => up({ desc: e.target.value }),
       reindex: () => {

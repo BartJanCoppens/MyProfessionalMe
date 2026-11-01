@@ -20,7 +20,7 @@ export type Profile = {
   career_stage: string | null;
   counsellor_id: string | null;
 };
-export type Role = { role: 'system_admin' | 'domain_admin'; business_line: BusinessLine | null };
+export type Role = { role: 'system_admin' | 'general_admin' | 'domain_admin'; business_line: BusinessLine | null };
 
 // Mirrors supabase/config.toml and the manage-users function.
 export const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{12,}$/;

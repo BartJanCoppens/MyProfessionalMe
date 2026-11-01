@@ -52,6 +52,8 @@ export default {
       const { data: targetRoles } = await admin.from('user_roles').select('role, business_line').eq('user_id', userId);
       const targetIsSystem = (targetRoles || []).some((r) => r.role === 'system_admin');
       if (targetIsSystem && !isSystem) return { error: fail(403, 'Only a System Admin can manage a System Admin') };
+      const targetIsGeneral = (targetRoles || []).some((r) => r.role === 'general_admin');
+      if (targetIsGeneral && !isSystem) return { error: fail(403, 'Only a System Admin can manage a General Admin') };
       // Managing someone who administers another line would hand their admin rights to the caller.
       const foreignAdmin = (targetRoles || []).some((r) => r.role === 'domain_admin' && !domains.includes(r.business_line as string));
       if (foreignAdmin && !isSystem) return { error: fail(403, 'This user is Domain Admin for a line you do not administer') };

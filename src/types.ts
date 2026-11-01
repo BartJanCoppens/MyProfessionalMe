@@ -44,7 +44,12 @@ export type CloudMeta = {
 export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'adminLib' | 'adminMap' | 'adminKb' | 'users';
 
 // What the signed-in account may administer (from public.user_roles).
-export type Access = { isSystem: boolean; domains: string[]; userId: string };
+// isGeneral: General Admin, edits all content (catalogue, every curriculum audience, all bundles) but no users.
+export type Access = { isSystem: boolean; isGeneral?: boolean; domains: string[]; userId: string };
+// Catalogue entry metadata: owning business line (null = firm-wide) and publication status.
+// The admin library form; numbers stay text while typing. line '' = firm-wide.
+export type LearnForm = { id: string | null; title: string; domain: string; level: string; format: string; source: string; hours: string; cpd: string; why: string; line: string; status: LearnMeta['status'] };
+export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft' };
 export type View = 'constellation' | 'radar' | 'road';
 export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | null;
 
@@ -72,6 +77,8 @@ export type AppState = {
   reads: Record<string, Read>; readBusy: boolean;
   // growth map: the domain zoomed into (domain key), or null for all domains
   zoom: string | null;
+  // admin library: the learning being added or edited in the drawer
+  libForm: LearnForm | null;
   // Knowledge library (admin): bundles are in memory this session, like the learning catalogue
   bundles: Bundle[]; kbSel: string; kbOpen: boolean; kbTopic: string; kbSearch: string; kbTagF: string | null; kbSort: string; kbTab: string; kbFile: string;
   kbModel: string | null; kbTestModel: string | null; kbTagIn: string; kbValid: [boolean, string][] | null; kbEdit: boolean; kbAdd: { conn: string; name: string; sens: string };
@@ -89,4 +96,5 @@ export type Concept = [string, string, string, string, string, string[], string[
 export type Bundle = {
   id: string; name: string; owner: string; topic: string; topics2: string[]; desc: string; access: string; fresh: string; status: string; updated: string; usedBy: number;
   tags: string[]; sugg: [string, number][]; models: RagModel[]; sources: BundleSource[]; chunks: [number, string][]; concepts: Concept[];
+  line?: string | null; // owning business line; null = firm-wide (General and System Admins edit it)
 };

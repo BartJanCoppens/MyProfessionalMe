@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-MyProfessionalMe: a clickable prototype of a learning & growth platform (growth map, library with avatar-practice learnings, projects & evaluations, profile, counsellor view, admin library and audience-based curriculum mapping). React 19 + Vite + TypeScript, npm. Accounts, roles and each person's learner data live in Supabase (project `myprofessionalme`, ref `njhrxshysipssjyeyivm`, West EU Paris); the learning catalogue, curriculum mappings and knowledge content are still seed data in memory. Production: https://myprofessionalme.vercel.app (Vercel project `myprofessionalme`, deployed with `vercel deploy --prod`).
+MyProfessionalMe: a clickable prototype of a learning & growth platform (growth map, library with avatar-practice learnings, projects & evaluations, profile, counsellor view, admin library and audience-based curriculum mapping). React 19 + Vite + TypeScript, npm. Accounts, roles, each person's learner data, the learning catalogue, curriculum mappings and knowledge bundles live in Supabase (project `myprofessionalme`, ref `njhrxshysipssjyeyivm`, West EU Paris). Production: https://myprofessionalme.vercel.app (Vercel project `myprofessionalme`, deployed with `vercel deploy --prod`).
 
 Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, file `MyProfessionalMe.dc.html`, built on the TaxConnect design system. GitHub: `BartJanCoppens/MyProfessionalMe` (public).
 
@@ -17,7 +17,7 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 
 - `src/styles/tokens/*.css`: design-system tokens (colours, type, spacing, motion), copied from the DS. `src/styles/index.css` adds globals and the `pm*` keyframes.
 - `src/ds/index.tsx`: TSX port of the DS components the app uses (Button, StatusChip, Tag, Card, Drawer…), inline styles on CSS variables. `Hover` stands in for the prototype's `style-hover` attribute.
-- `src/data.ts`: seed data, verbatim from the prototype script. `src/types.ts`: tuple and state types.
+- `src/data.ts`: seed data, verbatim from the prototype script; `scripts/seed-content.ts` turns its catalogue, mappings and bundles into the seed SQL of `…_content_tables.sql`. At runtime `useContent()` loads them from Supabase and `setCatalogue()` replaces `LEARN`/`LEARN_BY`/`LEARN_META` in place. `src/lib/contentStore.ts` reads and writes them (`publishMappings`, `saveLearning`, `saveBundleSoon`). `src/types.ts`: tuple and state types.
 - `src/model.ts`: `Logic` is a near-verbatim port of the prototype's `DCLogic` class. `renderVals()` derives the whole view-model (`VM`), including the constellation, radar and road geometry. Change behaviour here, not in the screens.
 - `Logic.curriculum()` builds the curriculum-mapping view-model; `applyOps()` is the single write path for mappings (drags, signals and copilot proposals all go through it).
 - `src/screens/*.tsx`: one file per screen group; each is a transcription of its template block and only reads from `VM`. `Mapping.tsx` is the curriculum-mapping screen.
@@ -25,7 +25,7 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 - `src/lib/supabase.ts` (client, `manageUsers()`, password rule), `src/lib/useAuth.ts` (session, profile, roles → `Access`).
 - The **subject** is the person the app shows: `src/lib/useSubject.ts` (who, chosen via "View as"; read-only when not yourself), `src/lib/learnerStore.ts` (their progress, ambitions, interests, avatar prefs), `src/lib/useTeam.ts` (their counsellees). `Logic` takes the subject and writes through `persist()`, which refuses when read-only.
 - `src/logic/`: pure, unit-tested derivations (`learner.ts` levels and stage, `team.ts` counsellee summary). `src/screens/SignIn.tsx`, `src/screens/Users.tsx` (User management).
-- Knowledge library (admin, design v3): `src/kbVals.ts` builds `vm.kb` (null off-screen), `src/screens/Knowledge.tsx` renders it, `src/logic/okf.ts` holds retrieval (never reads client or licensed sources), OKF v0.2 files, import and the tar download. Bundles are in memory like the catalogue. The full design export lives in `Design/` (git-ignored; the design tool's reader stops at 256 KB). Podcasts, reels, library covers and the map zoom are parked on branch `feature/design-v3-b`.
+- Knowledge library (admin, design v3): `src/kbVals.ts` builds `vm.kb` (null off-screen), `src/screens/Knowledge.tsx` renders it, `src/logic/okf.ts` holds retrieval (never reads client or licensed sources), OKF v0.2 files, import and the tar download. Bundles are stored per business line (`knowledge_bundles.business_line`, null = firm-wide); edits save shortly after each change. The full design export lives in `Design/` (git-ignored; the design tool's reader stops at 256 KB). Podcasts, reels, library covers and the map zoom are parked on branch `feature/design-v3-b`.
 - `supabase/migrations/`: `profiles`, `user_roles`, RLS, private helper functions, first-admin bootstrap. `supabase/functions/manage-users/`: create / remove / reset password / change own password via the auth admin API.
 
 ## Conventions
@@ -43,8 +43,9 @@ Source design: Claude Design project `797ed301-7b6d-47eb-9e2d-6d7d2e7483c3`, fil
 ## Accounts and roles
 
 - **System Admin** (`user_roles.role = 'system_admin'`, no line): everything, and the only role that grants or revokes roles.
-- **Domain Admin** (`'domain_admin'` + a business line; a person may hold several): creates, edits, resets and removes users of that line, and edits that line's curriculum mapping. Never manages a System Admin.
-- Enforcement is in the database (RLS + `private.*` helpers) and in `manage-users`; the UI only hides what the role cannot do. Library and curriculum data are still in-memory, so their per-line limits (`Logic.canEditAud`, `applyOps`) are UI-only until that data moves to Supabase.
+- **Domain Admin** (`'domain_admin'` + a business line; a person may hold several): creates, edits, resets and removes users of that line, and edits that line's learnings, curriculum mapping and knowledge bundles. Never manages a System Admin.
+- **General Admin** (`'general_admin'`, no line): edits all content: firm-wide and every line's learnings, curriculum mapping for every audience (business lines and the industry, technology, ambition and profile lenses) and all knowledge bundles. Manages no users and grants no roles; Domain Admins cannot manage a General Admin.
+- Enforcement is in the database (RLS + `private.*` helpers) and in `manage-users`; the UI only hides what the role cannot do. Content follows `private.can_edit_content(line)` (a null line is firm-wide: General and System Admins) and `private.can_edit_audience(audience)`; `Logic.canEditLine()` / `canEditAud()` mirror them in the UI.
 - Sign-up is closed; admins create accounts with a temporary password (`must_change_password`), which the user replaces at first sign-in. `[auth.email] enable_signup` must stay `true`: false disables email/password login entirely.
 - Never use `user_metadata` for authorization; never put a secret or `service_role` key in the app. `.env.local` holds only the URL and publishable key (see `.env.example`).
 - `private.bootstrap_admins` is one-shot: a listed email becomes System Admin only while none exists, and the row is consumed (it is empty now). The database refuses to remove the last System Admin.

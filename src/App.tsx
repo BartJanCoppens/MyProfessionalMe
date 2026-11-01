@@ -18,6 +18,8 @@ import SubjectPicker from './screens/SubjectPicker';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
 import { useAuth } from './lib/useAuth';
 import { useSubject } from './lib/useSubject';
+import { useContent } from './lib/useContent';
+import type { Content } from './lib/contentStore';
 import { useTeam } from './lib/useTeam';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
@@ -33,9 +35,10 @@ export default function App() {
 
 function Workspace({ auth }: { auth: Auth }) {
   const { subject, options, select, reload, retry, error } = useSubject(auth);
-  if (error) return <LoadError message={error} onRetry={retry} onSignOut={auth.signOut} />;
-  if (!subject) return <div style={{ minHeight: '100vh', background: '#f3f5f0' }} />;
-  return <Shell auth={auth} subject={subject} options={options} select={select} reload={reload} />;
+  const content = useContent();
+  if (error || content.error) return <LoadError message={(error || content.error)!} onRetry={error ? retry : content.retry} onSignOut={auth.signOut} />;
+  if (!subject || !content.content) return <div style={{ minHeight: '100vh', background: '#f3f5f0' }} />;
+  return <Shell auth={auth} subject={subject} options={options} select={select} reload={reload} content={content.content} reloadContent={content.reload} />;
 }
 
 function LoadError({ message, onRetry, onSignOut }: { message: string; onRetry: () => void; onSignOut: () => void }) {
@@ -53,25 +56,31 @@ function LoadError({ message, onRetry, onSignOut }: { message: string; onRetry: 
   );
 }
 
-type ShellProps = { auth: Auth; subject: Subject; options: { id: string; label: string }[]; select: (id: string) => void; reload: () => Promise<void> };
+type ShellProps = { auth: Auth; subject: Subject; options: { id: string; label: string }[]; select: (id: string) => void; reload: () => Promise<void>; content: Content; reloadContent: () => Promise<Content> };
 
-function Shell({ auth, subject, options, select, reload }: ShellProps) {
+function Shell({ auth, subject, options, select, reload, content, reloadContent }: ShellProps) {
   const [picking, setPicking] = useState(false);
   const team = useTeam(subject.id);
   const [today] = useState(() => new Date());
   const cfg = useMemo(() => readConfig(), []);
   const [state, setRaw] = useState<AppState>(() => {
-    const st = initState(cfg);
-    // Administration screens need a System or Domain Admin role, also when opened through ?screen=.
-    const admin = auth.access.isSystem || auth.access.domains.length > 0;
-    return ADMIN_SCREENS.includes(st.screen) && !admin ? { ...st, screen: 'map' } : st;
+    const st = { ...initState(cfg), maps: content.maps, bundles: content.bundles };
+    // Administration screens need an admin role, also when opened through ?screen=.
+    const admin = auth.access.isSystem || !!auth.access.isGeneral || auth.access.domains.length > 0;
+    const users = auth.access.isSystem || auth.access.domains.length > 0;
+    return (ADMIN_SCREENS.includes(st.screen) && !admin) || (st.screen === 'users' && !users) ? { ...st, screen: 'map' } : st;
   });
   const toastTimer = useRef<number | undefined>(undefined);
   const drag = useRef<string | null>(null);
   const file = useRef<HTMLInputElement | null>(null);
   const chat = useRef<HTMLDivElement | null>(null);
 
-  const logic = new Logic(state, (p) => setRaw((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, auth.access, subject, reload);
+  // After an admin saves: the catalogue reloads in place; published mappings replace the local map (unpublished edits are kept).
+  const refreshContent = async (what: 'catalogue' | 'maps') => {
+    const c = await reloadContent();
+    setRaw((s) => ({ ...s, maps: what === 'maps' || !Object.keys(s.pending).length ? c.maps : s.maps, pending: what === 'maps' ? {} : s.pending }));
+  };
+  const logic = new Logic(state, (p) => setRaw((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, auth.access, subject, reload, refreshContent);
   const vm = logic.renderVals();
 
   useEffect(() => { if (chat.current) chat.current.scrollTop = 1e6; }, [state.chat, state.chatBusy, state.proposal]);
@@ -144,7 +153,7 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
             <NavItem label="Learning library" active={vm.navAdminLib} onClick={vm.goAdminLib} />
             <NavItem label="Curriculum mapping" count={vm.pendingLabel} active={vm.navAdminMap} onClick={vm.goAdminMap} />
             <NavItem label="Knowledge library" count={vm.kbCount} active={vm.navKb} onClick={vm.goKb} />
-            <NavItem label="User management" active={vm.navUsers} onClick={vm.goUsers} />
+            {vm.canManageUsers && <NavItem label="User management" active={vm.navUsers} onClick={vm.goUsers} />}
           </>
         )}
       </nav>

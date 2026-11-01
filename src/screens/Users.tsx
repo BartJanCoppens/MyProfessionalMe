@@ -70,7 +70,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       del = bl ? del.eq('business_line', bl) : del.is('business_line', null);
       const { error } = await del; dbError(error);
     }
-  }, (on ? 'Granted ' : 'Revoked ') + (role === 'system_admin' ? 'System Admin' : 'Domain Admin · ' + bl) + ' for ' + (u.full_name || u.email));
+  }, (on ? 'Granted ' : 'Revoked ') + (role === 'system_admin' ? 'System Admin' : role === 'general_admin' ? 'General Admin' : 'Domain Admin · ' + bl) + ' for ' + (u.full_name || u.email));
   const resetPassword = async (u: User) => {
     const password = temporaryPassword();
     try { await manageUsers({ action: 'reset_password', user_id: u.id, password }); setHandover({ email: u.email, password, what: 'New temporary password' }); await load(); }
@@ -84,7 +84,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
     <>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <PageTitle title="User management" lead={access.isSystem
-          ? 'Create accounts, set business lines and appoint Domain Admins. You are a System Admin: you can manage everyone and you are the only role that grants roles.'
+          ? 'Create accounts, set business lines and appoint General and Domain Admins. A General Admin edits all learning content for the three business lines but manages no users. You are a System Admin: you can manage everyone and you are the only role that grants roles.'
           : 'Create and manage accounts in ' + managed.join(', ') + '. A System Admin appoints Domain Admins.'} />
         <Button onClick={() => setAdding(true)}>+ Add user</Button>
       </div>
@@ -109,7 +109,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
           </div>
           {shown.map((u) => {
             const me = u.id === meId;
-            const isSys = u.roles.some((r) => r.role === 'system_admin');
+            const isSys = u.roles.some((r) => r.role === 'system_admin'), isGen = u.roles.some((r) => r.role === 'general_admin');
             const domainOf = (l: string) => u.roles.some((r) => r.role === 'domain_admin' && r.business_line === l);
             const canEditLine = !isSys || access.isSystem;
             return (
@@ -144,6 +144,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
                   {access.isSystem ? (
                     <>
                       <FilterChip selected={isSys} onClick={() => toggleRole(u, 'system_admin', null, !isSys)} style={{ height: 26, fontSize: 12 }}>System Admin</FilterChip>
+                      <FilterChip selected={isGen} onClick={() => toggleRole(u, 'general_admin', null, !isGen)} style={{ height: 26, fontSize: 12 }}>General Admin</FilterChip>
                       {BUSINESS_LINES.map((l) => (
                         <FilterChip key={l} selected={domainOf(l)} onClick={() => toggleRole(u, 'domain_admin', l, !domainOf(l))} style={{ height: 26, fontSize: 12 }}>
                           {domainOf(l) ? 'Domain Admin · ' : ''}{l}
@@ -151,7 +152,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
                       ))}
                     </>
                   ) : u.roles.length ? u.roles.map((r) => (
-                    <Tag key={r.role + r.business_line} tone={r.role === 'system_admin' ? 'neutral' : 'green'}>{r.role === 'system_admin' ? 'System Admin' : 'Domain Admin · ' + r.business_line}</Tag>
+                    <Tag key={r.role + r.business_line} tone={r.role === 'domain_admin' ? 'green' : 'neutral'}>{r.role === 'system_admin' ? 'System Admin' : r.role === 'general_admin' ? 'General Admin' : 'Domain Admin · ' + r.business_line}</Tag>
                   )) : <span style={{ color: '#8b918a', fontSize: 12.5 }}>Member</span>}
                 </div>
                 <div style={{ padding: '10px 12px' }}>

@@ -106,6 +106,7 @@ function BundleDetail({ kb }: { kb: KB }) {
           {s.facts.map((kf) => <div key={kf.k} style={{ padding: '10px 20px', borderRight: '1px solid #eef0ea', minWidth: 0 }}><div style={{ fontSize: 11.5, color: '#8b918a' }}>{kf.k}</div><div style={{ fontWeight: 600, fontSize: 15 }}>{kf.v}</div></div>)}
         </div>
       </div>
+      {!s.editable && <Banner tone="info">{s.readOnlyNote}</Banner>}
       <Tabs tabs={kb.kbTabs} value={kb.kbTab} onChange={kb.kbSetTab} />
       {kb.kbTab === 'overview' && <Overview kb={kb} />}
       {kb.kbTab === 'sources' && <Sources kb={kb} />}
@@ -135,6 +136,9 @@ function Overview({ kb }: { kb: KB }) {
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12 }}>
+          <Field label="Business line" size="sm" hint="Its Domain Admins edit it; firm-wide bundles are edited by a General or System Admin.">
+            {s.editable ? <Select size="md" options={s.lineOptions} value={s.line} onChange={s.setLine} /> : <div style={{ fontWeight: 500, padding: '6px 0' }}>{s.line || 'Firm-wide'}</div>}
+          </Field>
           <Field label="Who can use it" size="sm"><Select size="md" options={kb.kbAccessOptions} value={s.access} onChange={s.setAccess} /></Field>
           <Field label="Flag sources older than" size="sm"><Select size="md" options={kb.kbFreshOptions} value={s.fresh} onChange={s.setFresh} /></Field>
         </div>

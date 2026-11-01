@@ -51,6 +51,7 @@ export function useAuth(): Auth {
   const access: Access = {
     userId: userId || '',
     isSystem: roles.some((r) => r.role === 'system_admin'),
+    isGeneral: roles.some((r) => r.role === 'general_admin'),
     domains: roles.filter((r) => r.role === 'domain_admin').map((r) => r.business_line as string),
   };
 
