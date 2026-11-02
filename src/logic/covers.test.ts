@@ -29,7 +29,7 @@ describe('formatTiles', () => {
     const tiles = formatTiles(LEARN, 'all', () => {});
     expect(tiles.some((t) => t.key === 'all')).toBe(false);
     expect(tiles.every((t) => !t.on)).toBe(true);
-    expect(tiles[0].swBd).toBe('#d5dacf');
+    expect(tiles[0]).not.toHaveProperty('sw');
     expect(tiles.reduce((n, t) => n + parseInt(t.count, 10), 0)).toBe(LEARN.length);
   });
   it('marks the chosen format, and choosing it again clears the filter', () => {

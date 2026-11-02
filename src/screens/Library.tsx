@@ -17,7 +17,7 @@ export function LibraryScreen({ vm }: { vm: VM }) {
         {vm.fmtTiles.map((ft) => (
           <Hover key={ft.key} as="button" type="button" onClick={ft.pick} hoverStyle={{ transform: 'translateY(-2px)', borderColor: '#1a1d18' }}
             style={{ textAlign: 'left', borderRadius: 6, border: '1px solid ' + ft.bd, background: ft.bg, color: ft.fg, padding: '9px 11px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: 2, transition: 'transform .15s,border-color .15s' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: ft.sw, border: '1px solid ' + ft.swBd, flex: 'none' }} /><span style={{ fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>{ft.label}</span></span>
+            <span style={{ fontWeight: 600, fontSize: 12.5, whiteSpace: 'nowrap' }}>{ft.label}</span>
             <span style={{ fontSize: 11.5, opacity: 0.75 }}>{ft.count}</span>
           </Hover>
         ))}
