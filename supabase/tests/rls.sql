@@ -309,20 +309,26 @@ do $$ begin
 end $$;
 with d as (delete from public.knowledge_bundles where id = 'B2' returning 1) insert into results (check_name, expected, actual) select 'DA deletes another line''s bundle', '0 rows', count(*)||' rows' from d;
 
--- ---------- Create & share (F12): creation grants, review policies, routing, reviews, publication ----------
+-- ---------- Create & share (F12): creation rules, review requirements, routing, reviews, publication ----------
 -- Real accounts exist in every line and routing picks at random among equals, so checks assert invariants and
 -- impersonate whoever was assigned. Fixed: a2 (Consulting, counsellor a6) authors; a8 is a2's counsellee;
 -- a9 has no business line (so no peers); a7 (General Admin) moves to Audit so it is never a Consulting peer.
 reset role;
 select set_config('request.jwt.claims', '', true);
+-- Data carried over from the topic model (live project: one grant, one policy, one contribution in review)
+insert into results (check_name, expected, actual) select 'CS migrated grant is a rule (format Micro-guide)', '1', least(count(*), 1)::text from public.creator_rules where formats = '{Micro-guide}' and cardinality(lines) + cardinality(domains) + cardinality(audiences) = 0;
+insert into results (check_name, expected, actual) select 'CS migrated policy (Micro-guide: 1 peer, quality)', '1', least(count(*), 1)::text from public.review_policies where formats = '{Micro-guide}' and peers = 1 and not expert and quality;
+insert into results (check_name, expected, actual) select 'CS contribution in review keeps its route', '1', least(count(*), 1)::text from public.contributions c
+  where c.title = 'Three questions that expose scope creep' and c.status = 'review' and c.step = 3
+    and exists (select 1 from public.contribution_reviews r where r.contribution_id = c.id and r.step = 3 and r.verdict = 'pending');
 insert into auth.users (id, email) values
  ('00000000-0000-0000-0000-0000000000a8','t.counsellee@test.local'),
  ('00000000-0000-0000-0000-0000000000a9','t.noline@test.local');
 update public.profiles set business_line='Consulting', counsellor_id='00000000-0000-0000-0000-0000000000a2' where id='00000000-0000-0000-0000-0000000000a8';
 update public.profiles set counsellor_id='00000000-0000-0000-0000-0000000000a6' where id='00000000-0000-0000-0000-0000000000a2';
 update public.profiles set business_line='Audit' where id='00000000-0000-0000-0000-0000000000a7';
--- the test topics start without a policy or an expert, whatever the live project holds
-delete from public.review_policies where (topic_kind, topic_value) in (('line','Consulting'),('format','Micro-guide'),('format','Case write-up'),('format','Podcast'),('domain','tec'));
+-- routing below depends only on the requirements these checks set, whatever the live project holds
+delete from public.review_policies;
 delete from public.domain_experts where domain = 'acad';
 insert into results (check_name, expected, actual) select 'CS peer candidates exclude the author', '0', count(*)::text from private.peer_candidates('00000000-0000-0000-0000-0000000000a2') c where c = '00000000-0000-0000-0000-0000000000a2';
 insert into results (check_name, expected, actual) select 'CS peer candidates exclude the author''s counsellor', '0', count(*)::text from private.peer_candidates('00000000-0000-0000-0000-0000000000a2') c where c = '00000000-0000-0000-0000-0000000000a6';
@@ -330,74 +336,113 @@ insert into results (check_name, expected, actual) select 'CS peer candidates ex
 insert into results (check_name, expected, actual) select 'CS peer candidates include a line colleague', '1', count(*)::text from private.peer_candidates('00000000-0000-0000-0000-0000000000a2') c where c = '00000000-0000-0000-0000-0000000000a1';
 insert into results (check_name, expected, actual) select 'CS blocked term is a whole word, any case', 'Delcroix|null', initcap(private.blocked_term('Notes from DELCROIX visit'))||'|'||coalesce(private.blocked_term('Delcroixville'), 'null');
 insert into results (check_name, expected, actual) select 'CS blocked term survives punctuation and spacing', 'flemish care', private.blocked_term('Pilot at Flemish-Care,  then');
+-- the match: OR within a part, AND across filled parts, empty = any, audience optional
+insert into results (check_name, expected, actual) select 'CS rule (Consulting or T&L) and Podcast', 'true,false,false,true',
+  private.rule_matches('{Consulting,"Tax & Legal"}', '{Podcast}', '{}', '{}', 'Tax & Legal', 'Podcast', 'reg', null)||','||
+  private.rule_matches('{Consulting,"Tax & Legal"}', '{Podcast}', '{}', '{}', 'Audit', 'Podcast', 'reg', null)||','||
+  private.rule_matches('{Consulting,"Tax & Legal"}', '{Podcast}', '{}', '{}', 'Consulting', 'Reel', 'reg', null)||','||
+  private.rule_matches('{Consulting,"Tax & Legal"}', '{Podcast}', '{}', '{}', 'Consulting', 'Podcast', 'tech', 'ind:energy');
+insert into results (check_name, expected, actual) select 'CS rule audiences need the audience', 'false,true,false',
+  private.rule_matches('{}', '{}', '{}', '{ind:energy}', 'Audit', 'Reel', 'tech', null)||','||
+  private.rule_matches('{}', '{}', '{}', '{ind:energy}', 'Audit', 'Reel', 'tech', 'ind:energy')||','||
+  private.rule_matches('{Consulting}', '{}', '{}', '{}', null, 'Reel', 'tech', null);
 set local role authenticated;
 
--- Creation grants and review policies. Consulting Domain Admin a1:
+-- Creation rules and review requirements. Consulting Domain Admin a1:
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
-with i as (insert into public.creator_grants (user_id, topic_kind, topic_value) values ('00000000-0000-0000-0000-0000000000a2','line','Consulting') returning 1) insert into results (check_name, expected, actual) select 'CS DA grants own line to a managed user', '1 rows', count(*)||' rows' from i;
-with i as (insert into public.review_policies (topic_kind, topic_value, peers, expert, quality) values ('line','Consulting',2,true,true) returning 1) insert into results (check_name, expected, actual) select 'CS DA sets own line''s review policy', '1 rows', count(*)||' rows' from i;
+with i as (insert into public.creator_rules (user_id, lines) values ('00000000-0000-0000-0000-0000000000a2','{Consulting}') returning 1) insert into results (check_name, expected, actual) select 'CS DA grants a rule in own line to a managed user', '1 rows', count(*)||' rows' from i;
+with i as (insert into public.review_policies (lines, formats, peers, expert, quality) values ('{Consulting}','{Reel}',2,true,true) returning 1) insert into results (check_name, expected, actual) select 'CS DA sets a requirement within own line', '1 rows', count(*)||' rows' from i;
 do $$ begin
-  begin insert into public.creator_grants (user_id, topic_kind, topic_value) values ('00000000-0000-0000-0000-0000000000a2','line','Audit');
+  begin insert into public.creator_rules (user_id, lines) values ('00000000-0000-0000-0000-0000000000a2','{Audit}');
     insert into results (check_name, expected, actual) values ('CS DA grants another line', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS DA grants another line', 'blocked', 'blocked: '||sqlstate); end;
-  begin insert into public.creator_grants (user_id, topic_kind, topic_value) values ('00000000-0000-0000-0000-0000000000a3','domain','acad');
+  begin insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000a2','{Consulting,Audit}','{Reel}');
+    insert into results (check_name, expected, actual) values ('CS DA grants own and another line', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS DA grants own and another line', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.creator_rules (user_id, formats) values ('00000000-0000-0000-0000-0000000000a2','{Reel}');
+    insert into results (check_name, expected, actual) values ('CS DA grants any line (empty lines part)', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS DA grants any line (empty lines part)', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.creator_rules (user_id, lines) values ('00000000-0000-0000-0000-0000000000a3','{Consulting}');
     insert into results (check_name, expected, actual) values ('CS DA grants an unmanaged user', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS DA grants an unmanaged user', 'blocked', 'blocked: '||sqlstate); end;
-  begin insert into public.review_policies (topic_kind, topic_value, peers) values ('line','Audit',0);
-    insert into results (check_name, expected, actual) values ('CS DA sets another line''s policy', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('CS DA sets another line''s policy', 'blocked', 'blocked: '||sqlstate); end;
-  begin insert into public.review_policies (topic_kind, topic_value, peers) values ('format','Reel',0);
-    insert into results (check_name, expected, actual) values ('CS DA sets a format policy', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('CS DA sets a format policy', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.review_policies (lines, peers) values ('{Audit}',0);
+    insert into results (check_name, expected, actual) values ('CS DA sets another line''s requirement', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS DA sets another line''s requirement', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.review_policies (formats, peers) values ('{Reel}',0);
+    insert into results (check_name, expected, actual) values ('CS DA sets a requirement for any line', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS DA sets a requirement for any line', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
--- General Admin a7: any person, any topic; policies for any topic; no domain experts
+-- General Admin a7: any rule to anyone; requirements for anything; no domain experts; never an empty rule
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
-with i as (insert into public.creator_grants (user_id, topic_kind, topic_value) values
-  ('00000000-0000-0000-0000-0000000000a2','format','Micro-guide'), ('00000000-0000-0000-0000-0000000000a2','domain','acad'),
-  ('00000000-0000-0000-0000-0000000000a3','format','Case write-up'), ('00000000-0000-0000-0000-0000000000a9','domain','tec'),
-  ('00000000-0000-0000-0000-0000000000a2','format','Podcast') returning 1)
-  insert into results (check_name, expected, actual) select 'CS GA grants anyone any topic', '5 rows', count(*)||' rows' from i;
-with i as (insert into public.review_policies (topic_kind, topic_value, peers, expert, quality) values ('format','Micro-guide',0,false,true), ('format','Case write-up',0,false,false), ('format','Podcast',1,false,true) returning 1)
-  insert into results (check_name, expected, actual) select 'CS GA sets format policies', '3 rows', count(*)||' rows' from i;
+with i as (insert into public.creator_rules (user_id, lines, formats, domains, audiences) values
+  ('00000000-0000-0000-0000-0000000000a2','{}','{Micro-guide}','{}','{}'),
+  ('00000000-0000-0000-0000-0000000000a2','{}','{}','{acad}','{}'),
+  ('00000000-0000-0000-0000-0000000000a2','{Consulting,"Tax & Legal"}','{Podcast}','{}','{}'),
+  ('00000000-0000-0000-0000-0000000000a2','{}','{}','{}','{ind:energy}'),
+  ('00000000-0000-0000-0000-0000000000a3','{}','{Case write-up}','{}','{}'),
+  ('00000000-0000-0000-0000-0000000000a9','{}','{}','{tec}','{}') returning 1)
+  insert into results (check_name, expected, actual) select 'CS GA grants any rule to anyone', '6 rows', count(*)||' rows' from i;
+with i as (insert into public.review_policies (lines, formats, domains, peers, expert, quality) values
+  ('{}','{Micro-guide}','{}',0,false,true), ('{}','{Case write-up}','{}',0,false,false), ('{}','{Podcast}','{}',1,false,false), ('{}','{}','{reg}',0,false,true) returning 1)
+  insert into results (check_name, expected, actual) select 'CS GA sets requirements', '4 rows', count(*)||' rows' from i;
+reset role;
+insert into results (check_name, expected, actual) select 'CS strictest requirement wins', '1,false,true|2,true,true', (select f.peers||','||f.expert||','||f.quality from private.policy_for('Consulting', 'Podcast', 'reg', null) f)||'|'||(select f.peers||','||f.expert||','||f.quality from private.policy_for('Audit', 'Reel', 'tech', null) f);
+set local role authenticated;
 do $$ begin
+  begin insert into public.creator_rules (user_id) values ('00000000-0000-0000-0000-0000000000a2');
+    insert into results (check_name, expected, actual) values ('CS an empty rule', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS an empty rule', 'blocked', 'blocked: '||sqlstate); end;
   begin insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a7');
     insert into results (check_name, expected, actual) values ('CS GA names a domain expert', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS GA names a domain expert', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
--- Member a2: no granting, no policies, no experts; drafts only within grants
+-- Member a2: no granting, no requirements, no experts; drafts only where a rule matches
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
-insert into results (check_name, expected, actual) select 'CS member reads own grants', '4', count(*)::text from public.creator_grants;
+insert into results (check_name, expected, actual) select 'CS member reads own rules', '5', count(*)::text from public.creator_rules where user_id = '00000000-0000-0000-0000-0000000000a2';
 do $$ begin
-  begin insert into public.creator_grants (user_id, topic_kind, topic_value) values ('00000000-0000-0000-0000-0000000000a2','domain','tech');
+  begin insert into public.creator_rules (user_id, domains) values ('00000000-0000-0000-0000-0000000000a2','{tech}');
     insert into results (check_name, expected, actual) values ('CS member grants self', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS member grants self', 'blocked', 'blocked: '||sqlstate); end;
-  begin insert into public.review_policies (topic_kind, topic_value, peers) values ('domain','acad',0);
-    insert into results (check_name, expected, actual) values ('CS member sets a policy', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('CS member sets a policy', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.review_policies (domains, peers) values ('{acad}',0);
+    insert into results (check_name, expected, actual) values ('CS member sets a requirement', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS member sets a requirement', 'blocked', 'blocked: '||sqlstate); end;
   begin insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a2');
     insert into results (check_name, expected, actual) values ('CS member names a domain expert', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS member names a domain expert', 'blocked', 'blocked: '||sqlstate); end;
-  begin insert into public.contributions (topic_kind, topic_value, type, title, domain, takeaway) values ('domain','tech','Reel','T no grant','tech','x');
-    insert into results (check_name, expected, actual) values ('CS member drafts outside their grants', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('CS member drafts outside their grants', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.contributions (business_line, type, title, domain, takeaway) values ('Audit','Podcast','T no match','tech','x');
+    insert into results (check_name, expected, actual) values ('CS draft that no rule matches', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS draft that no rule matches', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.contributions (business_line, type, title, domain, takeaway) values ('Audit','Reel','T no audience','tech','x');
+    insert into results (check_name, expected, actual) values ('CS an audience rule needs the audience', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS an audience rule needs the audience', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
-with i as (insert into public.contributions (topic_kind, topic_value, type, title, domain, level, audience_stage, takeaway) values
-  ('line','Consulting','Reel','T full flow','acad',2,'Partner','One message per slide, stated as a full sentence.'),
-  ('format','Micro-guide','Micro-guide','T quality only','pers',1,'Analyst','Ask before you suggest.'),
-  ('line','Consulting','Podcast','T client name','prof',3,'Manager','What we learned at Delcroix.'),
-  ('domain','acad','Podcast','T revoked','acad',2,'Consultant','Hedge in steps.'),
-  ('format','Podcast','Podcast','T rerun','reg',2,'Consultant','The four boxes that tell you who pays VAT.') returning 1)
-  insert into results (check_name, expected, actual) select 'CS author drafts within grants (Partner audience too)', '5 rows', count(*)||' rows' from i;
-insert into public.contributions (topic_kind, topic_value, type, title, domain, takeaway, outline, sources) values
-  ('line','Consulting','Reel','T outline name','prof','Clean takeaway.','1. Open with the Brabant-office case', '{}'),
-  ('line','Consulting','Reel','T source name','prof','Clean takeaway.','', '{"Workshop notes · HOVERNA"}');
+with i as (insert into public.contributions (business_line, audience, type, title, domain, takeaway) values ('Audit','ind:energy','Reel','T audience','tech','Grid tariffs reward a flat load.') returning 1)
+  insert into results (check_name, expected, actual) select 'CS an audience rule matches with the audience', '1 rows', count(*)||' rows' from i;
+-- no line given: the author's line
+with i as (insert into public.contributions (type, title, domain, level, audience_stage, takeaway) values
+  ('Reel','T full flow','acad',2,'Partner','One message per slide, stated as a full sentence.'),
+  ('Micro-guide','T quality only','pers',1,'Analyst','Ask before you suggest.'),
+  ('Reel','T client name','prof',3,'Manager','What we learned at Delcroix.'),
+  ('Podcast','T strictest','reg',2,'Consultant','The four boxes that tell you who pays VAT.') returning 1)
+  insert into results (check_name, expected, actual) select 'CS author drafts where a rule matches (Partner audience too)', '4 rows', count(*)||' rows' from i;
+insert into public.contributions (business_line, type, title, domain, takeaway) values ('Audit','Case write-up','T revoked','acad','Hedge in steps.');
+insert into results (check_name, expected, actual) select 'CS line defaults to the author''s', 'Consulting', business_line::text from public.contributions where title = 'T full flow';
 insert into results (check_name, expected, actual) select 'CS author name is copied', '1', count(*)::text from public.contributions where title = 'T full flow' and author_name <> '';
+insert into public.contributions (type, title, domain, takeaway, outline, sources) values
+  ('Reel','T outline name','prof','Clean takeaway.','1. Open with the Brabant-office case', '{}'),
+  ('Reel','T source name','prof','Clean takeaway.','', '{"Workshop notes · HOVERNA"}');
+do $$ begin
+  begin update public.contributions set business_line = 'Audit' where title = 'T client name';
+    insert into results (check_name, expected, actual) values ('CS draft edited out of the rules', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS draft edited out of the rules', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'CS the refused edit left the line', 'Consulting', business_line::text from public.contributions where title = 'T client name';
 -- a3 (Tax & Legal) drafts too; a2 must not see it
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
-insert into public.contributions (topic_kind, topic_value, type, title, domain, takeaway) values ('format','Case write-up','Case write-up','T zero steps','corp','Anonymise before you share.');
+insert into public.contributions (type, title, domain, takeaway) values ('Case write-up','T zero steps','corp','Anonymise before you share.');
 -- a9 (no business line) drafts for domain tec
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a9","role":"authenticated"}';
-insert into public.contributions (topic_kind, topic_value, type, title, domain, takeaway) values ('domain','tec','Reel','T no peers','tec','Pivot only what you need.');
+insert into public.contributions (type, title, domain, takeaway) values ('Reel','T no peers','tec','Pivot only what you need.');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'CS author cannot read another person''s draft', '0', count(*)::text from public.contributions where title like 'T %' and author_id <> '00000000-0000-0000-0000-0000000000a2';
 do $$ begin
@@ -414,17 +459,19 @@ do $$ begin
     insert into results (check_name, expected, actual) values ('CS submit with a client name in a source', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS submit with a client name in a source', 'blocked', 'blocked: '||sqlerrm); end;
 end $$;
--- the grant behind 'T revoked' is withdrawn by the General Admin; submitting is then refused
+-- the rule behind 'T revoked' (domain acad) is withdrawn by the General Admin; submitting is then refused
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
-with d as (delete from public.creator_grants where user_id = '00000000-0000-0000-0000-0000000000a2' and topic_kind = 'domain' and topic_value = 'acad' returning 1) insert into results (check_name, expected, actual) select 'CS GA revokes a grant', '1 rows', count(*)||' rows' from d;
+with d as (delete from public.creator_rules where user_id = '00000000-0000-0000-0000-0000000000a2' and domains = '{acad}' returning 1) insert into results (check_name, expected, actual) select 'CS GA revokes a rule', '1 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with d as (delete from public.creator_rules where user_id = '00000000-0000-0000-0000-0000000000a2' and formats = '{Podcast}' returning 1) insert into results (check_name, expected, actual) select 'CS DA cannot revoke a rule beyond own lines', '0 rows', count(*)||' rows' from d;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
 do $$ begin
   begin perform public.submit_contribution((select id from public.contributions where title = 'T revoked'));
-    insert into results (check_name, expected, actual) values ('CS submit without a creation grant', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('CS submit without a creation grant', 'blocked', 'blocked: '||sqlerrm); end;
+    insert into results (check_name, expected, actual) values ('CS submit no rule matches any more', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS submit no rule matches any more', 'blocked', 'blocked: '||sqlerrm); end;
 end $$;
 
--- Full flow (2 peers, expert, quality & risk): routing
+-- Full flow (Consulting Reel: 2 peers, expert, quality & risk): routing
 insert into results (check_name, expected, actual) select 'CS submit routes to peer review', 'review', public.submit_contribution((select id from public.contributions where title = 'T full flow'));
 select set_config('test.c1', (select id::text from public.contributions where title = 'T full flow'), true);
 insert into results (check_name, expected, actual) select 'CS author sees the whole route', '2/1/1', (select count(*) from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 1)||'/'||(select count(*) from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 2)||'/'||(select count(*) from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 3);
@@ -440,20 +487,16 @@ select set_config('test.qr', (select reviewer_id::text from public.contribution_
 reset role;
 insert into results (check_name, expected, actual) select 'CS no domain expert: a System Admin reviews', '1', count(*)::text from public.user_roles where user_id = current_setting('test.ex')::uuid and role = 'system_admin';
 insert into results (check_name, expected, actual) select 'CS quality & risk by a General Admin', '1', count(*)::text from public.user_roles where user_id = current_setting('test.qr')::uuid and role = 'general_admin';
--- a peer who is not a System Admin (System Admins read everything)
 select set_config('test.px', coalesce((select r.reviewer_id::text from public.contribution_reviews r where r.contribution_id = current_setting('test.c1')::uuid and r.step = 1
   and not exists (select 1 from public.user_roles x where x.user_id = r.reviewer_id and x.role = 'system_admin') order by r.slot limit 1), current_setting('test.p1')), true);
-set local role authenticated;
-select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.px'), 'role', 'authenticated')::text, true);
-insert into results (check_name, expected, actual) select 'CS a reviewer sees only assigned contributions', '1', count(*)::text from public.contributions where title like 'T %' and status <> 'published';
-reset role;
 do $$ begin
   begin insert into public.contribution_reviews (contribution_id, step, slot, reviewer_id) values (current_setting('test.c1')::uuid, 3, 2, current_setting('test.p1')::uuid);
     insert into results (check_name, expected, actual) values ('CS a second step for the same reviewer', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS a second step for the same reviewer', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
 set local role authenticated;
--- someone not assigned: neither a direct update nor the RPC
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.px'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'CS a reviewer sees only assigned contributions', '1', count(*)::text from public.contributions where title like 'T %' and status <> 'published';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
 do $$ begin
   begin update public.contribution_reviews set verdict = 'approved' where contribution_id = current_setting('test.c1')::uuid;
@@ -463,14 +506,12 @@ do $$ begin
     insert into results (check_name, expected, actual) values ('CS unassigned user approves', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS unassigned user approves', 'blocked', 'blocked: '||sqlerrm); end;
 end $$;
--- the quality reviewer (a7, never a Consulting peer now) cannot act during peer review
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
 do $$ begin
   begin perform public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,t}', '');
     insert into results (check_name, expected, actual) values ('CS a later step cannot approve early', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS a later step cannot approve early', 'blocked', 'blocked: '||sqlerrm); end;
 end $$;
--- peer 1: the rubric gates approval
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.p1'), 'role', 'authenticated')::text, true);
 do $$ begin
   begin perform public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,f}', '');
@@ -491,10 +532,10 @@ insert into results (check_name, expected, actual) select 'CS publication create
     and l.status = 'published' and l.format = 'Reel' and l.business_line = 'Consulting' and l.title = 'T full flow';
 set local role authenticated;
 
--- Shorter policy (quality & risk only): changes requested, edited, resubmitted, published
+-- Quality & risk only (Micro-guide): changes requested, attributes locked, edited, resubmitted, published
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
 select set_config('test.c2', (select id::text from public.contributions where title = 'T quality only'), true);
-insert into results (check_name, expected, actual) select 'CS quality-only policy skips peers and expert', 'review', public.submit_contribution(current_setting('test.c2')::uuid);
+insert into results (check_name, expected, actual) select 'CS quality-only requirement skips peers and expert', 'review', public.submit_contribution(current_setting('test.c2')::uuid);
 insert into results (check_name, expected, actual) select 'CS quality-only route', '3:pending', string_agg(step||':'||verdict, ',') from public.contribution_reviews where contribution_id = current_setting('test.c2')::uuid;
 select set_config('test.q2', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c2')::uuid), true);
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.q2'), 'role', 'authenticated')::text, true);
@@ -508,27 +549,33 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","r
 with u as (update public.contributions set takeaway = 'Ask before you suggest, using the situation-behaviour-impact model.' where id = current_setting('test.c2')::uuid returning 1)
   insert into results (check_name, expected, actual) select 'CS author edits after changes requested', '1 rows', count(*)||' rows' from u;
 do $$ begin
-  begin update public.contributions set topic_kind = 'line', topic_value = 'Consulting' where id = current_setting('test.c2')::uuid;
-    insert into results (check_name, expected, actual) values ('CS topic is fixed after submission', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('CS topic is fixed after submission', 'blocked', 'blocked: '||sqlerrm); end;
-  begin update public.contributions set domain = 'prof' where id = current_setting('test.c2')::uuid;
+  begin update public.contributions set business_line = 'Tax & Legal' where id = current_setting('test.c2')::uuid;
+    insert into results (check_name, expected, actual) values ('CS line is fixed after submission', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS line is fixed after submission', 'blocked', 'blocked: '||sqlerrm); end;
+  begin update public.contributions set domain = 'acad' where id = current_setting('test.c2')::uuid;
     insert into results (check_name, expected, actual) values ('CS domain is fixed after submission', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CS domain is fixed after submission', 'blocked', 'blocked: '||sqlerrm); end;
+  begin update public.contributions set type = 'Podcast' where id = current_setting('test.c2')::uuid;
+    insert into results (check_name, expected, actual) values ('CS format is fixed after submission', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS format is fixed after submission', 'blocked', 'blocked: '||sqlerrm); end;
+  begin update public.contributions set audience = 'ind:energy' where id = current_setting('test.c2')::uuid;
+    insert into results (check_name, expected, actual) values ('CS audience is fixed after submission', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS audience is fixed after submission', 'blocked', 'blocked: '||sqlerrm); end;
 end $$;
 insert into results (check_name, expected, actual) select 'CS author reads the reviewer comment', 'Name the model you use.', comment from public.contribution_reviews where contribution_id = current_setting('test.c2')::uuid;
-insert into results (check_name, expected, actual) select 'CS resubmit returns to the step that asked', 'review', public.submit_contribution(current_setting('test.c2')::uuid);
+insert into results (check_name, expected, actual) select 'CS resubmit returns to the reviewers', 'review', public.submit_contribution(current_setting('test.c2')::uuid);
 insert into results (check_name, expected, actual) select 'CS the reviewer is asked again', '3:pending', string_agg(step||':'||verdict, ',') from public.contribution_reviews where contribution_id = current_setting('test.c2')::uuid;
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.q2'), 'role', 'authenticated')::text, true);
 insert into results (check_name, expected, actual) select 'CS quality-only approval publishes', 'published', public.review_contribution(current_setting('test.c2')::uuid, 'approved', '{t,t,t,t}', '');
 reset role;
-insert into results (check_name, expected, actual) select 'CS format-topic learning sits in the author''s line', 'Micro-guide|Consulting', l.format||'|'||l.business_line from public.contributions c join public.learnings l on l.id = c.learning_id where c.id = current_setting('test.c2')::uuid;
+insert into results (check_name, expected, actual) select 'CS learning takes the contribution''s line', 'Micro-guide|Consulting', l.format||'|'||l.business_line from public.contributions c join public.learnings l on l.id = c.learning_id where c.id = current_setting('test.c2')::uuid;
 set local role authenticated;
 
--- Changes asked at a later step: resubmitting runs the whole flow again (earlier approvals were of the old version)
+-- Strictest requirement (Podcast: 1 peer; Regulations: quality) → 1 peer then quality; changes at quality rerun everything
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
-select set_config('test.c3', (select id::text from public.contributions where title = 'T rerun'), true);
-insert into results (check_name, expected, actual) select 'CS one peer then quality', 'review', public.submit_contribution(current_setting('test.c3')::uuid);
-insert into results (check_name, expected, actual) select 'CS one peer then quality route', '1:pending,3:waiting', string_agg(step||':'||verdict, ',' order by step) from public.contribution_reviews where contribution_id = current_setting('test.c3')::uuid;
+select set_config('test.c3', (select id::text from public.contributions where title = 'T strictest'), true);
+insert into results (check_name, expected, actual) select 'CS strictest requirement routes', 'review', public.submit_contribution(current_setting('test.c3')::uuid);
+insert into results (check_name, expected, actual) select 'CS strictest route: 1 peer then quality', '1:pending,3:waiting', string_agg(step||':'||verdict, ',' order by step) from public.contribution_reviews where contribution_id = current_setting('test.c3')::uuid;
 select set_config('test.p3', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c3')::uuid and step = 1), true);
 select set_config('test.q3', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c3')::uuid and step = 3), true);
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.p3'), 'role', 'authenticated')::text, true);
@@ -550,8 +597,7 @@ insert into results (check_name, expected, actual) select 'CS colleagues do not 
 insert into results (check_name, expected, actual) select 'CS colleagues read its published learning', '1', count(*)::text from public.learnings where title = 'T full flow' and source = 'Peer contribution';
 
 -- No review required: published on submit. No peers available: refused, still a draft.
-set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
-insert into results (check_name, expected, actual) select 'CS policy without reviews publishes on submit', 'published', public.submit_contribution((select id from public.contributions where title = 'T zero steps'));
+insert into results (check_name, expected, actual) select 'CS requirement without reviews publishes on submit', 'published', public.submit_contribution((select id from public.contributions where title = 'T zero steps'));
 insert into results (check_name, expected, actual) select 'CS zero-step learning exists', '1', count(*)::text from public.learnings l join public.contributions c on c.learning_id = l.id where c.title = 'T zero steps' and l.created_by = '00000000-0000-0000-0000-0000000000a3';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a9","role":"authenticated"}';
 do $$ begin
@@ -561,7 +607,6 @@ do $$ begin
 end $$;
 insert into results (check_name, expected, actual) select 'CS too few peers keeps the draft', 'draft|0', c.status||'|'||(select count(*) from public.contribution_reviews r where r.contribution_id = c.id) from public.contributions c where c.title = 'T no peers';
 insert into results (check_name, expected, actual) select 'CS peer count for someone without a line', '0', public.peer_count()::text;
--- System Admin names a domain expert
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
 with i as (insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a1') returning 1) insert into results (check_name, expected, actual) select 'CS SA names a domain expert', '1 rows', count(*)||' rows' from i;
 
