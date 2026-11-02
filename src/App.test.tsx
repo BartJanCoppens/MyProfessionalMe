@@ -144,6 +144,27 @@ describe('the sidebar', () => {
     button('Sign out');
     expect(a.signOut).toHaveBeenCalled();
   });
+  it('shows AI connections to System Admins only, and sends anyone else who opens it from the URL to the map', async () => {
+    for (const acc of [{ isGeneral: true }, { domains: ['Audit'] }, {}]) {
+      window.history.replaceState({}, '', '/?screen=adminAi');
+      setup({ a: auth({}, acc) });
+      expect(heading()).toEqual(['Your growth map']);
+      expect(screen.queryByText('AI connections', { selector: 'nav button > span' })).toBeNull();
+      cleanup();
+    }
+    expect(db.on('ai_connections')).toHaveLength(0);
+    db.answer((c) => c.table === 'ai_connections' ? { data: [{ id: 'c1', name: 'Claude EU', provider: 'anthropic', base_url: null, default_model: 'm1', region: null, key_hint: 'abcd' }] }
+      : c.table === 'rpc:ai_usage_summary' ? { data: { uses: {}, top: [] } } : { data: [] });
+    setup({ a: auth({}, { isSystem: true }) });
+    nav('AI connections');
+    expect(heading()).toEqual(['AI connections']);
+    expect(await screen.findByText('Key ····abcd')).toBeTruthy();
+  });
+  it('asks once which AI uses are live, for every signed-in person', async () => {
+    db.answer((c) => ({ data: c.table === 'rpc:ai_live_uses' ? ['profile_chat'] : [] }));
+    setup();
+    await waitFor(() => expect(db.on('rpc:ai_live_uses')).toHaveLength(1));
+  });
   it('sends a member who opens an admin screen from the URL to the map', () => {
     window.history.replaceState({}, '', '/?screen=adminLib');
     setup();

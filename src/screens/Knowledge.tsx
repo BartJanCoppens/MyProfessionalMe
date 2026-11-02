@@ -335,6 +335,7 @@ function TestRetrieval({ kb }: { kb: KB }) {
         )}
         {kb.kbBusy && <ChatBubble role="assistant"><span style={{ color: '#8b918a' }}>Drafting from the passages</span></ChatBubble>}
         {kb.kbAnswer && <ChatBubble role="assistant">{kb.kbAnswer}</ChatBubble>}
+        {kb.kbAnswer && <div style={{ fontSize: 11.5, color: '#8b918a' }}>{kb.kbAnswerNote}</div>}
         {kb.kbNoHits && <Banner tone="warning">{kb.kbNoHitText}</Banner>}
       </div>
     </div>

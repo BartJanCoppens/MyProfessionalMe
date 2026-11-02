@@ -161,6 +161,7 @@ describe('deciding from the learning detail (View as)', () => {
     expect(rec).toMatchObject({ editable: false, showEvidence: true, saved: { link, note: '', ref: '', none: '' } });
     expect(rec.decide).not.toBeNull();
     expect(as(member('c1'), 'L10').vm().rec.saved.none).toBe('No evidence needed for a classroom');
+    expect(as(member('c1'), 'L1').vm().rec.saved.none).toBe('No evidence needed for an e-learning');
   });
   it('offers the decision to a General Admin (Q7), not to another line\'s Domain Admin or the learner', () => {
     expect(as(generalAdmin('g1')).vm().rec.decide).not.toBeNull();

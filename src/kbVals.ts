@@ -33,15 +33,13 @@ async function ask(L: Logic, b: Bundle, m: RagModel, q0: string) {
   const q = (q0 || '').trim(); if (!q || L.state.kbBusy) return;
   const seq = ++askSeq, hits = rankHits([b], m, q);
   L.setState({ kbQ: q, kbHits: hits, kbAnswer: '', kbBusy: hits.length > 0 }); if (!hits.length) return;
-  let ans = '';
-  if (L.props.liveAssistant !== false && window.claude?.complete) {
-    try {
-      ans = await window.claude.complete({ messages: [{ role: 'user', content: 'Answer using ONLY these numbered passages. Citation rule: ' + ragOptLabel('cite', m.cite).toLowerCase() + ' carries a citation like [1]. At most 60 words, plain English, no emoji. If the passages do not answer it, say so.\n' + hits.map((h, k) => '[' + (k + 1) + '] ' + h.text).join('\n') + '\nQuestion: ' + q }], max_tokens: 250 });
-    } catch { ans = ''; }
-  }
+  // Only an AI attempt waits; the scripted answer is immediate.
+  const ai = L.aiCan('kb_answer') && await L.viaAi('kb_answer', { messages: [{ role: 'user', content: 'Answer using ONLY these numbered passages. Citation rule: ' + ragOptLabel('cite', m.cite).toLowerCase() + ' carries a citation like [1]. At most 60 words, plain English, no emoji. If the passages do not answer it, say so.\n' + hits.map((h, k) => '[' + (k + 1) + '] ' + h.text).join('\n') + '\nQuestion: ' + q }], max_tokens: 250 },
+    (t) => String(t).trim() || null);
   if (seq !== askSeq) return;
-  if (!ans) ans = hits[0].text + ' [1]' + (hits[1] ? ' ' + hits[1].text + ' [2]' : '');
-  L.setState({ kbBusy: false, kbAnswer: String(ans).trim() });
+  // Without AI the top passages are quoted, and the note under the answer says so.
+  const ans = ai || hits[0].text + ' [1]' + (hits[1] ? ' ' + hits[1].text + ' [2]' : '');
+  L.setState({ kbBusy: false, kbAnswer: ans, kbAnswerAi: !!ai });
 }
 
 async function importFiles(L: Logic, list: FileList | null) {
@@ -210,5 +208,6 @@ function kbScreen(L: Logic) {
     kbNoHitText: 'No passage reaches the ' + tm.thresh + ' threshold. Creators would get no draft, which is the intended behaviour. Lower the threshold in the RAG model or add a source.',
     kbHits: (hits || []).map((h, k) => ({ n: String(k + 1), text: h.text, src: h.src, score: (h.disp || 0.6).toFixed(2), w: Math.round((h.disp || 0.6) * 100) + '%', delay: k * 60 + 'ms' })),
     kbAnswer: s.kbAnswer,
+    kbAnswerNote: !s.kbAnswer ? '' : s.kbAnswerAi ? 'AI answer from ' + (s.kbHits || []).length + ' passages · ranking: simulated keyword' : 'Scripted answer: the top passages quoted · ' + (L.aiLabel('kb_answer') === 'Scripted assistant' ? 'no AI connection for this use' : 'AI did not answer'),
   };
 }

@@ -97,7 +97,7 @@ const commentBox = (L: Logic, key: string) => ({
 });
 const evidenceView = (e: Evidence, format: string) => ({
   note: e.note, link: e.link, ref: e.ref,
-  none: hasEvidence(e) ? '' : evidenceRule(format) === 'none' ? 'No evidence needed for a ' + (format || 'learning').toLowerCase() : 'No evidence attached',
+  none: hasEvidence(e) ? '' : evidenceRule(format) === 'none' ? 'No evidence needed for ' + ((f) => (/^[aeiou]/.test(f) ? 'an ' : 'a ') + f)((format || 'learning').toLowerCase()) : 'No evidence attached',
 });
 
 // The detail's learning record: evidence (form for the learner, read-only for others), open feedback, decisions.

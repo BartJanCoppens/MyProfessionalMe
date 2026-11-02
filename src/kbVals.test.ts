@@ -433,6 +433,7 @@ describe('test retrieval', () => {
     expect(kb.kbHitCount).toMatch(/^\d of up to 3 passages$/);
     expect(h.state.kbAnswer).toMatch(/^Pillar Two applies to groups[^[]*\[1\]/);
     expect(h.state.kbBusy).toBe(false);
+    expect(h.kb().kbAnswerNote).toBe('Scripted answer: the top passages quoted · no AI connection for this use');
   });
   it('says when no passage reaches the threshold', () => {
     const h = open('B2', { kbQ: 'zebra crossing weather' });
@@ -471,11 +472,13 @@ describe('test retrieval', () => {
     expect(live.state.kbBusy).toBe(true);
     await flush();
     expect(live.state).toMatchObject({ kbAnswer: 'Groups above €750m [1]', kbBusy: false });
+    expect(live.vm().kb!.kbAnswerNote).toMatch(/^AI answer from \d passages · ranking: simulated keyword$/);
     stubWindow({ claude: { complete: async () => { throw new Error('offline'); } } });
     const down = harness({ access: systemAdmin(), config: { liveAssistant: true }, state: { screen: 'adminKb', kbOpen: true, kbSel: 'B2', kbQ: q } });
     down.vm().kb!.kbAsk();
     await flush();
     expect(down.state.kbAnswer).toMatch(/\[1\]/);
+    expect(down.vm().kb!.kbAnswerNote).toBe('Scripted answer: the top passages quoted · AI did not answer');
   });
   it('drops a late answer after the test model changed', async () => {
     let answer: (v: string) => void = () => {};

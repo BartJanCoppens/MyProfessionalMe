@@ -1,10 +1,10 @@
 // Runs every migration and supabase/tests/rls.sql on PGlite (Postgres 17 in Node), with a stand-in for Supabase's
-// auth schema and roles, so the RLS checks can be tried without the live project and without Docker:
+// auth schema, roles and Vault (plain text, same function names), so the RLS checks can be tried without the live project and without Docker:
 //   npm i --no-save @electric-sql/pglite@0.3.15 && node scripts/rls-pglite.mjs . [real]
 // 'real' adds accounts in every line and a second General Admin, as in the live project (routing picks at random).
 // Before the creation-rules migration (20261102080340) it inserts v0.6.0 data in the old topic model (one grant for
 // format Micro-guide, the Micro-guide policy, a contribution at quality & risk), standing in for the live data that
-// migration carries over. The live check stays `npm run test:db`.
+// migration carries over. SHOW=<prefix> prints the checks whose name starts with it. The live check stays `npm run test:db`.
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,6 +22,17 @@ grant usage on schema auth to anon, authenticated; grant execute on function aut
 grant usage on schema public to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated;
 alter default privileges in schema public grant all on functions to anon, authenticated;
+grant usage on schema public to service_role;
+-- Supabase Vault stand-in: same names and positional arguments, no encryption, no access for client roles.
+create schema vault;
+create table vault.secrets (id uuid primary key default gen_random_uuid(), name text unique, description text not null default '', secret text not null,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create view vault.decrypted_secrets as select id, name, description, secret, secret as decrypted_secret, created_at, updated_at from vault.secrets;
+create function vault.create_secret(new_secret text, new_name text default null, new_description text default '') returns uuid language sql as $$
+  insert into vault.secrets (secret, name, description) values (new_secret, new_name, coalesce(new_description, '')) returning id $$;
+create function vault.update_secret(secret_id uuid, new_secret text default null, new_name text default null, new_description text default null) returns void language sql as $$
+  update vault.secrets set secret = coalesce(new_secret, secret), name = coalesce(new_name, name), description = coalesce(new_description, description), updated_at = now() where id = secret_id $$;
+revoke all on schema vault from public; revoke execute on all functions in schema vault from public;
 `);
 const dir = join(root, 'supabase/migrations');
 let seeded = false;
@@ -61,6 +72,7 @@ let res;
 try { res = await db.exec(sql); } catch (e) { console.error('RLS SCRIPT FAILED', e.message, e.where || ''); process.exit(1); }
 const rows = res[res.length - 1].rows;
 const bad = rows.filter((r) => r.result !== 'PASS');
+if (process.env.SHOW) rows.filter((r) => r.check_name.startsWith(process.env.SHOW)).forEach((r) => console.log(r.result, r.check_name, '|', r.actual));
 bad.forEach((r) => console.log('FAIL', r.check_name, '| expected', r.expected, '| actual', r.actual));
 console.log(rows.length - bad.length + '/' + rows.length + ' RLS checks pass (PGlite)');
 process.exit(bad.length ? 1 : 0);

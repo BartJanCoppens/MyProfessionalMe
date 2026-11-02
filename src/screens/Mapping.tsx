@@ -96,7 +96,7 @@ function Copilot({ vm }: { vm: VM }) {
     <div style={{ ...card, flex: '0 1 420px', minWidth: 320, display: 'flex', flexDirection: 'column', position: 'sticky', top: 78, maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' }}>
       <div style={{ padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#171a16', color: '#fff', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ width: 22, height: 22, borderRadius: 5, background: '#86BC25', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10180a' }} /></span>
-        <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600 }}>Curriculum copilot</div><div style={{ fontSize: 11.5, color: '#a9b0a5' }}>Reads anonymised evaluations, staffing and shared profiles. Proposes; you decide.</div></div>
+        <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600 }}>Curriculum copilot</div><div style={{ fontSize: 11.5, color: '#a9b0a5' }}>{vm.cpMode} · reads anonymised evaluations, staffing and shared profiles. Proposes; you decide.</div></div>
       </div>
       <div style={{ ...label, padding: '10px 18px 4px' }}>Found in the data · {vm.sigCount}</div>
       <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 430, overflow: 'auto' }}>
@@ -187,7 +187,7 @@ function LearnersEye({ vm }: { vm: VM }) {
           <Button variant="dark" onClick={vm.readAs} disabled={vm.readBusy}>{vm.readLabel}</Button>
           {vm.read ? (
             <div style={{ border: '1px solid #e1e5dc', borderRadius: 6, padding: '10px 12px', background: '#fafbf8', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={label}>{vm.readHead}</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}><span style={label}>{vm.readHead}</span><Tag tone={vm.read.ai ? 'blue' : 'neutral'}>{vm.readTag}</Tag></div>
               <div style={{ textWrap: 'pretty' }}>“{vm.read.text}”</div>
               <div style={{ fontSize: 12, color: '#5a6058', textWrap: 'pretty' }}>Copilot suggests: {vm.read.fix}</div>
             </div>

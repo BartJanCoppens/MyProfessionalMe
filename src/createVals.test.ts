@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from 'react';
 import * as store from './lib/contributionStore';
 import { draftFromPassages } from './createVals';
+import type { AskAi } from './createVals';
 import { emptyParts } from './logic/contribution';
 import type { CreateData, PolicyRow, Rule, RuleParts } from './logic/contribution';
 import { contribution, review } from './test/contributions';
@@ -24,8 +25,8 @@ let ids = 0;
 const rule = (o: Partial<RuleParts>): Rule => ({ id: ++ids, user_id: 'u1', ...emptyParts(), ...o });
 const pol = (o: Partial<RuleParts>, peers: number, expert: boolean, quality: boolean): PolicyRow => ({ id: ++ids, ...emptyParts(), ...o, peers, expert, quality });
 const data = (o: Partial<CreateData> = {}): CreateData => ({ contributions: [], reviews: [], rules: [rule({ lines: ['Consulting'] })], policies: [], peers: 3, ...o });
-const cs = (o: { data?: CreateData; state?: Partial<AppState>; access?: ReturnType<typeof member>; readOnly?: boolean } = {}) => {
-  const h = harness({ access: o.access || member('u1'), subject: person(o.readOnly ? { id: 'u9', name: 'Other Person', readOnly: true } : {}), state: { screen: 'create', create: o.data || data(), ...o.state } });
+const cs = (o: { data?: CreateData; state?: Partial<AppState>; access?: ReturnType<typeof member>; readOnly?: boolean; live?: boolean } = {}) => {
+  const h = harness({ access: o.access || member('u1'), subject: person(o.readOnly ? { id: 'u9', name: 'Other Person', readOnly: true } : {}), state: { screen: 'create', create: o.data || data(), ...o.state }, config: { liveAssistant: !!o.live } });
   vi.mocked(store.loadCreate).mockImplementation(async () => h.state.create!);
   return Object.assign(h, { c: () => h.vm().create! });
 };
@@ -359,16 +360,16 @@ describe('Draft with AI', () => {
     await h.c().nwDraftAi();
     expect(h.lastToast()).toBe('Pick at least one knowledge bundle');
   });
-  it('falls back to the scripted outline from retrieved passages, labelled as assisted', async () => {
+  it('falls back to the scripted outline from retrieved passages, labelled as scripted and not saved as AI-assisted', async () => {
     const h = cs({ state: { createTab: 'new', nw: { ...nw, title: 'One message per slide', dom: 'pers' }, nwKb: ['B1'] }, data: data() });
     await h.c().nwDraftAi();
     const c = h.c();
     expect(c.nwHasAi).toBe(true);
-    expect(c.nwAiNote).toBe('Scripted outline from the passages · no AI in this environment');
+    expect(c.nwAiNote).toBe('Scripted outline from the passages · no AI connection for this use');
     expect(c.nw.take).toMatch(/ \[1\]$/);
     expect(c.nwAiOutline[0].text).toMatch(/\[1\]$/);
     expect(c.nwAiCites[0].text).toMatch(/ · Operating model & cost methods$/);
-    expect(h.state.nw.ai).toBe(true);
+    expect(h.state.nw.ai).toBe(false);
   });
   it('only offers bundles the author may use: Tax & Legal bundles to Tax & Legal people', () => {
     expect(cs({ state: { createTab: 'new' } }).c().nwBundles.map((b) => b.id)).not.toContain('B2');
@@ -376,14 +377,20 @@ describe('Draft with AI', () => {
     expect(tl.vm().create!.nwBundles.map((b) => b.id)).toContain('B2');
   });
   it('says the AI outline is unavailable when the model fails, and the form stays usable', async () => {
-    stubWindow({ claude: { complete: vi.fn(async () => { throw new Error('down'); }) } });
-    const out = await draftFromPassages(nw, [{ text: 'Groups above €750m are in scope. Minimum rate 15%.', src: 'Guide · B2', score: 1 }], true);
+    const out = await draftFromPassages(nw, [{ text: 'Groups above €750m are in scope. Minimum rate 15%.', src: 'Guide · B2', score: 1 }], async () => null);
     expect(out.note).toBe('AI outline unavailable · scripted outline from the passages');
     expect(out.outline).toEqual(['Groups above €750m are in scope [1]']);
   });
   it('uses the model\'s JSON when it answers', async () => {
-    stubWindow({ claude: { complete: vi.fn(async () => 'Here: {"takeaway":"Check the €750m test first [1]","outline":["Scope [1]","Rate [1]"]}') } });
-    const out = await draftFromPassages(nw, [{ text: 'Groups above €750m are in scope.', src: 'Guide · B2', score: 1 }], true);
-    expect(out).toEqual({ takeaway: 'Check the €750m test first [1]', outline: ['Scope [1]', 'Rate [1]'], note: 'AI-assisted draft · grounded on keyword-ranked passages · edit it in your own words' });
+    const ask: AskAi = async (_req, parse) => parse('Here: {"takeaway":"Check the €750m test first [1]","outline":["Scope [1]","Rate [1]"]}');
+    const out = await draftFromPassages(nw, [{ text: 'Groups above €750m are in scope.', src: 'Guide · B2', score: 1 }], ask);
+    expect(out).toEqual({ takeaway: 'Check the €750m test first [1]', outline: ['Scope [1]', 'Rate [1]'], note: 'AI-assisted draft · grounded on keyword-ranked passages · edit it in your own words', ai: true });
+  });
+  it('drafts with AI through Claude Design and saves it as AI-assisted', async () => {
+    stubWindow({ claude: { complete: vi.fn(async () => '{"takeaway":"Price the change [1]","outline":["Scope [1]"]}') } });
+    const h = cs({ state: { createTab: 'new', nw: { ...nw, title: 'One message per slide', dom: 'pers' }, nwKb: ['B1'] }, data: data(), live: true });
+    await h.c().nwDraftAi();
+    expect(h.state.nw).toMatchObject({ take: 'Price the change [1]', outline: ['Scope [1]'], ai: true });
+    expect(h.c().nwAiNote).toMatch(/^AI-assisted draft/);
   });
 });
