@@ -24,15 +24,15 @@ describe('navigation by role', () => {
   it('lets a Domain Admin manage content and users of their line', () => {
     expect((['adminLib', 'adminMap', 'adminKb', 'users'] as Screen[]).map((s) => screenAfterGo(domainAdmin(['Audit']), s))).toEqual(['adminLib', 'adminMap', 'adminKb', 'users']);
   });
-  it('lets a General Admin edit content but not open user management', () => {
-    expect((['adminLib', 'adminMap', 'adminKb', 'users'] as Screen[]).map((s) => screenAfterGo(generalAdmin(), s))).toEqual(['adminLib', 'adminMap', 'adminKb', 'map']);
+  it('lets a General Admin edit content and open user management for creation rights', () => {
+    expect((['adminLib', 'adminMap', 'adminKb', 'users'] as Screen[]).map((s) => screenAfterGo(generalAdmin(), s))).toEqual(['adminLib', 'adminMap', 'adminKb', 'users']);
   });
   it('lets a System Admin open everything', () => {
     expect((['adminLib', 'adminMap', 'adminKb', 'users'] as Screen[]).map((s) => screenAfterGo(systemAdmin(), s))).toEqual(['adminLib', 'adminMap', 'adminKb', 'users']);
   });
   it('shows the administration menu and user management by role', () => {
-    const flags = (access: ReturnType<typeof member>) => { const vm = harness({ access }).vm(); return [vm.showAdmin, vm.canManageUsers]; };
-    expect([member(), domainAdmin(['Audit']), generalAdmin(), systemAdmin()].map(flags)).toEqual([[false, false], [true, true], [true, false], [true, true]]);
+    const flags = (access: ReturnType<typeof member>) => { const vm = harness({ access }).vm(); return [vm.showAdmin, vm.showUsers, vm.canManageUsers]; };
+    expect([member(), domainAdmin(['Audit']), generalAdmin(), systemAdmin()].map(flags)).toEqual([[false, false, false], [true, true, true], [true, true, false], [true, true, true]]);
   });
   it('clears map selections when moving between screens', () => {
     const h = harness({ state: { sel: { type: 'hub', id: 'tech' }, mapSel: 'L1' } });

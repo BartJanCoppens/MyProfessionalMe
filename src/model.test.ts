@@ -235,11 +235,11 @@ describe('content admins', () => {
     expect(['Consulting', 'Audit', 'Tax & Legal', 'ind:energy'].map((a) => build(general).L.canEditAud(a))).toEqual([true, true, true, true]);
     expect(['Consulting', 'Audit', 'ind:energy'].map((a) => build(consulting).L.canEditAud(a))).toEqual([true, false, false]);
   });
-  it('a General Admin manages no users', () => {
+  it('a General Admin manages no accounts but opens User management for creation rights', () => {
     const { L, sink } = build(general);
     expect(L.canManageUsers()).toBe(false);
     L.go('users');
-    expect(sink[0]).toMatchObject({ screen: 'map' });
+    expect(sink[0]).toMatchObject({ screen: 'users' });
   });
   it('a Domain Admin opens their own learnings but not firm-wide ones', () => {
     const { L, sink } = build(consulting, { screen: 'adminLib' });

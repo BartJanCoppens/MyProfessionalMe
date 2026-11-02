@@ -224,8 +224,8 @@ export class Logic {
   }
   items() { return LEARN.map((r, i) => { const it = this.item(r); return { ...it, ...cover(r, i, it.state, it.pct) }; }); }
   openDetail(id: string, origin?: Screen) { this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0); }
-  go(screen: Screen) { this.setState({ screen: (ADMIN_SCREENS.includes(screen) && !this.isAdmin()) || (screen === 'users' && !this.canManageUsers()) ? 'map' : screen, sel: null, mapSel: null }); window.scrollTo(0, 0); }
-  // User management: System Admins and Domain Admins. A General Admin edits content only.
+  go(screen: Screen) { this.setState({ screen: ADMIN_SCREENS.includes(screen) && !this.isAdmin() ? 'map' : screen, sel: null, mapSel: null }); window.scrollTo(0, 0); }
+  // Managing accounts: System Admins and Domain Admins. A General Admin opens User management only to hand out creation rights.
   canManageUsers() { return this.access.isSystem || this.access.domains.length > 0; }
   isAdmin() { return this.access.isSystem || !!this.access.isGeneral || this.access.domains.length > 0; }
   // Content of a business line: its Domain Admins, General and System Admins. Firm-wide content (no line) only the latter two.
@@ -585,7 +585,7 @@ export class Logic {
       noLineNote: this.subject.businessLine ? '' : (this.subject.readOnly ? this.subject.name + ' has' : 'You have') + ' no business line yet, so mandatory and advised items are shown for ' + bl + '. An admin sets the line in User management.',
       mapLead: 'You sit in the middle. The nine domains around you hold every learning the firm knows about; your ' + bl + ' affiliation decides which ones are mandatory, your counsellor advises some, the rest is yours to choose. Clouds show where your projects, personality and ambitions pull you.',
       crumb: titles[s.screen][0], headerTitle: titles[s.screen][1], screen: s.screen,
-      navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), canManageUsers: this.canManageUsers(), goUsers: () => this.go('users'),
+      navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), canManageUsers: this.canManageUsers(), showUsers: this.isAdmin(), goUsers: () => this.go('users'),
       navProj: s.screen === 'projects' || (s.screen === 'detail' && s.origin === 'projects'), navProfile: s.screen === 'profile' || (s.screen === 'detail' && s.origin === 'profile'),
       goMap: () => this.go('map'), goLibrary: () => this.go('library'), goTeam: () => this.go('team'), goAdminLib: () => this.go('adminLib'), goAdminMap: () => this.go('adminMap'), goProj: () => this.go('projects'), goProfile: () => this.go('profile'),
       goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : s.origin === 'create' ? '← Back to Create & share' : '← Back to library',

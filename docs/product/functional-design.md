@@ -447,6 +447,8 @@ The player stops when the learning or the subject changes (plan Task 3, `usePlay
 
 ### F12 Create & share with peer review (L, v0.8.0; Roadmap §3)
 
+> **Shipped in v0.6.0 (2 Nov 2026)** with the owner's change: creation rights per topic, granted by System, General and Domain Admins, and review requirements per topic (0–2 peers, expert, quality & risk). See CLAUDE.md for the tables and functions.
+
 **Goal.** Anyone (Q10) turns a project lesson into a reel, podcast, micro-guide or case write-up, grounded in firm knowledge, reviewed by two peers, a domain expert and the learning team, and published into the catalogue. Closes E8.1–E8.9, J13.4, J24.7, J26.1–J26.9, J28.1–J28.6.
 
 **Scope cut for the proof of concept.** The design's fifth type, "Avatar scenario", waits for the avatar studio (Q16).

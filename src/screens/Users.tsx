@@ -13,10 +13,11 @@ type Handover = { email: string; password: string; what: string };
 
 const COLS = 'minmax(0,2.2fr) 150px 170px 190px minmax(0,2.4fr) 200px 160px 190px';
 // RLS also returns counsellees and your own counsellor; manageable_user_ids() narrows to accounts you may manage.
-const fetchUsers = async () => {
+// A General Admin (no accounts to manage) lists everyone readable, to hand out creation rights.
+const fetchUsers = async (everyone = false) => {
   const [people, ids] = await Promise.all([fetchProfiles(), supabase.rpc('manageable_user_ids')]);
   if (people.error || ids.error) return { data: null, grants: [] as Grant[], experts: {} as Record<string, string>, error: people.error || ids.error };
-  const ok = new Set((ids.data as string[]) || []), data = (people.data || []).filter((p) => ok.has(p.id));
+  const ok = new Set((ids.data as string[]) || []), data = (people.data || []).filter((p) => everyone || ok.has(p.id));
   // Create & share: their creation grants, and the expert per domain (readable by everyone signed in).
   try {
     const [grants, experts] = await Promise.all([loadGrants(data.map((p) => p.id)), loadExperts()]);
@@ -30,6 +31,8 @@ const initials = (u: User) => (u.full_name || u.email).split(/[\s.@]+/).filter(B
 
 export default function UsersScreen({ access, meId, say }: { access: Access; meId: string; say: (msg: string) => void }) {
   const managed: BusinessLine[] = access.isSystem ? [...BUSINESS_LINES] : BUSINESS_LINES.filter((l) => access.domains.includes(l));
+  // A General Admin without a line to administer: creation rights only, nothing else editable.
+  const contentOnly = !access.isSystem && access.domains.length === 0;
   const [users, setUsers] = useState<User[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [line, setLine] = useState<string>('all');
@@ -48,12 +51,12 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
     if (r.error && !r.data) { setLoadError(r.error.message); return; }
     setLoadError(r.error ? r.error.message : null); setUsers(r.data as unknown as User[]); setGrants(r.grants); setExperts(r.experts);
   };
-  const load = async () => apply(await fetchUsers());
+  const load = async () => apply(await fetchUsers(contentOnly));
   useEffect(() => {
     let live = true;
-    fetchUsers().then((r) => { if (live) apply(r); });
+    fetchUsers(contentOnly).then((r) => { if (live) apply(r); });
     return () => { live = false; };
-  }, []);
+  }, [contentOnly, ]);
 
   const shown = useMemo(() => (users || []).filter((u) =>
     (line === 'all' || (line === 'none' ? !u.business_line : u.business_line === line))
@@ -98,8 +101,9 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <PageTitle title="User management" lead={access.isSystem
           ? 'Create accounts, set business lines and appoint General and Domain Admins. A General Admin edits all learning content for the three business lines but manages no users. You are a System Admin: you can manage everyone and you are the only role that grants roles.'
+          : contentOnly ? 'Hand out Create & share rights per topic. As General Admin you manage no accounts: lines, stages, counsellors and passwords stay with System and Domain Admins.'
           : 'Create and manage accounts in ' + managed.join(', ') + '. A System Admin appoints Domain Admins.'} />
-        <Button onClick={() => setAdding(true)}>+ Add user</Button>
+        {!contentOnly && <Button onClick={() => setAdding(true)}>+ Add user</Button>}
       </div>
       {handover && (
         <Banner tone="success" title={handover.what + ' for ' + handover.email + ':'} onDismiss={() => setHandover(null)}
@@ -124,7 +128,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
             const me = u.id === meId;
             const isSys = u.roles.some((r) => r.role === 'system_admin'), isGen = u.roles.some((r) => r.role === 'general_admin');
             const domainOf = (l: string) => u.roles.some((r) => r.role === 'domain_admin' && r.business_line === l);
-            const canEditLine = !isSys || access.isSystem;
+            const canEditLine = !contentOnly && (!isSys || access.isSystem);
             return (
               <Hover key={u.id} hoverStyle={{ background: '#fafbf8' }} style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center', borderBottom: '1px solid #eef0ea' }}>
                 <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>

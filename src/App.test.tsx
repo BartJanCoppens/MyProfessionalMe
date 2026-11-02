@@ -106,10 +106,10 @@ describe('the sidebar', () => {
     expect(screen.queryByText('Administration')).toBeNull();
     expect(screen.getByText('Member')).toBeTruthy();
   });
-  it('shows a General Admin content screens but no user management', () => {
+  it('shows a General Admin content screens and user management (to hand out creation rights)', () => {
     setup({ a: auth({}, { isGeneral: true }) });
     expect(screen.getByText('Knowledge library', { selector: 'nav button > span' })).toBeTruthy();
-    expect(screen.queryByText('User management', { selector: 'nav button > span' })).toBeNull();
+    expect(screen.getByText('User management', { selector: 'nav button > span' })).toBeTruthy();
     expect(screen.getByText('General Admin')).toBeTruthy();
     cleanup();
     setup({ a: auth({}, { isGeneral: true, domains: ['Audit'] }) });
@@ -150,7 +150,7 @@ describe('the sidebar', () => {
     expect(heading()).toEqual(['Your growth map']);
     cleanup();
     window.history.replaceState({}, '', '/?screen=users');
-    setup({ a: auth({}, { isGeneral: true }) });
+    setup();
     expect(heading()).toEqual(['Your growth map']);
   });
 });

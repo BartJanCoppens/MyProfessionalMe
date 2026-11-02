@@ -71,8 +71,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
     const st = { ...initState(cfg), maps: content.maps, bundles: content.bundles };
     // Administration screens need an admin role, also when opened through ?screen=.
     const admin = auth.access.isSystem || !!auth.access.isGeneral || auth.access.domains.length > 0;
-    const users = auth.access.isSystem || auth.access.domains.length > 0;
-    return (ADMIN_SCREENS.includes(st.screen) && !admin) || (st.screen === 'users' && !users) ? { ...st, screen: 'map' } : st;
+    return ADMIN_SCREENS.includes(st.screen) && !admin ? { ...st, screen: 'map' } : st;
   });
   const toastTimer = useRef<number | undefined>(undefined);
   const drag = useRef<string | null>(null);
@@ -178,7 +177,7 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
             <NavItem label="Learning library" active={vm.navAdminLib} onClick={vm.goAdminLib} />
             <NavItem label="Curriculum mapping" count={vm.pendingLabel} active={vm.navAdminMap} onClick={vm.goAdminMap} />
             <NavItem label="Knowledge library" count={vm.kbCount} active={vm.navKb} onClick={vm.goKb} />
-            {vm.canManageUsers && <NavItem label="User management" active={vm.navUsers} onClick={vm.goUsers} />}
+            {vm.showUsers && <NavItem label="User management" active={vm.navUsers} onClick={vm.goUsers} />}
           </>
         )}
       </nav>

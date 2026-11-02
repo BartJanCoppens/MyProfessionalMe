@@ -225,3 +225,17 @@ describe('adding a user', () => {
     expect(Array.from(lines.options).map((o) => o.value)).toEqual(['Audit']);
   });
 });
+
+describe('a General Admin', () => {
+  const general: Access = { userId: 'g1', isSystem: false, isGeneral: true, domains: [] };
+  it('lists everyone, even with nobody to manage, and only hands out creation rights', async () => {
+    db.answer((c) => (c.table === 'rpc:manageable_user_ids' ? { data: [] } : op(c) === 'select' ? { data: users } : writes(c)));
+    await mount(general);
+    expect(screen.getByText('5 of 5 accounts')).toBeTruthy();
+    expect(screen.queryByText('+ Add user')).toBeNull();
+    expect(within(row('c1')).queryByText('Reset password')).toBeNull();
+    expect(within(row('c1')).queryByText('Remove')).toBeNull();
+    expect(within(row('c1')).queryAllByRole('combobox')).toHaveLength(0);
+    expect(within(row('c1')).getByText('Edit')).toBeTruthy();
+  });
+});
