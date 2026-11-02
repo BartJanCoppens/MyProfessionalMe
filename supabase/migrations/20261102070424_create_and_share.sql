@@ -104,7 +104,9 @@ create table public.contribution_reviews (
   comment text not null default '' check (char_length(comment) <= 2000),
   decided_at timestamptz,
   created_at timestamptz not null default now(),
-  primary key (contribution_id, step, slot)
+  primary key (contribution_id, step, slot),
+  -- separation of duties: one person reviews one step of a contribution at most
+  constraint contribution_reviews_one_role unique (contribution_id, reviewer_id)
 );
 create index contribution_reviews_reviewer_id_idx on public.contribution_reviews (reviewer_id);
 
@@ -215,8 +217,8 @@ as $$
   select count(*) from public.contribution_reviews where reviewer_id = p_user and verdict = 'pending';
 $$;
 
--- A holder of the role who is not the author, least loaded first.
-create function private.pick_reviewer(p_role public.app_role, p_exclude uuid)
+-- A holder of the role who is neither the author nor already reviewing this contribution, least loaded first.
+create function private.pick_reviewer(p_role public.app_role, p_author uuid, p_contribution uuid)
 returns uuid
 language sql
 volatile
@@ -224,7 +226,8 @@ security definer
 set search_path = ''
 as $$
   select r.user_id from public.user_roles r
-  where r.role = p_role and r.user_id <> p_exclude
+  where r.role = p_role and r.user_id <> p_author
+    and not exists (select 1 from public.contribution_reviews x where x.contribution_id = p_contribution and x.reviewer_id = r.user_id)
   order by private.review_load(r.user_id), random()
   limit 1;
 $$;
@@ -239,14 +242,17 @@ as $$
   select coalesce(nullif(btrim(full_name), ''), split_part(email, '@', 1)) from public.profiles where id = p_user;
 $$;
 
--- The first client name (src/data.ts CLIENT_WORDS) found as a whole word, case-insensitive; null when clean.
+-- The first client name (src/data.ts CLIENT_WORDS) found as whole words; null when clean. Case, punctuation and
+-- spacing are normalised first, so "Flemish-Care" and "flemish  care" match too (src/logic/contribution.ts does the same).
 create function private.blocked_term(t text)
 returns text
 language sql
 immutable
 set search_path = ''
 as $$
-  select w from unnest(array['delcroix', 'brabant', 'hoverna', 'flemish care']) as w where t ~* ('\m' || w || '\M') limit 1;
+  select w from unnest(array['delcroix', 'brabant', 'hoverna', 'flemish care']) as w
+  where (' ' || lower(regexp_replace(coalesce(t, ''), '[^[:alnum:]]+', ' ', 'g')) || ' ') like ('% ' || w || ' %')
+  limit 1;
 $$;
 
 -- ---------- guard triggers ----------
@@ -271,7 +277,8 @@ create trigger contributions_defaults
   for each row execute function private.contribution_defaults();
 
 -- Allowed shapes: draft → review | published (no review required), review → changes | published, changes → review.
--- Content changes only in draft or changes; the author and the published learning are fixed.
+-- Content changes only in draft or changes; after the first submission the topic, type and domain are fixed (they
+-- chose the review policy and the routing); the author and the published learning are fixed.
 create function private.guard_contribution()
 returns trigger
 language plpgsql
@@ -295,6 +302,9 @@ begin
      is distinct from (old.topic_kind, old.topic_value, old.type, old.title, old.domain, old.level, old.audience_stage, old.takeaway, old.outline, old.sources, old.ai_assisted, old.bundle_ids) then
     raise exception 'Only a draft or a contribution with changes requested can be edited' using errcode = '42501';
   end if;
+  if old.status <> 'draft' and (new.topic_kind, new.topic_value, new.type, new.domain) is distinct from (old.topic_kind, old.topic_value, old.type, old.domain) then
+    raise exception 'The topic, format and domain are fixed once a contribution is submitted' using errcode = '42501';
+  end if;
   if new.learning_id is distinct from old.learning_id and not (old.status <> 'published' and new.status = 'published') then
     raise exception 'The published learning of a contribution is fixed' using errcode = '42501';
   end if;
@@ -306,7 +316,8 @@ create trigger contributions_guard
   before update on public.contributions
   for each row execute function private.guard_contribution();
 
--- A review row keeps its contribution, step, slot and reviewer; verdicts move waiting → pending → approved | changes → pending.
+-- A review row keeps its contribution, step, slot and reviewer; verdicts move waiting → pending → approved | changes,
+-- and back to waiting or pending when the author resubmits (the whole flow runs again).
 create function private.guard_contribution_review()
 returns trigger
 language plpgsql
@@ -321,7 +332,8 @@ begin
     raise exception 'A review assignment cannot be moved' using errcode = '42501';
   end if;
   if new.verdict is distinct from old.verdict and (old.verdict, new.verdict) not in
-     (('waiting', 'pending'), ('pending', 'approved'), ('pending', 'changes'), ('changes', 'pending')) then
+     (('waiting', 'pending'), ('pending', 'approved'), ('pending', 'changes'),
+      ('changes', 'pending'), ('approved', 'pending'), ('changes', 'waiting'), ('approved', 'waiting'), ('pending', 'waiting')) then
     raise exception 'A review cannot move from % to %', old.verdict, new.verdict using errcode = '42501';
   end if;
   return new;
@@ -377,11 +389,14 @@ begin
 end;
 $$;
 
--- Submit (or resubmit after changes). Refused without a creation grant for the topic or when a content check fails.
--- A first submission assigns every reviewer the topic's policy requires, up front: peers (step 1), the domain's
--- expert or else a System Admin (step 2), a General Admin or else a System Admin (step 3). The first required
--- step starts; with no step required the contribution is published at once. Too few peers: refused, still a draft.
--- A resubmission sends it back to the reviewers who asked for changes, at the step that asked.
+-- Submit (or resubmit after changes). Refused without a creation grant for the topic or when a content check fails
+-- (client names are searched in every text field).
+-- A first submission assigns every reviewer the topic's policy requires, up front, each person at most once:
+-- the domain's expert or else a System Admin (step 2), a General Admin or else a System Admin (step 3), then the
+-- peers (step 1) from the author's line among the people left. The first required step starts; with no step required
+-- the contribution is published at once. Too few people: refused, still a draft.
+-- A resubmission runs the whole flow again from the first step with the same reviewers: earlier approvals were of
+-- the old version.
 create function private.submit_contribution(p_id uuid)
 returns text
 language plpgsql
@@ -416,7 +431,7 @@ begin
   if btrim(c.takeaway) = '' then
     raise exception 'Write the one takeaway first' using errcode = 'P0001';
   end if;
-  v_term := private.blocked_term(c.title || ' ' || c.takeaway);
+  v_term := private.blocked_term(c.title || ' ' || c.takeaway || ' ' || c.outline || ' ' || array_to_string(c.sources, ' '));
   if v_term is not null then
     raise exception '“%” looks like a client name · anonymise it', initcap(v_term) using errcode = 'P0001';
   end if;
@@ -425,9 +440,10 @@ begin
   end if;
 
   if c.status = 'changes' then
-    update public.contribution_reviews set verdict = 'pending', rubric = '{}', decided_at = null
-    where contribution_id = p_id and step = c.step and verdict = 'changes';
-    update public.contributions set status = 'review', submitted_at = now() where id = p_id;
+    v_first := (select min(step) from public.contribution_reviews where contribution_id = p_id);
+    update public.contribution_reviews set verdict = case when step = v_first then 'pending' else 'waiting' end, rubric = '{}', decided_at = null
+    where contribution_id = p_id;
+    update public.contributions set status = 'review', step = v_first, submitted_at = now() where id = p_id;
     return 'review';
   end if;
 
@@ -435,23 +451,9 @@ begin
   if found then v_peers := pol.peers; v_expert := pol.expert; v_quality := pol.quality; end if;
   delete from public.contribution_reviews where contribution_id = p_id;
 
-  if v_peers > 0 then
-    for v_pick in
-      select x.id from private.peer_candidates(me) as x(id) order by private.review_load(x.id), random() limit v_peers
-    loop
-      n := n + 1;
-      insert into public.contribution_reviews (contribution_id, step, slot, reviewer_id, reviewer_name)
-      values (p_id, 1, n, v_pick, private.display_name(v_pick));
-    end loop;
-    if n < v_peers then
-      raise exception 'Only % colleague(s) in your business line can peer-review this; its topic needs %. It stays a draft: ask an admin to lower the peer requirement for this topic.', n, v_peers
-        using errcode = 'P0001';
-    end if;
-  end if;
-
   if v_expert then
     v_pick := (select e.user_id from public.domain_experts e where e.domain = c.domain and e.user_id <> me);
-    if v_pick is null then v_pick := private.pick_reviewer('system_admin', me); end if;
+    if v_pick is null then v_pick := private.pick_reviewer('system_admin', me, p_id); end if;
     if v_pick is null then
       raise exception 'No subject-matter expert or System Admin can review this. It stays a draft.' using errcode = 'P0001';
     end if;
@@ -460,13 +462,29 @@ begin
   end if;
 
   if v_quality then
-    v_pick := private.pick_reviewer('general_admin', me);
-    if v_pick is null then v_pick := private.pick_reviewer('system_admin', me); end if;
+    v_pick := private.pick_reviewer('general_admin', me, p_id);
+    if v_pick is null then v_pick := private.pick_reviewer('system_admin', me, p_id); end if;
     if v_pick is null then
       raise exception 'No General or System Admin can do the quality & risk review. It stays a draft.' using errcode = 'P0001';
     end if;
     insert into public.contribution_reviews (contribution_id, step, slot, reviewer_id, reviewer_name)
     values (p_id, 3, 1, v_pick, private.display_name(v_pick));
+  end if;
+
+  if v_peers > 0 then
+    for v_pick in
+      select x.id from private.peer_candidates(me) as x(id)
+      where not exists (select 1 from public.contribution_reviews y where y.contribution_id = p_id and y.reviewer_id = x.id)
+      order by private.review_load(x.id), random() limit v_peers
+    loop
+      n := n + 1;
+      insert into public.contribution_reviews (contribution_id, step, slot, reviewer_id, reviewer_name)
+      values (p_id, 1, n, v_pick, private.display_name(v_pick));
+    end loop;
+    if n < v_peers then
+      raise exception 'Only % colleague(s) in your business line can peer-review this (the expert and quality reviewers do not count); its topic needs %. It stays a draft: ask an admin to lower the peer requirement for this topic.', n, v_peers
+        using errcode = 'P0001';
+    end if;
   end if;
 
   v_first := (select min(step) from public.contribution_reviews where contribution_id = p_id);
@@ -548,7 +566,7 @@ grant execute on function
   to authenticated;
 -- Internal only: called by the functions above, never by a client.
 revoke execute on function
-  private.peer_candidates(uuid), private.review_load(uuid), private.pick_reviewer(public.app_role, uuid), private.display_name(uuid),
+  private.peer_candidates(uuid), private.review_load(uuid), private.pick_reviewer(public.app_role, uuid, uuid), private.display_name(uuid),
   private.blocked_term(text), private.publish_contribution(uuid), private.contribution_defaults(), private.guard_contribution(),
   private.guard_contribution_review(), private.touch_review_policy()
   from public, anon, authenticated;
@@ -640,11 +658,10 @@ create policy "domain_experts: system admins edit" on public.domain_experts for 
 create policy "domain_experts: system admins remove" on public.domain_experts for delete to authenticated
   using ((select private.is_system_admin()));
 
--- The author, assigned reviewers, System Admins; published contributions are visible to everyone signed in.
+-- The author, assigned reviewers and System Admins. Everyone else sees a published piece as its learnings row.
 create policy "contributions: read" on public.contributions for select to authenticated
   using (
     author_id = (select auth.uid())
-    or status = 'published'
     or (select private.is_contribution_reviewer(id))
     or (select private.is_system_admin())
   );
