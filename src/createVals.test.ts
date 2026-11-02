@@ -137,6 +137,11 @@ describe('the New tab', () => {
     expect(h.c().nwPolicyNote).toBe('Review for this combination: 1 peer, quality & risk.');
     expect(h.c().nwRouteWarn).toMatch(/^Only 0 colleagues can peer-review you; this combination needs 1\./);
   });
+  it('looks for peers in the author\'s line and the content\'s line', () => {
+    const h = open(cs({ data: data({ rules: [rule({ lines: ['Tax & Legal'] })] }) }));
+    expect(h.state.nw.line).toBe('Tax & Legal');
+    expect(h.c().nwRoute[0].role).toBe('A colleague in Consulting or Tax & Legal');
+  });
   it('labels the button Publish when no review is required', () => {
     const d = data({ policies: [pol({ lines: ['Consulting'] }, 0, false, false)] });
     const h = open(cs({ data: d }));

@@ -222,7 +222,7 @@ function createScreen(L: Logic) {
   const pristine = !s.editing && !s.nw.title && !s.nw.take;
   const short = policy.peers > d.peers;
   const nwRoute = [
-    ...Array.from({ length: policy.peers }, (_, k) => ({ n: String(k + 1), name: 'Peer reviewer ' + (k + 1) + ' of ' + policy.peers, role: line ? 'A colleague in ' + line : 'A colleague in your business line' })),
+    ...Array.from({ length: policy.peers }, (_, k) => ({ n: String(k + 1), name: 'Peer reviewer ' + (k + 1) + ' of ' + policy.peers, role: 'A colleague in ' + (Array.from(new Set([line, nw.line].filter(Boolean))).join(' or ') || 'your business line') })),
     ...(policy.expert ? [{ n: '', name: 'Subject-matter expert', role: domainName(nw.dom) + ' · or a System Admin when none is named' }] : []),
     ...(policy.quality ? [{ n: '', name: 'Learning team', role: 'Quality & risk · a General Admin' }] : []),
   ].map((x, k) => ({ ...x, n: String(k + 1) }));
@@ -255,7 +255,7 @@ function createScreen(L: Logic) {
     myRules: d.rules.map((r) => ruleSentence(r)),
     goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [] }) : L.say('Ask an admin for creation rights first')),
     // The full flow, as the design shows it. Peers come from the author's business line (the design said "same domain").
-    reviewSteps: REVIEW_STAGES.map((n, k) => ({ n: String(k + 1), name: n, who: k === 1 ? 'Two colleagues in your business line · 5 working days' : REVIEW_WHO[k], bg: k === 4 ? '#86BC25' : '#1a1d18', fg: k === 4 ? '#10180a' : '#fff' })),
+    reviewSteps: REVIEW_STAGES.map((n, k) => ({ n: String(k + 1), name: n, who: k === 1 ? 'Two colleagues in your line or the content\'s line · 5 working days' : REVIEW_WHO[k], bg: k === 4 ? '#86BC25' : '#1a1d18', fg: k === 4 ? '#10180a' : '#fff' })),
     tabs, tab, setTab: (v: string) => (v === 'new' && !canCreate ? L.say('Ask an admin for creation rights first') : v === 'rules' && !isAdmin ? undefined
       : setState(v === 'new' && pristine ? { createTab: v, nw: fresh() } : { createTab: v })),
     tabMine: tab === 'mine', tabReview: tab === 'review', tabNew: tab === 'new', tabRules: tab === 'rules',
