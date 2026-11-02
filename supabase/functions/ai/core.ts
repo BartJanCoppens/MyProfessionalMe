@@ -52,6 +52,19 @@ export function readAsk(body: unknown): { ok: true; use: string; ask: Ask } | { 
   return { ok: true, use, ask: { ...(b.system ? { system: b.system as string } : {}), messages, max_tokens } };
 }
 
+// The use's fixed instruction (ai_uses.preamble, set by the System Admin) always comes first; the app's system text,
+// built from app data, follows it. The client cannot replace or drop the preamble.
+export function withPreamble(ask: Ask, preamble: string | null | undefined): Ask {
+  const system = [(preamble || '').trim(), (ask.system || '').trim()].filter(Boolean).join('\n\n');
+  const { system: _drop, ...rest } = ask;
+  return system ? { ...rest, system } : rest;
+}
+// Characters sent to the model, counted per person and day (ai_usage.input_chars).
+export const inputChars = (ask: Ask) => (ask.system || '').length + ask.messages.reduce((a, m) => a + m.content.length, 0);
+// The database refuses a call beyond the use's daily limit with this message.
+export const isLimitError = (message: string | undefined) => /daily ai limit reached/i.test(message || '');
+export const limitMessage = (limit: number | null) => 'Daily AI limit reached' + (limit != null ? ' (' + limit + ' a day per person for this use)' : '') + '; the scripted reply is used until tomorrow (UTC)';
+
 const trimUrl = (u: string) => u.replace(/\/+$/, '');
 
 export function buildRequest(t: Target, ask: Ask): { url: string; init: { method: 'POST'; headers: Record<string, string>; body: string } } {

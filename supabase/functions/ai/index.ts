@@ -4,10 +4,13 @@
 //                                            connection and model the System Admin chose for it -> { text }
 //   { action: 'test', connection_id }        System Admins: one tiny call with that connection -> { ok, model } or { ok: false, error }
 //
-// Uses marked admins_only (curriculum copilot, learner's eye, test retrieval) need an admin role. Nothing of the
-// messages or the reply is logged; a log line holds the use, the outcome and the duration.
+// Guard rails: the use's fixed instruction (ai_uses.preamble) always goes first and the client's system text after it;
+// each person has a daily limit per use (ai_uses.daily_limit), counted in ai_usage before the call (429 beyond it);
+// uses marked admins_only (curriculum copilot, learner's eye, test retrieval) need an admin role; max_tokens and the
+// request size are capped (core.ts). Nothing of the messages or the reply is logged; a log line holds the use, the
+// outcome and the duration.
 import { withSupabase } from '@supabase/server';
-import { callProvider, LIMITS, readAsk, TEST_ASK, TEXT_PROVIDERS } from './core.ts';
+import { callProvider, inputChars, isLimitError, limitMessage, LIMITS, readAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
 import type { Provider } from './core.ts';
 
 const fail = (status: number, error: string) => Response.json({ error }, { status });
@@ -50,12 +53,17 @@ export default {
     const { data: live, error: liveError } = await admin.rpc('ai_live_uses');
     if (liveError) return fail(500, 'Could not read the AI settings');
     if (!((live as string[]) || []).includes(r.use)) return fail(409, 'This AI use is not live: a System Admin sets its connection in Administration · AI connections');
-    const { data: use } = await admin.from('ai_uses').select('admins_only, model, connection:ai_connections(id, provider, base_url, default_model)').eq('key', r.use).single<{ admins_only: boolean; model: string | null; connection: Conn }>();
+    const { data: use } = await admin.from('ai_uses').select('admins_only, model, preamble, daily_limit, connection:ai_connections(id, provider, base_url, default_model)').eq('key', r.use)
+      .single<{ admins_only: boolean; model: string | null; preamble: string; daily_limit: number; connection: Conn }>();
     if (!use || !use.connection) return fail(409, 'This AI use has no connection');
     if (use.admins_only && !roles.length) return fail(403, 'Only admins use this assistant');
+    const ask = withPreamble(r.ask, use.preamble);
+    // Counted before the call, atomically; beyond the limit nothing is counted and nothing is sent.
+    const { error: countError } = await admin.rpc('ai_count_call', { p_user: callerId, p_use: r.use, p_chars: inputChars(ask) });
+    if (countError) return isLimitError(countError.message) ? fail(429, limitMessage(use.daily_limit)) : fail(500, 'Could not count the call');
     const key = await keyOf(use.connection.id);
     if (!key) return fail(409, 'The connection has no key');
-    const out = await callProvider({ provider: use.connection.provider, baseUrl: use.connection.base_url, model: use.model || use.connection.default_model!, key }, r.ask);
+    const out = await callProvider({ provider: use.connection.provider, baseUrl: use.connection.base_url, model: use.model || use.connection.default_model!, key }, ask);
     console.log(JSON.stringify({ use: r.use, ok: out.ok, ms: Date.now() - started }));
     return out.ok ? Response.json({ text: out.text }) : fail(502, out.error);
   }),
