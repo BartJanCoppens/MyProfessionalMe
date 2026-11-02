@@ -129,6 +129,9 @@ do $$ begin
   begin perform public.save_learning('L44', p_state => 'in-progress');
     insert into results (check_name, expected, actual) values ('Owner reopens completed reel', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('Owner reopens completed reel', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.learner_learnings set learning_id = 'L3' where user_id = '00000000-0000-0000-0000-0000000000a2' and learning_id = 'L44';
+    insert into results (check_name, expected, actual) values ('Owner moves a completed reel to another learning', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('Owner moves a completed reel to another learning', 'blocked', 'blocked: '||sqlstate); end;
   begin perform public.save_learning('L3', p_state => 'accepted');
     insert into results (check_name, expected, actual) values ('Owner self-completes a classroom item', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('Owner self-completes a classroom item', 'blocked', 'blocked: '||sqlstate); end;
