@@ -45,7 +45,7 @@ describe('the account list', () => {
     expect(within(row('me')).getByText('· you')).toBeTruthy();
     expect(within(row('a1')).getByText('Temporary password')).toBeTruthy();
     expect(within(row('c1')).getByText('Own password')).toBeTruthy();
-    expect(db.calls.map((c) => c.table)).toEqual(['profiles', 'rpc:manageable_user_ids', 'creator_grants', 'domain_experts']);
+    expect(db.calls.map((c) => c.table)).toEqual(['profiles', 'rpc:manageable_user_ids', 'creator_rules', 'domain_experts']);
   });
   it('leaves out people returned by RLS but not manageable', async () => {
     db.answer((c) => (c.table === 'rpc:manageable_user_ids' ? { data: ['me', 'a1'] } : { data: users }));
@@ -237,5 +237,44 @@ describe('a General Admin', () => {
     expect(within(row('c1')).queryByText('Remove')).toBeNull();
     expect(within(row('c1')).queryAllByRole('combobox')).toHaveLength(0);
     expect(within(row('c1')).getByText('Edit')).toBeTruthy();
+  });
+});
+
+describe('creation rules (Can create for)', () => {
+  const rules = [{ id: 7, user_id: 'c1', lines: ['Consulting', 'Tax & Legal'], formats: ['Podcast'], domains: [], audiences: [] }, { id: 8, user_id: 'a1', lines: [], formats: ['Reel'], domains: ['reg'], audiences: [] }];
+  const answerRules = () => db.answer((c) => (c.table === 'rpc:manageable_user_ids' ? { data: users.map((x) => x.id) } : c.table === 'creator_rules' && op(c) === 'select' ? { data: rules }
+    : c.table === 'domain_experts' ? { data: [] } : op(c) === 'select' ? { data: users } : writes(c)));
+  const group = (name: string) => screen.getByRole('group', { name });
+  it('lists a person\'s rules in plain words and adds one built from four parts', async () => {
+    answerRules();
+    const say = await mount();
+    expect(within(row('c1')).getByText('1 rule')).toBeTruthy();
+    await click(within(row('c1')).getByRole('button', { name: 'Edit' }));
+    expect(screen.getByText('Consulting or Tax & Legal · Podcast')).toBeTruthy();
+    const add = () => screen.getByRole('button', { name: 'Add rule' }) as HTMLButtonElement;
+    expect(add().disabled).toBe(true);
+    expect(screen.getByText('Pick at least one value')).toBeTruthy();
+    await click(within(group('Formats')).getByRole('button', { name: 'Reel' }));
+    await click(within(group('Domains')).getByRole('button', { name: 'Regulations' }));
+    expect(screen.getByText('Rule: Any line · Reel · Regulations')).toBeTruthy();
+    await click(add());
+    const ins = db.on('creator_rules').find((c) => op(c) === 'insert')!;
+    expect(has(ins, 'insert', { user_id: 'c1', lines: [], formats: ['Reel'], domains: ['reg'], audiences: [] })).toBe(true);
+    expect(say).toHaveBeenCalledWith('Person C1 can create · Any line · Reel · Regulations');
+    await click(within(screen.getByText('Consulting or Tax & Legal · Podcast').parentElement!).getByRole('button', { name: 'Remove' }));
+    expect(db.on('creator_rules').some((c) => op(c) === 'delete' && has(c, 'eq', 'id', 7))).toBe(true);
+  });
+  it('gives a Domain Admin only their own lines and refuses any line', async () => {
+    answerRules();
+    await mount(auditAdmin);
+    await click(within(row('a1')).getByRole('button', { name: 'Edit' }));
+    expect(screen.getByText('Any line · Reel · Regulations')).toBeTruthy();
+    expect(screen.getByText("Another admin's")).toBeTruthy();
+    expect(within(group('Business lines')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Audit']);
+    expect(screen.getByText('Rule: Audit')).toBeTruthy();
+    await click(within(group('Business lines')).getByRole('button', { name: 'Audit' }));
+    await click(within(group('Formats')).getByRole('button', { name: 'Podcast' }));
+    expect(screen.getByText('Pick at least one of your business lines, and only yours')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Add rule' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

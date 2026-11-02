@@ -48,8 +48,8 @@ export function initState(cfg: Config): AppState {
     projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: {},
     chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
     chat: [],
-    create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null), editing: null, nwKb: [], nwAiBusy: false,
-    polForm: { topic: '', peers: '2', expert: true, quality: true },
+    create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwAiBusy: false,
+    polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
   };
 }
 

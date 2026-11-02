@@ -97,11 +97,12 @@ export type AppState = {
   create: CreateData | null; createError: string | null; createBusy: boolean; createTab: string; contribSel: string | null; revSel: string | null;
   // rubric ticks and comments per review (contribution|step|slot), the New form, the contribution being edited
   revChecks: Record<string, boolean[]>; revComment: Record<string, string>; nw: NewDraft; editing: string | null; nwKb: string[]; nwAiBusy: boolean;
-  polForm: { topic: string; peers: string; expert: boolean; quality: boolean };
+  polForm: { lines: string[]; formats: string[]; domains: string[]; audiences: string[]; peers: string; expert: boolean; quality: boolean };
 };
 
-// The New content form. topic is a topicKey; lvl stays text for the select; outline and sources come from Draft with AI.
-export type NewDraft = { topic: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string };
+// The New content form. line and aud are '' for none; type is the format; lvl stays text for the select; outline and
+// sources come from Draft with AI.
+export type NewDraft = { line: string; aud: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string };
 
 // Knowledge library: retrieval models and bundles
 export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };

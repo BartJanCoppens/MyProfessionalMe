@@ -135,7 +135,7 @@ describe('the sidebar', () => {
       : c.table === 'rpc:peer_count' ? { data: 2 } : { data: [] });
     setup();
     await waitFor(() => expect(screen.getByText('Create & share', { selector: 'nav button > span' }).parentElement!.textContent).toBe('Create & share1'));
-    expect(db.on('creator_grants').some((c) => has(c, 'eq', 'user_id', 'u1'))).toBe(true);
+    expect(db.on('creator_rules').some((c) => has(c, 'eq', 'user_id', 'u1'))).toBe(true);
     nav('Create & share');
     expect(screen.getByText('Review for peers · 1')).toBeTruthy();
   });

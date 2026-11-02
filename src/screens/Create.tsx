@@ -2,6 +2,7 @@
 // A transcription of the template's CREATE & SHARE block; it only reads from the view-model (createVals.ts).
 import { Banner, Button, Checkbox, Eyebrow, Field, FilterChip, Hover, Input, LinkButton, PageTitle, Select, StatusChip, Stepper, Tabs, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
+import RuleChips from './RuleChips';
 
 type CS = NonNullable<VM['create']>;
 const label = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase' as const, letterSpacing: '.04em' };
@@ -174,9 +175,11 @@ function NewTab({ c }: { c: CS }) {
     <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
       <div style={{ flex: '1 1 560px', minWidth: 0, ...card, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {c.editing && <Banner tone="info">{c.editingNote}</Banner>}
-        <Field label="Topic" hint={c.topicNote}>
-          <Select value={nw.topic} onChange={c.nwSetTopic} options={c.topicOptions} aria-label="Topic" />
-        </Field>
+        <div style={{ fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' }}>{c.locked ? c.lockedNote : c.nwRulesText}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+          <Field label="Business line"><Select value={nw.line} onChange={c.nwSetLine} options={c.lineOptions} aria-label="Business line" /></Field>
+          <Field label="Industry or technology"><Select value={nw.aud} onChange={c.nwSetAud} options={c.audOptions} aria-label="Industry or technology" /></Field>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={{ fontWeight: 500 }}>What are you making?</span>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 8 }}>
@@ -222,6 +225,7 @@ function NewTab({ c }: { c: CS }) {
           <Textarea value={nw.take} onChange={c.nwSetTake} placeholder="One or two sentences. Reviewers judge the piece against this." aria-label="The one takeaway" />
         </Field>
         <div style={{ padding: 12, border: '1px dashed #cfd4c9', borderRadius: 6, fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' }}>{c.nwFileText}</div>
+        {c.nwRuleWarn && <Banner tone="warning">{c.nwRuleWarn}</Banner>}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button onClick={c.nwSubmit} disabled={c.nwBlocked}>{c.nwSubmitLabel}</Button>
           <Button variant="secondary" onClick={c.nwDraft} disabled={c.busy}>Save draft</Button>
@@ -244,7 +248,8 @@ function NewTab({ c }: { c: CS }) {
               <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 12.5 }}>{nr.name}</div><div style={{ fontSize: 11.5, color: '#8b918a' }}>{nr.role}</div></div>
             </div>
           ))}
-          {c.nwRouteEmpty && <div style={{ fontSize: 12.5, color: '#3d423b' }}>No review for this topic: it is published as soon as you submit and the checks pass.</div>}
+          <div style={{ fontSize: 12, color: '#5a6058' }}>{c.nwPolicyNote}</div>
+          {c.nwRouteEmpty && <div style={{ fontSize: 12.5, color: '#3d423b' }}>No review required for this combination: it is published as soon as you submit and the checks pass.</div>}
           {c.nwRouteWarn && <Banner tone="warning">{c.nwRouteWarn}</Banner>}
         </div>
       </div>
@@ -271,15 +276,16 @@ function Rules({ c }: { c: CS }) {
           ) : <Tag tone="muted">Set by another admin</Tag>}
         </div>
       ))}
-      {c.polCanAdd && (
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', padding: '12px 0 0', borderTop: '1px solid #eef0ea' }}>
-          <div style={{ flex: '1 1 240px' }}><Select size="md" value={pf.topic} onChange={(e) => c.polSet({ topic: e.target.value })} options={c.polTopicOptions} aria-label="Topic for a review requirement" /></div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 0 0', borderTop: '1px solid #eef0ea' }}>
+        <div style={{ fontWeight: 600 }}>Add a review requirement</div>
+        <RuleChips groups={c.polGroups} preview={c.polPreview} problem={c.polProblem} />
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ width: 130 }}><Select size="md" value={pf.peers} onChange={(e) => c.polSet({ peers: e.target.value })} options={c.peerOptions} aria-label="Peers" /></div>
           <Checkbox checked={pf.expert} onChange={(v) => c.polSet({ expert: v })}>Expert</Checkbox>
           <Checkbox checked={pf.quality} onChange={(v) => c.polSet({ quality: v })}>Quality &amp; risk</Checkbox>
-          <Button size="sm" onClick={c.polAdd} disabled={c.busy}>Add requirement</Button>
+          <Button size="sm" onClick={c.polAdd} disabled={c.busy || !!c.polProblem}>Add requirement</Button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
