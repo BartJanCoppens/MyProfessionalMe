@@ -165,7 +165,9 @@ describe('learning detail', () => {
     const named = { subject: person({ counsellor: coach }) };
     expect(detail('L7', named).vm().det.approvalNote).toBe('Mandatory items complete only after Sam Coach accepts them.');
     expect(detail('L3').vm().det.approvalNote).toBe('Open items count toward your hours and levels once your counsellor accepts them.');
-    expect(detail('L20').vm().det.approvalNote).toBe('Log your hours here; your counsellor accepts the result.');
+    expect(detail('L3', { subject: person({ data: withProgress({ L3: ['in-progress', 10, true] }) }) }).vm().det.approvalNote).toBe('Log your hours here; your counsellor accepts the result.');
+    // a self-completing format says what completes it instead (v0.7.2)
+    expect(detail('L20').vm().det.approvalNote).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
   });
   it('explains an open learning a cloud suggests with its evidence', () => {
     const subject = person({ data: withProgress({}, { ambitions: [{ id: 'a1', text: 'Lead a team', horizon: '3 years', doms: ['lead'], from: '' }] }) });
@@ -206,12 +208,12 @@ describe('logging hours', () => {
     expect(h.reloadSubject).toHaveBeenCalled();
     expect(h.lastToast()).toBe('1 hour logged · 67% of 1.5 h');
   });
-  it('submits for acceptance once every hour is logged', async () => {
+  it('stops at 100% on the last hour of an e-learning and says how it completes', async () => {
     const h = harness({ subject: person({ counsellor: coach }), state: { screen: 'detail', detailId: 'L16' } });
     h.vm().logHours();
     await flush();
-    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L16', { state: 'submitted', pct: 100 });
-    expect(h.lastToast()).toBe('All hours logged · sent to Sam Coach for acceptance');
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L16', { state: 'in-progress', pct: 100 });
+    expect(h.lastToast()).toBe('All hours logged · mark it as completed to complete it');
   });
   it('shows the error when saving fails', async () => {
     vi.mocked(learner.saveProgress).mockRejectedValueOnce(new Error('network down'));
@@ -236,11 +238,21 @@ describe('adding to my path and asking approval', () => {
     expect(learner.saveProgress).not.toHaveBeenCalled();
   });
   it('asks the counsellor to approve', async () => {
-    const h = harness({ subject: person({ data: withProgress({ L17: ['in-progress', 40] }) }), state: { screen: 'detail', detailId: 'L17' } });
+    const data = withProgress({ L18: ['in-progress', 40] });
+    data.progress.L18.evidence = { note: '', link: 'https://x.example/c.pdf', ref: '' };
+    const h = harness({ subject: person({ data }), state: { screen: 'detail', detailId: 'L18' } });
     h.vm().askApprove();
     await flush();
-    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L17', { state: 'submitted', pct: 100 });
-    expect(h.lastToast()).toBe('Sent to your counsellor · they see the hours you logged');
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L18', { state: 'submitted', pct: 100 });
+    expect(h.lastToast()).toBe('Sent to your counsellor · they see the hours you logged and your evidence');
+  });
+  it('never asks approval for a format that completes itself', async () => {
+    const h = harness({ subject: person({ data: withProgress({ L17: ['in-progress', 40] }) }), state: { screen: 'detail', detailId: 'L17' } });
+    expect(h.vm().det.canAsk).toBe(false);
+    h.vm().askApprove();
+    await flush();
+    expect(learner.saveProgress).not.toHaveBeenCalled();
+    expect(h.lastToast()).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
   });
 });
 

@@ -20,8 +20,9 @@ import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
 import { currentPos, podSave, podView, reelView, startPos, step } from './logic/media';
-import { lastActivity, lastActivityLabel, openChanges } from './logic/record';
+import { completionOf, completionText, completionTodo, lastActivity, lastActivityLabel, openChanges } from './logic/record';
 import { logHour, recordVals, submit } from './recordVals';
+import { completionVals, loadAttendance, showsAttendance } from './completionVals';
 import { aiVals } from './aiVals';
 import { canComplete, complete } from './lib/ai';
 import type { AiRequest } from './lib/ai';
@@ -65,7 +66,7 @@ export function initState(cfg: Config): AppState {
     chat: [],
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwAiBusy: false,
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
-    evDraft: null, decideNote: {}, queue: null, queueError: null,
+    evDraft: null, decideNote: {}, queue: null, queueError: null, fbDraft: null, quiz: null, att: null,
     aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {},
   };
 }
@@ -221,7 +222,7 @@ export class Logic {
       id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
       isMedia: !!MD, mediaLine: MD ? format + ' · ' + MD.len + ' · ' + MD.by : '', isPeer, peerLine: isPeer ? 'Made by a colleague · peer-reviewed' : '',
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
-      stateLabel: changes ? 'Changes requested' : state === 'in-progress' ? 'In progress · ' + pct + '%' : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
+      stateLabel: changes ? 'Changes requested' : state === 'in-progress' ? (pct >= 100 && completionOf(format) !== 'acceptance' ? 'All hours logged · ' + completionTodo(format) : 'In progress · ' + pct + '%') : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
       dueLabel: hasDue ? 'Due ' + due : (m && m.si <= this.myStage() + 1 ? 'By ' + m.stage + ' stage' : ''), dueColor: hasDue ? (dueSoon ? '#9a3d0c' : '#7a5000') : '#8b918a',
       meta: source + ' · ' + hoursLabel + ' · ' + LEVELS[lvl - 1] + ' · L' + lvl + (cpd ? ' · ' + cpd + ' CPD' : ''),
@@ -232,7 +233,11 @@ export class Logic {
     };
   }
   items() { return LEARN.map((r, i) => { const it = this.item(r); return { ...it, ...cover(r, i, it.state, it.pct) }; }); }
-  openDetail(id: string, origin?: Screen) { this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0); }
+  openDetail(id: string, origin?: Screen) {
+    this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0);
+    // Admins see who attended a classroom (the signed-in admin's roster, whoever is being viewed).
+    if (showsAttendance(this, id)) loadAttendance(this, id);
+  }
   go(screen: Screen) { this.setState({ screen: allowedScreen(screen, this.access), sel: null, mapSel: null }); window.scrollTo(0, 0); }
   // Managing accounts: System Admins and Domain Admins. A General Admin opens User management only to hand out creation rights.
   canManageUsers() { return this.access.isSystem || this.access.domains.length > 0; }
@@ -499,8 +504,9 @@ export class Logic {
       frac: d0.pct / 100, hoursDone: (Math.round(d0.hours * d0.pct / 100 * 10) / 10) + ' h', hoursText: 'logged of ' + d0.hoursLabel,
       kv: [{ k: 'Format', v: d0.format }, { k: 'Source', v: d0.source }, { k: 'Effort', v: d0.hoursLabel }, { k: 'Level', v: d0.lvlLabel }, { k: 'CPD units', v: d0.cpd ? d0.cpd + (d0.cpd === 1 ? ' unit' : ' units') : 'None' }, { k: 'Deadline', v: d0.hasDue ? d0.due : 'None set' }, { k: 'Counts toward', v: d0.domLabel + ' · hours' }],
       canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || (d0.state === 'in-progress' && d0.pct < 100),
-      canAsk: d0.state === 'in-progress',
-      approvalNote: d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
+      canAsk: d0.state === 'in-progress' && completionOf(d0.format) === 'acceptance',
+      // What completes this learning: the format's own rule, or acceptance by the counsellor.
+      approvalNote: completionOf(d0.format) !== 'acceptance' ? completionText(d0.format, this.counsellorFull()) : d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
       canAcceptIt: this.canAccept(d0.state), paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
       av: AVATARS[d0.id] ? (() => {
         const AV = AVATARS[d0.id]; const best = AV.skills.map((_sk, k) => Math.max(0, ...AV.attempts.map((a) => a[1][k])));
@@ -616,6 +622,7 @@ export class Logic {
       ...kbVals(this),
       ...createVals(this),
       ...recordVals(this, d0),
+      ...completionVals(this, d0),
       ...aiVals(this),
       // library
       libLead: LEARN.length + ' learnings across nine domains · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),

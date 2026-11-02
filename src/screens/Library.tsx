@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Avatar, Banner, Button, Card, Eyebrow, Field, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, PillToggle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
+import { Avatar, Banner, Button, Card, Checkbox, Eyebrow, Field, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, PillToggle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
 import { AvatarBadge } from './Map';
 import { CoverArt } from './Cover';
@@ -112,6 +112,9 @@ export function DetailScreen({ vm }: { vm: VM }) {
           {det.pod && <PodcastPlayer pod={det.pod} />}
           {det.reel && <ReelViewer reel={det.reel} />}
           {det.av && <AvatarPractice av={det.av} counsellorFirst={vm.counsellorFirst} />}
+          {vm.done.quiz && <QuizCard quiz={vm.done.quiz} />}
+          {vm.done.feedback && <FeedbackCard fb={vm.done.feedback} />}
+          {vm.done.attendance && <AttendanceCard att={vm.done.attendance} />}
           {det.hasSugg && (
             <Card title="Suggested by" subtitle={det.suggSub}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -167,6 +170,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
               {vm.rec.decide && <DecideBox decide={vm.rec.decide} />}
               {det.canAdd && <Button size="xl" fullWidth onClick={vm.addToPath}>+ Add to my path</Button>}
               {det.canLog && <Button size="xl" fullWidth onClick={vm.logHours}>Log 1 hour</Button>}
+              {vm.done.mark && <Button size="xl" variant={det.canLog ? 'secondary' : 'primary'} fullWidth disabled={vm.done.mark.disabled} onClick={vm.done.mark.run}>{vm.done.mark.label}</Button>}
               {det.canAsk && <Button size="xl" variant="secondary" fullWidth disabled={!!vm.rec.problem} onClick={vm.askApprove}>{vm.rec.submitLabel}</Button>}
               {det.canAsk && vm.rec.problem && <div style={{ fontSize: 12, color: '#7a5000', textWrap: 'pretty' }}>{vm.rec.problem}</div>}
               {vm.rec.submittedLine && <div style={{ fontSize: 12, color: '#5a6058' }}>{vm.rec.submittedLine}</div>}
@@ -280,7 +284,7 @@ function AvatarPractice({ av, counsellorFirst }: { av: NonNullable<VM['det']['av
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' }}>Best scores · 4 of 5 on every skill completes it</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' }}>Best scores · the target is 4 of 5 on every skill</div>
           {av.skills.map((sk) => (
             <div key={sk.name} style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) 44px', gap: 10, alignItems: 'center', fontSize: 12.5 }}>
               <span>{sk.name}</span>
@@ -309,6 +313,103 @@ function AvatarPractice({ av, counsellorFirst }: { av: NonNullable<VM['det']['av
 }
 
 const caps: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
+// A fieldset that disables every control inside it (View as, rows already completed), without a frame of its own.
+const bare: CSSProperties = { border: 0, padding: 0, margin: 0, minWidth: 0 };
+type Done = VM['done'];
+
+// Avatar practice: the evaluation quiz after the session. Three right answers complete the learning.
+function QuizCard({ quiz }: { quiz: NonNullable<Done['quiz']> }) {
+  return (
+    <Card title="Evaluation quiz" subtitle={quiz.lead}>
+      {!quiz.done && (
+        <fieldset disabled={quiz.disabled} style={bare}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {quiz.items.map((qi) => (
+              <div key={qi.q} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontWeight: 600, textWrap: 'pretty' }}>{qi.q}</div>
+                {qi.opts.map((o) => (
+                  <Hover key={o.label} as="button" type="button" onClick={o.pick} aria-pressed={o.picked} hoverStyle={{ borderColor: '#1a1d18' }}
+                    style={{ textAlign: 'left', padding: '9px 12px', borderRadius: 6, border: '1px solid ' + o.bd, background: o.bg, color: '#1a1d18', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>{o.label}</Hover>
+                ))}
+                {qi.wrong && <div style={{ fontSize: 12.5, color: '#9a2b22', fontWeight: 500 }}>Not quite. Think about what this person needs from you here.</div>}
+              </div>
+            ))}
+            {quiz.hasResult && <div style={{ fontSize: 13, color: quiz.resultColor, fontWeight: 500, textWrap: 'pretty' }}>{quiz.result}</div>}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {!quiz.checked && <Button disabled={!quiz.canCheck} onClick={quiz.check}>Check my answers</Button>}
+              {quiz.checked && !quiz.passed && <Button variant="secondary" onClick={quiz.retry}>Try again</Button>}
+            </div>
+          </div>
+        </fieldset>
+      )}
+    </Card>
+  );
+}
+
+// Classroom: the learner's feedback completes it (a rating and what they will apply); read-only once given.
+function FeedbackCard({ fb }: { fb: NonNullable<Done['feedback']> }) {
+  if (!fb.open) {
+    return (
+      <Card title="Your feedback on the session">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div><Tag tone="green">{fb.given?.rating}</Tag></div>
+          <div style={{ whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{fb.given?.text}</div>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card title="Feedback on the session" subtitle={fb.lead}>
+      <fieldset disabled={fb.disabled} style={bare}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Field label="How useful was the session? (1 = not at all, 5 = very)">
+            <div><SegmentedControl options={fb.ratingOptions} value={fb.rating} onChange={fb.setRating} size="md" /></div>
+          </Field>
+          <Field label="What will you apply?" hint={fb.count}>
+            <Textarea value={fb.text} onChange={fb.setText} minHeight={88} placeholder="One thing you will do differently, and where" />
+          </Field>
+          <div><Button disabled={fb.disabled || !!fb.problem} onClick={fb.send}>Send feedback and complete</Button></div>
+          {fb.problem && <div style={{ fontSize: 12, color: '#7a5000', textWrap: 'pretty' }}>{fb.problem}</div>}
+        </div>
+      </fieldset>
+    </Card>
+  );
+}
+
+// Classroom attendance (admins): tick who attended; registering completes the learning for them.
+function AttendanceCard({ att }: { att: NonNullable<Done['attendance']> }) {
+  return (
+    <Card title="Attendance" subtitle={att.lead} extra={att.summary ? <span style={{ fontSize: 12, color: '#5a6058' }}>{att.summary}</span> : undefined}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {att.notLoaded && <div><Button variant="secondary" onClick={att.load}>Show the people you can register</Button></div>}
+        {att.loading && <div style={{ color: '#5a6058' }}>Loading the people you can register…</div>}
+        {att.error && (
+          <Banner tone="warning" title="The list did not load">
+            <div>{att.error}</div>
+            <div style={{ marginTop: 6 }}><LinkButton onClick={att.retry}>Try again</LinkButton></div>
+          </Banner>
+        )}
+        {att.showSearch && <div style={{ maxWidth: 320 }}><Input placeholder="Search name or business line" value={att.q} onChange={att.setQ} /></div>}
+        {att.rows.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 320, overflowY: 'auto' }}>
+            {att.rows.map((r, i) => (
+              <fieldset key={r.userId} disabled={r.locked} style={{ ...bare, padding: '8px 0', borderTop: i ? '1px solid #eef0ea' : 0 }}>
+                <Checkbox checked={r.ticked} onChange={r.toggle}>
+                  <span style={{ fontWeight: 500 }}>{r.name}</span> <span style={{ fontSize: 12, color: '#5a6058' }}>{r.sub}</span>
+                </Checkbox>
+              </fieldset>
+            ))}
+          </div>
+        )}
+        {att.empty && <div style={{ color: '#5a6058' }}>{att.empty}</div>}
+        {!att.notLoaded && !att.loading && !att.error && (
+          <div><Button disabled={!att.canSave} onClick={att.save}>{att.busy ? 'Registering…' : 'Register attendance'}</Button></div>
+        )}
+        <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>Registering completes the classroom for each person ticked, without a counsellor. Someone already completed stays as they are.</div>
+      </div>
+    </Card>
+  );
+}
 
 function PodcastPlayer({ pod }: { pod: NonNullable<VM['det']['pod']> }) {
   return (

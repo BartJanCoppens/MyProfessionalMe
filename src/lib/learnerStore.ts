@@ -1,6 +1,6 @@
 // Per-user learner data in Supabase (learner_learnings, ambitions, interests, learner_prefs, learning_decisions).
 // RLS lets the person write their own rows; admins and counsellors may only read them. Decisions are written by
-// public.decide_learning() (recordStore) and by the database when a podcast or reel completes itself.
+// public.decide_learning() and public.register_attendance() (recordStore) and by the database when a learning completes itself.
 import { supabase } from './supabase';
 import type { LearnState, Progress } from '../logic/learner';
 import type { Decision, Verdict } from '../logic/record';
@@ -13,7 +13,7 @@ const fail = (error: { message: string } | null) => { if (error) throw new Error
 
 export async function loadLearner(userId: string): Promise<LearnerData> {
   const [l, a, i, p, d] = await Promise.all([
-    supabase.from('learner_learnings').select('learning_id, state, pct, chosen, submitted_at, updated_at, evidence_note, evidence_link, evidence_ref').eq('user_id', userId),
+    supabase.from('learner_learnings').select('learning_id, state, pct, chosen, submitted_at, updated_at, evidence_note, evidence_link, evidence_ref, evidence_rating').eq('user_id', userId),
     supabase.from('ambitions').select('id, text, horizon, domains, source').eq('user_id', userId).order('created_at'),
     supabase.from('interests').select('label, domain').eq('user_id', userId).order('created_at'),
     supabase.from('learner_prefs').select('avatar_initials, avatar_color').eq('user_id', userId).maybeSingle(),
@@ -23,7 +23,7 @@ export async function loadLearner(userId: string): Promise<LearnerData> {
   const progress: Progress = {};
   (l.data || []).forEach((r) => {
     progress[r.learning_id] = { state: r.state as LearnState, pct: r.pct, chosen: r.chosen, submittedAt: r.submitted_at ?? null, updatedAt: r.updated_at ?? null,
-      evidence: { note: r.evidence_note || '', link: r.evidence_link || '', ref: r.evidence_ref || '' } };
+      evidence: { note: r.evidence_note || '', link: r.evidence_link || '', ref: r.evidence_ref || '' }, rating: r.evidence_rating ?? null };
   });
   return {
     progress,
@@ -32,17 +32,19 @@ export async function loadLearner(userId: string): Promise<LearnerData> {
     prefs: { initials: p.data?.avatar_initials || '', color: p.data?.avatar_color || '' },
     decisions: (d.data || []).map((r) => ({
       learningId: r.learning_id, verdict: r.verdict as Verdict, comment: r.comment || '', by: r.decided_by ?? null, byName: r.decided_by_name || '', at: r.decided_at,
-      evidence: { note: r.evidence?.note || '', link: r.evidence?.link || '', ref: r.evidence?.ref || '' },
+      evidence: { note: r.evidence?.note || '', link: r.evidence?.link || '', ref: r.evidence?.ref || '' }, rating: r.evidence?.rating ?? null,
     })),
   };
 }
 
 // Atomic insert-or-update of your own progress row (save_learning); only the given fields change. Evidence fields are
-// sent only when given ('' clears one); the database checks the format's evidence rule when the state is submitted.
-export async function saveProgress(_userId: string, learningId: string, patch: Partial<{ state: LearnState; pct: number; chosen: boolean; note: string; link: string; ref: string }>) {
+// sent only when given ('' clears one); the database checks the format's evidence rule when the state is submitted, and a
+// classroom's feedback (note and rating) when the learner completes it.
+export async function saveProgress(_userId: string, learningId: string, patch: Partial<{ state: LearnState; pct: number; chosen: boolean; note: string; link: string; ref: string; rating: number }>) {
   fail((await supabase.rpc('save_learning', {
     p_learning_id: learningId, p_state: patch.state ?? null, p_pct: patch.pct ?? null, p_chosen: patch.chosen ?? null,
     ...(patch.note !== undefined && { p_note: patch.note }), ...(patch.link !== undefined && { p_link: patch.link }), ...(patch.ref !== undefined && { p_ref: patch.ref }),
+    ...(patch.rating !== undefined && { p_rating: patch.rating }),
   })).error);
 }
 

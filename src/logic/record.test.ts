@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { LEARN } from '../data';
 import {
-  NO_EVIDENCE, decisionLine, decisionsFor, evidenceNeed, evidenceProblem, evidenceRule, fieldProblem, lastActivity, lastActivityLabel, linkProblem, openChanges, ruleText,
-  waitingLabel, workingDaysSince,
+  NO_EVIDENCE, completionOf, completionText, completionTodo, decisionLine, decisionsFor, evidenceNeed, evidenceProblem, evidenceRule, feedbackProblem, fieldProblem, lastActivity,
+  lastActivityLabel, linkProblem, openChanges, ruleText, selfCompletes, waitingLabel, workingDaysSince,
 } from './record';
 import type { Decision } from './record';
 
@@ -104,5 +104,45 @@ describe('waiting and last activity (F3)', () => {
   it('takes the latest own change across the progress rows', () => {
     expect(lastActivity({ L1: { updatedAt: '2026-10-01T00:00:00Z' }, L2: { updatedAt: '2026-10-20T00:00:00Z' }, L3: {} })).toBe('2026-10-20T00:00:00Z');
     expect(lastActivity({})).toBeNull();
+  });
+});
+
+describe('completion per learning type (owner, 2 Nov 2026)', () => {
+  it('completes podcasts, reels, e-learnings, classrooms and avatar practice without a counsellor; the rest by acceptance', () => {
+    const kinds = Object.fromEntries(['Podcast', 'Reel', 'E-learning', 'Classroom', 'Avatar', 'Certification', 'Book', 'Website', 'Mentoring', 'Game', 'Micro-guide', 'Case write-up', 'Something new']
+      .map((f) => [f, completionOf(f)]));
+    expect(kinds).toEqual({
+      Podcast: 'media', Reel: 'media', 'E-learning': 'mark', Classroom: 'feedback', Avatar: 'quiz', Certification: 'acceptance', Book: 'acceptance', Website: 'acceptance',
+      Mentoring: 'acceptance', Game: 'acceptance', 'Micro-guide': 'acceptance', 'Case write-up': 'acceptance', 'Something new': 'acceptance',
+    });
+    expect(['Podcast', 'Reel', 'E-learning', 'Classroom', 'Avatar'].every(selfCompletes)).toBe(true);
+    expect(selfCompletes('Certification')).toBe(false);
+  });
+  it('checks the classroom feedback: a rating 1 to 5 and at least 40 characters on what you will apply', () => {
+    const apply = 'I will open every workshop with the issue tree.';
+    expect(feedbackProblem(null, apply)).toBe('Rate the session from 1 to 5');
+    expect(feedbackProblem(0, apply)).toBe('Rate the session from 1 to 5');
+    expect(feedbackProblem(6, apply)).toBe('Rate the session from 1 to 5');
+    expect(feedbackProblem(4, 'Good day.')).toBe('Say what you will apply (at least 40 characters)');
+    expect(feedbackProblem(4, ' '.repeat(50) + 'x'.repeat(39))).toBe('Say what you will apply (at least 40 characters)');
+    expect(feedbackProblem(4, 'x'.repeat(2001))).toBe('Keep it to 2000 characters');
+    expect(feedbackProblem(1, apply)).toBeNull();
+    expect(feedbackProblem(5, 'x'.repeat(40))).toBeNull();
+  });
+  it('says what completes each type, and what is left once the hours are logged', () => {
+    expect(completionText('Podcast', 'Sam Coach')).toBe('Listening to 80% completes it. It counts right away; no acceptance needed.');
+    expect(completionText('Reel', 'Sam Coach')).toBe('A right answer to the question completes it. It counts right away; no acceptance needed.');
+    expect(completionText('E-learning', 'Sam Coach')).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
+    expect(completionText('Classroom', 'Sam Coach')).toBe('It completes when the faculty registers your attendance, or when you give your feedback on the session. No acceptance needed.');
+    expect(completionText('Avatar', 'Sam Coach')).toBe('After your practice session, three right answers in the evaluation quiz complete it. No acceptance needed.');
+    expect(completionText('Certification', 'Sam Coach')).toBe('Log your hours and add your evidence; Sam Coach accepts the certification.');
+    expect(completionText('Something new', 'Sam Coach')).toBe('Log your hours, then Sam Coach accepts the something new.');
+    expect(['E-learning', 'Classroom', 'Avatar', 'Podcast', 'Reel', 'Book'].map(completionTodo)).toEqual(['mark it as completed', 'give your feedback', 'take the evaluation quiz', 'listen to it', 'answer the question', '']);
+  });
+  it('labels attendance and a completion with feedback in the acceptance record', () => {
+    const base: Decision = { learningId: 'L10', verdict: 'attended', comment: '', by: 'a1', byName: 'Pat Admin', at: '2026-11-02T10:00:00Z', evidence: NO_EVIDENCE };
+    expect(decisionLine(base, 'u1', 'u1')).toMatchObject({ label: 'Attendance registered by Pat Admin · counts without acceptance', tone: 'green' });
+    expect(decisionLine(base, 'u1', 'a1').label).toBe('Attendance registered by you · counts without acceptance');
+    expect(decisionLine({ ...base, verdict: 'self_completed', by: 'u1', byName: 'Robin Test', rating: 4 }, 'u1', 'u1').label).toBe('Completed by you with feedback · rated 4 of 5 · counts without acceptance');
   });
 });

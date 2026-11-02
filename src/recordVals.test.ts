@@ -40,13 +40,11 @@ describe('evidence per format on the learner\'s detail', () => {
     h.vm().rec.setNote(field(reflection));
     expect(h.vm().rec).toMatchObject({ noteCount: reflection.length + ' / 140 characters', problem: null, dirty: true });
   });
-  it('needs nothing for a classroom item and shows no form before it starts', () => {
-    expect(learnerOn('L10', { L10: ['in-progress', 50] }).vm().rec).toMatchObject({ editable: true, problem: null });
-    expect(learnerOn('L10', {}).vm().rec).toMatchObject({ editable: false, showEvidence: false });
+  it('asks a certification for evidence before it starts', () => {
     expect(learnerOn('L18', {}).vm().rec.editable).toBe(true);
   });
-  it('shows no evidence form for a podcast or reel, which complete themselves', () => {
-    expect(learnerOn('L44', { L44: ['in-progress', 0] }).vm().rec.showEvidence).toBe(false);
+  it('shows no evidence form for the formats that complete themselves (podcast, reel, e-learning, classroom, avatar)', () => {
+    for (const id of ['L44', 'L42', 'L17', 'L10', 'L38']) expect(learnerOn(id, { [id]: ['in-progress', 50] }).vm().rec).toMatchObject({ editable: false, showEvidence: false });
   });
 });
 
@@ -92,7 +90,7 @@ describe('submitting with evidence', () => {
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L18', { state: 'submitted', pct: 100 });
   });
   it('saves evidence on its own, checking the link first', async () => {
-    const h = learnerOn('L10', { L10: ['in-progress', 50] });
+    const h = learnerOn('L3', { L3: ['in-progress', 50] });
     h.vm().rec.save();
     expect(h.lastToast()).toBe('Nothing changed');
     h.vm().rec.setLink(field('sharepoint/attendance'));
@@ -101,7 +99,7 @@ describe('submitting with evidence', () => {
     h.vm().rec.setLink(field('https://sharepoint.example/attendance'));
     h.vm().rec.save();
     await flush();
-    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L10', { note: '', link: 'https://sharepoint.example/attendance', ref: '' });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L3', { note: '', link: 'https://sharepoint.example/attendance', ref: '' });
     expect(h.lastToast()).toBe('Evidence saved · it goes with your submission');
   });
   it('keeps the rule while a submission waits: evidence cannot drop below it', async () => {

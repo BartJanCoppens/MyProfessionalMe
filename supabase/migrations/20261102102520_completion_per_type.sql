@@ -13,6 +13,13 @@
 -- Submitting a self-completing format for acceptance is still possible at the database (rows submitted before this
 -- release keep waiting for a decision); the app no longer offers it.
 
+-- ---------- copy: the avatar learning that described the old completion ----------
+
+-- Only when an admin has not rewritten it since the seed.
+update public.learnings
+   set why = 'A ten-minute spoken role-play with an AI avatar who reopens agreed scope. Up to three runs; the evaluation quiz after your practice session completes it.'
+ where id = 'L38' and why = 'A ten-minute spoken role-play with an AI avatar who reopens agreed scope. Three runs; the best one counts once it reaches 4 of 5 on every skill.';
+
 -- ---------- the classroom feedback: a rating next to the note ----------
 
 alter table public.learner_learnings

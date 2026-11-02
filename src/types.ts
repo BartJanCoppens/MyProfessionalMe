@@ -1,5 +1,6 @@
 import type { CreateData } from './logic/contribution';
 import type { QueueRow } from './lib/recordStore';
+import type { RosterRow } from './lib/attendanceStore';
 import type { AiAdmin, AiForm, AiUseEdit } from './logic/ai';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
 export type Learn = [string, string, string, number, string, string, number, number, string, string];
@@ -31,6 +32,8 @@ export type AvatarSpec = {
   // [date, score per skill (0..5), coach note]
   attempts: [string, number[], string][];
 };
+// One multiple-choice question, as in a reel's check: the question, the options and the right option's index.
+export type QuizQ = { q: string; opts: string[]; a: number };
 
 // A change to one audience's mappings, from a signal, the copilot or a drag.
 export type Op = { op: 'add' | 'remove' | 'setOb'; aud: string; lid: string; stage?: string; ob?: string };
@@ -107,6 +110,12 @@ export type AppState = {
   decideNote: Record<string, string>;
   // Approvals (F3): what waits for the signed-in person (not the viewed one), from waiting_submissions().
   queue: QueueRow[] | null; queueError: string | null;
+  // Completion per type (v0.7.2): the classroom feedback being written and the avatar quiz's picks, for one learning of
+  // one person (key subject|learning), so View as never shows another person's draft.
+  fbDraft: { key: string; rating: number | null; text: string } | null;
+  quiz: { key: string; picks: Record<number, number>; checked: boolean } | null;
+  // Classroom attendance (admins): the signed-in admin's roster for one learning, ticks not saved yet and the search.
+  att: { learningId: string; rows: RosterRow[] | null; error: string | null; picks: Record<string, boolean>; q: string; busy: boolean } | null;
   // AI: the uses the app may call now (everyone), and per use whether the last attempt was answered by AI or fell back.
   // The AI connections page (System Admin): its data, the connection form (with a typed key until it is saved) and test results.
   aiLive: string[]; aiOut: Record<string, 'ai' | 'scripted'>;

@@ -139,10 +139,10 @@ describe('learner data', () => {
       learner_prefs: { data: null },
     } as Record<string, object>)[c.table]);
     expect(await loadLearner('u1')).toEqual({
-      progress: { L1: { state: 'accepted', pct: 100, chosen: false, submittedAt: '2026-10-30T09:00:00Z', updatedAt: '2026-10-30T09:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' } } },
+      progress: { L1: { state: 'accepted', pct: 100, chosen: false, submittedAt: '2026-10-30T09:00:00Z', updatedAt: '2026-10-30T09:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' }, rating: null } },
       ambitions: [{ id: '5', text: 'Lead', horizon: '', doms: [], from: '' }],
       interests: [{ label: 'Data', dom: 'tec' }], prefs: { initials: '', color: '' },
-      decisions: [{ learningId: 'L1', verdict: 'accepted', comment: '', by: 'c1', byName: 'Sam Coach', at: '2026-10-31T10:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' } }],
+      decisions: [{ learningId: 'L1', verdict: 'accepted', comment: '', by: 'c1', byName: 'Sam Coach', at: '2026-10-31T10:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' }, rating: null }],
     });
     expect(db.calls.every((c) => has(c, 'eq', 'user_id', 'u1'))).toBe(true);
   });
@@ -157,6 +157,10 @@ describe('learner data', () => {
   it('sends evidence with save_learning only when given', async () => {
     await saveProgress('u1', 'L18', { state: 'submitted', pct: 100, link: 'https://x.example/c.pdf', note: '' });
     expect(db.calls[0].steps[0][1][0]).toEqual({ p_learning_id: 'L18', p_state: 'submitted', p_pct: 100, p_chosen: null, p_note: '', p_link: 'https://x.example/c.pdf' });
+  });
+  it('sends the classroom feedback rating with save_learning only when given', async () => {
+    await saveProgress('u1', 'L10', { state: 'accepted', pct: 100, note: 'I will open every workshop with the issue tree.', rating: 4 });
+    expect(db.calls[0].steps[0][1][0]).toEqual({ p_learning_id: 'L10', p_state: 'accepted', p_pct: 100, p_chosen: null, p_note: 'I will open every workshop with the issue tree.', p_rating: 4 });
   });
   it('adds and removes ambitions and interests', async () => {
     db.answer(() => ({ data: { id: 12 } }));
