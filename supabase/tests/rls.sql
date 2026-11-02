@@ -119,6 +119,17 @@ do $$ begin
   exception when others then insert into results (check_name, expected, actual) values ('Owner reopens accepted item', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
 with d as (delete from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000a2' and learning_id='L2' returning 1) insert into results (check_name, expected, actual) select 'Owner deletes accepted item', '0 rows', count(*)||' rows' from d;
+-- a draft podcast (not visible to learners) cannot be completed by one
+reset role;
+select set_config('request.jwt.claims', '', true);
+insert into public.learnings (id, title, domain, level, format, hours, status) values ('L902','T draft podcast','prof',2,'Podcast',0.5,'draft');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+do $$ begin
+  begin perform public.save_learning('L902', p_state => 'accepted', p_pct => 100::smallint);
+    insert into results (check_name, expected, actual) values ('Owner self-completes a draft podcast', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('Owner self-completes a draft podcast', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
 -- Podcasts and reels complete themselves (80% listened, or the reel's question answered); nothing else does
 select public.save_learning('L44', p_state => 'accepted', p_pct => 100::smallint);
 insert into results (check_name, expected, actual) select 'Owner completes a reel', 'accepted', coalesce(max(state), 'none') from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000a2' and learning_id='L44';
