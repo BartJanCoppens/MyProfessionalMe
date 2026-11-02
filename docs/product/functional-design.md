@@ -447,7 +447,7 @@ The player stops when the learning or the subject changes (plan Task 3, `usePlay
 
 ### F12 Create & share with peer review (L, v0.8.0; Roadmap §3)
 
-> **Shipped in v0.6.0 (2 Nov 2026)** with the owner's change: creation rights per topic, granted by System, General and Domain Admins, and review requirements per topic (0–2 peers, expert, quality & risk). See CLAUDE.md for the tables and functions.
+> **Shipped in v0.6.0 (2 Nov 2026)** with the owner's changes. Since v0.6.1, creation rights are simple logical rules (`creator_rules`: business lines, formats, domains, industries/technologies; OR within a part, AND across parts, several rules per person), granted by System, General and Domain Admins (the latter within their own lines). Review requirements use the same parts; the strictest matching one wins (default: 2 peers, expert, quality & risk). The topic-based text below is superseded where it differs; see CLAUDE.md for the tables and functions.
 
 **Goal.** Anyone (Q10) turns a project lesson into a reel, podcast, micro-guide or case write-up, grounded in firm knowledge, reviewed by two peers, a domain expert and the learning team, and published into the catalogue. Closes E8.1–E8.9, J13.4, J24.7, J26.1–J26.9, J28.1–J28.6.
 
