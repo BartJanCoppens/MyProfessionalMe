@@ -1,5 +1,5 @@
 // Seed data for the MyProfessionalMe prototype (verbatim from the Claude Design file).
-import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal, RagPreset, RagModel, Bundle, LearnMeta } from './types';
+import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal, RagPreset, RagModel, Bundle, LearnMeta, Media } from './types';
 
 export const DOMAINS: [string, string, string][] = [
   ['tech','Job technical skills','Tech skills'],['acad','Academic background','Academic'],['pers','Personal growth','Personal'],
@@ -51,7 +51,14 @@ export const LEARN: Learn[] = [
  ['L38','Holding scope with a procurement director','prof',3,'Avatar','Avatar studio',1.5,0,'','A ten-minute spoken role-play with an AI avatar who reopens agreed scope. Three runs; the best one counts once it reaches 4 of 5 on every skill.'],
  ['L39','Giving hard feedback to a junior','lead',2,'Avatar','Avatar studio',1,0,'','Practise the conversation before you have it. The avatar is a capable analyst who missed two deadlines and does not see the problem.'],
  ['L40','Presenting a fee increase to a sceptical CFO','prof',4,'Avatar','Avatar studio',1.5,0,'','The avatar challenges every number. You are scored on clarity, calm and whether you protect the relationship.'],
- ['L41','Calming an escalating client call','pers',3,'Avatar','Avatar studio',1,0,'','']
+ ['L41','Calming an escalating client call','pers',3,'Avatar','Avatar studio',1,0,'',''],
+ ['L42','Procurement tactics in energy tenders','prof',3,'Podcast','Peer contribution',0.5,0,'','Recorded by a Consulting peer with a former procurement director. Reviewed by two peers and the Energy sector lead before it was published.'],
+ ['L43','The CFO’s first question','pers',2,'Podcast','Internal academy',0.4,0,'',''],
+ ['L44','Pillar Two in 90 seconds','reg',2,'Reel','Tax & Legal academy',0.025,0,'',''],
+ ['L45','One slide, one message','pers',1,'Reel','Peer contribution',0.017,0,'',''],
+ ['L46','Pivot tables you actually need','tec',1,'Reel','Peer contribution',0.021,0,'',''],
+ ['L47','Scope creep: spot it in the SOW','prof',2,'Reel','Peer contribution',0.022,0,'',''],
+ ['L48','Grid tariffs explained','ind',2,'Podcast','Internal academy',0.6,0,'','']
 ];
 export const MAPS0: Record<string, Mapping[]> = {
  'Consulting':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L20','Analyst','advised'],['L31','Analyst','advised'],['L10','Consultant','mandatory'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','advised'],['L13','Consultant','advised'],['L1','Senior consultant','mandatory'],['L2','Senior consultant','advised'],['L8','Senior consultant','advised'],['L11','Senior consultant','advised'],['L19','Senior consultant','advised'],['L23','Senior consultant','advised'],['L4','Manager','mandatory'],['L12','Manager','mandatory'],['L27','Manager','mandatory'],['L18','Manager','advised'],['L28','Manager','advised'],['L3','Senior manager','advised']],
@@ -139,6 +146,18 @@ export const CLOUD_META: Record<CloudKey, CloudMeta> = {
 };
 export const KEYWORDS: [string, string, string][] = [['sustain','Sustainability','reg'],['data','Data analysis','tec'],['coach','Coaching others','lead'],['lead','Leading teams','lead'],['health','Healthcare clients','ind'],['abroad','Working abroad','pers'],['financ','Corporate finance','acad'],['writ','Writing','pers'],['negoti','Negotiation','prof'],['sell','Business development','prof'],['supply','Supply chains','tech'],['tax','Tax technology','reg']];
 export const IMPORT_RESULTS: [string, string][] = [['Negotiation for consultants','Coursera · 6 h · Professional skills'],['Cloud economics for advisors','Coursera · 4 h · Technology'],['Supply chain analytics','edX · 10 h · Job technical skills']];
+
+// ---------- Podcasts and reels (design v3; people named in the design are replaced by roles) ----------
+// Podcast and reel players: host, length, duration (s), chapters or captions and a one-question check.
+export const MEDIA: Record<string, Media> = {
+ L42:{ kind:'pod', by:'A Consulting peer with a former procurement director', len:'28 min', dur:1680, ch:[[0,'Why tenders reopen scope'],[580,'Trading timing for scope'],[1155,'What to put in writing']] },
+ L43:{ kind:'pod', by:'Internal academy', len:'24 min', dur:1440, ch:[[0,'What a CFO reads first'],[420,'Numbers without a story'],[960,'Answering “why now”']] },
+ L48:{ kind:'pod', by:'The Energy sector lead and a grid operator', len:'36 min', dur:2160, ch:[[0,'How a tariff is built'],[900,'Capacity tariffs in Flanders'],[1600,'What it means for clients']] },
+ L44:{ kind:'reel', by:'Tax & Legal academy', len:'90 s', dur:90, caps:['Large groups now pay at least 15%, wherever they operate.','The threshold is €750m consolidated turnover.','Belgium collects a top-up when an entity pays less.'], take:'Pillar Two sets a 15% minimum effective tax rate for groups with €750m or more turnover; Belgium collects a top-up tax when a group entity pays less.', q:'Which groups fall under Pillar Two?', opts:['Every Belgian company','Groups with €750m or more consolidated turnover','Only listed companies'], a:1 },
+ L45:{ kind:'reel', by:'Peer contribution', len:'60 s', dur:60, caps:['Write the headline first.','If it needs “and”, it is two slides.','The evidence goes to the appendix.'], take:'One message per slide: the headline states it as a full sentence and the evidence moves to the appendix.', q:'Your slide headline needs “and” to be true. What do you do?', opts:['Shorten the words','Split it into two slides','Move it to the appendix'], a:1 },
+ L46:{ kind:'reel', by:'Peer contribution', len:'75 s', dur:75, caps:['Three pivot moves cover most client requests.','Group by month. Show values as % of total.','Add a slicer and hand it over.'], take:'Group dates by month, show values as a share of the total and add a slicer; that covers most client data requests.', q:'Which setting shows each customer’s share of revenue?', opts:['Show values as % of grand total','Sort largest to smallest','Add a calculated field'], a:0 },
+ L47:{ kind:'reel', by:'Peer contribution', len:'80 s', dur:80, caps:['Scope creep hides in one word: “including”.','Every “such as” is an open list.','Close it with “limited to”.'], take:'Read every “including” and “such as” in the statement of work: each is an open list the client can extend later.', q:'Which phrase opens scope the most?', opts:['“limited to”','“including but not limited to”','“as agreed in annex 2”'], a:1 }
+};
 
 // ---------- Knowledge library (design v3; admin, in memory like the catalogue) ----------
 export const KB_TYPES: Record<string, string> = { upload: 'Upload', sharepoint: 'SharePoint', confluence: 'Confluence', web: 'Website', lms: 'LMS course' };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { LEARN, LEARN_BY } from '../data';
-import { cover, formatTiles } from './covers';
+import { LEARN, LEARN_BY, MEDIA } from '../data';
+import { cover, formatTiles, reelStrip } from './covers';
 
 const row = (id: string) => LEARN_BY[id];
 
@@ -40,3 +40,13 @@ describe('formatTiles', () => {
     expect(tiles.filter((t) => t.on).map((t) => t.key)).toEqual(['Book']);
   });
 });
+
+describe('reelStrip', () => {
+  it('lists every reel with its host and length', () => {
+    const strip = reelStrip(LEARN, { L44: 'accepted' }, () => {});
+    expect(strip.map((r) => r.id)).toEqual(LEARN.filter((r) => r[4] === 'Reel').map((r) => r[0]));
+    expect(strip.find((r) => r.id === 'L44')).toMatchObject({ done: true, len: MEDIA.L44.len, by: MEDIA.L44.by });
+    expect(strip.find((r) => r.id === 'L46')!.done).toBe(false);
+  });
+});
+

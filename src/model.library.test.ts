@@ -50,7 +50,7 @@ describe('library filters', () => {
     h.vm().setLibLevel(select('5'));
     expect(h.state.libLevel).toBe('5');
     expect(h.vm().libItems).toEqual([]);
-    expect(harness({ state: { libLevel: '1' } }).vm().libItems.map((i) => i.id)).toEqual(['L16', 'L20', 'L25']);
+    expect(harness({ state: { libLevel: '1' } }).vm().libItems.map((i) => i.id)).toEqual(['L16', 'L20', 'L25', 'L45', 'L46']);
     expect(harness().vm().levelOptions[0]).toEqual({ value: '0', label: 'Any level' });
   });
   it('filters by format tile, and the same tile clears it', () => {

@@ -3,7 +3,7 @@
 import type { ChangeEvent, DragEvent, KeyboardEvent, RefObject } from 'react';
 import {
   AUD_INFO, AUD_MAPS0, BUNDLES0, LEARN_META, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
-  OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, PROJECTS, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
+  MEDIA, OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, PROJECTS, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
 } from './data';
 import type { Config } from './config';
 import type { Access, AppState, ChatMsg, CloudKey, Learn, LearnForm, LearnMeta, Op, Persona, Proposal, Read, Screen, Signal } from './types';
@@ -16,7 +16,8 @@ import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import { kbVals } from './kbVals';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
-import { cover, formatTiles, lengthLabel } from './logic/covers';
+import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
+import { currentPos, podSave, podView, reelView, startPos, step } from './logic/media';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
 export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'adminKb', 'users'];
@@ -25,6 +26,8 @@ const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!
 type Evidence = { id: string; text: string; src: string };
 type ChatReply = { reply: string; interests?: { label: string; domain: string }[]; ambition?: Proposal['ambition'] };
 
+// Podcast and reel progress saved per person and learning, until the reload lands (so a tick never repeats a save).
+const MEDIA_SAVED = new Map<string, number>();
 // Saves in flight (learning form, publishing); a second click while one runs does nothing.
 const BUSY = new Set<string>();
 // Publication status in the admin library: chip status and label.
@@ -36,7 +39,7 @@ export function initState(cfg: Config): AppState {
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, zoom: null, libForm: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, zoom: null, libForm: null, media: { playing: null, pos: {}, speed: '1' }, answers: {}, answersFor: null,
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
     kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
@@ -85,6 +88,47 @@ export class Logic {
   async persist(write: () => Promise<unknown>, done?: string) {
     if (this.readOnly()) return;
     try { await write(); await this.reloadSubject(); if (done) this.say(done); } catch (err) { this.say((err as Error).message); }
+  }
+  // Podcast and reel players. Playback lives in app state; progress is saved for the learner only, never in View as.
+  // Saves are remembered per person and learning until the reload lands, so a tick never repeats one.
+  mediaSaved(id: string) {
+    const own = this.subject.data.progress[id], last = MEDIA_SAVED.get(this.subject.id + '|' + id);
+    if (last === 100 || own?.state === 'accepted') return { state: 'accepted' as LearnState, pct: 100 };
+    return own ? { state: own.state, pct: Math.max(own.pct, last || 0) } : last != null ? { state: 'in-progress' as LearnState, pct: last } : undefined;
+  }
+  saveMedia(id: string, patch: { state: LearnState; pct: number }, done?: string) {
+    const key = this.subject.id + '|' + id; MEDIA_SAVED.set(key, patch.pct);
+    this.persist(() => saveProgress(this.subject.id, id, patch).catch((err) => { MEDIA_SAVED.delete(key); throw err; }), done);
+  }
+  tick() {
+    const m = this.state.media, id = m.playing; if (!id) return;
+    if (m.owner !== this.subject.id) { this.setState({ media: { ...m, playing: null } }); return; }
+    const next = step(m); this.setState({ media: next });
+    if (this.subject.readOnly) return;
+    const M = MEDIA[id], p = next.pos[id];
+    if (M.kind === 'pod') {
+      const sv = podSave(p, M.dur, this.mediaSaved(id));
+      if (sv) this.saveMedia(id, sv, sv.state === 'accepted' ? 'Podcast complete · ' + LEARN_BY[id][1] + ' counts toward your hours' : undefined);
+    } else if (p >= M.dur && !this.mediaSaved(id)) this.saveMedia(id, { state: 'in-progress', pct: 0 });
+  }
+  mediaVals(it: Item) {
+    const M = MEDIA[it.id]; if (!M) return { isPod: false, isReel: false, pod: null, reel: null };
+    // Session positions and answers belong to the person they were made for; another person starts from their own progress.
+    const mine = (st: AppState) => (st.media.owner === this.subject.id ? st.media.pos : {});
+    const m = this.state.media, on = m.playing === it.id && m.owner === this.subject.id, pos = currentPos(M, mine(this.state)[it.id], it.pct);
+    const play = (at?: number) => this.setState((st) => ({ media: { ...st.media, playing: at == null && st.media.playing === it.id && st.media.owner === this.subject.id ? null : it.id, owner: this.subject.id, pos: { ...mine(st), [it.id]: at ?? startPos(M, mine(st)[it.id], it.pct) } } }));
+    if (M.kind === 'pod') {
+      const v = podView(M, pos, on);
+      return { isPod: true, isReel: false, reel: null, pod: { ...v, sub: M.len + ' · ' + M.by + (it.isPeer ? ' · peer-made' : ''), toggle: () => play(),
+        speed: m.speed, speedOptions: [{ value: '1', label: '1×' }, { value: '1.5', label: '1.5×' }, { value: '2', label: '2×' }], setSpeed: (v: string) => this.setState((st) => ({ media: { ...st.media, speed: v } })),
+        chapters: v.chapters.map((c) => ({ ...c, seek: () => play(c.at) })) } };
+    }
+    const ans = this.state.answersFor === this.subject.id ? this.state.answers[it.id] : undefined, v = reelView(M, pos, on, ans, it.title);
+    return { isPod: false, isReel: true, pod: null, reel: { ...v, toggle: () => play(),
+      opts: v.opts.map((o, k) => ({ ...o, pick: () => {
+        this.setState((st) => ({ answers: { ...(st.answersFor === this.subject.id ? st.answers : {}), [it.id]: k }, answersFor: this.subject.id }));
+        if (o.right && ans !== M.a && this.mediaSaved(it.id)?.state !== 'accepted') this.saveMedia(it.id, { state: 'accepted', pct: 100 }, 'Reel complete · added to your year');
+      } })) } };
   }
   myStage() { return stageIndex(this.subject.stage); }
   // Ambitions, interests and personality are private to the person (owner, Q8); nobody viewing them sees these.
@@ -155,9 +199,10 @@ export class Logic {
     const state: LearnState = own?.state || 'not-started'; const pct = state === 'accepted' || state === 'submitted' ? 100 : own?.pct || 0;
     const ob = this.obFor(id); const m = this.mapping(id); const di = DOMAINS.findIndex((d) => d[0] === dom);
     const hasDue = ob === 'mandatory' && !!due; const dueSoon = due === '30 Nov 2026';
-    const hoursLabel = lengthLabel(row);
+    const hoursLabel = lengthLabel(row); const MD = MEDIA[id]; const isPeer = source === 'Peer contribution';
     return {
       id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
+      isMedia: !!MD, mediaLine: MD ? format + ' · ' + MD.len + ' · ' + MD.by : '', isPeer, peerLine: isPeer ? 'Made by a colleague · peer-reviewed' : '',
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
       stateLabel: state === 'in-progress' ? 'In progress · ' + pct + '%' : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
@@ -412,6 +457,7 @@ export class Logic {
     const domChips = [{ key: 'all', label: 'All domains', on: s.libDom === 'all', onClick: () => this.setState({ libDom: 'all' }) }]
       .concat(DOMAINS.map((d) => ({ key: d[0], label: d[1], on: s.libDom === d[0], onClick: () => this.setState({ libDom: d[0] }) })));
     const formats = Array.from(new Set(LEARN.map((l) => l[4])));
+    const reels = reelStrip(LEARN, Object.fromEntries(items.map((it) => [it.id, it.state])), (id) => this.openDetail(id, 'library'));
 
     // detail
     // With no learnings at all (a fresh catalogue) the detail view gets a blank stand-in; nothing links to it.
@@ -424,7 +470,7 @@ export class Logic {
       .filter((x): x is { bl: string; stage: string; ob: string } => !!x);
     if (!paths.length) paths = [{ bl: 'No path', stage: 'open to everyone', ob: '' }];
     const det = {
-      ...d0,
+      ...d0, ...this.mediaVals(d0),
       outcomes: OUTCOMES[d0.dom].map((t) => ({ t })),
       levelSub: LEVELS[d0.lvl - 1] + ' · L' + d0.lvl + ' in ' + d0.domLabel + '. You are at L' + myLvl + '; ' + this.nextStage() + ' expects L' + TARGET[d0.di] + '.',
       ladder: LEVELS.map((lab, i) => {
@@ -556,6 +602,7 @@ export class Logic {
       obOptions: [opt('all', 'All'), opt('mandatory', 'Mandatory'), opt('advised', 'Advised'), opt('chosen', 'Chosen'), opt('open', 'Open')], libOb: s.libOb, setLibOb: (v: string) => this.setState({ libOb: v }),
       levelOptions: [opt('0', 'Any level')].concat(LEVELS.map((l, i) => opt(String(i + 1), 'L' + (i + 1) + ' · ' + l))), libLevel: s.libLevel, setLibLevel: (e: ChangeEvent<HTMLSelectElement>) => this.setState({ libLevel: e.target.value }),
       fmtTiles: formatTiles(LEARN, s.libFormat, (f) => this.setState({ libFormat: f })),
+      showReels: reels.length > 0 && (s.libFormat === 'all' || s.libFormat === 'Reel'), reelStrip: reels, reelSub: reels.length + ' reels · under two minutes each · ' + reels.filter((r) => LEARN_BY[r.id][5] === 'Peer contribution').length + ' made by colleagues',
       libEmpty: libItems.length === 0, clearLibFilters: () => this.setState({ libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all' }),
       domChips, libItems, libResultText: libItems.length + ' of ' + LEARN.length + ' learnings' + (s.libOb === 'mandatory' ? ' · mandatory for ' + bl + ' up to the ' + this.nextStage() + ' stage' : ''),
       // detail

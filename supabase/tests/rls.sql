@@ -119,6 +119,20 @@ do $$ begin
   exception when others then insert into results (check_name, expected, actual) values ('Owner reopens accepted item', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
 with d as (delete from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000a2' and learning_id='L2' returning 1) insert into results (check_name, expected, actual) select 'Owner deletes accepted item', '0 rows', count(*)||' rows' from d;
+-- Podcasts and reels complete themselves (80% listened, or the reel's question answered); nothing else does
+select public.save_learning('L44', p_state => 'accepted', p_pct => 100::smallint);
+insert into results (check_name, expected, actual) select 'Owner completes a reel', 'accepted', coalesce(max(state), 'none') from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000a2' and learning_id='L44';
+select public.save_learning('L42', p_state => 'in-progress', p_pct => 40::smallint);
+select public.save_learning('L42', p_state => 'accepted', p_pct => 100::smallint);
+insert into results (check_name, expected, actual) select 'Owner completes a podcast', 'accepted', coalesce(max(state), 'none') from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000a2' and learning_id='L42';
+do $$ begin
+  begin perform public.save_learning('L44', p_state => 'in-progress');
+    insert into results (check_name, expected, actual) values ('Owner reopens completed reel', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('Owner reopens completed reel', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.save_learning('L3', p_state => 'accepted');
+    insert into results (check_name, expected, actual) values ('Owner self-completes a classroom item', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('Owner self-completes a classroom item', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
 insert into results (check_name, expected, actual) select 'Every profile has prefs', '0', count(*)::text from public.profiles p where p.id = '00000000-0000-0000-0000-0000000000a2' and not exists (select 1 from public.learner_prefs x where x.user_id = p.id);
 -- Who the Consulting Domain Admin may manage (User management list)
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';

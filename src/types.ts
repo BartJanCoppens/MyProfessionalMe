@@ -49,6 +49,12 @@ export type Access = { isSystem: boolean; isGeneral?: boolean; domains: string[]
 // Catalogue entry metadata: owning business line (null = firm-wide) and publication status.
 // The admin library form; numbers stay text while typing. line '' = firm-wide.
 export type LearnForm = { id: string | null; title: string; domain: string; level: string; format: string; source: string; hours: string; cpd: string; why: string; line: string; status: LearnMeta['status'] };
+// Podcast and reel players (design v3)
+export type PodMedia = { kind: 'pod'; by: string; len: string; dur: number; ch: [number, string][] };
+export type ReelMedia = { kind: 'reel'; by: string; len: string; dur: number; caps: string[]; take: string; q: string; opts: string[]; a: number };
+export type Media = PodMedia | ReelMedia;
+// owner: whose app playback started in; the clock stops when the viewed person changes
+export type MediaState = { playing: string | null; owner?: string | null; pos: Record<string, number>; speed: string };
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft' };
 export type View = 'constellation' | 'radar' | 'road';
 export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | null;
@@ -77,6 +83,8 @@ export type AppState = {
   reads: Record<string, Read>; readBusy: boolean;
   // growth map: the domain zoomed into (domain key), or null for all domains
   zoom: string | null;
+  // podcast and reel players: what plays, positions this session, podcast speed; reel answers and whose they are
+  media: MediaState; answers: Record<string, number>; answersFor: string | null;
   // admin library: the learning being added or edited in the drawer
   libForm: LearnForm | null;
   // Knowledge library (admin): bundles are in memory this session, like the learning catalogue

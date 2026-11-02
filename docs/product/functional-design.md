@@ -427,6 +427,8 @@ Ambition and Profile stay learner-only by default because the counsellor must no
 
 ### F11 Podcasts and reels (M, v0.6.0; Roadmap §2)
 
+> **Shipped in v0.5.0 (2 Nov 2026)**, ahead of F2–F4 at the owner's request. Self-completion follows the format, as designed here, through `private.is_self_complete()` reading `learnings.format`.
+
 **Goal.** Short formats that fit a project week. Closes E9.2–E9.7.
 
 **Design.** Rebase `feature/design-v3-b` onto `main` as the roadmap says, with three changes:

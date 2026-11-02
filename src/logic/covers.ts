@@ -1,4 +1,5 @@
-// Library card covers and format tiles (design v3). The podcast and reel covers stay for when those formats ship.
+// Library card covers, format tiles and the quick-learning reels strip (design v3).
+import { MEDIA } from '../data';
 import type { Learn } from '../types';
 import type { LearnState } from './learner';
 
@@ -8,10 +9,10 @@ type Bar = { bg: string; anim: string };
 const KIND: Record<string, CoverKind> = { Podcast: 'pod', Reel: 'reel', Avatar: 'avatar', Game: 'game', Book: 'book', Classroom: 'class', 'E-learning': 'elearn', Mentoring: 'mentor', Website: 'web', Certification: 'cert' };
 const DARK = ['Podcast', 'Reel', 'Avatar', 'Game', 'Certification'];
 
-// Study time: "40 min" under an hour, otherwise hours.
+// "28 min" for media, otherwise the study time.
 export function lengthLabel(row: Learn) {
-  const hours = row[6];
-  return hours < 1 ? Math.round(hours * 60) + ' min' : (hours % 1 ? hours.toFixed(1) : hours) + ' h';
+  const [id, , , , , , hours] = row;
+  return MEDIA[id] ? MEDIA[id].len : hours < 1 ? Math.round(hours * 60) + ' min' : (hours % 1 ? hours.toFixed(1) : hours) + ' h';
 }
 
 // The design's cover(r, i): an animated illustration per format, seeded from the id and title so it never jumps.
@@ -58,4 +59,11 @@ export function formatTiles(rows: Learn[], selected: string, pick: (format: stri
       bg: on ? '#1a1d18' : '#fff', fg: on ? '#fff' : '#1a1d18', bd: on ? '#1a1d18' : '#e1e5dc', pick: () => pick(on ? 'all' : key) };
   };
   return [tile('all', 'All formats', rows.length, '#86BC25')].concat(formats.map((f) => tile(f, f, rows.filter((r) => r[4] === f).length, DARK.includes(f) ? '#171a16' : '#f3f5f0')));
+}
+
+// Reels as vertical cards above the grid.
+export function reelStrip(rows: Learn[], states: Record<string, LearnState | undefined>, open: (id: string) => void) {
+  return rows.filter((r) => r[4] === 'Reel' && MEDIA[r[0]]).map((r) => ({
+    id: r[0], title: r[1], len: MEDIA[r[0]].len, by: MEDIA[r[0]].by, done: states[r[0]] === 'accepted', open: () => open(r[0]),
+  }));
 }

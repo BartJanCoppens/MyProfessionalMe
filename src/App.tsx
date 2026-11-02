@@ -91,6 +91,14 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
 
   useEffect(() => { if (chat.current) chat.current.scrollTop = 1e6; }, [state.chat, state.chatBusy, state.proposal]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+  // One clock while a podcast or reel plays. Each tick reads the latest Logic, which saves progress and stops at the end.
+  const logicRef = useRef(logic);
+  useEffect(() => { logicRef.current = logic; });
+  useEffect(() => {
+    if (!state.media.playing) return;
+    const t = window.setInterval(() => logicRef.current.tick(), 250);
+    return () => clearInterval(t);
+  }, [state.media.playing]);
 
   return (
     <div data-pm-motion={vm.motionAttr} style={{ display: 'flex', minHeight: '100vh', background: '#f3f5f0', color: '#1a1d18', fontFamily: "'IBM Plex Sans',system-ui,sans-serif", fontSize: 13, lineHeight: 1.45 }}>
