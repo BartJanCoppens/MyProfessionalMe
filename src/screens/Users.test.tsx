@@ -278,3 +278,40 @@ describe('creation rules (Can create for)', () => {
     expect((screen.getByRole('button', { name: 'Add rule' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('domain experts (System Admins, own tab)', () => {
+  const answerExperts = (rows: { domain: string; user_id: string }[]) => db.answer((c) => (c.table === 'rpc:manageable_user_ids' ? { data: users.map((x) => x.id) }
+    : c.table === 'domain_experts' && op(c) === 'select' ? { data: rows } : c.table === 'creator_rules' && op(c) === 'select' ? { data: [] } : op(c) === 'select' ? { data: users } : writes(c)));
+  const tab = (name: RegExp) => screen.getByRole('button', { name });
+  it('keeps the experts off the people list and shows several per domain on their own tab', async () => {
+    answerExperts([{ domain: 'reg', user_id: 'a1' }, { domain: 'reg', user_id: 'c1' }]);
+    await mount();
+    expect(screen.queryByRole('group', { name: 'Experts for Regulations' })).toBeNull();
+    await click(tab(/^Domain experts/));
+    const reg = screen.getByRole('group', { name: 'Experts for Regulations' });
+    expect(within(reg).getByText('Person A1')).toBeTruthy();
+    expect(within(reg).getByText('Person C1')).toBeTruthy();
+    expect(within(screen.getByRole('group', { name: 'Experts for Leadership' })).getByText('None · a System Admin reviews')).toBeTruthy();
+    const add = within(reg).getByLabelText('Add an expert for Regulations') as HTMLSelectElement;
+    expect(Array.from(add.options).map((o) => o.value)).toEqual(['', 'me', 'n1', 's2']);
+    await click(tab(/^People/));
+    expect(screen.getByText('5 of 5 accounts')).toBeTruthy();
+  });
+  it('adds a second expert and removes one', async () => {
+    answerExperts([{ domain: 'reg', user_id: 'a1' }]);
+    const say = await mount();
+    await click(tab(/^Domain experts/));
+    const reg = () => screen.getByRole('group', { name: 'Experts for Regulations' });
+    await change(within(reg()).getByLabelText('Add an expert for Regulations'), 's2');
+    expect(has(db.on('domain_experts').find((c) => op(c) === 'insert')!, 'insert', { domain: 'reg', user_id: 's2' })).toBe(true);
+    expect(say).toHaveBeenCalledWith('Person S2 is now an expert for Regulations');
+    await click(within(reg()).getByRole('button', { name: 'Remove Person A1 as expert for Regulations' }));
+    const del = db.on('domain_experts').find((c) => op(c) === 'delete')!;
+    expect(has(del, 'eq', 'domain', 'reg') && has(del, 'eq', 'user_id', 'a1')).toBe(true);
+    expect(say).toHaveBeenCalledWith('Person A1 is no longer an expert for Regulations');
+  });
+  it('shows no tabs to a Domain Admin', async () => {
+    await mount(auditAdmin);
+    expect(screen.queryByRole('button', { name: /^Domain experts/ })).toBeNull();
+  });
+});

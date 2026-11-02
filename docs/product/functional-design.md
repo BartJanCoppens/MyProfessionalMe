@@ -509,7 +509,7 @@ stateDiagram-v2
 | Step | Reviewer | Rule |
 |---|---|---|
 | Peer review | Two people who share the contribution's domain as an interest or share the author's line | Never the author, never the author's counsellor, never someone the author counsels; fewer than two candidates: any member of the author's line; still none: a System Admin |
-| Expert review | The domain's expert from `domain_experts` (System Admins maintain it in User management) | None set: any System Admin (Q17) |
+| Expert review | One of the domain's experts from `domain_experts`, several per domain (System Admins keep them on the Domain experts tab of User management); never the author, the one with the fewest open reviews | None set: any System Admin (Q17) |
 | Quality & risk | Any General Admin (the learning team) | None: any System Admin |
 
 Routing runs in `private.submit_contribution(id)` (`security definer`), called by an RPC, so the author cannot pick reviewers. The plan's separate `contributions` edge function is not needed.

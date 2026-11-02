@@ -96,14 +96,19 @@ export async function removePolicy(id: number) {
   if (!data?.length) throw new Error('Not removed · you cannot change this review requirement');
 }
 
-export async function loadExperts(): Promise<Record<string, string>> {
+// Domain -> its experts (several per domain). A domain without one is reviewed by a System Admin.
+export async function loadExperts(): Promise<Record<string, string[]>> {
   const { data, error } = await supabase.from('domain_experts').select('domain, user_id');
   fail(error);
-  return Object.fromEntries(((data || []) as { domain: string; user_id: string }[]).map((r) => [r.domain, r.user_id]));
+  const out: Record<string, string[]> = {};
+  for (const r of (data || []) as { domain: string; user_id: string }[]) (out[r.domain] ||= []).push(r.user_id);
+  return out;
 }
 
-// null clears the expert: a System Admin then reviews that domain.
-export async function setExpert(domain: string, userId: string | null) {
-  if (!userId) { fail((await supabase.from('domain_experts').delete().eq('domain', domain)).error); return; }
-  fail((await supabase.from('domain_experts').upsert({ domain, user_id: userId, updated_at: new Date().toISOString() })).error);
+export async function addExpert(domain: string, userId: string) {
+  fail((await supabase.from('domain_experts').insert({ domain, user_id: userId })).error);
+}
+
+export async function removeExpert(domain: string, userId: string) {
+  fail((await supabase.from('domain_experts').delete().eq('domain', domain).eq('user_id', userId)).error);
 }

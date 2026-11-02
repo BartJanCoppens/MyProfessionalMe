@@ -339,6 +339,9 @@ What a user can do in MyProfessionalMe, per feature and role, and which automate
 | USR-16 | Domain Admin | — | "+ Add user" | Own lines only, no role box | `screens/Users.test.tsx › adding a user › lets a Domain Admin add users to their own lines only, without roles` |
 | USR-17 | Admin | Real project | Removed person's open session | Valid for up to an hour, then gone | manual: needs a real auth server and time |
 | USR-18 | Domain Admin | Real project | Manage a System Admin or another line's Domain Admin via the API | Refused by `manage-users` and RLS | manual: server-side, covered by `supabase/tests/rls.sql` and the edge function |
+| USR-19 | System Admin | Two experts for Regulations | Open the Domain experts tab | Experts off the people list; both shown per domain; none = "a System Admin reviews"; add list leaves out current experts | `screens/Users.test.tsx › domain experts (System Admins, own tab) › keeps the experts off the people list and shows several per domain on their own tab` |
+| USR-20 | System Admin | One expert | Add a second expert, remove the first | Insert and delete on `domain_experts`, toasts | `screens/Users.test.tsx › domain experts (System Admins, own tab) › adds a second expert and removes one`<br>`supabase/tests/rls.sql` (CS checks on several experts and `pick_expert`) |
+| USR-21 | Domain Admin | — | Open | No tabs, no domain experts | `screens/Users.test.tsx › domain experts (System Admins, own tab) › shows no tabs to a Domain Admin` |
 
 ## 14. Career stages and people without line or stage (STG)
 

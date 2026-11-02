@@ -643,6 +643,20 @@ insert into results (check_name, expected, actual) select 'CS audience-scoped re
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
 with i as (insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a1') returning 1) insert into results (check_name, expected, actual) select 'CS SA names a domain expert', '1 rows', count(*)||' rows' from i;
+with i as (insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a3') returning 1) insert into results (check_name, expected, actual) select 'CS SA names a second expert for the same domain', '1 rows', count(*)||' rows' from i;
+do $$ begin
+  begin insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a1');
+    insert into results (check_name, expected, actual) values ('CS same expert twice for a domain', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS same expert twice for a domain', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+with d as (delete from public.domain_experts where domain = 'acad' and user_id = '00000000-0000-0000-0000-0000000000a3' returning 1) insert into results (check_name, expected, actual) select 'CS SA removes one expert of a domain', '1 rows', count(*)||' rows' from d;
+insert into results (check_name, expected, actual) select 'CS the other expert stays', '1', count(*)::text from public.domain_experts where domain = 'acad';
+insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a3');
+reset role;
+delete from public.domain_experts where domain = 'corp';
+insert into results (check_name, expected, actual) select 'CS expert review skips an author who is an expert', '00000000-0000-0000-0000-0000000000a3', private.pick_expert('acad', '00000000-0000-0000-0000-0000000000a1', null)::text;
+insert into results (check_name, expected, actual) select 'CS expert review goes to one of the experts', '1', count(*)::text from public.domain_experts where domain = 'acad' and user_id = (select private.pick_expert('acad', '00000000-0000-0000-0000-0000000000a2', null));
+insert into results (check_name, expected, actual) select 'CS no expert named for a domain', 'null', coalesce(private.pick_expert('corp', '00000000-0000-0000-0000-0000000000a2', null)::text, 'null');
 
 -- General Admin hands out creation rights, so may list people and their roles, but still manages nobody
 set local role authenticated;

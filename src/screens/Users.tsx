@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Banner, Button, Checkbox, Drawer, Field, FilterChip, Hover, Input, LinkButton, PageTitle, SegmentedControl, Select, Tag } from '../ds';
+import { Avatar, Banner, Button, Checkbox, Drawer, Field, FilterChip, Hover, Input, LinkButton, PageTitle, SegmentedControl, Select, Tabs, Tag } from '../ds';
 import { BUSINESS_LINES, manageUsers, PASSWORD_HINT, supabase, temporaryPassword } from '../lib/supabase';
 import type { BusinessLine, Profile, Role } from '../lib/supabase';
 import type { Access } from '../types';
 import { DOMAINS, STAGES } from '../data';
-import { addRule, loadExperts, loadRules, removeRule, setExpert } from '../lib/contributionStore';
+import { addExpert, addRule, loadExperts, loadRules, removeExpert, removeRule } from '../lib/contributionStore';
 import { PARTS, PART_LABEL, PART_VALUES, emptyParts, ruleProblem, ruleSentence, togglePart, valueName, withinLines } from '../logic/contribution';
 import type { Rule, RuleParts } from '../logic/contribution';
 import RuleChips from './RuleChips';
@@ -17,13 +17,13 @@ const COLS = 'minmax(0,2.2fr) 150px 170px 190px minmax(0,2.4fr) 200px 160px 190p
 // A General Admin (no accounts to manage) lists everyone readable, to hand out creation rights.
 const fetchUsers = async (everyone = false) => {
   const [people, ids] = await Promise.all([fetchProfiles(), supabase.rpc('manageable_user_ids')]);
-  if (people.error || ids.error) return { data: null, grants: [] as Rule[], experts: {} as Record<string, string>, error: people.error || ids.error };
+  if (people.error || ids.error) return { data: null, grants: [] as Rule[], experts: {} as Record<string, string[]>, error: people.error || ids.error };
   const ok = new Set((ids.data as string[]) || []), data = (people.data || []).filter((p) => everyone || ok.has(p.id));
-  // Create & share: their creation rules, and the expert per domain (readable by everyone signed in).
+  // Create & share: their creation rules, and the experts per domain (readable by everyone signed in).
   try {
     const [grants, experts] = await Promise.all([loadRules(data.map((p) => p.id)), loadExperts()]);
     return { data, grants, experts, error: null };
-  } catch (err) { return { data, grants: [] as Rule[], experts: {} as Record<string, string>, error: { message: (err as Error).message } }; }
+  } catch (err) { return { data, grants: [] as Rule[], experts: {} as Record<string, string[]>, error: { message: (err as Error).message } }; }
 };
 const fetchProfiles = () => supabase.from('profiles')
   .select('id, email, full_name, business_line, must_change_password, created_at, career_stage, counsellor_id, roles:user_roles!user_roles_user_id_fkey(role, business_line)')
@@ -41,9 +41,10 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
   const [adding, setAdding] = useState(false);
   const [handover, setHandover] = useState<Handover | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  // Create & share: creation rules of the people shown, and (System Admins) the expert per domain.
+  // Create & share: creation rules of the people shown, and (System Admins, own tab) the experts per domain.
   const [grants, setGrants] = useState<Rule[]>([]);
-  const [experts, setExperts] = useState<Record<string, string>>({});
+  const [experts, setExperts] = useState<Record<string, string[]>>({});
+  const [tab, setTab] = useState<'people' | 'experts'>('people');
   const [granting, setGranting] = useState<string | null>(null);
   // Mirrors private.can_grant_rule: System and General Admins any rule; a Domain Admin only rules within their own lines.
   const anyLine = access.isSystem || !!access.isGeneral;
@@ -113,6 +114,9 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
           {' '}Pass it on in person or by phone. It is shown once; they must replace it when they first sign in.
         </Banner>
       )}
+      {access.isSystem && <Tabs tabs={[{ value: 'people', label: 'People' + (users ? ' · ' + users.length : '') }, { value: 'experts', label: 'Domain experts' }]} value={tab} onChange={(v) => setTab(v as 'people' | 'experts')} />}
+      {access.isSystem && tab === 'experts' && users && <DomainExperts users={users} experts={experts} say={say} onSaved={load} />}
+      {tab === 'people' && <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ flex: '1 1 240px', maxWidth: 320 }}><Input placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         {lineOptions.length > 2 && <SegmentedControl options={lineOptions} value={line} onChange={setLine} size="lg" />}
@@ -199,7 +203,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>
         Removing someone deletes their account at once; a session they already have open stays valid for up to an hour. The last System Admin cannot be removed.
       </div>
-      {access.isSystem && users && <DomainExperts users={users} experts={experts} say={say} onSaved={load} />}
+      </>}
       {granting && users?.some((u) => u.id === granting) && (
         <CreatorDrawer user={users.find((u) => u.id === granting)!} rules={grants.filter((g) => g.user_id === granting)} anyLine={anyLine} domains={access.domains} say={say}
           onChanged={load} onClose={() => setGranting(null)} />
@@ -283,22 +287,37 @@ export function CreatorDrawer({ user, rules, anyLine, domains, say, onChanged, o
     </Drawer>
   );
 }
-// The subject-matter expert per domain (System Admins). With none named, a System Admin does the expert review.
-function DomainExperts({ users, experts, say, onSaved }: { users: User[]; experts: Record<string, string>; say: (m: string) => void; onSaved: () => Promise<void> }) {
-  const set = async (domain: string, label: string, userId: string) => {
-    try { await setExpert(domain, userId || null); say(userId ? 'Expert for ' + label + ' set' : label + ' · a System Admin reviews it now'); } catch (err) { say((err as Error).message); }
+// The subject-matter experts per domain (System Admins), several per domain. The expert review goes to the least busy one
+// who is not the author; with none named, a System Admin does it.
+function DomainExperts({ users, experts, say, onSaved }: { users: User[]; experts: Record<string, string[]>; say: (m: string) => void; onSaved: () => Promise<void> }) {
+  const name = (id: string) => { const u = users.find((x) => x.id === id); return u ? u.full_name || u.email : 'Someone you cannot list'; };
+  const run = async (fn: () => Promise<void>, ok: string) => {
+    try { await fn(); say(ok); } catch (err) { say((err as Error).message); }
     await onSaved();
   };
   return (
-    <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div><div style={{ fontWeight: 600 }}>Domain experts</div><div style={{ fontSize: 12, color: '#5a6058' }}>Create & share sends the expert review of a contribution to the expert of its domain; with none named, to a System Admin.</div></div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 10 }}>
-        {DOMAINS.map((d) => (
-          <Field key={d[0]} label={d[1]} size="sm">
-            <Select size="md" value={experts[d[0]] || ''} onChange={(e) => set(d[0], d[1], e.target.value)} aria-label={'Expert for ' + d[1]}
-              options={[{ value: '', label: 'None · a System Admin' }].concat(users.map((u) => ({ value: u.id, label: u.full_name || u.email })))} />
-          </Field>
-        ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' }}>Create & share sends the expert review of a contribution to one of the experts of its domain: never the author, the one with the fewest open reviews. With none named, a System Admin reviews it.</div>
+      <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6 }}>
+        {DOMAINS.map((d, i) => {
+          const ids = experts[d[0]] || [];
+          return (
+            <div key={d[0]} role="group" aria-label={'Experts for ' + d[1]} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px,220px) minmax(0,1fr) 240px', gap: 12, alignItems: 'center', padding: '10px 16px', borderTop: i ? '1px solid #eef0ea' : 0 }}>
+              <div style={{ fontWeight: 600 }}>{d[1]}</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {ids.length ? ids.map((id) => (
+                  <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 28, padding: '0 4px 0 12px', borderRadius: 999, background: '#f3f5f0', fontSize: 12.5, fontWeight: 600 }}>
+                    {name(id)}
+                    <button type="button" aria-label={'Remove ' + name(id) + ' as expert for ' + d[1]} onClick={() => run(() => removeExpert(d[0], id), name(id) + ' is no longer an expert for ' + d[1])}
+                      style={{ width: 22, height: 22, border: 0, borderRadius: 999, background: 'none', color: '#5a6058', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
+                  </span>
+                )) : <span style={{ fontSize: 12.5, color: '#8b918a' }}>None · a System Admin reviews</span>}
+              </div>
+              <Select size="md" value="" aria-label={'Add an expert for ' + d[1]} onChange={(e) => { const id = e.target.value; if (id) run(() => addExpert(d[0], id), name(id) + ' is now an expert for ' + d[1]); }}
+                options={[{ value: '', label: '+ Add an expert' }].concat(users.filter((u) => !ids.includes(u.id)).map((u) => ({ value: u.id, label: u.full_name || u.email })))} />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
