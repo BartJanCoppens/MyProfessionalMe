@@ -323,7 +323,8 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
 function reviewDetail(L: Logic, c: Contribution, r: Review, d: CreateData, now: Date) {
   const s = L.state, key = revKey(r), chk = s.revChecks[key] || [], com = s.revComment[key] || '', policy = policyFor(d.policies, topicOf(c));
   const open = r.verdict === 'pending' && c.status === 'review';
-  const role = r.step === 1 ? 'Peer reviewer ' + r.slot + ' of ' + d.reviews.filter((x) => x.contribution_id === c.id && x.step === 1).length : ROLE_OF_STEP[r.step];
+  // A peer reads only their own review row, so the number of peers comes from the topic's policy.
+  const role = r.step === 1 ? 'Peer reviewer ' + r.slot + ' of ' + Math.max(r.slot, policy.peers, d.reviews.filter((x) => x.contribution_id === c.id && x.step === 1).length) : ROLE_OF_STEP[r.step];
   const next = r.step === 1 ? (policy.expert ? 'subject-matter expert' : policy.quality ? 'quality & risk' : '') : r.step === 2 ? (policy.quality ? 'quality & risk' : '') : '';
   const doneText = c.status === 'published' ? 'Published · it is in the library now.'
     : r.verdict === 'approved' ? 'You approved this. It moves on once every reviewer of this step has decided.'

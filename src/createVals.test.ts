@@ -254,6 +254,10 @@ describe('Review for peers', () => {
     expect(store.decideReview).toHaveBeenCalledWith('r1', 'changes', [false, false, false, false], 'Name the model at 02:10.');
     expect(h.lastToast()).toBe('Changes requested · Kim sees your comment in Create & share');
   });
+  it('numbers the peers from the policy, since a peer reads only their own row', () => {
+    const one = data({ contributions: [contribution({ id: 'r1', author_id: 'u5', status: 'review', step: 1 })], reviews: [review({ contribution_id: 'r1', reviewer_id: 'u1', slot: 2 })] });
+    expect(cs({ data: one }).c().rs!.eyebrow).toBe('Reel · Personal growth · L2 · Peer reviewer 2 of 2');
+  });
   it('closes a review that is back with its author', () => {
     const h = cs({ data: d(), state: { revSel: 'r2|1|1' } });
     expect(h.c().rs!.open).toBe(false);
