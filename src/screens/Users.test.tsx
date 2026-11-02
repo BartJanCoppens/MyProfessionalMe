@@ -45,7 +45,7 @@ describe('the account list', () => {
     expect(within(row('me')).getByText('· you')).toBeTruthy();
     expect(within(row('a1')).getByText('Temporary password')).toBeTruthy();
     expect(within(row('c1')).getByText('Own password')).toBeTruthy();
-    expect(db.calls.map((c) => c.table)).toEqual(['profiles', 'rpc:manageable_user_ids']);
+    expect(db.calls.map((c) => c.table)).toEqual(['profiles', 'rpc:manageable_user_ids', 'creator_grants', 'domain_experts']);
   });
   it('leaves out people returned by RLS but not manageable', async () => {
     db.answer((c) => (c.table === 'rpc:manageable_user_ids' ? { data: ['me', 'a1'] } : { data: users }));

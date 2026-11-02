@@ -15,6 +15,8 @@ import { memberSummary } from './logic/team';
 import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import { kbVals } from './kbVals';
+import { blankDraft, createVals } from './createVals';
+import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
 import { currentPos, podSave, podView, reelView, startPos, step } from './logic/media';
@@ -46,6 +48,8 @@ export function initState(cfg: Config): AppState {
     projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: {},
     chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
     chat: [],
+    create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null), editing: null, nwKb: [], nwAiBusy: false,
+    polForm: { topic: '', peers: '2', expert: true, quality: true },
   };
 }
 
@@ -181,6 +185,10 @@ export class Logic {
       this.say('Avatar updated · it now sits in the middle of your growth map');
     };
     img.src = url;
+  }
+  // Create & share data belongs to the signed-in person (access.userId), whoever is being viewed.
+  reloadCreate() {
+    return loadCreate(this.access.userId).then((d) => this.setState({ create: d, createError: null }), (err) => this.setState({ createError: (err as Error).message }));
   }
   bl() { return this.state.blState || this.subject.businessLine || this.props.businessLine || 'Consulting'; }
   say(msg: string) {
@@ -554,7 +562,7 @@ export class Logic {
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
       projects: ['Me · Projects & evaluations', 'Projects & evaluations'], profile: ['Me · My profile', 'My profile'], map: ['Me · ' + [this.subject.stage, bl].filter(Boolean).join(' · '), 'My growth map'], library: ['Me · Library', 'Library'],
-      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminKb: ['Administration · Knowledge library', 'Knowledge library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'],
+      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminKb: ['Administration · Knowledge library', 'Knowledge library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'], create: ['Me · Create & share', 'Create & share'],
     };
     const hubDock = sel && sel.type === 'hub' ? (() => {
       const di = DOMAINS.findIndex((d) => d[0] === sel.id); const list = items.filter((it) => it.dom === sel.id);
@@ -580,7 +588,7 @@ export class Logic {
       navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), canManageUsers: this.canManageUsers(), goUsers: () => this.go('users'),
       navProj: s.screen === 'projects' || (s.screen === 'detail' && s.origin === 'projects'), navProfile: s.screen === 'profile' || (s.screen === 'detail' && s.origin === 'profile'),
       goMap: () => this.go('map'), goLibrary: () => this.go('library'), goTeam: () => this.go('team'), goAdminLib: () => this.go('adminLib'), goAdminMap: () => this.go('adminMap'), goProj: () => this.go('projects'), goProfile: () => this.go('profile'),
-      goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : '← Back to library',
+      goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : s.origin === 'create' ? '← Back to Create & share' : '← Back to library',
       libCount: String(LEARN.length), projCount: String(PROJECTS.length), pendingLabel: pendingN ? pendingN + ' pending' : '', noPending: pendingN === 0,
       toastHelp: () => this.say(this.subject.counsellor ? 'Prototype: opens a message to ' + this.counsellorFull() + ', your counsellor' : 'No counsellor yet · an admin can assign one in User management'),
       askLabel: this.subject.counsellor ? 'Ask ' + this.counsellorFirst() : 'Ask your counsellor',
@@ -597,6 +605,7 @@ export class Logic {
       // Earned marks only; private to the person.
       marks: [this.levels.every((l) => l > 0) ? 'All nine domains touched' : '', items.some((it) => it.state === 'accepted' && it.format === 'Certification') ? 'First certification' : ''].filter(Boolean),
       ...kbVals(this),
+      ...createVals(this),
       // library
       libLead: LEARN.length + ' learnings across nine domains · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),
       obOptions: [opt('all', 'All'), opt('mandatory', 'Mandatory'), opt('advised', 'Advised'), opt('chosen', 'Chosen'), opt('open', 'Open')], libOb: s.libOb, setLibOb: (v: string) => this.setState({ libOb: v }),

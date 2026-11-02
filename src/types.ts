@@ -1,3 +1,4 @@
+import type { CreateData } from './logic/contribution';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
 export type Learn = [string, string, string, number, string, string, number, number, string, string];
 // learning id, stage, obligation
@@ -41,7 +42,7 @@ export type CloudMeta = {
   anchor: number; frac: number; screen: Screen; goLabel: string;
 };
 
-export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'adminLib' | 'adminMap' | 'adminKb' | 'users';
+export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'create' | 'adminLib' | 'adminMap' | 'adminKb' | 'users';
 
 // What the signed-in account may administer (from public.user_roles).
 // isGeneral: General Admin, edits all content (catalogue, every curriculum audience, all bundles) but no users.
@@ -92,7 +93,15 @@ export type AppState = {
   kbModel: string | null; kbTestModel: string | null; kbTagIn: string; kbValid: [boolean, string][] | null; kbEdit: boolean; kbAdd: { conn: string; name: string; sens: string };
   kbQ: string; kbBusy: boolean; kbHits: { text: string; src: string; score: number; disp?: number }[] | null; kbAnswer: string;
   cpInput: string; cpBusy: boolean; cpReply: string; cpOpsP: Op[] | null;
+  // Create & share: the signed-in person's own work (not the viewed person's), loaded from Supabase.
+  create: CreateData | null; createError: string | null; createBusy: boolean; createTab: string; contribSel: string | null; revSel: string | null;
+  // rubric ticks and comments per review (contribution|step|slot), the New form, the contribution being edited
+  revChecks: Record<string, boolean[]>; revComment: Record<string, string>; nw: NewDraft; editing: string | null; nwKb: string[]; nwAiBusy: boolean;
+  polForm: { topic: string; peers: string; expert: boolean; quality: boolean };
 };
+
+// The New content form. topic is a topicKey; lvl stays text for the select; outline and sources come from Draft with AI.
+export type NewDraft = { topic: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string };
 
 // Knowledge library: retrieval models and bundles
 export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };

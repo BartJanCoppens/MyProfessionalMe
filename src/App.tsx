@@ -13,6 +13,7 @@ import TeamScreen from './screens/Team';
 import { AdminLibraryScreen, AddLearningDrawer } from './screens/Admin';
 import AdminMappingScreen from './screens/Mapping';
 import KnowledgeScreen from './screens/Knowledge';
+import CreateScreen from './screens/Create';
 import UsersScreen from './screens/Users';
 import SubjectPicker from './screens/SubjectPicker';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
@@ -23,6 +24,7 @@ import { mergeMaps } from './lib/contentStore';
 import type { Content } from './lib/contentStore';
 import { LEARN_BY } from './data';
 import { useTeam } from './lib/useTeam';
+import { loadCreate } from './lib/contributionStore';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import type { Auth } from './lib/useAuth';
@@ -90,6 +92,13 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   const vm = logic.renderVals();
 
   useEffect(() => { if (chat.current) chat.current.scrollTop = 1e6; }, [state.chat, state.chatBusy, state.proposal]);
+  // Create & share is the signed-in person's own work; it loads once and reloads after each write.
+  const me = auth.access.userId;
+  useEffect(() => {
+    let live = true;
+    loadCreate(me).then((d) => { if (live) setRaw((s) => ({ ...s, create: d, createError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, createError: (err as Error).message })); });
+    return () => { live = false; };
+  }, [me]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
   // One clock while a podcast or reel plays. Each tick reads the latest Logic, which saves progress and stops at the end.
   const logicRef = useRef(logic);
@@ -124,6 +133,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
           {vm.screen === 'adminLib' && <AdminLibraryScreen vm={vm} />}
           {vm.screen === 'adminMap' && <AdminMappingScreen vm={vm} />}
           {vm.kb && <KnowledgeScreen kb={vm.kb} />}
+          {vm.create && <CreateScreen c={vm.create} />}
           {vm.screen === 'users' && <UsersScreen access={auth.access} meId={auth.profile!.id} say={(m) => logic.say(m)} />}
         </div>
       </main>
@@ -159,6 +169,7 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
         <NavItem label="Library" count={vm.libCount} active={vm.navLib} onClick={vm.goLibrary} />
         <NavItem label="Projects & evaluations" count={vm.projCount} active={vm.navProj} onClick={vm.goProj} />
         <NavItem label="My profile" active={vm.navProfile} onClick={vm.goProfile} />
+        <NavItem label="Create & share" badge={vm.reviewBadge} active={vm.navCreate} onClick={vm.goCreate} />
         <NavGroupHeader>Counsellor</NavGroupHeader>
         <NavItem label="My team" badge={teamOverdue} active={vm.navTeam} onClick={vm.goTeam} />
         {vm.showAdmin && (
