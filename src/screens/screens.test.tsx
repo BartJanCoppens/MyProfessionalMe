@@ -11,6 +11,8 @@ import type { VM } from '../model';
 import * as content from '../lib/contentStore';
 import * as learner from '../lib/learnerStore';
 import * as record from '../lib/recordStore';
+import * as attendance from '../lib/attendanceStore';
+import { AVATAR_QUIZ } from '../data';
 import type { Subject } from '../lib/useSubject';
 import type { Member } from '../logic/team';
 import { cfg, emptyData, person, systemAdmin, withProgress } from '../test/harness';
@@ -42,6 +44,7 @@ vi.mock('../lib/learnerStore', () => ({
   removeInterest: vi.fn(async () => {}), saveProgress: vi.fn(async () => {}), savePrefs: vi.fn(async () => {}), loadLearner: vi.fn(),
 }));
 vi.mock('../lib/recordStore', () => ({ decideLearning: vi.fn(async () => 'accepted'), loadQueue: vi.fn(async () => []) }));
+vi.mock('../lib/attendanceStore', () => ({ loadRoster: vi.fn(async () => []), registerAttendance: vi.fn(async () => 1) }));
 vi.mock('../lib/contentStore', async (orig) => ({ ...(await orig<object>()), saveLearning: vi.fn(async () => {}), removeLearning: vi.fn(async () => {}), publishMappings: vi.fn(async () => {}), saveBundleSoon: vi.fn(), saveBundleNow: vi.fn() }));
 
 type Refs = { file: RefObject<HTMLInputElement | null>; chat: RefObject<HTMLDivElement | null> };
@@ -124,14 +127,68 @@ describe('the learning detail screen', () => {
     expect(toast()).toMatch(/^Coming with the avatar studio$/);
   });
   it('asks for approval of a learning in progress', () => {
-    detail('L17', person({ data: withProgress({ L17: ['in-progress', 40] }) }));
+    const data = withProgress({ L18: ['in-progress', 40] });
+    data.progress.L18.evidence = { note: '', link: 'https://x.example/c.pdf', ref: '' };
+    detail('L18', person({ data }));
     click(/^Mark for review|^Ask/);
-    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L17', { state: 'submitted', pct: 100 });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L18', { state: 'submitted', pct: 100 });
   });
   it('lets the counsellor accept a submitted learning', async () => {
     detail('L10', person({ readOnly: true, counsellor: { id: 'c1', name: 'Sam Coach' }, data: withProgress({ L10: 'submitted' }) }), { isSystem: false, domains: [], userId: 'c1' });
     await act(async () => { click('Accept'); });
     expect(record.decideLearning).toHaveBeenCalledWith('u1', 'L10', 'accepted', '');
+  });
+  it('marks an e-learning as completed', async () => {
+    detail('L17', person({ data: withProgress({ L17: ['in-progress', 40] }) }));
+    expect(screen.queryByRole('button', { name: /^Ask/ })).toBeNull();
+    await act(async () => { click('Mark as completed'); });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L17', { state: 'accepted', pct: 100 });
+  });
+  it('completes a classroom with the feedback form', async () => {
+    detail('L10');
+    expect(screen.getByText(/^It completes when the faculty registers your attendance/)).toBeTruthy();
+    const send = () => screen.getByRole('button', { name: 'Send feedback and complete' }) as HTMLButtonElement;
+    expect(send().disabled).toBe(true);
+    click('4');
+    fireEvent.change(screen.getByPlaceholderText('One thing you will do differently, and where'), { target: { value: 'I will open every workshop with the issue tree we built.' } });
+    expect(send().disabled).toBe(false);
+    await act(async () => { fireEvent.click(send()); });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L10', { state: 'accepted', pct: 100, note: 'I will open every workshop with the issue tree we built.', rating: 4 });
+  });
+  it('disables the feedback form and the quiz in View as', () => {
+    detail('L10', person({ id: 'p2', name: 'Kim Learner', readOnly: true }), { isSystem: false, domains: [], userId: 'c1' });
+    expect((screen.getByPlaceholderText('One thing you will do differently, and where') as HTMLTextAreaElement).closest('fieldset')!.disabled).toBe(true);
+    expect(screen.getByText('Only Kim can give this feedback.')).toBeTruthy();
+    cleanup();
+    detail('L38', person({ id: 'p2', name: 'Kim Learner', readOnly: true }), { isSystem: false, domains: [], userId: 'c1' });
+    expect(screen.getByRole('button', { name: AVATAR_QUIZ.L38[0].opts[0] }).closest('fieldset')!.disabled).toBe(true);
+  });
+  it('takes the avatar evaluation quiz: a wrong answer, a retry, then complete', async () => {
+    detail('L38');
+    const Q = AVATAR_QUIZ.L38;
+    click(Q[0].opts[(Q[0].a + 1) % 3]); click(Q[1].opts[Q[1].a]); click(Q[2].opts[Q[2].a]);
+    click('Check my answers');
+    expect(screen.getByText('2 of 3 right. Look at the marked question against the brief, then try again.')).toBeTruthy();
+    expect(learner.saveProgress).not.toHaveBeenCalled();
+    click('Try again');
+    click(Q[0].opts[Q[0].a]);
+    await act(async () => { click('Check my answers'); });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L38', { state: 'accepted', pct: 100 });
+  });
+  it('lets an admin register classroom attendance from the detail', async () => {
+    vi.mocked(attendance.loadRoster).mockResolvedValue([{ userId: 'p2', name: 'Kim Learner', line: 'Consulting', state: 'not-started' }, { userId: 'p3', name: 'Ali Member', line: 'Consulting', state: 'accepted' }]);
+    detail('L10', person({ id: 'a1', name: 'Pat Admin' }), { isSystem: false, domains: ['Consulting'], userId: 'a1' });
+    await act(async () => { click('Show the people you can register'); });
+    expect(screen.getByText('1 of 2 completed')).toBeTruthy();
+    expect((screen.getByRole('checkbox', { name: /Ali Member/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Kim Learner/ }));
+    await act(async () => { click('Register attendance'); });
+    expect(attendance.registerAttendance).toHaveBeenCalledWith('L10', ['p2']);
+    expect(toast()).toBe('Attendance registered for 1 person · “Structured problem solving” is complete for them');
+  });
+  it('shows no Attendance card to a learner', () => {
+    detail('L10');
+    expect(screen.queryByText('Attendance')).toBeNull();
   });
   it('offers no rating or note form until notes are stored', () => {
     detail('L1');

@@ -7,12 +7,55 @@ export type EvidenceRule = 'none' | 'reflection' | 'certificate';
 export const REFLECTION_MIN = 140;
 export const COMMENT_MIN = 10;
 export const COMMENT_MAX = 500;
-const REFLECTION_FORMATS = ['Book', 'Website', 'Mentoring', 'Coaching', 'Game', 'Micro-guide', 'Case write-up'];
-// Podcasts and reels complete themselves (private.is_self_complete): no evidence, no acceptance.
-export const SELF_COMPLETE = ['Podcast', 'Reel'];
+export const CERTIFICATE_FORMATS = ['Certification'];
+export const REFLECTION_FORMATS = ['Book', 'Website', 'Mentoring', 'Coaching', 'Game', 'Micro-guide', 'Case write-up'];
 
 export function evidenceRule(format: string): EvidenceRule {
-  return format === 'Certification' ? 'certificate' : REFLECTION_FORMATS.includes(format) ? 'reflection' : 'none';
+  return CERTIFICATE_FORMATS.includes(format) ? 'certificate' : REFLECTION_FORMATS.includes(format) ? 'reflection' : 'none';
+}
+
+// How a format completes (owner's rules, 2 Nov 2026). Every format listed here completes itself, without a counsellor
+// (private.is_self_complete); the rest go to the counsellor or an admin for acceptance. 'feedback' is
+// private.completion_rule(): the database refuses a learner's completion without it. record.sync.test.ts compares these
+// lists with the latest migration.
+//   media: a podcast at 80% listened, a reel on a right answer · mark: the learner marks it completed
+//   feedback: the learner's feedback, or the faculty registers attendance · quiz: three right answers after the practice session
+export type Completion = 'acceptance' | 'media' | 'mark' | 'feedback' | 'quiz';
+export const COMPLETION: Record<string, Exclude<Completion, 'acceptance'>> = { Podcast: 'media', Reel: 'media', 'E-learning': 'mark', Classroom: 'feedback', Avatar: 'quiz' };
+export const SELF_COMPLETE = Object.keys(COMPLETION);
+export const completionOf = (format: string): Completion => COMPLETION[format] || 'acceptance';
+export const selfCompletes = (format: string) => completionOf(format) !== 'acceptance';
+
+// The classroom feedback form: a rating from 1 to 5 and what the learner will apply.
+export const FEEDBACK_MIN = 40;
+export function feedbackProblem(rating: number | null | undefined, text: string): string | null {
+  if (!rating || rating < 1 || rating > 5) return 'Rate the session from 1 to 5';
+  const n = text.trim().length;
+  if (n < FEEDBACK_MIN) return 'Say what you will apply (at least ' + FEEDBACK_MIN + ' characters)';
+  if (n > 2000) return 'Keep it to 2000 characters';
+  return null;
+}
+
+// What completes this format, in the learner's words (detail sidebar and help). accepter: the counsellor's full name.
+export function completionText(format: string, accepter: string): string {
+  const f = format.toLowerCase();
+  switch (completionOf(format)) {
+    case 'media': return format === 'Podcast' ? 'Listening to 80% completes it. It counts right away; no acceptance needed.' : 'A right answer to the question completes it. It counts right away; no acceptance needed.';
+    case 'mark': return 'Mark it as completed when you have finished the course. It counts right away; no acceptance needed.';
+    case 'feedback': return 'It completes when the faculty registers your attendance, or when you give your feedback on the session. No acceptance needed.';
+    case 'quiz': return 'After your practice session, three right answers in the evaluation quiz complete it. No acceptance needed.';
+    default: return evidenceRule(format) === 'none' ? 'Log your hours, then ' + accepter + ' accepts the ' + f + '.' : 'Log your hours and add your evidence; ' + accepter + ' accepts the ' + f + '.';
+  }
+}
+// What a self-completing format still needs once all hours are logged, for the toast and the state label.
+export function completionTodo(format: string): string {
+  switch (completionOf(format)) {
+    case 'mark': return 'mark it as completed';
+    case 'feedback': return 'give your feedback';
+    case 'quiz': return 'take the evaluation quiz';
+    case 'media': return format === 'Podcast' ? 'listen to it' : 'answer the question';
+    default: return '';
+  }
 }
 
 export type Evidence = { note: string; link: string; ref: string };
@@ -56,8 +99,9 @@ export function ruleText(format: string, accepter: string): string {
 }
 export const LINKED_NOT_UPLOADED = 'Files are linked, not uploaded: keep the certificate or attendance record on SharePoint or OneDrive and paste its link here.';
 
-export type Verdict = 'accepted' | 'changes' | 'self_completed';
-export type Decision = { learningId: string; verdict: Verdict; comment: string; by: string | null; byName: string; at: string; evidence: Evidence };
+export type Verdict = 'accepted' | 'changes' | 'self_completed' | 'attended';
+// rating: the classroom feedback's rating, when the learner completed it with feedback.
+export type Decision = { learningId: string; verdict: Verdict; comment: string; by: string | null; byName: string; at: string; evidence: Evidence; rating?: number | null };
 
 // The decisions on one learning, newest first.
 export const decisionsFor = (all: Decision[] | undefined, learningId: string) => (all || []).filter((d) => d.learningId === learningId).sort((a, b) => b.at.localeCompare(a.at));
@@ -72,7 +116,8 @@ export function openChanges(all: Decision[] | undefined, learningId: string, sta
 export function decisionLine(d: Decision, ownerId: string, meId: string) {
   const who = d.by && d.by === meId ? 'you' : d.byName || 'a former colleague';
   const label = d.verdict === 'accepted' ? 'Accepted by ' + who : d.verdict === 'changes' ? 'Changes requested by ' + who
-    : 'Completed by ' + (ownerId === meId ? 'you' : d.byName || 'the learner') + ' · counts without acceptance';
+    : d.verdict === 'attended' ? 'Attendance registered by ' + who + ' · counts without acceptance'
+      : 'Completed by ' + (ownerId === meId ? 'you' : d.byName || 'the learner') + (d.rating ? ' with feedback · rated ' + d.rating + ' of 5' : '') + ' · counts without acceptance';
   return { label, date: fmtDate(d.at), comment: d.comment, tone: d.verdict === 'changes' ? 'amber' : 'green' };
 }
 

@@ -64,7 +64,7 @@ S: up to one week. M: two to three weeks. L: four to six weeks. One developer wo
 | Id | Feature | Closes (main ids) | Size | Release |
 |---|---|---|---|---|
 | F1 | Hardening and honest copy | E2.9, E11.8, E12.9, E16.6, E16.7, E1.12, J08.7, J24.5; Q1, Q5, Q8 defects | S | v0.4.1 |
-| F2 | Learning record: evidence, send-back, acceptance record | E3.6–E3.8, J02.7, J15.4, J15.6; Q3, Q7 | M | Shipped v0.7.0 |
+| F2 | Learning record: evidence, send-back, acceptance record; completion per learning type | E3.6–E3.8, J02.7, J15.4, J15.6; Q3, Q7 | M | Shipped v0.7.0; per-type completion v0.7.2 |
 | F3 | Approvals queue and last activity | E4.7, E4.8, J05.5, J14.5, J15.1 | S | Shipped v0.7.0 |
 | F4 | Dates, targets and hours goals | E1.2, E1.4, E1.8, E5.12, E6.7, E16.4, J07.2, J07.4, J13.2, J19.6, J20.5 | M | v0.5.0 |
 | F5 | Audience membership | E1.11, E5.8–E5.10, J08.6, J11.4, J18.6, J19.2, J19.4, J22.7 | M | v0.6.0 |
@@ -163,6 +163,22 @@ S: up to one week. M: two to three weeks. L: four to six weeks. One developer wo
 - **No `learning_events` table.** Logged hours, submissions and withdrawals are not recorded as events; last activity (F3) is the person's latest own change to their progress (`updated_at`, stamped by the guard). F6, F9 and F10 will need events added when they are built.
 - **No "Withdraw" button.** The database still lets the learner move a submission back to in-progress; while it waits, the learner may edit its evidence within the rule.
 - **F2-b: every person, read-only.** `private.can_view_track()` (progress, evidence, decisions, avatar prefs) includes General Admins; a General Admin can View as anyone and accept. Ambitions and interests stay private (Q8).
+
+**Completion per learning type (owner's rules, 2 Nov 2026; v0.7.2).** Migration `20261102102520_completion_per_type.sql`; app in `src/completionVals.ts`, `src/logic/record.ts` (`COMPLETION`, `completionText`, `feedbackProblem`), `src/lib/attendanceStore.ts`. Keep it simple: a proof of concept, but consistent end to end.
+
+| Format | Completes when | Who | Database |
+|---|---|---|---|
+| Podcast, Reel | 80% listened; a right answer (unchanged, Q3) | The learner | `private.is_self_complete()` |
+| E-learning | The learner marks it completed ("Mark as completed", optionally after logging hours) | The learner | `private.is_self_complete()` |
+| Classroom | (a) the faculty registers the person as attended, or (b) the learner sends the feedback form: a rating 1–5 and "What will you apply?" (at least 40 characters) | Faculty: a Domain Admin for people of their line, a General or System Admin; or the learner | `private.is_self_complete()`; the learner's completion is refused without the feedback (`private.completion_rule()` / `completion_ok()` in the record trigger); attendance only through `public.register_attendance()` |
+| Avatar | Three right answers in the evaluation quiz after the practice session (`AVATAR_QUIZ` in `src/data.ts`, three questions per scenario; a wrong answer shows feedback and allows a retry). The avatar studio itself is still parked ("Coming with the avatar studio") | The learner (trust-based, like reels) | `private.is_self_complete()` |
+| Certification; Book, Website, Mentoring, Game, Micro-guide, Case write-up; any other format | Accepted by the counsellor or an admin with the evidence of the F2-a rule (unchanged) | Counsellor, managing Domain Admin, General or System Admin | `public.decide_learning()` |
+
+- **Feedback storage.** The text is `learner_learnings.evidence_note`, the rating the new `evidence_rating` (1–5); both are frozen once the classroom is completed, and the `self_completed` decision keeps them as its evidence snapshot. The detail shows the feedback as given, not as acceptance evidence.
+- **Attendance.** An "Attendance" card on a published classroom's detail, for admins only (also in View as): `public.attendance_roster(learning)` lists exactly the people the admin may register (Domain Admins: people they manage; General and System Admins: everyone, with a search box), each with a tick box; already completed people are ticked and locked. `public.register_attendance(learning, user_ids)` (security definer) refuses a learning that is not a published Classroom and refuses the whole list if any person is not the caller's (never the caller themselves); it sets each person `accepted` with the full hours and records a `learning_decisions` row with the new verdict `attended`, decided by the admin. An accepted item stays accepted (no new decision).
+- **No acceptance for self-completing formats in the app.** "Ask … to approve" and the evidence form are gone for them; the last logged hour stops at 100% and says what completes it ("mark it as completed", "give your feedback", "take the evaluation quiz"). The database still accepts a submission of these formats, so learnings submitted before v0.7.2 keep waiting for a decision.
+- **Copy.** The detail's help line, the toasts, the state label ("All hours logged · give your feedback") and the acceptance record ("Attendance registered by …", "Completed by you with feedback · rated 4 of 5") say what completes each type. Readiness still counts accepted hours only.
+- **Kept in sync.** `src/logic/record.sync.test.ts` reads the latest migration defining each rule function and compares its format lists and thresholds with the TypeScript tables.
 
 **Goal.** Completions count only once accepted, with the evidence the format needs, a way to return work with feedback, and a durable record of who did what and when. Closes E3.6, E3.7, E3.8, J02.7, J15.4, J15.6; implements Q3 (self-completing reels) and Q7 (evidence per format, General Admin accepts). Provides the event history that F3, F6, F9 and F10 read.
 

@@ -1,5 +1,5 @@
 // Seed data for the MyProfessionalMe prototype (verbatim from the Claude Design file).
-import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal, RagPreset, RagModel, Bundle, LearnMeta, Media } from './types';
+import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal, RagPreset, RagModel, Bundle, LearnMeta, Media, QuizQ } from './types';
 
 export const DOMAINS: [string, string, string][] = [
   ['tech','Job technical skills','Tech skills'],['acad','Academic background','Academic'],['pers','Personal growth','Personal'],
@@ -48,7 +48,7 @@ export const LEARN: Learn[] = [
  ['L35','ESG data and reporting tooling','tec',3,'E-learning','Microsoft Learn',6,0,'',''],
  ['L36','Delegation and workload planning','lead',2,'E-learning','Internal academy',2,0,'',''],
  ['L37','Storytelling with data','pers',3,'Game','Internal academy',2,0,'',''],
- ['L38','Holding scope with a procurement director','prof',3,'Avatar','Avatar studio',1.5,0,'','A ten-minute spoken role-play with an AI avatar who reopens agreed scope. Three runs; the best one counts once it reaches 4 of 5 on every skill.'],
+ ['L38','Holding scope with a procurement director','prof',3,'Avatar','Avatar studio',1.5,0,'','A ten-minute spoken role-play with an AI avatar who reopens agreed scope. Up to three runs; the evaluation quiz after your practice session completes it.'],
  ['L39','Giving hard feedback to a junior','lead',2,'Avatar','Avatar studio',1,0,'','Practise the conversation before you have it. The avatar is a capable analyst who missed two deadlines and does not see the problem.'],
  ['L40','Presenting a fee increase to a sceptical CFO','prof',4,'Avatar','Avatar studio',1.5,0,'','The avatar challenges every number. You are scored on clarity, calm and whether you protect the relationship.'],
  ['L41','Calming an escalating client call','pers',3,'Avatar','Avatar studio',1,0,'',''],
@@ -90,6 +90,26 @@ export const AVATARS: Record<string, AvatarSpec> = {
  L39:{ persona:'Noah Claes', role:'Analyst, eight months in', initials:'NC', brief:'Capable and well liked. Missed two deadlines and thinks the plan was unrealistic.', skills:['Directness','Empathy','Next steps'], target:4, attempts:[] },
  L40:{ persona:'Hilde Jacobs', role:'CFO, wholesale trader', initials:'HJ', brief:'Has read the engagement letter twice. Asks for the number behind every number.', skills:['Clarity','Calm','Relationship'], target:4, attempts:[] },
  L41:{ persona:'Pieter Wouters', role:'Operations director, logistics client', initials:'PW', brief:'A go-live slipped and he is under pressure from his own board.', skills:['Calm','Empathy','Ownership'], target:4, attempts:[] }
+};
+// Evaluation quiz after the practice session (owner, 2 Nov 2026): three questions per avatar learning, written from its
+// brief and skills, in the style of a reel's check. All three right completes the learning (trust-based, like reels).
+export const AVATAR_QUIZ: Record<string, QuizQ[]> = {
+ L38:[
+  { q:'The procurement director asks to add two sites “within the agreed fee”. What do you say first?', opts:['Agree, to keep the relationship warm','Point to the scope the steering committee agreed and offer to price the two sites as a change','Say you will check with your partner and come back later'], a:1 },
+  { q:'Which move shows you listened before you hold the line?', opts:['Sum up his concern in your own words, then answer','Read the contract clause out word for word','Move straight on to the next agenda item'], a:0 },
+  { q:'He says “every other adviser would include this”. What keeps your answer clear?', opts:['Explain at length why other firms work differently','Offer a discount so the question goes away','One sentence: what is in scope, what is not, and how to add it as a change request'], a:2 }],
+ L39:[
+  { q:'How do you open the conversation with the analyst?', opts:['Talk about the team lunch first to keep it light','Hint that some people have been late with their work','Name the two missed deadlines plainly and say you want to understand what happened'], a:2 },
+  { q:'He says the plan was unrealistic. What shows empathy without dropping the point?', opts:['Acknowledge the pressure, ask what made it unrealistic, and keep the missed deadlines on the table','Agree the plan was wrong and move on','Tell him every analyst works to the same plan'], a:0 },
+  { q:'How do you close the conversation?', opts:['Say you trust him to sort it out','Agree one concrete next step and a date to check in together','Send a summary to his counsellor without telling him'], a:1 }],
+ L40:[
+  { q:'How do you present the fee increase to the CFO?', opts:['Lead with the new total and the two drivers behind it','Start with the history of the engagement','Send the number by email after the meeting'], a:0 },
+  { q:'She asks for the number behind a figure you do not have to hand. What do you do?', opts:['Estimate on the spot to keep the momentum','Move on to the next slide','Say calmly that you will send the breakdown by a set time, and do it'], a:2 },
+  { q:'Which line protects the relationship?', opts:['“This is standard; every client accepts it.”','“Here is what the increase buys you, and where we can phase it.”','“If the fee is a problem, we can stop the work.”'], a:1 }],
+ L41:[
+  { q:'The operations director opens the call angry about the slipped go-live. Your first response?', opts:['Explain why the delay was not your fault','Stay calm, acknowledge what it means for him and his board, and let him finish','Interrupt to correct his facts'], a:1 },
+  { q:'What shows ownership?', opts:['Point to the client data that arrived late','Promise the date will never slip again, whatever happens','Say what your team will do, by when, and who he can call'], a:2 },
+  { q:'He has to report to his board tomorrow. What do you offer?', opts:['A short note with the cause, the new date and the steps that protect it','Nothing until the new plan is final','The full project log'], a:0 }]
 };
 export const LEARN_BY: Record<string, Learn> = {}; LEARN.forEach((r) => { LEARN_BY[r[0]] = r; });
 // Owning business line and status per learning; filled from the database (seed data: firm-wide, published).

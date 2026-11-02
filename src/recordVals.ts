@@ -6,7 +6,7 @@ import type { ChangeEvent } from 'react';
 import { LEARN_BY } from './data';
 import type { Item, Logic } from './model';
 import {
-  COMMENT_MAX, COMMENT_MIN, LINKED_NOT_UPLOADED, NO_EVIDENCE, REFLECTION_MIN, SELF_COMPLETE, decisionLine, decisionsFor, evidenceNeed, evidenceProblem, evidenceRule,
+  COMMENT_MAX, COMMENT_MIN, LINKED_NOT_UPLOADED, NO_EVIDENCE, REFLECTION_MIN, SELF_COMPLETE, completionOf, completionText, completionTodo, decisionLine, decisionsFor, evidenceNeed, evidenceProblem, evidenceRule,
   fieldProblem, hasEvidence, lastActivityLabel, openChanges, ruleText, sameEvidence, waitingLabel,
 } from './logic/record';
 import type { Evidence } from './logic/record';
@@ -40,11 +40,15 @@ export function reloadQueue(L: Logic) {
 }
 
 // Log one hour. The last hour submits the learning when the format's evidence rule is met; otherwise it stops at 100%
-// and says what is still needed.
+// and says what is still needed. A self-completing format never goes to acceptance: at 100% it says what completes it.
 export function logHour(L: Logic, it: Item) {
   const np = Math.min(100, Math.round(it.pct + 100 / it.hours));
   if (np < 100) {
     L.persist(() => saveProgress(L.subject.id, it.id, { state: 'in-progress', pct: np }), '1 hour logged · ' + np + '% of ' + it.hoursLabel);
+    return;
+  }
+  if (completionOf(it.format) !== 'acceptance') {
+    L.persist(() => saveProgress(L.subject.id, it.id, { state: 'in-progress', pct: 100 }), 'All hours logged · ' + completionTodo(it.format) + ' to complete it');
     return;
   }
   const ev = draftEvidence(L, it.id), need = fieldProblem(ev) ? null : evidenceNeed(it.format, ev);
@@ -59,6 +63,7 @@ export function logHour(L: Logic, it: Item) {
 // Submit (or resubmit) with the evidence typed so far; refused while the format's rule is not met.
 export function submit(L: Logic, it: Item) {
   if (L.readOnly()) return;
+  if (completionOf(it.format) !== 'acceptance') { L.say(completionText(it.format, L.counsellorFull())); return; }
   const ev = draftEvidence(L, it.id), bad = evidenceProblem(it.format, ev);
   if (bad) { L.say(bad); return; }
   L.persist(() => saveProgress(L.subject.id, it.id, { state: 'submitted', pct: 100, ...changedEvidence(L, it.id) }),
@@ -111,12 +116,13 @@ function detailRecord(L: Logic, it: Item) {
   };
   const changes = openChanges(L.subject.data.decisions, it.id, it.state);
   const history = decisionsFor(L.subject.data.decisions, it.id).map((d, i) => ({ key: d.at + '|' + i, ...decisionLine(d, L.subject.id, L.access.userId),
-    evidence: d.verdict !== 'self_completed' && hasEvidence(d.evidence) ? [d.evidence.note && 'reflection', d.evidence.link && 'link', d.evidence.ref && 'certificate number'].filter(Boolean).join(', ') : '' }));
+    evidence: (d.verdict === 'accepted' || d.verdict === 'changes') && hasEvidence(d.evidence) ? [d.evidence.note && 'reflection', d.evidence.link && 'link', d.evidence.ref && 'certificate number'].filter(Boolean).join(', ') : '' }));
   const submittedAt = L.subject.data.progress[it.id]?.submittedAt;
   const canDecide = L.canAccept(it.state);
   const target: Target = { userId: L.subject.id, learningId: it.id, title: it.title, name: L.subject.name };
   return {
-    showEvidence: editable || hasEvidence(saved) || (L.subject.readOnly && it.state === 'submitted'),
+    // A classroom's feedback shows on its own card (completionVals), not as evidence.
+    showEvidence: editable || (hasEvidence(saved) && L.subject.data.progress[it.id]?.rating == null) || (L.subject.readOnly && it.state === 'submitted'),
     editable, ruleText: ruleText(it.format, L.counsellorFull()), linkedNote: LINKED_NOT_UPLOADED,
     note: draft.note, link: draft.link, ref: draft.ref, showRef: rule === 'certificate', setNote: set('note'), setLink: set('link'), setRef: set('ref'),
     noteLabel: rule === 'reflection' ? 'Reflection' : 'Note (optional)', noteCount: rule === 'reflection' ? draft.note.trim().length + ' / ' + REFLECTION_MIN + ' characters' : '',
