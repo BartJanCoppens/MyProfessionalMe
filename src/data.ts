@@ -226,3 +226,9 @@ export const slugify = (s: string) => String(s).toLowerCase().normalize('NFD').r
 export const isoDate = (d: string) => { const M: Record<string, string> = { Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12' }; const p = String(d).split(' '); return (p[2] || '2026') + '-' + (M[p[1]] || '10') + '-' + String(p[0]).padStart(2, '0'); };
 export const yamlList = (a: string[]) => '[' + a.map((x) => (/[:,#[\]]/.test(x) ? JSON.stringify(x) : x)).join(', ') + ']';
 export const yq = (s: string) => (/[:#"']/.test(s) ? JSON.stringify(s) : s);
+// Create & share (design v3). REVIEW_WHO describes each step by role; reviewers are real accounts, never named here.
+export const REVIEW_STAGES = ['Draft','Peer review','Expert review','Quality & risk','Published'];
+export const REVIEW_WHO = ['You · only you can see it','Two colleagues in the same domain · 5 working days','A subject-matter expert · accuracy and level','Learning team · client confidentiality, sources, captions','In the library · admins can map it to paths'];
+export const NEW_TYPES = [['Reel','Vertical video up to 90 s, one takeaway'],['Podcast','Audio up to 30 min, with a transcript'],['Micro-guide','Up to a 6-minute read'],['Case write-up','Anonymised lessons from a project'],['Avatar scenario','A role-play brief for the avatar studio']];
+export const CLIENT_WORDS = ['delcroix','brabant','hoverna','flemish care'];
+export const RUBRIC = ['Accurate and current','One clear takeaway','Pitched at the stated level','Safe to share: no client names or confidential numbers'];

@@ -309,6 +309,262 @@ do $$ begin
 end $$;
 with d as (delete from public.knowledge_bundles where id = 'B2' returning 1) insert into results (check_name, expected, actual) select 'DA deletes another line''s bundle', '0 rows', count(*)||' rows' from d;
 
+-- ---------- Create & share (F12): creation grants, review policies, routing, reviews, publication ----------
+-- Real accounts exist in every line and routing picks at random among equals, so checks assert invariants and
+-- impersonate whoever was assigned. Fixed: a2 (Consulting, counsellor a6) authors; a8 is a2's counsellee;
+-- a9 has no business line (so no peers); a7 (General Admin) moves to Audit so it is never a Consulting peer.
+reset role;
+select set_config('request.jwt.claims', '', true);
+insert into auth.users (id, email) values
+ ('00000000-0000-0000-0000-0000000000a8','t.counsellee@test.local'),
+ ('00000000-0000-0000-0000-0000000000a9','t.noline@test.local');
+update public.profiles set business_line='Consulting', counsellor_id='00000000-0000-0000-0000-0000000000a2' where id='00000000-0000-0000-0000-0000000000a8';
+update public.profiles set counsellor_id='00000000-0000-0000-0000-0000000000a6' where id='00000000-0000-0000-0000-0000000000a2';
+update public.profiles set business_line='Audit' where id='00000000-0000-0000-0000-0000000000a7';
+-- the test topics start without a policy or an expert, whatever the live project holds
+delete from public.review_policies where (topic_kind, topic_value) in (('line','Consulting'),('format','Micro-guide'),('format','Case write-up'),('format','Podcast'),('domain','tec'));
+delete from public.domain_experts where domain = 'acad';
+insert into results (check_name, expected, actual) select 'CS peer candidates exclude the author', '0', count(*)::text from private.peer_candidates('00000000-0000-0000-0000-0000000000a2') c where c = '00000000-0000-0000-0000-0000000000a2';
+insert into results (check_name, expected, actual) select 'CS peer candidates exclude the author''s counsellor', '0', count(*)::text from private.peer_candidates('00000000-0000-0000-0000-0000000000a2') c where c = '00000000-0000-0000-0000-0000000000a6';
+insert into results (check_name, expected, actual) select 'CS peer candidates exclude the author''s counsellee', '0', count(*)::text from private.peer_candidates('00000000-0000-0000-0000-0000000000a2') c where c = '00000000-0000-0000-0000-0000000000a8';
+insert into results (check_name, expected, actual) select 'CS peer candidates include a line colleague', '1', count(*)::text from private.peer_candidates('00000000-0000-0000-0000-0000000000a2') c where c = '00000000-0000-0000-0000-0000000000a1';
+insert into results (check_name, expected, actual) select 'CS blocked term is a whole word, any case', 'Delcroix|null', initcap(private.blocked_term('Notes from DELCROIX visit'))||'|'||coalesce(private.blocked_term('Delcroixville'), 'null');
+insert into results (check_name, expected, actual) select 'CS blocked term survives punctuation and spacing', 'flemish care', private.blocked_term('Pilot at Flemish-Care,  then');
+set local role authenticated;
+
+-- Creation grants and review policies. Consulting Domain Admin a1:
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into public.creator_grants (user_id, topic_kind, topic_value) values ('00000000-0000-0000-0000-0000000000a2','line','Consulting') returning 1) insert into results (check_name, expected, actual) select 'CS DA grants own line to a managed user', '1 rows', count(*)||' rows' from i;
+with i as (insert into public.review_policies (topic_kind, topic_value, peers, expert, quality) values ('line','Consulting',2,true,true) returning 1) insert into results (check_name, expected, actual) select 'CS DA sets own line''s review policy', '1 rows', count(*)||' rows' from i;
+do $$ begin
+  begin insert into public.creator_grants (user_id, topic_kind, topic_value) values ('00000000-0000-0000-0000-0000000000a2','line','Audit');
+    insert into results (check_name, expected, actual) values ('CS DA grants another line', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS DA grants another line', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.creator_grants (user_id, topic_kind, topic_value) values ('00000000-0000-0000-0000-0000000000a3','domain','acad');
+    insert into results (check_name, expected, actual) values ('CS DA grants an unmanaged user', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS DA grants an unmanaged user', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.review_policies (topic_kind, topic_value, peers) values ('line','Audit',0);
+    insert into results (check_name, expected, actual) values ('CS DA sets another line''s policy', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS DA sets another line''s policy', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.review_policies (topic_kind, topic_value, peers) values ('format','Reel',0);
+    insert into results (check_name, expected, actual) values ('CS DA sets a format policy', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS DA sets a format policy', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+-- General Admin a7: any person, any topic; policies for any topic; no domain experts
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+with i as (insert into public.creator_grants (user_id, topic_kind, topic_value) values
+  ('00000000-0000-0000-0000-0000000000a2','format','Micro-guide'), ('00000000-0000-0000-0000-0000000000a2','domain','acad'),
+  ('00000000-0000-0000-0000-0000000000a3','format','Case write-up'), ('00000000-0000-0000-0000-0000000000a9','domain','tec'),
+  ('00000000-0000-0000-0000-0000000000a2','format','Podcast') returning 1)
+  insert into results (check_name, expected, actual) select 'CS GA grants anyone any topic', '5 rows', count(*)||' rows' from i;
+with i as (insert into public.review_policies (topic_kind, topic_value, peers, expert, quality) values ('format','Micro-guide',0,false,true), ('format','Case write-up',0,false,false), ('format','Podcast',1,false,true) returning 1)
+  insert into results (check_name, expected, actual) select 'CS GA sets format policies', '3 rows', count(*)||' rows' from i;
+do $$ begin
+  begin insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a7');
+    insert into results (check_name, expected, actual) values ('CS GA names a domain expert', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS GA names a domain expert', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+-- Member a2: no granting, no policies, no experts; drafts only within grants
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'CS member reads own grants', '4', count(*)::text from public.creator_grants;
+do $$ begin
+  begin insert into public.creator_grants (user_id, topic_kind, topic_value) values ('00000000-0000-0000-0000-0000000000a2','domain','tech');
+    insert into results (check_name, expected, actual) values ('CS member grants self', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS member grants self', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.review_policies (topic_kind, topic_value, peers) values ('domain','acad',0);
+    insert into results (check_name, expected, actual) values ('CS member sets a policy', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS member sets a policy', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a2');
+    insert into results (check_name, expected, actual) values ('CS member names a domain expert', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS member names a domain expert', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.contributions (topic_kind, topic_value, type, title, domain, takeaway) values ('domain','tech','Reel','T no grant','tech','x');
+    insert into results (check_name, expected, actual) values ('CS member drafts outside their grants', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS member drafts outside their grants', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+with i as (insert into public.contributions (topic_kind, topic_value, type, title, domain, level, audience_stage, takeaway) values
+  ('line','Consulting','Reel','T full flow','acad',2,'Partner','One message per slide, stated as a full sentence.'),
+  ('format','Micro-guide','Micro-guide','T quality only','pers',1,'Analyst','Ask before you suggest.'),
+  ('line','Consulting','Podcast','T client name','prof',3,'Manager','What we learned at Delcroix.'),
+  ('domain','acad','Podcast','T revoked','acad',2,'Consultant','Hedge in steps.'),
+  ('format','Podcast','Podcast','T rerun','reg',2,'Consultant','The four boxes that tell you who pays VAT.') returning 1)
+  insert into results (check_name, expected, actual) select 'CS author drafts within grants (Partner audience too)', '5 rows', count(*)||' rows' from i;
+insert into public.contributions (topic_kind, topic_value, type, title, domain, takeaway, outline, sources) values
+  ('line','Consulting','Reel','T outline name','prof','Clean takeaway.','1. Open with the Brabant-office case', '{}'),
+  ('line','Consulting','Reel','T source name','prof','Clean takeaway.','', '{"Workshop notes · HOVERNA"}');
+insert into results (check_name, expected, actual) select 'CS author name is copied', '1', count(*)::text from public.contributions where title = 'T full flow' and author_name <> '';
+-- a3 (Tax & Legal) drafts too; a2 must not see it
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
+insert into public.contributions (topic_kind, topic_value, type, title, domain, takeaway) values ('format','Case write-up','Case write-up','T zero steps','corp','Anonymise before you share.');
+-- a9 (no business line) drafts for domain tec
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a9","role":"authenticated"}';
+insert into public.contributions (topic_kind, topic_value, type, title, domain, takeaway) values ('domain','tec','Reel','T no peers','tec','Pivot only what you need.');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'CS author cannot read another person''s draft', '0', count(*)::text from public.contributions where title like 'T %' and author_id <> '00000000-0000-0000-0000-0000000000a2';
+do $$ begin
+  begin update public.contributions set status = 'published' where title = 'T full flow';
+    insert into results (check_name, expected, actual) values ('CS author sets status directly', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS author sets status directly', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T client name'));
+    insert into results (check_name, expected, actual) values ('CS submit with a client name', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS submit with a client name', 'blocked', 'blocked: '||sqlerrm); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T outline name'));
+    insert into results (check_name, expected, actual) values ('CS submit with a client name in the outline', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS submit with a client name in the outline', 'blocked', 'blocked: '||sqlerrm); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T source name'));
+    insert into results (check_name, expected, actual) values ('CS submit with a client name in a source', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS submit with a client name in a source', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+-- the grant behind 'T revoked' is withdrawn by the General Admin; submitting is then refused
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+with d as (delete from public.creator_grants where user_id = '00000000-0000-0000-0000-0000000000a2' and topic_kind = 'domain' and topic_value = 'acad' returning 1) insert into results (check_name, expected, actual) select 'CS GA revokes a grant', '1 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T revoked'));
+    insert into results (check_name, expected, actual) values ('CS submit without a creation grant', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS submit without a creation grant', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+
+-- Full flow (2 peers, expert, quality & risk): routing
+insert into results (check_name, expected, actual) select 'CS submit routes to peer review', 'review', public.submit_contribution((select id from public.contributions where title = 'T full flow'));
+select set_config('test.c1', (select id::text from public.contributions where title = 'T full flow'), true);
+insert into results (check_name, expected, actual) select 'CS author sees the whole route', '2/1/1', (select count(*) from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 1)||'/'||(select count(*) from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 2)||'/'||(select count(*) from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 3);
+insert into results (check_name, expected, actual) select 'CS only the peers start', 'pending,pending,waiting,waiting', string_agg(verdict, ',' order by step, slot) from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid;
+insert into results (check_name, expected, actual) select 'CS one step per reviewer', '4', count(distinct reviewer_id)::text from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid;
+insert into results (check_name, expected, actual) select 'CS never the author, counsellor or counsellee as peer', '0', count(*)::text from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 1
+  and reviewer_id in ('00000000-0000-0000-0000-0000000000a2','00000000-0000-0000-0000-0000000000a6','00000000-0000-0000-0000-0000000000a8');
+with u as (update public.contributions set title = 'T full flow edited' where id = current_setting('test.c1')::uuid returning 1) insert into results (check_name, expected, actual) select 'CS author edits while in review', '0 rows', count(*)||' rows' from u;
+select set_config('test.p1', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 1 and slot = 1), true);
+select set_config('test.p2', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 1 and slot = 2), true);
+select set_config('test.ex', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 2), true);
+select set_config('test.qr', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c1')::uuid and step = 3), true);
+reset role;
+insert into results (check_name, expected, actual) select 'CS no domain expert: a System Admin reviews', '1', count(*)::text from public.user_roles where user_id = current_setting('test.ex')::uuid and role = 'system_admin';
+insert into results (check_name, expected, actual) select 'CS quality & risk by a General Admin', '1', count(*)::text from public.user_roles where user_id = current_setting('test.qr')::uuid and role = 'general_admin';
+-- a peer who is not a System Admin (System Admins read everything)
+select set_config('test.px', coalesce((select r.reviewer_id::text from public.contribution_reviews r where r.contribution_id = current_setting('test.c1')::uuid and r.step = 1
+  and not exists (select 1 from public.user_roles x where x.user_id = r.reviewer_id and x.role = 'system_admin') order by r.slot limit 1), current_setting('test.p1')), true);
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.px'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'CS a reviewer sees only assigned contributions', '1', count(*)::text from public.contributions where title like 'T %' and status <> 'published';
+reset role;
+do $$ begin
+  begin insert into public.contribution_reviews (contribution_id, step, slot, reviewer_id) values (current_setting('test.c1')::uuid, 3, 2, current_setting('test.p1')::uuid);
+    insert into results (check_name, expected, actual) values ('CS a second step for the same reviewer', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS a second step for the same reviewer', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+set local role authenticated;
+-- someone not assigned: neither a direct update nor the RPC
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
+do $$ begin
+  begin update public.contribution_reviews set verdict = 'approved' where contribution_id = current_setting('test.c1')::uuid;
+    insert into results (check_name, expected, actual) values ('CS unassigned user updates a review', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS unassigned user updates a review', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,t}', '');
+    insert into results (check_name, expected, actual) values ('CS unassigned user approves', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS unassigned user approves', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+-- the quality reviewer (a7, never a Consulting peer now) cannot act during peer review
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+do $$ begin
+  begin perform public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,t}', '');
+    insert into results (check_name, expected, actual) values ('CS a later step cannot approve early', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS a later step cannot approve early', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+-- peer 1: the rubric gates approval
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.p1'), 'role', 'authenticated')::text, true);
+do $$ begin
+  begin perform public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,f}', '');
+    insert into results (check_name, expected, actual) values ('CS approve with three of four rubric items', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS approve with three of four rubric items', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+insert into results (check_name, expected, actual) select 'CS first peer approves; still in peer review', 'review', public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,t}', 'Clear.');
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.p2'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'CS second peer approves; on to the expert', 'review', public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,t}', '');
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.ex'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'CS expert step is current', '2', step::text from public.contributions where id = current_setting('test.c1')::uuid;
+insert into results (check_name, expected, actual) select 'CS expert approves; on to quality & risk', 'review', public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,t}', '');
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.qr'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'CS quality & risk approves; published', 'published', public.review_contribution(current_setting('test.c1')::uuid, 'approved', '{t,t,t,t}', '');
+reset role;
+insert into results (check_name, expected, actual) select 'CS publication creates the learning', '1', count(*)::text from public.contributions c join public.learnings l on l.id = c.learning_id
+  where c.id = current_setting('test.c1')::uuid and c.status = 'published' and l.created_by = '00000000-0000-0000-0000-0000000000a2' and l.source = 'Peer contribution'
+    and l.status = 'published' and l.format = 'Reel' and l.business_line = 'Consulting' and l.title = 'T full flow';
+set local role authenticated;
+
+-- Shorter policy (quality & risk only): changes requested, edited, resubmitted, published
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+select set_config('test.c2', (select id::text from public.contributions where title = 'T quality only'), true);
+insert into results (check_name, expected, actual) select 'CS quality-only policy skips peers and expert', 'review', public.submit_contribution(current_setting('test.c2')::uuid);
+insert into results (check_name, expected, actual) select 'CS quality-only route', '3:pending', string_agg(step||':'||verdict, ',') from public.contribution_reviews where contribution_id = current_setting('test.c2')::uuid;
+select set_config('test.q2', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c2')::uuid), true);
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.q2'), 'role', 'authenticated')::text, true);
+do $$ begin
+  begin perform public.review_contribution(current_setting('test.c2')::uuid, 'changes', '{}', '  ');
+    insert into results (check_name, expected, actual) values ('CS request changes without a comment', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS request changes without a comment', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+insert into results (check_name, expected, actual) select 'CS reviewer requests changes', 'changes', public.review_contribution(current_setting('test.c2')::uuid, 'changes', '{}', 'Name the model you use.');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+with u as (update public.contributions set takeaway = 'Ask before you suggest, using the situation-behaviour-impact model.' where id = current_setting('test.c2')::uuid returning 1)
+  insert into results (check_name, expected, actual) select 'CS author edits after changes requested', '1 rows', count(*)||' rows' from u;
+do $$ begin
+  begin update public.contributions set topic_kind = 'line', topic_value = 'Consulting' where id = current_setting('test.c2')::uuid;
+    insert into results (check_name, expected, actual) values ('CS topic is fixed after submission', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS topic is fixed after submission', 'blocked', 'blocked: '||sqlerrm); end;
+  begin update public.contributions set domain = 'prof' where id = current_setting('test.c2')::uuid;
+    insert into results (check_name, expected, actual) values ('CS domain is fixed after submission', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS domain is fixed after submission', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+insert into results (check_name, expected, actual) select 'CS author reads the reviewer comment', 'Name the model you use.', comment from public.contribution_reviews where contribution_id = current_setting('test.c2')::uuid;
+insert into results (check_name, expected, actual) select 'CS resubmit returns to the step that asked', 'review', public.submit_contribution(current_setting('test.c2')::uuid);
+insert into results (check_name, expected, actual) select 'CS the reviewer is asked again', '3:pending', string_agg(step||':'||verdict, ',') from public.contribution_reviews where contribution_id = current_setting('test.c2')::uuid;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.q2'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'CS quality-only approval publishes', 'published', public.review_contribution(current_setting('test.c2')::uuid, 'approved', '{t,t,t,t}', '');
+reset role;
+insert into results (check_name, expected, actual) select 'CS format-topic learning sits in the author''s line', 'Micro-guide|Consulting', l.format||'|'||l.business_line from public.contributions c join public.learnings l on l.id = c.learning_id where c.id = current_setting('test.c2')::uuid;
+set local role authenticated;
+
+-- Changes asked at a later step: resubmitting runs the whole flow again (earlier approvals were of the old version)
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+select set_config('test.c3', (select id::text from public.contributions where title = 'T rerun'), true);
+insert into results (check_name, expected, actual) select 'CS one peer then quality', 'review', public.submit_contribution(current_setting('test.c3')::uuid);
+insert into results (check_name, expected, actual) select 'CS one peer then quality route', '1:pending,3:waiting', string_agg(step||':'||verdict, ',' order by step) from public.contribution_reviews where contribution_id = current_setting('test.c3')::uuid;
+select set_config('test.p3', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c3')::uuid and step = 1), true);
+select set_config('test.q3', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.c3')::uuid and step = 3), true);
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.p3'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'CS the peer approves', 'review', public.review_contribution(current_setting('test.c3')::uuid, 'approved', '{t,t,t,t}', '');
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.q3'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'CS quality & risk asks for changes', 'changes', public.review_contribution(current_setting('test.c3')::uuid, 'changes', '{}', 'Cite the source.');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'CS resubmit after a later step', 'review', public.submit_contribution(current_setting('test.c3')::uuid);
+insert into results (check_name, expected, actual) select 'CS the whole flow runs again', '1:pending,3:waiting|1', string_agg(step||':'||verdict, ',' order by step)||'|'||(select step from public.contributions where id = current_setting('test.c3')::uuid) from public.contribution_reviews where contribution_id = current_setting('test.c3')::uuid;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.q3'), 'role', 'authenticated')::text, true);
+do $$ begin
+  begin perform public.review_contribution(current_setting('test.c3')::uuid, 'approved', '{t,t,t,t}', '');
+    insert into results (check_name, expected, actual) values ('CS quality cannot approve before the peer re-approves', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS quality cannot approve before the peer re-approves', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+-- a published contribution is read through its learning, not by colleagues
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'CS colleagues do not read a published contribution', '0', count(*)::text from public.contributions where id = current_setting('test.c1')::uuid;
+insert into results (check_name, expected, actual) select 'CS colleagues read its published learning', '1', count(*)::text from public.learnings where title = 'T full flow' and source = 'Peer contribution';
+
+-- No review required: published on submit. No peers available: refused, still a draft.
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'CS policy without reviews publishes on submit', 'published', public.submit_contribution((select id from public.contributions where title = 'T zero steps'));
+insert into results (check_name, expected, actual) select 'CS zero-step learning exists', '1', count(*)::text from public.learnings l join public.contributions c on c.learning_id = l.id where c.title = 'T zero steps' and l.created_by = '00000000-0000-0000-0000-0000000000a3';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a9","role":"authenticated"}';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T no peers'));
+    insert into results (check_name, expected, actual) values ('CS too few peers is refused', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CS too few peers is refused', 'blocked', 'blocked: '||sqlerrm); end;
+end $$;
+insert into results (check_name, expected, actual) select 'CS too few peers keeps the draft', 'draft|0', c.status||'|'||(select count(*) from public.contribution_reviews r where r.contribution_id = c.id) from public.contributions c where c.title = 'T no peers';
+insert into results (check_name, expected, actual) select 'CS peer count for someone without a line', '0', public.peer_count()::text;
+-- System Admin names a domain expert
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+with i as (insert into public.domain_experts (domain, user_id) values ('acad','00000000-0000-0000-0000-0000000000a1') returning 1) insert into results (check_name, expected, actual) select 'CS SA names a domain expert', '1 rows', count(*)||' rows' from i;
+
 -- anon
 reset role; set local role anon;
 do $$ begin
@@ -318,6 +574,10 @@ do $$ begin
   exception when others then insert into results (check_name, expected, actual) values ('anon reads learner progress', 'blocked', 'blocked: '||sqlstate); end;
   begin perform count(*) from public.learnings; insert into results (check_name, expected, actual) values ('anon reads the catalogue', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('anon reads the catalogue', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform count(*) from public.contributions; insert into results (check_name, expected, actual) values ('anon reads contributions', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('anon reads contributions', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_contribution(gen_random_uuid()); insert into results (check_name, expected, actual) values ('anon submits a contribution', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('anon submits a contribution', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;

@@ -397,6 +397,25 @@ export function KeyValueList({ rows = [], labelWidth = 150, size = 13, style }: 
   );
 }
 
+// Steps in a row: done steps green, the current one dark, later ones muted.
+export function Stepper({ steps = [], current = 0, style }: { steps?: string[]; current?: number; style?: CSSProperties }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, overflow: 'hidden', ...style }}>
+      {steps.map((label, i) => {
+        const done = i < current, now = i === current;
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+            <span style={{ width: 22, height: 22, borderRadius: '50%', background: done ? 'var(--tc-green)' : now ? 'var(--tc-ink)' : '#fff', color: done ? 'var(--tc-green-ink)' : now ? '#fff' : 'var(--tc-ink-5)',
+              border: '1px solid ' + (done ? 'var(--tc-green)' : now ? 'var(--tc-ink)' : 'var(--tc-line)'), fontSize: 11.5, fontWeight: 600, display: 'grid', placeItems: 'center' }}>{i + 1}</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: i <= current ? 'var(--tc-ink)' : 'var(--tc-ink-5)' }}>{label}</span>
+            {i < steps.length - 1 ? <span style={{ width: 28, height: 1, background: 'var(--tc-line)', marginLeft: 6 }} /> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Tabs({ tabs = [], value, onChange, style }: { tabs?: Opt[]; value?: string; onChange?: (v: string) => void; style?: CSSProperties }) {
   return (
     <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--tc-line-soft)', ...style }}>

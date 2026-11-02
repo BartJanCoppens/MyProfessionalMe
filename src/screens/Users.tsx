@@ -3,18 +3,25 @@ import { Avatar, Banner, Button, Checkbox, Drawer, Field, FilterChip, Hover, Inp
 import { BUSINESS_LINES, manageUsers, PASSWORD_HINT, supabase, temporaryPassword } from '../lib/supabase';
 import type { BusinessLine, Profile, Role } from '../lib/supabase';
 import type { Access } from '../types';
-import { STAGES } from '../data';
+import { DOMAINS, STAGES } from '../data';
+import { addGrant, loadExperts, loadGrants, removeGrant, setExpert } from '../lib/contributionStore';
+import { allTopics, topicKey, topicLong, topicOf } from '../logic/contribution';
+import type { Grant, Topic } from '../logic/contribution';
 
 type User = Profile & { roles: Role[] };
 type Handover = { email: string; password: string; what: string };
 
-const COLS = 'minmax(0,2.2fr) 150px 170px 190px minmax(0,2.4fr) 160px 190px';
+const COLS = 'minmax(0,2.2fr) 150px 170px 190px minmax(0,2.4fr) 200px 160px 190px';
 // RLS also returns counsellees and your own counsellor; manageable_user_ids() narrows to accounts you may manage.
 const fetchUsers = async () => {
   const [people, ids] = await Promise.all([fetchProfiles(), supabase.rpc('manageable_user_ids')]);
-  if (people.error || ids.error) return { data: null, error: people.error || ids.error };
-  const ok = new Set((ids.data as string[]) || []);
-  return { data: (people.data || []).filter((p) => ok.has(p.id)), error: null };
+  if (people.error || ids.error) return { data: null, grants: [] as Grant[], experts: {} as Record<string, string>, error: people.error || ids.error };
+  const ok = new Set((ids.data as string[]) || []), data = (people.data || []).filter((p) => ok.has(p.id));
+  // Create & share: their creation grants, and the expert per domain (readable by everyone signed in).
+  try {
+    const [grants, experts] = await Promise.all([loadGrants(data.map((p) => p.id)), loadExperts()]);
+    return { data, grants, experts, error: null };
+  } catch (err) { return { data, grants: [] as Grant[], experts: {} as Record<string, string>, error: { message: (err as Error).message } }; }
 };
 const fetchProfiles = () => supabase.from('profiles')
   .select('id, email, full_name, business_line, must_change_password, created_at, career_stage, counsellor_id, roles:user_roles!user_roles_user_id_fkey(role, business_line)')
@@ -30,10 +37,16 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
   const [adding, setAdding] = useState(false);
   const [handover, setHandover] = useState<Handover | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  // Create & share: creation grants of the people shown, and (System Admins) the expert per domain.
+  const [grants, setGrants] = useState<Grant[]>([]);
+  const [experts, setExperts] = useState<Record<string, string>>({});
+  const [granting, setGranting] = useState<string | null>(null);
+  // Mirrors private.can_grant_creator: System and General Admins any topic; a Domain Admin line topics of their own lines only.
+  const canGrant = (t: Topic) => access.isSystem || !!access.isGeneral || t.kind !== 'line' || access.domains.includes(t.value);
 
   const apply = (r: Awaited<ReturnType<typeof fetchUsers>>) => {
-    if (r.error) { setLoadError(r.error.message); return; }
-    setLoadError(null); setUsers(r.data as unknown as User[]);
+    if (r.error && !r.data) { setLoadError(r.error.message); return; }
+    setLoadError(r.error ? r.error.message : null); setUsers(r.data as unknown as User[]); setGrants(r.grants); setExperts(r.experts);
   };
   const load = async () => apply(await fetchUsers());
   useEffect(() => {
@@ -102,10 +115,10 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       </div>
       {loadError && <Banner tone="warning">{loadError}</Banner>}
       <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflowX: 'auto' }}>
-        <div style={{ minWidth: 1340 }}>
+        <div style={{ minWidth: 1540 }}>
           <div style={{ display: 'grid', gridTemplateColumns: COLS, fontSize: 11.5, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em', borderBottom: '1px solid #e1e5dc', background: '#fafbf8' }}>
             <div style={{ padding: '10px 12px' }}>Person</div><div style={{ padding: '10px 12px' }}>Business line</div><div style={{ padding: '10px 12px' }}>Stage</div><div style={{ padding: '10px 12px' }}>Counsellor</div><div style={{ padding: '10px 12px' }}>Roles</div>
-            <div style={{ padding: '10px 12px' }}>Sign-in</div><div style={{ padding: '10px 12px' }} />
+            <div style={{ padding: '10px 12px' }}>Can create for</div><div style={{ padding: '10px 12px' }}>Sign-in</div><div style={{ padding: '10px 12px' }} />
           </div>
           {shown.map((u) => {
             const me = u.id === meId;
@@ -155,6 +168,14 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
                     <Tag key={r.role + r.business_line} tone={r.role === 'domain_admin' ? 'green' : 'neutral'}>{r.role === 'system_admin' ? 'System Admin' : r.role === 'general_admin' ? 'General Admin' : 'Domain Admin · ' + r.business_line}</Tag>
                   )) : <span style={{ color: '#8b918a', fontSize: 12.5 }}>Member</span>}
                 </div>
+                <div style={{ padding: '8px 12px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
+                  {(() => { const mine = grants.filter((g) => g.user_id === u.id); return (
+                    <>
+                      <span style={{ fontSize: 12.5, color: mine.length ? '#1a1d18' : '#8b918a' }}>{mine.length ? mine.length + (mine.length === 1 ? ' topic' : ' topics') : 'Nothing yet'}</span>
+                      <LinkButton onClick={() => setGranting(u.id)}>Edit</LinkButton>
+                    </>
+                  ); })()}
+                </div>
                 <div style={{ padding: '10px 12px' }}>
                   {u.must_change_password ? <Tag tone="amber">Temporary password</Tag> : <Tag tone="muted">Own password</Tag>}
                 </div>
@@ -173,6 +194,11 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>
         Removing someone deletes their account at once; a session they already have open stays valid for up to an hour. The last System Admin cannot be removed.
       </div>
+      {access.isSystem && users && <DomainExperts users={users} experts={experts} say={say} onSaved={load} />}
+      {granting && users?.some((u) => u.id === granting) && (
+        <CreatorDrawer user={users.find((u) => u.id === granting)!} grants={grants.filter((g) => g.user_id === granting)} canGrant={canGrant} say={say}
+          onChanged={load} onClose={() => setGranting(null)} />
+      )}
       {adding && <AddUserDrawer access={access} managed={managed} meId={meId} onClose={() => setAdding(false)}
         onCreated={async (h) => { setAdding(false); setHandover(h); say('Account created for ' + h.email); await load(); }} />}
     </>
@@ -223,5 +249,55 @@ function AddUserDrawer({ access, managed, meId, onClose, onCreated }: { access: 
         </div>
       </div>
     </Drawer>
+  );
+}
+
+// Creation rights for one person: the topics they may create for in Create & share.
+function CreatorDrawer({ user, grants, canGrant, say, onChanged, onClose }: { user: User; grants: Grant[]; canGrant: (t: Topic) => boolean; say: (m: string) => void; onChanged: () => Promise<void>; onClose: () => void }) {
+  const held = new Set(grants.map((g) => topicKey(topicOf(g))));
+  const options = allTopics().filter((t) => canGrant(t) && !held.has(topicKey(t)));
+  const [pick, setPick] = useState('');
+  const sel = options.find((t) => topicKey(t) === pick) || options[0];
+  const name = user.full_name || user.email;
+  const run = async (fn: () => Promise<void>, ok: string) => { try { await fn(); say(ok); } catch (err) { say((err as Error).message); } await onChanged(); };
+  return (
+    <Drawer title={'Can create for · ' + name} subtitle="Create & share: a person creates only for the topics listed here. A topic is a business line, an industry or technology, a format or a domain." onClose={onClose} width={480}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {!grants.length && <div style={{ color: '#5a6058' }}>No creation rights yet.</div>}
+        {grants.map((g) => { const t = topicOf(g); return (
+          <div key={topicKey(t)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #eef0ea' }}>
+            <span>{topicLong(t)}</span>
+            {canGrant(t) ? <LinkButton tone="muted" onClick={() => run(() => removeGrant(user.id, t), 'Removed · ' + name + ' no longer creates for ' + topicLong(t))}>Remove</LinkButton> : <Tag tone="muted">Another admin's</Tag>}
+          </div>
+        ); })}
+        {sel && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Select value={topicKey(sel)} onChange={(e) => setPick(e.target.value)} options={options.map((t) => ({ value: topicKey(t), label: topicLong(t) }))} aria-label="Topic to grant" />
+            <Button onClick={() => run(() => addGrant(user.id, sel), name + ' can create for ' + topicLong(sel))}>Add</Button>
+          </div>
+        )}
+      </div>
+    </Drawer>
+  );
+}
+
+// The subject-matter expert per domain (System Admins). With none named, a System Admin does the expert review.
+function DomainExperts({ users, experts, say, onSaved }: { users: User[]; experts: Record<string, string>; say: (m: string) => void; onSaved: () => Promise<void> }) {
+  const set = async (domain: string, label: string, userId: string) => {
+    try { await setExpert(domain, userId || null); say(userId ? 'Expert for ' + label + ' set' : label + ' · a System Admin reviews it now'); } catch (err) { say((err as Error).message); }
+    await onSaved();
+  };
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div><div style={{ fontWeight: 600 }}>Domain experts</div><div style={{ fontSize: 12, color: '#5a6058' }}>Create & share sends the expert review of a contribution to the expert of its domain; with none named, to a System Admin.</div></div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 10 }}>
+        {DOMAINS.map((d) => (
+          <Field key={d[0]} label={d[1]} size="sm">
+            <Select size="md" value={experts[d[0]] || ''} onChange={(e) => set(d[0], d[1], e.target.value)} aria-label={'Expert for ' + d[1]}
+              options={[{ value: '', label: 'None · a System Admin' }].concat(users.map((u) => ({ value: u.id, label: u.full_name || u.email })))} />
+          </Field>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -11,7 +11,7 @@ export type Config = {
   motion: boolean;
 };
 
-const SCREENS: Screen[] = ['map', 'library', 'team', 'adminLib', 'adminMap', 'adminKb', 'users', 'projects', 'profile'];
+const SCREENS: Screen[] = ['map', 'library', 'team', 'adminLib', 'adminMap', 'adminKb', 'users', 'projects', 'profile', 'create'];
 const VIEWS: View[] = ['constellation', 'radar', 'road'];
 const BLS = ['Consulting', 'Audit', 'Tax & Legal'] as const;
 
