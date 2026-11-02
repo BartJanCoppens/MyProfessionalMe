@@ -1,25 +1,30 @@
-// Per-user learner data in Supabase (learner_learnings, ambitions, interests, learner_prefs, learning_decisions).
+// Per-user learner data in Supabase (learner_learnings, ambitions, interests, learner_prefs, learning_decisions, project_evaluations,
+// personality_tests).
 // RLS lets the person write their own rows; admins and counsellors may only read them. Decisions are written by
 // public.decide_learning() and public.register_attendance() (recordStore) and by the database when a learning completes itself.
 import { supabase } from './supabase';
 import type { LearnState, Progress } from '../logic/learner';
 import type { Decision, Verdict } from '../logic/record';
-import type { Ambition, Interest } from '../types';
+import type { Ambition, Interest, Project, Test } from '../types';
 
 // decisions: the acceptance record (F2), every decision on this person's learnings.
-export type LearnerData = { progress: Progress; ambitions: Ambition[]; interests: Interest[]; prefs: { initials: string; color: string }; decisions?: Decision[] };
+// projects: engagements and their evaluations (read like the formal track); tests: personality results (the person only).
+export type LearnerData = { progress: Progress; ambitions: Ambition[]; interests: Interest[]; prefs: { initials: string; color: string }; decisions?: Decision[];
+  projects?: Project[]; tests?: Test[] };
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 
 export async function loadLearner(userId: string): Promise<LearnerData> {
-  const [l, a, i, p, d] = await Promise.all([
+  const [l, a, i, p, d, pe, pt] = await Promise.all([
     supabase.from('learner_learnings').select('learning_id, state, pct, chosen, submitted_at, updated_at, evidence_note, evidence_link, evidence_ref, evidence_rating').eq('user_id', userId),
     supabase.from('ambitions').select('id, text, horizon, domains, source').eq('user_id', userId).order('created_at'),
     supabase.from('interests').select('label, domain').eq('user_id', userId).order('created_at'),
     supabase.from('learner_prefs').select('avatar_initials, avatar_color').eq('user_id', userId).maybeSingle(),
     supabase.from('learning_decisions').select('learning_id, verdict, comment, decided_by, decided_by_name, decided_at, evidence').eq('user_id', userId).order('decided_at'),
+    supabase.from('project_evaluations').select('id, client, name, role, period, hours, lead, evaluator, eval_date, overall, summary, dims, quote, advice').eq('user_id', userId).order('id'),
+    supabase.from('personality_tests').select('id, name, provider, taken, headline, unit, bars, reading, sugg').eq('user_id', userId).order('id'),
   ]);
-  [l.error, a.error, i.error, p.error, d.error].forEach(fail);
+  [l.error, a.error, i.error, p.error, d.error, pe.error, pt.error].forEach(fail);
   const progress: Progress = {};
   (l.data || []).forEach((r) => {
     progress[r.learning_id] = { state: r.state as LearnState, pct: r.pct, chosen: r.chosen, submittedAt: r.submitted_at ?? null, updatedAt: r.updated_at ?? null,
@@ -34,6 +39,11 @@ export async function loadLearner(userId: string): Promise<LearnerData> {
       learningId: r.learning_id, verdict: r.verdict as Verdict, comment: r.comment || '', by: r.decided_by ?? null, byName: r.decided_by_name || '', at: r.decided_at,
       evidence: { note: r.evidence?.note || '', link: r.evidence?.link || '', ref: r.evidence?.ref || '' }, rating: r.evidence?.rating ?? null,
     })),
+    projects: (pe.data || []).map((r) => ({
+      id: 'P' + r.id, client: r.client, name: r.name, role: r.role, period: r.period, hours: r.hours, lead: r.lead, evaluator: r.evaluator, evalDate: r.eval_date || '',
+      overall: r.overall || '', summary: r.summary || '', dims: r.dims ?? null, quote: r.quote || '', advice: r.advice || [],
+    })),
+    tests: (pt.data || []).map((r) => ({ id: 'T' + r.id, name: r.name, provider: r.provider, date: r.taken, headline: r.headline, unit: r.unit, bars: r.bars || [], reading: r.reading || '', sugg: r.sugg || [] })),
   };
 }
 

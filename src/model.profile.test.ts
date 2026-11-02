@@ -234,12 +234,39 @@ describe('the avatar', () => {
 });
 
 describe('projects and personality tests', () => {
-  it('have nothing seeded', () => {
+  const project = { id: 'P4', client: 'Northwind', name: 'Pillar Two readiness', role: 'Engagement director', period: 'Mar–Jun 2026', hours: 210, lead: 'Kato Laurent', evaluator: 'Kato Laurent',
+    evalDate: '2 Jul 2026', overall: 'Exceeds expectations', summary: 'Readiness review.', dims: [['Leadership', 2, 'Clear']] as [string, number, string][], quote: 'Calm under pressure.', advice: [['L37', 'Tell the story first.']] as [string, string][] };
+  const pending = { ...project, id: 'P5', client: 'Contoso', dims: null, overall: '', evalDate: '', quote: '', advice: [] };
+  const test = { id: 'T2', name: 'Four Colours', provider: 'Insights', date: 'Sep 2026', headline: 'Fiery red first', unit: '%', bars: [['Red', 48, '#c0392b']] as [string, number, string][], reading: 'Direct.', sugg: [['L10', 'Slow down to listen.']] as [string, string][] };
+  const theirs = (readOnly: boolean) => person({ readOnly, counsellor: { id: 'c1', name: 'Sam Coach' }, data: withProgress({}, { projects: [project, pending], tests: [test] }) });
+  const chip = (vm: ReturnType<ReturnType<typeof harness>['vm']>, key: string) => vm.cloudChips.find((c) => c.key === key)!.count;
+  it('have nothing for a newcomer', () => {
     const vm = harness().vm();
     expect(vm.projList).toEqual([]);
     expect(vm.pr).toBeNull();
     expect(vm.tests).toEqual([]);
-    expect(vm.projLead).toMatch(/^0 engagements since Sep 2025 · 0 evaluated/);
+    expect(vm.projLead).toMatch(/^0 engagements · 0 evaluated/);
+  });
+  it('come from the person: projects with their evaluation advice feed the projects cloud, results the personality cloud', () => {
+    const vm = harness({ subject: theirs(false) }).vm();
+    expect(vm.projList.map((p) => p.client)).toEqual(['Northwind', 'Contoso']);
+    expect(vm.projCount).toBe('2');
+    expect(vm.projLead).toMatch(/^2 engagements · 1 evaluated/);
+    expect(vm.pr!.advice.map((a) => a.id)).toEqual(['L37']);
+    expect(vm.tests.map((t) => t.headline)).toEqual(['Fiery red first']);
+    expect(chip(vm, 'proj')).toBe('1');
+    expect(chip(vm, 'pers')).toBe('1');
+  });
+  it('keep personality results private in View as, while projects show like the rest of the formal track', () => {
+    const vm = harness({ subject: theirs(true) }).vm();
+    expect(vm.projList).toHaveLength(2);
+    expect(chip(vm, 'proj')).toBe('1');
+    expect(vm.tests).toEqual([]);
+    expect(chip(vm, 'pers')).toBe('0');
+  });
+  it('say a pending evaluation is requested from its evaluator', () => {
+    const h = harness({ subject: theirs(false), state: { projSel: 'P5' } });
+    expect(h.vm().pr!.pendingText).toBe('Evaluation requested from Kato Laurent. Its advice joins your projects cloud once it is submitted.');
   });
   it('explain the prototype actions', () => {
     const h = harness();
@@ -247,10 +274,6 @@ describe('projects and personality tests', () => {
     expect(h.lastToast()).toMatch(/^Prototype: sends an evaluation request/);
     h.vm().addTest();
     expect(h.lastToast()).toMatch(/^Prototype: upload a report or enter results/);
-  });
-  it('offer sharing with the counsellor by first name', () => {
-    expect(harness({ subject: known }).vm().shareOptions).toEqual([{ value: 'me', label: 'Only me' }, { value: 'counsellor', label: 'Sam' }]);
-    expect(harness().vm().shareOptions[1].label).toBe('Counsellor');
   });
 });
 

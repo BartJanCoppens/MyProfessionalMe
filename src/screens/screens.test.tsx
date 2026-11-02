@@ -16,7 +16,7 @@ import { AVATAR_QUIZ } from '../data';
 import type { Subject } from '../lib/useSubject';
 import type { Member } from '../logic/team';
 import { cfg, emptyData, person, systemAdmin, withProgress } from '../test/harness';
-import type { Access, AppState } from '../types';
+import type { Access, AppState, Project, Test } from '../types';
 import MapScreen from './Map';
 import { DetailScreen } from './Library';
 import ProfileScreen from './Profile';
@@ -27,18 +27,6 @@ import AdminMappingScreen from './Mapping';
 import KnowledgeScreen from './Knowledge';
 import ApprovalsScreen from './Approvals';
 
-vi.mock('../data', async (orig) => {
-  const d = await orig<typeof import('../data')>();
-  return {
-    ...d,
-    PROJECTS: [
-      { id: 'P1', client: 'Northwind', name: 'Cost review', role: 'Analyst', period: 'Sep–Oct 2026', hours: 120, lead: 'Lead Person', evaluator: 'Eval Person', evalDate: '20 Oct 2026', overall: 'Meets expectations',
-        summary: 'A cost review.', dims: [['Analysis', 2, 'Sharp'], ['Communication', 0, 'Too long']], quote: 'Solid work.', advice: [['L37', 'Tell the story first.'], ['L10', 'Structure earlier.']] },
-      { id: 'P2', client: 'Contoso', name: 'Target model', role: 'Consultant', period: 'Oct 2026', hours: 40, lead: 'Other Lead', evaluator: 'Other Lead', evalDate: '', overall: '', summary: 'Ongoing.', dims: null, quote: '', advice: [] },
-    ],
-    TESTS: [{ id: 'T1', name: 'Four Colours', provider: 'Insights', date: 'Oct 2026', headline: 'Cool blue first', unit: '%', bars: [['Blue', 60, '#2f7fc1'], ['Red', 20]], reading: 'Prefers facts.', sugg: [['L37', 'Practise the story.']] }],
-  };
-});
 vi.mock('../lib/learnerStore', () => ({
   acceptLearning: vi.fn(async () => {}), addAmbition: vi.fn(async () => ({})), addInterest: vi.fn(async () => {}), removeAmbition: vi.fn(async () => {}),
   removeInterest: vi.fn(async () => {}), saveProgress: vi.fn(async () => {}), savePrefs: vi.fn(async () => {}), loadLearner: vi.fn(),
@@ -60,6 +48,12 @@ const show = (view: (vm: VM, refs: Refs) => ReactNode, state: Partial<AppState> 
   render(<Live state={state} subject={subject} access={access} view={view} />);
 const click = (name: string | RegExp, n = 0) => fireEvent.click(screen.getAllByRole('button', { name })[n]);
 const toast = () => screen.getByRole('status').textContent;
+const PROJECTS: Project[] = [
+      { id: 'P1', client: 'Northwind', name: 'Cost review', role: 'Analyst', period: 'Sep–Oct 2026', hours: 120, lead: 'Lead Person', evaluator: 'Eval Person', evalDate: '20 Oct 2026', overall: 'Meets expectations',
+        summary: 'A cost review.', dims: [['Analysis', 2, 'Sharp'], ['Communication', 0, 'Too long']], quote: 'Solid work.', advice: [['L37', 'Tell the story first.'], ['L10', 'Structure earlier.']] },
+      { id: 'P2', client: 'Contoso', name: 'Target model', role: 'Consultant', period: 'Oct 2026', hours: 40, lead: 'Other Lead', evaluator: 'Other Lead', evalDate: '', overall: '', summary: 'Ongoing.', dims: null, quote: '', advice: [] },
+    ];
+const TESTS: Test[] = [{ id: 'T1', name: 'Four Colours', provider: 'Insights', date: 'Oct 2026', headline: 'Cool blue first', unit: '%', bars: [['Blue', 60, '#2f7fc1'], ['Red', 20]], reading: 'Prefers facts.', sugg: [['L37', 'Practise the story.']] }];
 
 beforeEach(() => { vi.clearAllMocks(); window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -226,13 +220,10 @@ describe('the profile screen', () => {
     click('Not now');
     expect(current.proposal).toBeNull();
   });
-  it('shares a personality result and opens what it suggests', () => {
-    profile(person({ counsellor: { id: 'c1', name: 'Sam Coach' } }));
+  it('shows a personality result as private and opens what it suggests', () => {
+    profile(person({ counsellor: { id: 'c1', name: 'Sam Coach' }, data: withProgress({}, { tests: TESTS }) }));
     expect(screen.getByText('Four Colours')).toBeTruthy();
-    click('Sam');
-    expect(toast()).toBe('Four Colours result shared with Sam Coach');
-    click('Only me');
-    expect(toast()).toBe('Four Colours result is now visible to you only');
+    expect(screen.getByText('Only you see this result; your counsellor and admins do not.')).toBeTruthy();
     fireEvent.click(screen.getAllByText('Storytelling with data')[0]);
     expect(current).toMatchObject({ screen: 'detail', detailId: 'L37', origin: 'profile' });
   });
@@ -240,7 +231,7 @@ describe('the profile screen', () => {
 
 describe('the projects screen', () => {
   it('shows an evaluation with its dimensions and advice, and a pending one', () => {
-    show((vm) => <ProjectsScreen vm={vm} />, { screen: 'projects', projSel: 'P1' });
+    show((vm) => <ProjectsScreen vm={vm} />, { screen: 'projects', projSel: 'P1' }, person({ data: withProgress({}, { projects: PROJECTS }) }));
     expect(screen.getByText('Solid work.', { exact: false })).toBeTruthy();
     expect(screen.getByText('Too long')).toBeTruthy();
     click('+ Add');

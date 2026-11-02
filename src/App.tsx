@@ -162,14 +162,16 @@ const roleLabel = ({ access }: Auth) =>
 
 function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: VM; auth: Auth; teamOverdue: number; canPick: boolean; onPick: () => void; onBackToMe: () => void }) {
   return (
-    <aside style={{ width: 248, flex: 'none', background: '#171a16', color: '#c9cec5', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', overflow: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 20px 14px' }}>
+    <aside style={{ width: 248, flex: 'none', background: '#171a16', color: '#c9cec5', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 20px 14px', flex: 'none' }}>
         <BrandMark />
         <div>
           <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.1, color: '#fff' }}>MyProfessionalMe</div>
           <div style={{ fontSize: 11, color: '#858c82', letterSpacing: '.04em', textTransform: 'uppercase' }}>Learning &amp; growth</div>
         </div>
       </div>
+      {/* Only the middle scrolls: the brand above and who you are (and who is signed in) below stay in place. */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 12 }}>
       <div style={{ margin: '4px 12px 14px', padding: 12, borderRadius: 6, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.06)' }}>
         <div style={{ fontWeight: 600, color: '#fff', fontSize: 13 }}>{vm.who.name}</div>
         <div style={{ fontSize: 12, color: '#858c82', marginTop: 2 }}>{vm.who.roleLine}</div>
@@ -197,8 +199,8 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
           </>
         )}
       </nav>
-      <div style={{ flex: 1 }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px 18px', borderTop: '1px solid rgba(255,255,255,.08)' }}>
+      </div>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px 18px', borderTop: '1px solid rgba(255,255,255,.08)' }}>
         <span onClick={vm.goProfile} title="Change your avatar in My profile" style={{ width: 32, height: 32, borderRadius: '50%', flex: 'none', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: vm.avatarBg, color: vm.avatarFg, fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,.16)' }}>
           <AvatarFace vm={vm} fontSize={12} />
@@ -215,7 +217,7 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
         </div>
         {canPick && <LinkButton tone="onDark" size={12} onClick={onPick} title="View the app as another user">Change</LinkButton>}
       </div>
-      <div style={{ padding: '10px 20px 14px', borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
+      <div style={{ flex: 'none', padding: '10px 20px 14px', borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: '#858c82', textTransform: 'uppercase', letterSpacing: '.06em' }}>Signed in</div>
           <div style={{ color: '#c9cec5', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={auth.profile!.email}>{auth.profile!.full_name || auth.profile!.email}</div>

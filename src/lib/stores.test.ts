@@ -137,12 +137,22 @@ describe('learner data', () => {
       ambitions: { data: [{ id: 5, text: 'Lead', horizon: null, domains: null, source: null }] },
       interests: { data: [{ label: 'Data', domain: 'tec' }] },
       learner_prefs: { data: null },
+      project_evaluations: { data: [{ id: 3, client: 'Northwind', name: 'Pillar Two readiness', role: 'Director', period: 'Mar–Jun 2026', hours: 210, lead: 'Kato Laurent', evaluator: 'Kato Laurent',
+        eval_date: '2 Jul 2026', overall: 'Exceeds expectations', summary: 'Review.', dims: [['Leadership', 2, 'Clear']], quote: 'Calm.', advice: [['L37', 'Story first.']] },
+        { id: 4, client: 'Contoso', name: 'VAT', role: 'Director', period: 'Oct 2026', hours: 40, lead: 'Kato Laurent', evaluator: 'Kato Laurent', eval_date: null, overall: null, summary: null, dims: null, quote: null, advice: null }] },
+      personality_tests: { data: [{ id: 9, name: 'Four Colours', provider: 'Insights', taken: 'Sep 2026', headline: 'Fiery red first', unit: '%', bars: [['Red', 48, '#c0392b']], reading: 'Direct.', sugg: [['L10', 'Listen.']] }] },
     } as Record<string, object>)[c.table]);
     expect(await loadLearner('u1')).toEqual({
       progress: { L1: { state: 'accepted', pct: 100, chosen: false, submittedAt: '2026-10-30T09:00:00Z', updatedAt: '2026-10-30T09:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' }, rating: null } },
       ambitions: [{ id: '5', text: 'Lead', horizon: '', doms: [], from: '' }],
       interests: [{ label: 'Data', dom: 'tec' }], prefs: { initials: '', color: '' },
       decisions: [{ learningId: 'L1', verdict: 'accepted', comment: '', by: 'c1', byName: 'Sam Coach', at: '2026-10-31T10:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' }, rating: null }],
+      projects: [
+        { id: 'P3', client: 'Northwind', name: 'Pillar Two readiness', role: 'Director', period: 'Mar–Jun 2026', hours: 210, lead: 'Kato Laurent', evaluator: 'Kato Laurent', evalDate: '2 Jul 2026',
+          overall: 'Exceeds expectations', summary: 'Review.', dims: [['Leadership', 2, 'Clear']], quote: 'Calm.', advice: [['L37', 'Story first.']] },
+        { id: 'P4', client: 'Contoso', name: 'VAT', role: 'Director', period: 'Oct 2026', hours: 40, lead: 'Kato Laurent', evaluator: 'Kato Laurent', evalDate: '', overall: '', summary: '', dims: null, quote: '', advice: [] },
+      ],
+      tests: [{ id: 'T9', name: 'Four Colours', provider: 'Insights', date: 'Sep 2026', headline: 'Fiery red first', unit: '%', bars: [['Red', 48, '#c0392b']], reading: 'Direct.', sugg: [['L10', 'Listen.']] }],
     });
     expect(db.calls.every((c) => has(c, 'eq', 'user_id', 'u1'))).toBe(true);
   });

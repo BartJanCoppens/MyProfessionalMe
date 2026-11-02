@@ -1025,6 +1025,41 @@ do $$ begin
   begin perform count(*) from public.attendance_roster('L4'); insert into results (check_name, expected, actual) values ('anon reads an attendance roster', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('anon reads an attendance roster', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
+-- ---------- Projects & evaluations (formal track) and personality results (the person only, owner's Q8) ----------
+reset role;
+select set_config('request.jwt.claims', '', true);
+update public.profiles set business_line = 'Consulting', counsellor_id = '00000000-0000-0000-0000-0000000000a6' where id = '00000000-0000-0000-0000-0000000000a2';
+insert into public.project_evaluations (user_id, client, name, role, period, hours, lead, evaluator, advice) values ('00000000-0000-0000-0000-0000000000a2', 'T Northwind', 'T review', 'Consultant', 'Oct 2026', 40, 'T Lead', 'T Lead', '[["L37","Story first."]]');
+insert into public.personality_tests (user_id, name, provider, taken, headline, unit, bars, sugg) values ('00000000-0000-0000-0000-0000000000a2', 'T Four Colours', 'Insights', 'Oct 2026', 'Cool blue first', '%', '[["Blue",60]]', '[["L37","Practise the story."]]');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'PT owner reads own projects and personality', '1/1', (select count(*) from public.project_evaluations where user_id = '00000000-0000-0000-0000-0000000000a2' and client = 'T Northwind')||'/'||(select count(*) from public.personality_tests where user_id = '00000000-0000-0000-0000-0000000000a2' and name = 'T Four Colours');
+do $$ begin
+  begin insert into public.project_evaluations (user_id, client, name, role, period, hours, lead, evaluator) values ('00000000-0000-0000-0000-0000000000a2', 'T own', 'T', 'T', 'T', 1, 'T', 'T');
+    insert into results (check_name, expected, actual) values ('PT owner writes an evaluation', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('PT owner writes an evaluation', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.personality_tests set headline = 'T changed' where user_id = '00000000-0000-0000-0000-0000000000a2';
+    insert into results (check_name, expected, actual) values ('PT owner edits a personality result', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('PT owner edits a personality result', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'PT counsellor reads projects, no personality', '1/0', (select count(*) from public.project_evaluations where user_id = '00000000-0000-0000-0000-0000000000a2' and client = 'T Northwind')||'/'||(select count(*) from public.personality_tests where user_id = '00000000-0000-0000-0000-0000000000a2' and name = 'T Four Colours');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'PT managing Domain Admin reads projects, no personality', '1/0', (select count(*) from public.project_evaluations where user_id = '00000000-0000-0000-0000-0000000000a2' and client = 'T Northwind')||'/'||(select count(*) from public.personality_tests where user_id = '00000000-0000-0000-0000-0000000000a2' and name = 'T Four Colours');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'PT General Admin reads projects, no personality', '1/0', (select count(*) from public.project_evaluations where user_id = '00000000-0000-0000-0000-0000000000a2' and client = 'T Northwind')||'/'||(select count(*) from public.personality_tests where user_id = '00000000-0000-0000-0000-0000000000a2' and name = 'T Four Colours');
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'PT System Admin reads projects, no personality', '1/0', (select count(*) from public.project_evaluations where user_id = '00000000-0000-0000-0000-0000000000a2' and client = 'T Northwind')||'/'||(select count(*) from public.personality_tests where user_id = '00000000-0000-0000-0000-0000000000a2' and name = 'T Four Colours');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'PT another line reads neither', '0/0', (select count(*) from public.project_evaluations where user_id = '00000000-0000-0000-0000-0000000000a2' and client = 'T Northwind')||'/'||(select count(*) from public.personality_tests where user_id = '00000000-0000-0000-0000-0000000000a2' and name = 'T Four Colours');
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+do $$ begin
+  begin perform count(*) from public.project_evaluations; insert into results (check_name, expected, actual) values ('PT anon reads evaluations', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('PT anon reads evaluations', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform count(*) from public.personality_tests; insert into results (check_name, expected, actual) values ('PT anon reads personality results', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('PT anon reads personality results', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

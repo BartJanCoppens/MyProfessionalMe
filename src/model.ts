@@ -3,10 +3,10 @@
 import type { ChangeEvent, DragEvent, KeyboardEvent, RefObject } from 'react';
 import {
   AUD_INFO, AUD_MAPS0, BUNDLES0, LEARN_META, AUDS, AV_SWATCHES, AVATARS, BLS, CLOUD_META, DOMAINS, FILL, HEAT, IMPORT_RESULTS, KEYWORDS, LEARN, LEARN_BY, LENSES, LEVELS, MAPS0,
-  MEDIA, OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, PROJECTS, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET, TESTS,
+  MEDIA, OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET,
 } from './data';
 import type { Config } from './config';
-import type { Access, AppState, ChatMsg, CloudKey, Learn, LearnForm, LearnMeta, Op, Persona, Proposal, Read, Screen, Signal } from './types';
+import type { Access, Ambition, AppState, ChatMsg, CloudKey, Interest, Learn, LearnForm, LearnMeta, Op, Persona, Proposal, Read, Screen, Signal, Test } from './types';
 import { dueQuarter, levelLabel, levelsByDomain, stageIndex } from './logic/learner';
 import type { LearnState } from './logic/learner';
 import { addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
@@ -61,7 +61,7 @@ export function initState(cfg: Config): AppState {
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
     kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbAnswerAi: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
-    projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: {},
+    projSel: '', clouds: { proj: true, pers: true, amb: true },
     chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
     chat: [],
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwAiBusy: false,
@@ -150,7 +150,9 @@ export class Logic {
   }
   myStage() { return stageIndex(this.subject.stage); }
   // Ambitions, interests and personality are private to the person (owner, Q8); nobody viewing them sees these.
-  privateData() { return this.subject.readOnly ? { ambitions: [] as Subject['data']['ambitions'], interests: [] as Subject['data']['interests'] } : this.subject.data; }
+  // Ambitions, interests and personality results are the person's alone (owner's Q8): View as shows none of them.
+  privateData() { return this.subject.readOnly ? { ambitions: [] as Ambition[], interests: [] as Interest[], tests: [] as Test[] } : { ...this.subject.data, tests: this.subject.data.tests || [] }; }
+  projects() { return this.subject.data.projects || []; }
   // The viewed person's counsellor, an admin who manages them, or a General Admin (Q7) decides on their submitted learning.
   canAccept(state: string) {
     const s = this.subject;
@@ -313,8 +315,8 @@ export class Logic {
       evidence.forEach((e) => { const it = byId[e.id]; if (!it) return; w[it.dom] = (w[it.dom] || 0) + 1; if (!ids.includes(e.id)) ids.push(e.id); });
       return { key, w, ids, evidence: evidence.filter((e) => byId[e.id]), on: !!s.clouds[key], ...CLOUD_META[key] };
     };
-    const proj: Evidence[] = []; PROJECTS.forEach((p) => p.advice.forEach((a) => proj.push({ id: a[0], text: a[1], src: p.client + ' · ' + p.lead })));
-    const pers: Evidence[] = []; TESTS.forEach((t) => t.sugg.forEach((x) => pers.push({ id: x[0], text: x[1], src: t.name })));
+    const proj: Evidence[] = []; this.projects().forEach((p) => p.advice.forEach((a) => proj.push({ id: a[0], text: a[1], src: p.client + ' · ' + p.lead })));
+    const pers: Evidence[] = []; this.privateData().tests.forEach((t) => t.sugg.forEach((x) => pers.push({ id: x[0], text: x[1], src: t.name })));
     const amb: Evidence[] = [], seen = new Set<string>();
     const pick = (doms: string[]) => doms.map((d) => items.filter((x) => x.dom === d && x.state !== 'accepted' && x.ob !== 'mandatory' && !seen.has(x.id)).sort((a, b) => b.lvl - a.lvl)[0]).filter(Boolean).map((x) => x.id);
     this.privateData().ambitions.forEach((a) => (a.ids || pick(a.doms)).forEach((id) => { if (seen.has(id) || !byId[id]) return; seen.add(id); amb.push({ id, src: 'Ambition · ' + a.text, text: 'Builds ' + byId[id].domLabel.toLowerCase() + ', which this ambition depends on.' }); }));
@@ -548,8 +550,9 @@ export class Logic {
       toggle: () => this.setState({ clouds: Object.assign({}, s.clouds, { [cl.key]: !cl.on }), sel: csel && csel.key === cl.key ? null : s.sel }),
     }));
     const scaleL = ['Developing', 'Meets', 'Exceeds'];
-    const p0 = PROJECTS.find((p) => p.id === s.projSel) || PROJECTS[0] || null;
-    const projList = PROJECTS.map((p) => {
+    const projects = this.projects();
+    const p0 = projects.find((p) => p.id === s.projSel) || projects[0] || null;
+    const projList = projects.map((p) => {
       const on = p.id === p0?.id;
       return { id: p.id, client: p.client, period: p.period, name: p.name, role: p.role, st: p.dims ? 'accepted' : 'in-progress', stLabel: p.dims ? p.overall.replace(' expectations', '') : 'Evaluation pending', stIcon: p.dims ? 'check' : 'dot',
         bd: on ? '#1a1d18' : '#e1e5dc', ring: on ? '0 0 0 3px rgba(134,188,37,.45)' : 'none', open: () => this.setState({ projSel: p.id }) };
@@ -561,14 +564,12 @@ export class Logic {
       evInit: p0.lead.split(' ').filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join('').slice(0, 2), quote: p0.quote,
       dims: (p0.dims || []).map((d) => ({ name: d[0], comment: d[2], scale: scaleL.map((l, k) => ({ label: l, bg: k === d[1] ? '#1a1d18' : '#f3f5f0', fg: k === d[1] ? '#fff' : '#8b918a' })) })),
       adviceSub: p0.advice.length + ' items · they feed the projects cloud on your map', advice: p0.advice.map((a) => advRow(a[0], a[1], p0.client)),
-      pendingText: 'Evaluation requested from ' + p0.lead + ' on 24 Oct 2026. Its advice joins your projects cloud once it is submitted.',
+      pendingText: 'Evaluation requested from ' + p0.evaluator + '. Its advice joins your projects cloud once it is submitted.',
     };
-    const tests = TESTS.map((t) => ({
+    const tests = this.privateData().tests.map((t) => ({
       id: t.id, name: t.name, provider: t.provider, date: t.date, headline: t.headline, reading: t.reading,
       bars: t.bars.map((b) => ({ label: b[0], w: b[1] + '%', val: b[1] + t.unit, color: b[2] || '#5a6058' })),
       sugg: t.sugg.map((x) => ({ id: x[0], title: byId[x[0]].title, text: x[1], open: byId[x[0]].open })),
-      share: s.share[t.id],
-      setShare: (v: string) => { this.setState((st) => ({ share: Object.assign({}, st.share, { [t.id]: v }) })); this.say(v === 'counsellor' ? t.name + ' result shared with ' + this.counsellorFull() : t.name + ' result is now visible to you only'); },
     }));
     const domName = (k: string) => (DOMAINS.find((d) => d[0] === k) || [k, k])[1];
     const ambitions = this.privateData().ambitions.map((a) => ({ id: a.id, text: a.text, meta: [a.horizon, a.from].filter(Boolean).join(' · '), doms: a.doms.map((d) => ({ key: d, label: domName(d) })), remove: () => this.persist(() => removeAmbition(a.id), 'Ambition removed') }));
@@ -604,7 +605,7 @@ export class Logic {
       navProj: s.screen === 'projects' || (s.screen === 'detail' && s.origin === 'projects'), navProfile: s.screen === 'profile' || (s.screen === 'detail' && s.origin === 'profile'),
       goMap: () => this.go('map'), goLibrary: () => this.go('library'), goTeam: () => this.go('team'), goAdminLib: () => this.go('adminLib'), goAdminMap: () => this.go('adminMap'), goProj: () => this.go('projects'), goProfile: () => this.go('profile'),
       goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : s.origin === 'create' ? '← Back to Create & share' : s.origin === 'approvals' ? '← Back to approvals' : '← Back to library',
-      libCount: String(LEARN.length), projCount: String(PROJECTS.length), pendingLabel: pendingN ? pendingN + ' pending' : '', noPending: pendingN === 0,
+      libCount: String(LEARN.length), projCount: String(this.projects().length), pendingLabel: pendingN ? pendingN + ' pending' : '', noPending: pendingN === 0,
       toastHelp: () => this.say(this.subject.counsellor ? 'Prototype: opens a message to ' + this.counsellorFull() + ', your counsellor' : 'No counsellor yet · an admin can assign one in User management'),
       askLabel: this.subject.counsellor ? 'Ask ' + this.counsellorFirst() : 'Ask your counsellor',
       counsellorFirst: this.counsellorFirst(),
@@ -637,11 +638,11 @@ export class Logic {
       ratingOptions: [1, 2, 3, 4, 5].map((n) => opt(String(n), String(n))), myRating: s.myRating, setRating: (v: string) => this.setState({ myRating: v }),
       addToPath: () => this.addToPath(d0.id), logHours: () => this.logHours(d0), askApprove: () => submit(this, d0),
       // projects & profile
-      projLead: PROJECTS.length + ' engagements since Sep 2025 · ' + PROJECTS.filter((p) => p.dims).length + ' evaluated · synced from staffing and the performance tool. Advice from each evaluation lands in the projects cloud on your map.',
+      projLead: this.projects().length + ' engagements · ' + this.projects().filter((p) => p.dims).length + ' evaluated · synced from staffing and the performance tool. Advice from each evaluation lands in the projects cloud on your map.',
       projList, pr, requestEval: () => this.say('Prototype: sends an evaluation request through the performance tool · the evaluator is reminded after 10 days'),
       profLead: 'Your ambitions, interests and personality results are private. Your counsellor sees your learning track: progress and acceptance.',
       privateNote: this.subject.readOnly ? 'Ambitions, interests and personality results are private to ' + this.subject.name.split(' ')[0] + '.' : '',
-      tests, shareOptions: [opt('me', 'Only me'), opt('counsellor', this.subject.counsellor ? this.counsellorFirst() : 'Counsellor')], addTest: () => this.say('Prototype: upload a report or enter results · Four Colours, MBTI, Big Five, DISC, Belbin team roles, Hogan'),
+      tests, addTest: () => this.say('Prototype: upload a report or enter results · Four Colours, MBTI, Big Five, DISC, Belbin team roles, Hogan'),
       ambitions, interests,
       chat: ([{ role: 'assistant', text: this.greeting() }] as ChatMsg[]).concat(this.myChat()), chatBusy: s.chatBusy, chatInput: s.chatInput, setChatInput: (e: ChangeEvent<HTMLInputElement>) => this.setState({ chatInput: e.target.value }),
       chatKey: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') this.send(s.chatInput); }, sendChat: () => this.send(s.chatInput),

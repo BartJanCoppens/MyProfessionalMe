@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Banner, Button, ChatBubble, Eyebrow, FilterChip, Hover, Input, LinkButton, PageTitle, PillToggle, Tag } from '../ds';
+import { Banner, Button, ChatBubble, Eyebrow, FilterChip, Hover, Input, LinkButton, PageTitle, Tag } from '../ds';
 import type { VM } from '../model';
 import { AvatarFace } from './AvatarFace';
 
@@ -81,8 +81,7 @@ export default function ProfileScreen({ vm, fileRef, chatRef }: Props) {
               ))}
             </div>
             <div style={{ padding: '10px 18px', borderTop: '1px solid #eef0ea', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ fontSize: 12, color: '#5a6058' }}>Visible to</span>
-              <PillToggle options={vm.shareOptions} value={ts.share} onChange={ts.setShare} size="xs" />
+              <span style={{ fontSize: 12, color: '#5a6058' }}>Only you see this result; your counsellor and admins do not.</span>
             </div>
           </div>
         ))}

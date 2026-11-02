@@ -1,5 +1,5 @@
 // Seed data for the MyProfessionalMe prototype (verbatim from the Claude Design file).
-import type { Learn, Mapping, Project, Test, CloudKey, CloudMeta, AvatarSpec, Signal, RagPreset, RagModel, Bundle, LearnMeta, Media, QuizQ } from './types';
+import type { Learn, Mapping, CloudKey, CloudMeta, AvatarSpec, Signal, RagPreset, RagModel, Bundle, LearnMeta, Media, QuizQ } from './types';
 
 export const DOMAINS: [string, string, string][] = [
   ['tech','Job technical skills','Tech skills'],['acad','Academic background','Academic'],['pers','Personal growth','Personal'],
@@ -155,10 +155,6 @@ export const SIGNALS: Signal[] = [
  { id:'S5', kind:'Overlap', st:'submitted', op:{ op:'remove', aud:'ind:whole', lid:'L2', stage:'Senior consultant' }, evidence:'Value-chain cost modelling already reaches Senior consultants through the Consulting path, so people in Wholesale & retail receive it twice.', quote:'' },
  { id:'S6', kind:'Gap', st:'clarification', op:{ op:'add', aud:'pro:red', lid:'L28', stage:'Consultant', ob:'advised' }, evidence:'Among people who shared a fiery-red-first profile, evaluations mention listening or leaving room for others 2.1 times as often. Only shared profiles are counted.', quote:'' }
 ];
-// Filled from the performance tool once it is connected; no seeded evaluations.
-export const PROJECTS: Project[] = [];
-// Personality test results are added by each person; none are seeded.
-export const TESTS: Test[] = [];
 export const CLOUD_META: Record<CloudKey, CloudMeta> = {
  proj:{ label:'Projects', long:'From project evaluations', laneLabel:'Project-led path', laneSub:'advice from your evaluations', color:'#2f7fc1', text:'#1d5a8f', wash:'rgba(47,127,193,.14)', anchor:3, frac:.55, screen:'projects', goLabel:'Open projects →' },
  pers:{ label:'Personality', long:'From personality profiles', laneLabel:'Personal style path', laneSub:'from your profiles', color:'#8a5a8c', text:'#6e4370', wash:'rgba(138,90,140,.14)', anchor:2, frac:.55, screen:'profile', goLabel:'Open profiles →' },

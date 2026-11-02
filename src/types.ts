@@ -79,7 +79,7 @@ export type AppState = {
   teamTab: string; adminQ: string; adminStatus: string; drawerOpen: boolean; importQ: string;
   blState: string | null; maps: Record<string, Mapping[]>; pending: Record<string, boolean>; mapSel: string | null; overStage: string | null;
   toast: string | null; noteOpen: boolean; myRating: string;
-  projSel: string; clouds: Record<CloudKey, boolean>; share: Record<string, string>;
+  projSel: string; clouds: Record<CloudKey, boolean>;
   // The assistant chat and its proposal belong to one person (chatFor), never to whoever is viewed next.
   chatInput: string; chatBusy: boolean; proposal: Proposal | null; chatFor: string | null;
   // Avatar edits shown before the save round-trips, for the person being edited.
