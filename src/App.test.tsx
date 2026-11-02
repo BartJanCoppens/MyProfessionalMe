@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The app shell end to end with real view-model and screens: the auth gate, load errors, the sidebar per role,
 // "View as", and one walk through every screen (FT-AUTH-*, FT-NAV-*, FT-VIEW-*, FT-UI-*). Data hooks and stores are mocked.
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { AUD_MAPS0, BUNDLES0, LEARN, MAPS0 } from './data';
@@ -14,7 +14,8 @@ import { useSubject } from './lib/useSubject';
 import type { Subject } from './lib/useSubject';
 import { useTeam } from './lib/useTeam';
 import type { Member } from './logic/team';
-import { db } from './test/fakeSupabase';
+import { db, has } from './test/fakeSupabase';
+import { contribution, review } from './test/contributions';
 import { emptyData, person, withProgress } from './test/harness';
 import type { Access } from './types';
 
@@ -127,6 +128,16 @@ describe('the sidebar', () => {
     vi.setSystemTime(new Date('2026-12-15T12:00:00Z'));
     setup({ team: [{ id: 'm1', name: 'Kim Learner', stage: 'Analyst', businessLine: 'Consulting', data: emptyData() }] });
     expect(screen.getByText('My team', { selector: 'nav button > span' }).parentElement!.textContent).toBe('My team1');
+  });
+  it('loads Create & share for the signed-in person and badges the reviews waiting for them', async () => {
+    db.answer((c) => c.table === 'contributions' ? { data: [contribution({ id: 'x1', author_id: 'u5', status: 'review', step: 1 })] }
+      : c.table === 'contribution_reviews' ? { data: [review({ contribution_id: 'x1', reviewer_id: 'u1' })] }
+      : c.table === 'rpc:peer_count' ? { data: 2 } : { data: [] });
+    setup();
+    await waitFor(() => expect(screen.getByText('Create & share', { selector: 'nav button > span' }).parentElement!.textContent).toBe('Create & share1'));
+    expect(db.on('creator_grants').some((c) => has(c, 'eq', 'user_id', 'u1'))).toBe(true);
+    nav('Create & share');
+    expect(screen.getByText('Review for peers · 1')).toBeTruthy();
   });
   it('signs out', () => {
     const { a } = setup();

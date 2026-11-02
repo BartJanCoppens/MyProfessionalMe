@@ -15,6 +15,9 @@ describe('readConfig', () => {
   it('ignores unknown values', () => {
     expect(readConfig('?bl=Advisory&screen=detail&view=globe')).toMatchObject({ businessLine: 'Consulting', startScreen: 'map', homeView: 'constellation' });
   });
+  it('opens Create & share from the URL', () => {
+    expect(readConfig('?screen=create').startScreen).toBe('create');
+  });
   it('accepts every admin screen (the app still checks the role)', () => {
     expect(['adminLib', 'adminMap', 'adminKb', 'users'].map((s) => readConfig('?screen=' + s).startScreen)).toEqual(['adminLib', 'adminMap', 'adminKb', 'users']);
   });
