@@ -471,8 +471,8 @@ export class Logic {
     const q = s.libQ.toLowerCase();
     const libItems = items.filter((it) => (!q || (it.title + ' ' + it.source + ' ' + it.domLabel).toLowerCase().includes(q)) && (s.libOb === 'all' || it.ob === s.libOb)
       && (s.libLevel === '0' || it.lvl === +s.libLevel) && (s.libFormat === 'all' || it.format === s.libFormat) && (s.libDom === 'all' || it.dom === s.libDom));
-    const domChips = [{ key: 'all', label: 'All domains', on: s.libDom === 'all', onClick: () => this.setState({ libDom: 'all' }) }]
-      .concat(DOMAINS.map((d) => ({ key: d[0], label: d[1], on: s.libDom === d[0], onClick: () => this.setState({ libDom: d[0] }) })));
+    // One chip per domain; nothing selected shows every domain, and clicking the selected one clears it.
+    const domChips = DOMAINS.map((d) => ({ key: d[0], label: d[1], on: s.libDom === d[0], onClick: () => this.setState({ libDom: s.libDom === d[0] ? 'all' : d[0] }) }));
     const formats = Array.from(new Set(LEARN.map((l) => l[4])));
     const reels = reelStrip(LEARN, Object.fromEntries(items.map((it) => [it.id, it.state])), (id) => this.openDetail(id, 'library'));
 

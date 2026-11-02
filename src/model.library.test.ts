@@ -66,13 +66,14 @@ describe('library filters', () => {
   it('filters by domain chip', () => {
     const h = harness();
     const chips = h.vm().domChips;
-    expect(chips.map((c) => c.key)).toEqual(['all'].concat(DOMAINS.map((d) => d[0])));
+    expect(chips.map((c) => c.key)).toEqual(DOMAINS.map((d) => d[0]));
+    expect(chips.every((c) => !c.on)).toBe(true);
     chips.find((c) => c.key === 'corp')!.onClick();
     expect(h.state.libDom).toBe('corp');
     const vm = h.vm();
     expect(vm.domChips.find((c) => c.key === 'corp')!.on).toBe(true);
     expect(vm.libItems.map((i) => i.id)).toEqual(['L20', 'L21', 'L22']);
-    vm.domChips[0].onClick();
+    vm.domChips.find((c) => c.key === 'corp')!.onClick();
     expect(h.state.libDom).toBe('all');
   });
   it('combines filters and shows the empty state', () => {

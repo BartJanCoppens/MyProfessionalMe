@@ -25,11 +25,12 @@ describe('cover', () => {
 });
 
 describe('formatTiles', () => {
-  it('counts every learning once under its format, plus All', () => {
+  it('counts every learning once under its format, with no "All" tile (nothing selected means all)', () => {
     const tiles = formatTiles(LEARN, 'all', () => {});
-    expect(tiles[0]).toMatchObject({ key: 'all', label: 'All formats', count: LEARN.length + ' learnings', swBd: 'rgba(255,255,255,.4)' });
-    expect(tiles[1].swBd).toBe('#d5dacf');
-    expect(tiles.slice(1).reduce((n, t) => n + parseInt(t.count, 10), 0)).toBe(LEARN.length);
+    expect(tiles.some((t) => t.key === 'all')).toBe(false);
+    expect(tiles.every((t) => !t.on)).toBe(true);
+    expect(tiles[0].swBd).toBe('#d5dacf');
+    expect(tiles.reduce((n, t) => n + parseInt(t.count, 10), 0)).toBe(LEARN.length);
   });
   it('marks the chosen format, and choosing it again clears the filter', () => {
     const picked: string[] = [];

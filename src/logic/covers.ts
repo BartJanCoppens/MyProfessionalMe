@@ -50,7 +50,7 @@ export function cover(row: Learn, index: number, state: LearnState, pct0: number
 }
 export type Cover = ReturnType<typeof cover>;
 
-// One tile per format plus "All"; the swatch is the format's cover colour. Picking the chosen format again clears it.
+// One tile per format; nothing selected shows every format. The swatch is the format's cover colour; picking the chosen format again clears it.
 export function formatTiles(rows: Learn[], selected: string, pick: (format: string) => void) {
   const formats = Array.from(new Set(rows.map((r) => r[4])));
   const tile = (key: string, label: string, n: number, sw: string) => {
@@ -58,7 +58,7 @@ export function formatTiles(rows: Learn[], selected: string, pick: (format: stri
     return { key, label, on, count: n + (n === 1 ? ' learning' : ' learnings'), sw, swBd: on ? 'rgba(255,255,255,.4)' : '#d5dacf',
       bg: on ? '#1a1d18' : '#fff', fg: on ? '#fff' : '#1a1d18', bd: on ? '#1a1d18' : '#e1e5dc', pick: () => pick(on ? 'all' : key) };
   };
-  return [tile('all', 'All formats', rows.length, '#86BC25')].concat(formats.map((f) => tile(f, f, rows.filter((r) => r[4] === f).length, DARK.includes(f) ? '#171a16' : '#f3f5f0')));
+  return formats.map((f) => tile(f, f, rows.filter((r) => r[4] === f).length, DARK.includes(f) ? '#171a16' : '#f3f5f0'));
 }
 
 // Reels as vertical cards above the grid.
