@@ -64,8 +64,8 @@ S: up to one week. M: two to three weeks. L: four to six weeks. One developer wo
 | Id | Feature | Closes (main ids) | Size | Release |
 |---|---|---|---|---|
 | F1 | Hardening and honest copy | E2.9, E11.8, E12.9, E16.6, E16.7, E1.12, J08.7, J24.5; Q1, Q5, Q8 defects | S | v0.4.1 |
-| F2 | Learning record: evidence, send-back, acceptance record | E3.6–E3.8, J02.7, J15.4, J15.6; Q3, Q7 | M | v0.5.0 |
-| F3 | Approvals queue and last activity | E4.7, E4.8, J05.5, J14.5, J15.1 | S | v0.5.0 |
+| F2 | Learning record: evidence, send-back, acceptance record | E3.6–E3.8, J02.7, J15.4, J15.6; Q3, Q7 | M | Shipped v0.7.0 |
+| F3 | Approvals queue and last activity | E4.7, E4.8, J05.5, J14.5, J15.1 | S | Shipped v0.7.0 |
 | F4 | Dates, targets and hours goals | E1.2, E1.4, E1.8, E5.12, E6.7, E16.4, J07.2, J07.4, J13.2, J19.6, J20.5 | M | v0.5.0 |
 | F5 | Audience membership | E1.11, E5.8–E5.10, J08.6, J11.4, J18.6, J19.2, J19.4, J22.7 | M | v0.6.0 |
 | F6 | In-app notifications | E15.2–E15.5, J02.8, J02.9, J04.4, J14.7, J26.7, J28.1 | S | v0.6.0 |
@@ -152,7 +152,17 @@ S: up to one week. M: two to three weeks. L: four to six weeks. One developer wo
 
 ---
 
-### F2 Learning record: evidence, send-back and acceptance record (M, v0.5.0)
+### F2 Learning record: evidence, send-back and acceptance record (M, shipped in v0.7.0)
+
+**Shipped in v0.7.0 (2 Nov 2026), with these deviations from the design below.** Migration `20261102092834_learning_record.sql`; app in `src/recordVals.ts`, `src/logic/record.ts`, `src/lib/recordStore.ts`.
+
+- **No file storage.** Evidence is text on the progress row (`learner_learnings.evidence_note`, `evidence_link`, `evidence_ref`): a reflection, a link (a certificate or attendance record kept on SharePoint or OneDrive) and a certificate number. The screen says files are linked, not uploaded. No `learning_evidence` table, no `evidence` bucket, no signed URLs.
+- **Evidence rule (F2-a) as built.** Certification: a link or a certificate number. Book, Website, Mentoring, Game: a reflection of at least 140 characters; Coaching, Micro-guide and Case write-up (not in the table) the same. Classroom, E-learning, Avatar: none. Podcast and Reel complete themselves, as built in v0.6.0 (F11, Q3), so Podcast is "self-complete: yes", not "no". The rule is fixed in `private.evidence_rule()` and mirrored in `evidenceRule()`; there is no `format_rules` table and no "Formats" admin panel.
+- **No `returned` state.** "Request changes" (the design's "Return with feedback") puts the learning back to in-progress with its hours kept; the learner sees the comment on the detail and in the state label ("Changes requested") and resubmits. The comment is required (10–500 characters); accepting takes an optional comment.
+- **Decisions only through `public.decide_learning()`.** The update policy on `learner_learnings` is now owner-only; nobody else updates the row directly. Instead of `accepted_by`/`accepted_at`/`feedback` columns, every decision is a row in `learning_decisions` (who, their name as it was, when, verdict, comment, a snapshot of the evidence), which the detail shows as the "Acceptance record". A podcast or reel completing itself is recorded as `self_completed`.
+- **No `learning_events` table.** Logged hours, submissions and withdrawals are not recorded as events; last activity (F3) is the person's latest own change to their progress (`updated_at`, stamped by the guard). F6, F9 and F10 will need events added when they are built.
+- **No "Withdraw" button.** The database still lets the learner move a submission back to in-progress; while it waits, the learner may edit its evidence within the rule.
+- **F2-b: every person, read-only.** `private.can_view_track()` (progress, evidence, decisions, avatar prefs) includes General Admins; a General Admin can View as anyone and accept. Ambitions and interests stay private (Q8).
 
 **Goal.** Completions count only once accepted, with the evidence the format needs, a way to return work with feedback, and a durable record of who did what and when. Closes E3.6, E3.7, E3.8, J02.7, J15.4, J15.6; implements Q3 (self-completing reels) and Q7 (evidence per format, General Admin accepts). Provides the event history that F3, F6, F9 and F10 read.
 
@@ -230,7 +240,13 @@ Retention: events and evidence live as long as the account; removing a person ca
 
 ---
 
-### F3 Approvals queue and last activity (S, v0.5.0)
+### F3 Approvals queue and last activity (S, shipped in v0.7.0)
+
+**Shipped in v0.7.0 (2 Nov 2026), with these deviations from the design below.**
+
+- **Its own screen, not a panel on My team.** "Waiting for you" sits in the sidebar's Counsellor group with a badge counting what waits. My team follows the viewed person (View as) while the queue belongs to the signed-in person, and General and System Admins without counsellees need it too. My team keeps its overdue badge and gains the "Last activity" column.
+- **Scope.** `public.waiting_submissions()` lists counsellees' submissions and, for anyone who may accept, submissions of people without a counsellor: a Domain Admin's people, every person for General and System Admins (F2-b).
+- **Decide in place.** Each row shows the person, last activity, learning, format, submitted date and working days waiting (amber after five), the evidence, a comment field and Accept / Request changes; "Open in <name>'s app" switches View as to the person and opens the detail.
 
 **Goal.** Counsellors and admins find what waits for them without opening each person, and see who is inactive. Closes E4.7, E4.8, J14.5, and the queue half of J05.5 and J15.1.
 
@@ -630,7 +646,7 @@ flowchart LR
 | Release | Features | Size | Why here |
 |---|---|---|---|
 | v0.4.1 | F1 Hardening and honest copy | S | Brings production in line with the owner's answers (Q1, Q5, Q8) and removes false claims before real users arrive. |
-| v0.5.0 | F2 Learning record, F3 Approvals queue, F4 Dates and targets | M + S + M | The core loop becomes trustworthy: evidence, send-back, who accepted when, real deadlines and targets per stage and line. Everything after reads these events and dates. |
+| v0.5.0 | F2 Learning record, F3 Approvals queue (both shipped in v0.7.0), F4 Dates and targets | M + S + M | The core loop becomes trustworthy: evidence, send-back, who accepted when, real deadlines and targets per stage and line. Everything after reads these events and dates. |
 | v0.6.0 | F11 Podcasts and reels, F5 Audience membership, F6 Notifications, F7 Library essentials | M + M + S + M | The visible learner release. Reels use F2's format rule. Notifications use F2's events. Ratings must exist before Create & share shows author statistics. |
 | v0.7.0 | F8 Server-side AI proxy, F16 Computed signals | M + S | Makes the four assistants real; prerequisite of Create & share. Signals need F4 and F5. |
 | v0.8.0 | F12 Create & share | L | Now that the proxy, notifications and ratings exist. |
