@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Avatar, Button, Card, Eyebrow, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, PillToggle, ProgressRing, SegmentedControl, Select, StatusChip, Tag } from '../ds';
+import { Avatar, Banner, Button, Card, Eyebrow, Field, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, PillToggle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
 import { AvatarBadge } from './Map';
 import { CoverArt } from './Cover';
@@ -100,7 +100,15 @@ export function DetailScreen({ vm }: { vm: VM }) {
       </div>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 600px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {vm.rec.changes && (
+            <Banner tone="warning" title={vm.rec.changes.title}>
+              <div style={{ textWrap: 'pretty' }}>{vm.rec.changes.comment}</div>
+              {vm.rec.changes.hint && <div style={{ marginTop: 4, fontSize: 12 }}>{vm.rec.changes.hint}</div>}
+            </Banner>
+          )}
           <Card title="Why this is on your path"><p style={{ margin: 0, textWrap: 'pretty', maxWidth: 640 }}>{det.why}</p></Card>
+          {vm.rec.showEvidence && <EvidenceCard rec={vm.rec} />}
+          {vm.rec.hasHistory && <RecordCard rec={vm.rec} />}
           {det.pod && <PodcastPlayer pod={det.pod} />}
           {det.reel && <ReelViewer reel={det.reel} />}
           {det.av && <AvatarPractice av={det.av} counsellorFirst={vm.counsellorFirst} />}
@@ -156,10 +164,12 @@ export function DetailScreen({ vm }: { vm: VM }) {
             </div>
             <KeyValueList rows={det.kv} labelWidth={96} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-              {det.canAcceptIt && <Button size="xl" fullWidth onClick={vm.acceptIt}>Accept</Button>}
+              {vm.rec.decide && <DecideBox decide={vm.rec.decide} />}
               {det.canAdd && <Button size="xl" fullWidth onClick={vm.addToPath}>+ Add to my path</Button>}
               {det.canLog && <Button size="xl" fullWidth onClick={vm.logHours}>Log 1 hour</Button>}
-              {det.canAsk && <Button size="xl" variant="secondary" fullWidth onClick={vm.askApprove}>{vm.askLabel} to approve</Button>}
+              {det.canAsk && <Button size="xl" variant="secondary" fullWidth disabled={!!vm.rec.problem} onClick={vm.askApprove}>{vm.rec.submitLabel}</Button>}
+              {det.canAsk && vm.rec.problem && <div style={{ fontSize: 12, color: '#7a5000', textWrap: 'pretty' }}>{vm.rec.problem}</div>}
+              {vm.rec.submittedLine && <div style={{ fontSize: 12, color: '#5a6058' }}>{vm.rec.submittedLine}</div>}
             </div>
             <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>{det.approvalNote}</div>
           </div>
@@ -174,6 +184,79 @@ export function DetailScreen({ vm }: { vm: VM }) {
         </div>
       </div>
     </>
+  );
+}
+
+type Rec = VM['rec'];
+const linkStyle = { color: '#2f6fa8', overflowWrap: 'anywhere' } as const;
+
+// Evidence: the learner's form while the learning is open; read-only for the learner once accepted and for whoever views it.
+function EvidenceCard({ rec }: { rec: Rec }) {
+  if (!rec.editable) {
+    return (
+      <Card title="Evidence">
+        <EvidenceList ev={rec.saved} />
+      </Card>
+    );
+  }
+  return (
+    <Card title="Evidence for acceptance" subtitle={rec.ruleText}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Field label={rec.noteLabel} hint={rec.noteCount}>
+          <Textarea value={rec.note} onChange={rec.setNote} minHeight={88} placeholder="What you took from it, and where you will use it" />
+        </Field>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <Field label="Link" style={{ flex: '2 1 260px' }}><Input value={rec.link} onChange={rec.setLink} placeholder="https://… (SharePoint, OneDrive, provider page)" /></Field>
+          {rec.showRef && <Field label="Certificate number" style={{ flex: '1 1 160px' }}><Input value={rec.ref} onChange={rec.setRef} placeholder="e.g. AZ900-12345" /></Field>}
+        </div>
+        <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>{rec.linkedNote}</div>
+        <div><Button variant="secondary" disabled={!rec.dirty} onClick={rec.save}>Save evidence</Button></div>
+      </div>
+    </Card>
+  );
+}
+
+function EvidenceList({ ev }: { ev: Rec['saved'] }) {
+  if (ev.none) return <div style={{ color: '#5a6058' }}>{ev.none}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {ev.note && <div style={{ whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{ev.note}</div>}
+      {ev.link && <div><a href={ev.link} target="_blank" rel="noopener noreferrer" style={linkStyle}>{ev.link}</a></div>}
+      {ev.ref && <div style={{ fontSize: 12.5, color: '#5a6058' }}>Certificate number · {ev.ref}</div>}
+    </div>
+  );
+}
+
+// The acceptance record: every decision on this learning, newest first.
+function RecordCard({ rec }: { rec: Rec }) {
+  return (
+    <Card title="Acceptance record">
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {rec.history.map((h, i) => (
+          <div key={h.key} style={{ display: 'grid', gridTemplateColumns: '96px minmax(0,1fr)', gap: 10, padding: '8px 0', borderTop: i ? '1px solid #eef0ea' : 0, fontSize: 12.5 }}>
+            <span style={{ color: '#8b918a' }}>{h.date}</span>
+            <div style={{ minWidth: 0 }}>
+              <Tag tone={h.tone}>{h.label}</Tag>
+              {h.comment && <div style={{ marginTop: 4, textWrap: 'pretty' }}>{h.comment}</div>}
+              {h.evidence && <div style={{ marginTop: 2, fontSize: 11.5, color: '#5a6058' }}>Decided on: {h.evidence}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function DecideBox({ decide }: { decide: NonNullable<Rec['decide']> }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <Field label="Comment" hint={decide.hint} size="sm">
+        <Textarea value={decide.comment} onChange={decide.setComment} minHeight={64} placeholder="What is good, or what should change" />
+      </Field>
+      <div style={{ fontSize: 11.5, color: '#8b918a', textAlign: 'right' }}>{decide.commentCount}</div>
+      <Button size="xl" fullWidth onClick={decide.accept}>Accept</Button>
+      <Button size="xl" variant="secondary" fullWidth onClick={decide.sendBack}>Request changes</Button>
+    </div>
   );
 }
 

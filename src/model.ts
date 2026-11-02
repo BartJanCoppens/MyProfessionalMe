@@ -9,7 +9,7 @@ import type { Config } from './config';
 import type { Access, AppState, ChatMsg, CloudKey, Learn, LearnForm, LearnMeta, Op, Persona, Proposal, Read, Screen, Signal } from './types';
 import { dueQuarter, levelLabel, levelsByDomain, stageIndex } from './logic/learner';
 import type { LearnState } from './logic/learner';
-import { acceptLearning, addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
+import { addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
 import { photoKey } from './lib/useSubject';
 import { memberSummary } from './logic/team';
 import type { Member } from './logic/team';
@@ -20,6 +20,8 @@ import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
 import { currentPos, podSave, podView, reelView, startPos, step } from './logic/media';
+import { lastActivity, lastActivityLabel, openChanges } from './logic/record';
+import { logHour, recordVals, submit } from './recordVals';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
 export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'adminKb', 'users'];
@@ -50,6 +52,7 @@ export function initState(cfg: Config): AppState {
     chat: [],
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwAiBusy: false,
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
+    evDraft: null, decideNote: {}, queue: null, queueError: null,
   };
 }
 
@@ -137,16 +140,11 @@ export class Logic {
   myStage() { return stageIndex(this.subject.stage); }
   // Ambitions, interests and personality are private to the person (owner, Q8); nobody viewing them sees these.
   privateData() { return this.subject.readOnly ? { ambitions: [] as Subject['data']['ambitions'], interests: [] as Subject['data']['interests'] } : this.subject.data; }
-  // A counsellor or an admin who manages the viewed person may accept their submitted learning.
+  // The viewed person's counsellor, an admin who manages them, or a General Admin (Q7) decides on their submitted learning.
   canAccept(state: string) {
     const s = this.subject;
     return s.readOnly && state === 'submitted'
-      && (s.counsellor?.id === this.access.userId || this.access.isSystem || (!!s.businessLine && this.access.domains.includes(s.businessLine)));
-  }
-  accept(learningId: string, title: string) {
-    acceptLearning(this.subject.id, learningId).then(this.reloadSubject)
-      .then(() => this.say('Accepted · “' + title + '” now counts toward ' + this.subject.name.split(' ')[0] + '’s levels'))
-      .catch((err) => this.say((err as Error).message));
+      && (s.counsellor?.id === this.access.userId || this.access.isSystem || !!this.access.isGeneral || (!!s.businessLine && this.access.domains.includes(s.businessLine)));
   }
   // The chat and proposal shown are the viewed person's own; another person's conversation never carries over.
   myChat() { return this.state.chatFor === this.subject.id ? this.state.chat : []; }
@@ -205,6 +203,7 @@ export class Logic {
     const [id, title, dom, lvl, format, source, hours, cpd, due, why] = row;
     const own = this.subject.data.progress[id];
     const state: LearnState = own?.state || 'not-started'; const pct = state === 'accepted' || state === 'submitted' ? 100 : own?.pct || 0;
+    const changes = !!openChanges(this.subject.data.decisions, id, state);
     const ob = this.obFor(id); const m = this.mapping(id); const di = DOMAINS.findIndex((d) => d[0] === dom);
     const hasDue = ob === 'mandatory' && !!due; const dueSoon = due === '30 Nov 2026';
     const hoursLabel = lengthLabel(row); const MD = MEDIA[id]; const isPeer = source === 'Peer contribution';
@@ -212,7 +211,7 @@ export class Logic {
       id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
       isMedia: !!MD, mediaLine: MD ? format + ' · ' + MD.len + ' · ' + MD.by : '', isPeer, peerLine: isPeer ? 'Made by a colleague · peer-reviewed' : '',
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
-      stateLabel: state === 'in-progress' ? 'In progress · ' + pct + '%' : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
+      stateLabel: changes ? 'Changes requested' : state === 'in-progress' ? 'In progress · ' + pct + '%' : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
       dueLabel: hasDue ? 'Due ' + due : (m && m.si <= this.myStage() + 1 ? 'By ' + m.stage + ' stage' : ''), dueColor: hasDue ? (dueSoon ? '#9a3d0c' : '#7a5000') : '#8b918a',
       meta: source + ' · ' + hoursLabel + ' · ' + LEVELS[lvl - 1] + ' · L' + lvl + (cpd ? ' · ' + cpd + ' CPD' : ''),
@@ -489,7 +488,7 @@ export class Logic {
       rating: 'Ratings and notes are not available yet', notes: [] as { initials: string; who: string; text: string }[],
       frac: d0.pct / 100, hoursDone: (Math.round(d0.hours * d0.pct / 100 * 10) / 10) + ' h', hoursText: 'logged of ' + d0.hoursLabel,
       kv: [{ k: 'Format', v: d0.format }, { k: 'Source', v: d0.source }, { k: 'Effort', v: d0.hoursLabel }, { k: 'Level', v: d0.lvlLabel }, { k: 'CPD units', v: d0.cpd ? d0.cpd + (d0.cpd === 1 ? ' unit' : ' units') : 'None' }, { k: 'Deadline', v: d0.hasDue ? d0.due : 'None set' }, { k: 'Counts toward', v: d0.domLabel + ' · hours' }],
-      canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || d0.state === 'in-progress',
+      canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || (d0.state === 'in-progress' && d0.pct < 100),
       canAsk: d0.state === 'in-progress',
       approvalNote: d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
       canAcceptIt: this.canAccept(d0.state), paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
@@ -562,7 +561,7 @@ export class Logic {
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
       projects: ['Me · Projects & evaluations', 'Projects & evaluations'], profile: ['Me · My profile', 'My profile'], map: ['Me · ' + [this.subject.stage, bl].filter(Boolean).join(' · '), 'My growth map'], library: ['Me · Library', 'Library'],
-      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminKb: ['Administration · Knowledge library', 'Knowledge library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'], create: ['Me · Create & share', 'Create & share'],
+      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], approvals: ['Counsellor · approvals', 'Waiting for you'], adminLib: ['Administration · Learning library', 'Learning library'], adminKb: ['Administration · Knowledge library', 'Knowledge library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'], create: ['Me · Create & share', 'Create & share'],
     };
     const hubDock = sel && sel.type === 'hub' ? (() => {
       const di = DOMAINS.findIndex((d) => d[0] === sel.id); const list = items.filter((it) => it.dom === sel.id);
@@ -588,7 +587,7 @@ export class Logic {
       navMap: s.screen === 'map' || (s.screen === 'detail' && s.origin === 'map'), navLib: s.screen === 'library' || (s.screen === 'detail' && s.origin === 'library'), navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), canManageUsers: this.canManageUsers(), showUsers: this.isAdmin(), goUsers: () => this.go('users'),
       navProj: s.screen === 'projects' || (s.screen === 'detail' && s.origin === 'projects'), navProfile: s.screen === 'profile' || (s.screen === 'detail' && s.origin === 'profile'),
       goMap: () => this.go('map'), goLibrary: () => this.go('library'), goTeam: () => this.go('team'), goAdminLib: () => this.go('adminLib'), goAdminMap: () => this.go('adminMap'), goProj: () => this.go('projects'), goProfile: () => this.go('profile'),
-      goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : s.origin === 'create' ? '← Back to Create & share' : '← Back to library',
+      goBack: () => this.go(s.origin), backLabel: s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : s.origin === 'create' ? '← Back to Create & share' : s.origin === 'approvals' ? '← Back to approvals' : '← Back to library',
       libCount: String(LEARN.length), projCount: String(PROJECTS.length), pendingLabel: pendingN ? pendingN + ' pending' : '', noPending: pendingN === 0,
       toastHelp: () => this.say(this.subject.counsellor ? 'Prototype: opens a message to ' + this.counsellorFull() + ', your counsellor' : 'No counsellor yet · an admin can assign one in User management'),
       askLabel: this.subject.counsellor ? 'Ask ' + this.counsellorFirst() : 'Ask your counsellor',
@@ -606,6 +605,7 @@ export class Logic {
       marks: [this.levels.every((l) => l > 0) ? 'All nine domains touched' : '', items.some((it) => it.state === 'accepted' && it.format === 'Certification') ? 'First certification' : ''].filter(Boolean),
       ...kbVals(this),
       ...createVals(this),
+      ...recordVals(this, d0),
       // library
       libLead: LEARN.length + ' learnings across nine domains · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),
       obOptions: [opt('all', 'All'), opt('mandatory', 'Mandatory'), opt('advised', 'Advised'), opt('chosen', 'Chosen'), opt('open', 'Open')], libOb: s.libOb, setLibOb: (v: string) => this.setState({ libOb: v }),
@@ -617,8 +617,7 @@ export class Logic {
       // detail
       det, noteOpen: s.noteOpen, toggleNote: () => this.setState({ noteOpen: !s.noteOpen }), saveNote: () => { this.setState({ noteOpen: false }); this.say('Note posted · visible to colleagues on this learning'); },
       ratingOptions: [1, 2, 3, 4, 5].map((n) => opt(String(n), String(n))), myRating: s.myRating, setRating: (v: string) => this.setState({ myRating: v }),
-      acceptIt: () => this.accept(d0.id, d0.title), addToPath: () => this.addToPath(d0.id), logHours: () => this.logHours(d0),
-      askApprove: () => this.persist(() => saveProgress(this.subject.id, d0.id, { state: 'submitted', pct: 100 }), 'Sent to ' + this.counsellorFull() + ' · they see the hours you logged'),
+      addToPath: () => this.addToPath(d0.id), logHours: () => this.logHours(d0), askApprove: () => submit(this, d0),
       // projects & profile
       projLead: PROJECTS.length + ' engagements since Sep 2025 · ' + PROJECTS.filter((p) => p.dims).length + ' evaluated · synced from staffing and the performance tool. Advice from each evaluation lands in the projects cloud on your map.',
       projList, pr, requestEval: () => this.say('Prototype: sends an evaluation request through the performance tool · the evaluator is reminded after 10 days'),
@@ -639,6 +638,7 @@ export class Logic {
         const initials = m.name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
         return {
           id: m.id, initials, name: m.name, grade: [m.stage || 'No stage', m.businessLine || 'No line'].join(' · '), readinessLabel: t.readiness + '%', barW: t.readiness + '%', hours: t.hours,
+          lastActive: lastActivityLabel(lastActivity(m.data.progress), new Date()),
           mandStatus: t.overdue ? 'clarification' : 'accepted', mandLabel: t.overdue ? t.overdue + ' overdue' : 'On track', mandIcon: t.overdue ? 'dot' : 'check',
           cells: t.levels.map((v, i) => ({ v: 'L' + v, bg: HEAT[v], fg: v >= 4 ? '#fff' : v >= 2 ? '#1a1d18' : '#5a6058', overdue: t.overdueDomains.includes(DOMAINS[i][0]), title: DOMAINS[i][1] + ' · L' + v })),
           open: () => open(m.id),
@@ -681,11 +681,8 @@ export class Logic {
     if (this.subject.data.progress[id]?.chosen) return;
     this.persist(() => saveProgress(this.subject.id, id, { chosen: true }), 'Added to your path · it now shows on your map with a green ring');
   }
-  logHours(it: Item) {
-    const np = Math.min(100, Math.round(it.pct + 100 / it.hours));
-    this.persist(() => saveProgress(this.subject.id, it.id, { state: np >= 100 ? 'submitted' : 'in-progress', pct: np }),
-      np >= 100 ? 'All hours logged · sent to ' + this.counsellorFull() + ' for acceptance' : '1 hour logged · ' + np + '% of ' + it.hoursLabel);
-  }
+  // The last hour submits only when the format's evidence rule is met (recordVals.logHour).
+  logHours(it: Item) { logHour(this, it); }
   greeting() {
     const a = this.privateData().ambitions.length, i = this.privateData().interests.length;
     const plural = (n: number, w: string) => n + ' ' + w + (n === 1 ? '' : 's');

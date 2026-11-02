@@ -1,42 +1,49 @@
-// Per-user learner data in Supabase (learner_learnings, ambitions, interests, learner_prefs).
-// RLS lets the person write their own rows; admins and counsellors may only read them.
+// Per-user learner data in Supabase (learner_learnings, ambitions, interests, learner_prefs, learning_decisions).
+// RLS lets the person write their own rows; admins and counsellors may only read them. Decisions are written by
+// public.decide_learning() (recordStore) and by the database when a podcast or reel completes itself.
 import { supabase } from './supabase';
 import type { LearnState, Progress } from '../logic/learner';
+import type { Decision, Verdict } from '../logic/record';
 import type { Ambition, Interest } from '../types';
 
-export type LearnerData = { progress: Progress; ambitions: Ambition[]; interests: Interest[]; prefs: { initials: string; color: string } };
+// decisions: the acceptance record (F2), every decision on this person's learnings.
+export type LearnerData = { progress: Progress; ambitions: Ambition[]; interests: Interest[]; prefs: { initials: string; color: string }; decisions?: Decision[] };
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 
 export async function loadLearner(userId: string): Promise<LearnerData> {
-  const [l, a, i, p] = await Promise.all([
-    supabase.from('learner_learnings').select('learning_id, state, pct, chosen').eq('user_id', userId),
+  const [l, a, i, p, d] = await Promise.all([
+    supabase.from('learner_learnings').select('learning_id, state, pct, chosen, submitted_at, updated_at, evidence_note, evidence_link, evidence_ref').eq('user_id', userId),
     supabase.from('ambitions').select('id, text, horizon, domains, source').eq('user_id', userId).order('created_at'),
     supabase.from('interests').select('label, domain').eq('user_id', userId).order('created_at'),
     supabase.from('learner_prefs').select('avatar_initials, avatar_color').eq('user_id', userId).maybeSingle(),
+    supabase.from('learning_decisions').select('learning_id, verdict, comment, decided_by, decided_by_name, decided_at, evidence').eq('user_id', userId).order('decided_at'),
   ]);
-  [l.error, a.error, i.error, p.error].forEach(fail);
+  [l.error, a.error, i.error, p.error, d.error].forEach(fail);
   const progress: Progress = {};
-  (l.data || []).forEach((r) => { progress[r.learning_id] = { state: r.state as LearnState, pct: r.pct, chosen: r.chosen }; });
+  (l.data || []).forEach((r) => {
+    progress[r.learning_id] = { state: r.state as LearnState, pct: r.pct, chosen: r.chosen, submittedAt: r.submitted_at ?? null, updatedAt: r.updated_at ?? null,
+      evidence: { note: r.evidence_note || '', link: r.evidence_link || '', ref: r.evidence_ref || '' } };
+  });
   return {
     progress,
     ambitions: (a.data || []).map((r) => ({ id: String(r.id), text: r.text, horizon: r.horizon || '', doms: r.domains || [], from: r.source || '' })),
     interests: (i.data || []).map((r) => ({ label: r.label, dom: r.domain })),
     prefs: { initials: p.data?.avatar_initials || '', color: p.data?.avatar_color || '' },
+    decisions: (d.data || []).map((r) => ({
+      learningId: r.learning_id, verdict: r.verdict as Verdict, comment: r.comment || '', by: r.decided_by ?? null, byName: r.decided_by_name || '', at: r.decided_at,
+      evidence: { note: r.evidence?.note || '', link: r.evidence?.link || '', ref: r.evidence?.ref || '' },
+    })),
   };
 }
 
-// Atomic insert-or-update of your own progress row (save_learning); only the given fields change.
-export async function saveProgress(_userId: string, learningId: string, patch: Partial<{ state: LearnState; pct: number; chosen: boolean }>) {
-  fail((await supabase.rpc('save_learning', { p_learning_id: learningId, p_state: patch.state ?? null, p_pct: patch.pct ?? null, p_chosen: patch.chosen ?? null })).error);
-}
-
-// A counsellor or managing admin accepts a submitted learning; the database allows nothing else.
-export async function acceptLearning(userId: string, learningId: string) {
-  const { data, error } = await supabase.from('learner_learnings').update({ state: 'accepted' })
-    .eq('user_id', userId).eq('learning_id', learningId).eq('state', 'submitted').select('learning_id');
-  fail(error);
-  if (!data || !data.length) throw new Error('This learning is no longer waiting for acceptance');
+// Atomic insert-or-update of your own progress row (save_learning); only the given fields change. Evidence fields are
+// sent only when given ('' clears one); the database checks the format's evidence rule when the state is submitted.
+export async function saveProgress(_userId: string, learningId: string, patch: Partial<{ state: LearnState; pct: number; chosen: boolean; note: string; link: string; ref: string }>) {
+  fail((await supabase.rpc('save_learning', {
+    p_learning_id: learningId, p_state: patch.state ?? null, p_pct: patch.pct ?? null, p_chosen: patch.chosen ?? null,
+    ...(patch.note !== undefined && { p_note: patch.note }), ...(patch.link !== undefined && { p_link: patch.link }), ...(patch.ref !== undefined && { p_ref: patch.ref }),
+  })).error);
 }
 
 export async function addAmbition(userId: string, a: Omit<Ambition, 'id'>): Promise<Ambition> {

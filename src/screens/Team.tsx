@@ -2,7 +2,7 @@ import { Avatar, Hover, LinkButton, PageTitle, StatusChip, Tabs } from '../ds';
 import type { VM } from '../model';
 import type { Member } from '../logic/team';
 
-const ROSTER_COLS = 'minmax(0,2fr) minmax(0,1.6fr) 90px minmax(0,1.4fr) 70px';
+const ROSTER_COLS = 'minmax(0,2fr) minmax(0,1.6fr) 90px minmax(0,1.4fr) 120px 70px';
 const HEAT_COLS = '200px repeat(9,minmax(0,1fr))';
 
 export default function TeamScreen({ vm, members, error = null, onRetry, onOpen }: { vm: VM; members: Member[] | null; error?: string | null; onRetry?: () => void; onOpen: (id: string) => void }) {
@@ -19,10 +19,10 @@ export default function TeamScreen({ vm, members, error = null, onRetry, onOpen 
       )}
       {team && team.length > 0 && vm.teamTab === 'roster' && (
         <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflowX: 'auto' }}>
-          <div style={{ minWidth: 820 }}>
+          <div style={{ minWidth: 940 }}>
             <div style={{ display: 'grid', gridTemplateColumns: ROSTER_COLS, fontSize: 11.5, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em', borderBottom: '1px solid #e1e5dc', background: '#fafbf8' }}>
               <div style={{ padding: '10px 12px' }}>Person</div><div style={{ padding: '10px 12px' }}>Readiness for next stage</div><div style={{ padding: '10px 12px', textAlign: 'right' }}>Hours</div>
-              <div style={{ padding: '10px 12px' }}>Mandatory</div><div style={{ padding: '10px 12px' }} />
+              <div style={{ padding: '10px 12px' }}>Mandatory</div><div style={{ padding: '10px 12px' }}>Last activity</div><div style={{ padding: '10px 12px' }} />
             </div>
             {team!.map((p) => (
               <Hover key={p.id} hoverStyle={{ background: '#fafbf8' }} style={{ display: 'grid', gridTemplateColumns: ROSTER_COLS, alignItems: 'center', borderBottom: '1px solid #eef0ea' }}>
@@ -36,6 +36,7 @@ export default function TeamScreen({ vm, members, error = null, onRetry, onOpen 
                 </div>
                 <div style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.hours} h</div>
                 <div style={{ padding: '10px 12px' }}><StatusChip status={p.mandStatus} label={p.mandLabel} icon={p.mandIcon} /></div>
+                <div style={{ padding: '10px 12px', fontSize: 12.5, color: '#5a6058' }}>{p.lastActive}</div>
                 <div style={{ padding: '10px 12px' }}><LinkButton onClick={p.open}>Open</LinkButton></div>
               </Hover>
             ))}

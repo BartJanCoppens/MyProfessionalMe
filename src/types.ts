@@ -1,4 +1,5 @@
 import type { CreateData } from './logic/contribution';
+import type { QueueRow } from './lib/recordStore';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
 export type Learn = [string, string, string, number, string, string, number, number, string, string];
 // learning id, stage, obligation
@@ -42,7 +43,7 @@ export type CloudMeta = {
   anchor: number; frac: number; screen: Screen; goLabel: string;
 };
 
-export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'create' | 'adminLib' | 'adminMap' | 'adminKb' | 'users';
+export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'approvals' | 'create' | 'adminLib' | 'adminMap' | 'adminKb' | 'users';
 
 // What the signed-in account may administer (from public.user_roles).
 // isGeneral: General Admin, edits all content (catalogue, every curriculum audience, all bundles) but no users.
@@ -98,6 +99,12 @@ export type AppState = {
   // rubric ticks and comments per review (contribution|step|slot), the New form, the contribution being edited
   revChecks: Record<string, boolean[]>; revComment: Record<string, string>; nw: NewDraft; editing: string | null; nwKb: string[]; nwAiBusy: boolean;
   polForm: { lines: string[]; formats: string[]; domains: string[]; audiences: string[]; peers: string; expert: boolean; quality: boolean };
+  // Learning record (F2): the learner's evidence being typed for one learning (key subject|learning), before it is saved.
+  evDraft: { key: string; note: string; link: string; ref: string } | null;
+  // Decisions (F2, F3): the comment being written per submission (key person|learning).
+  decideNote: Record<string, string>;
+  // Approvals (F3): what waits for the signed-in person (not the viewed one), from waiting_submissions().
+  queue: QueueRow[] | null; queueError: string | null;
 };
 
 // The New content form. line and aud are '' for none; type is the format; lvl stays text for the select; outline and

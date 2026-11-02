@@ -1,5 +1,6 @@
 // The subject: the person whose growth map, library and profile the app shows.
-// Everyone sees themselves; System and Domain Admins can choose someone they manage (read-only).
+// Everyone sees themselves; System and Domain Admins can choose someone they manage, a General Admin anyone (read-only:
+// a General Admin reads every formal learning track to accept, Q7), a counsellor their counsellees.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabase';
 import { loadLearner } from './learnerStore';
@@ -23,7 +24,7 @@ const readPhoto = (userId: string) => { try { return localStorage.getItem(photoK
 
 export function useSubject(auth: Auth) {
   const me = auth.profile!;
-  const isAdmin = auth.access.isSystem || auth.access.domains.length > 0;
+  const isAdmin = auth.access.isSystem || !!auth.access.isGeneral || auth.access.domains.length > 0;
   const [people, setPeople] = useState<Person[] | null>(null);
   const [picked, setPicked] = useState<string>(() => readPick() || me.id);
   const [loaded, setLoaded] = useState<{ id: string; data: LearnerData } | null>(null);
@@ -45,7 +46,7 @@ export function useSubject(auth: Auth) {
     const list = people || [];
     const self = list.find((p) => p.id === me.id);
     const others = list.filter((p) => p.id !== me.id && (p.counsellor_id === me.id || (isAdmin
-      && (auth.access.isSystem || p.id !== me.counsellor_id || auth.access.domains.includes(p.business_line || '')))));
+      && (auth.access.isSystem || auth.access.isGeneral || p.id !== me.counsellor_id || auth.access.domains.includes(p.business_line || '')))));
     return (self ? [self] : []).concat(others).map((p) => ({ id: p.id, label: nameOf(p) + (p.id === me.id ? ' (you)' : '') }));
   }, [people, me.id, me.counsellor_id, isAdmin, auth.access]);
 

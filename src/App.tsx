@@ -14,6 +14,7 @@ import { AdminLibraryScreen, AddLearningDrawer } from './screens/Admin';
 import AdminMappingScreen from './screens/Mapping';
 import KnowledgeScreen from './screens/Knowledge';
 import CreateScreen from './screens/Create';
+import ApprovalsScreen from './screens/Approvals';
 import UsersScreen from './screens/Users';
 import SubjectPicker from './screens/SubjectPicker';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
@@ -25,6 +26,7 @@ import type { Content } from './lib/contentStore';
 import { LEARN_BY } from './data';
 import { useTeam } from './lib/useTeam';
 import { loadCreate } from './lib/contributionStore';
+import { loadQueue } from './lib/recordStore';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import type { Auth } from './lib/useAuth';
@@ -98,6 +100,12 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
     loadCreate(me).then((d) => { if (live) setRaw((s) => ({ ...s, create: d, createError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, createError: (err as Error).message })); });
     return () => { live = false; };
   }, [me]);
+  // What waits for the signed-in person to decide (approvals badge); reloads after each decision and on opening the screen.
+  useEffect(() => {
+    let live = true;
+    loadQueue().then((q) => { if (live) setRaw((s) => ({ ...s, queue: q, queueError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, queueError: (err as Error).message })); });
+    return () => { live = false; };
+  }, [me]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
   // One clock while a podcast or reel plays. Each tick reads the latest Logic, which saves progress and stops at the end.
   const logicRef = useRef(logic);
@@ -128,6 +136,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
           {vm.screen === 'detail' && <DetailScreen vm={vm} />}
           {vm.screen === 'projects' && <ProjectsScreen vm={vm} />}
           {vm.screen === 'profile' && <ProfileScreen vm={vm} fileRef={file} chatRef={chat} />}
+          {vm.appr && <ApprovalsScreen appr={vm.appr} onOpen={(id, lid) => { select(id); logic.openDetail(lid, 'approvals'); }} />}
           {vm.screen === 'team' && <TeamScreen vm={vm} members={team.members} error={team.error} onRetry={team.retry} onOpen={(id) => { select(id); logic.go('map'); }} />}
           {vm.screen === 'adminLib' && <AdminLibraryScreen vm={vm} />}
           {vm.screen === 'adminMap' && <AdminMappingScreen vm={vm} />}
@@ -171,6 +180,7 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
         <NavItem label="Create & share" badge={vm.reviewBadge} active={vm.navCreate} onClick={vm.goCreate} />
         <NavGroupHeader>Counsellor</NavGroupHeader>
         <NavItem label="My team" badge={teamOverdue} active={vm.navTeam} onClick={vm.goTeam} />
+        <NavItem label="Waiting for you" badge={vm.approvalsBadge} active={vm.navApprovals} onClick={vm.goApprovals} />
         {vm.showAdmin && (
           <>
             <NavGroupHeader>Administration</NavGroupHeader>

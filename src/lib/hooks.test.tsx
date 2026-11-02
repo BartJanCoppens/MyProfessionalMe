@@ -94,6 +94,13 @@ describe('useSubject', () => {
     const sys = renderHook(() => useSubject(authOf('u1', { isSystem: true }, { counsellor_id: 'c1' })));
     await waitFor(() => expect(sys.result.current.options.map((o) => o.id)).toEqual(['u1', 'c1', 'm1', 'x1']));
   });
+  it('offers a General Admin everyone, read-only, so they can accept (Q7)', async () => {
+    const { result } = renderHook(() => useSubject(authOf('u1', { isGeneral: true }, { counsellor_id: 'c1' })));
+    await waitFor(() => expect(result.current.options.map((o) => o.id)).toEqual(['u1', 'c1', 'm1', 'x1']));
+    act(() => result.current.select('c1'));
+    await waitFor(() => expect(result.current.subject?.id).toBe('c1'));
+    expect(result.current.subject!.readOnly).toBe(true);
+  });
   it('views someone else read-only and remembers the choice for this tab', async () => {
     const { result } = renderHook(() => useSubject(authOf('u1', { isSystem: true })));
     await waitFor(() => expect(result.current.subject?.id).toBe('u1'));

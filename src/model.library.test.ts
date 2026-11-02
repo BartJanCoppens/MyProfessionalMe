@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from 'react';
 import { BLS, DOMAINS, LEARN, MAPS0 } from './data';
 import * as learner from './lib/learnerStore';
+import * as record from './lib/recordStore';
 import { domainAdmin, flush, harness, member, person, stubWindow, systemAdmin, withProgress } from './test/harness';
 
 vi.mock('./lib/learnerStore', () => ({
   acceptLearning: vi.fn(async () => {}), addAmbition: vi.fn(async () => ({})), addInterest: vi.fn(async () => {}), removeAmbition: vi.fn(async () => {}),
   removeInterest: vi.fn(async () => {}), saveProgress: vi.fn(async () => {}), savePrefs: vi.fn(async () => {}), loadLearner: vi.fn(),
 }));
+vi.mock('./lib/recordStore', () => ({ decideLearning: vi.fn(async () => 'accepted'), loadQueue: vi.fn(async () => []) }));
 
 beforeEach(() => { stubWindow(); vi.clearAllMocks(); });
 
@@ -234,10 +236,10 @@ describe('adding to my path and asking approval', () => {
     expect(learner.saveProgress).not.toHaveBeenCalled();
   });
   it('asks the counsellor to approve', async () => {
-    const h = harness({ subject: person({ data: withProgress({ L7: ['in-progress', 40] }) }), state: { screen: 'detail', detailId: 'L7' } });
+    const h = harness({ subject: person({ data: withProgress({ L17: ['in-progress', 40] }) }), state: { screen: 'detail', detailId: 'L17' } });
     h.vm().askApprove();
     await flush();
-    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L7', { state: 'submitted', pct: 100 });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L17', { state: 'submitted', pct: 100 });
     expect(h.lastToast()).toBe('Sent to your counsellor · they see the hours you logged');
   });
 });
@@ -253,16 +255,16 @@ describe('accepting a submitted learning', () => {
   });
   it('accepts, reloads and names the person', async () => {
     const h = harness({ subject: counsellee, access: member('c1'), state: { detailId: 'L10' } });
-    h.vm().acceptIt();
+    h.vm().rec.decide!.accept();
     await flush();
-    expect(learner.acceptLearning).toHaveBeenCalledWith('p2', 'L10');
+    expect(record.decideLearning).toHaveBeenCalledWith('p2', 'L10', 'accepted', '');
     expect(h.reloadSubject).toHaveBeenCalled();
     expect(h.lastToast()).toBe('Accepted · “Structured problem solving” now counts toward Kim’s levels');
   });
   it('says so when the learning is no longer waiting', async () => {
-    vi.mocked(learner.acceptLearning).mockRejectedValueOnce(new Error('This learning is no longer waiting for acceptance'));
+    vi.mocked(record.decideLearning).mockRejectedValueOnce(new Error('This learning is no longer waiting for acceptance'));
     const h = harness({ subject: counsellee, access: member('c1'), state: { detailId: 'L10' } });
-    h.vm().acceptIt();
+    h.vm().rec.decide!.accept();
     await flush();
     expect(h.lastToast()).toBe('This learning is no longer waiting for acceptance');
   });

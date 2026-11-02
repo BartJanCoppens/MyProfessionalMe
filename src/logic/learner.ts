@@ -1,9 +1,11 @@
 // Values derived from one learner's own progress (no seeded persona).
 import { DOMAINS, LEVELS, STAGES } from '../data';
 import type { Learn } from '../types';
+import type { Evidence } from './record';
 
 export type LearnState = 'not-started' | 'in-progress' | 'submitted' | 'accepted';
-export type Progress = Record<string, { state: LearnState; pct: number; chosen: boolean }>;
+// submittedAt: the latest submission; updatedAt: the person's latest own change; evidence: what they attached (F2).
+export type Progress = Record<string, { state: LearnState; pct: number; chosen: boolean; submittedAt?: string | null; updatedAt?: string | null; evidence?: Evidence }>;
 
 // Level reached per domain (DOMAINS order): the highest level among accepted learnings, 0 if none.
 export function levelsByDomain(progress: Progress, learn: Learn[]): number[] {

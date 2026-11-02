@@ -10,6 +10,7 @@ import { initState, Logic } from '../model';
 import type { VM } from '../model';
 import * as content from '../lib/contentStore';
 import * as learner from '../lib/learnerStore';
+import * as record from '../lib/recordStore';
 import type { Subject } from '../lib/useSubject';
 import type { Member } from '../logic/team';
 import { cfg, emptyData, person, systemAdmin, withProgress } from '../test/harness';
@@ -22,6 +23,7 @@ import TeamScreen from './Team';
 import { AddLearningDrawer, AdminLibraryScreen } from './Admin';
 import AdminMappingScreen from './Mapping';
 import KnowledgeScreen from './Knowledge';
+import ApprovalsScreen from './Approvals';
 
 vi.mock('../data', async (orig) => {
   const d = await orig<typeof import('../data')>();
@@ -39,6 +41,7 @@ vi.mock('../lib/learnerStore', () => ({
   acceptLearning: vi.fn(async () => {}), addAmbition: vi.fn(async () => ({})), addInterest: vi.fn(async () => {}), removeAmbition: vi.fn(async () => {}),
   removeInterest: vi.fn(async () => {}), saveProgress: vi.fn(async () => {}), savePrefs: vi.fn(async () => {}), loadLearner: vi.fn(),
 }));
+vi.mock('../lib/recordStore', () => ({ decideLearning: vi.fn(async () => 'accepted'), loadQueue: vi.fn(async () => []) }));
 vi.mock('../lib/contentStore', async (orig) => ({ ...(await orig<object>()), saveLearning: vi.fn(async () => {}), removeLearning: vi.fn(async () => {}), publishMappings: vi.fn(async () => {}), saveBundleSoon: vi.fn(), saveBundleNow: vi.fn() }));
 
 type Refs = { file: RefObject<HTMLInputElement | null>; chat: RefObject<HTMLDivElement | null> };
@@ -121,14 +124,14 @@ describe('the learning detail screen', () => {
     expect(toast()).toMatch(/^Coming with the avatar studio$/);
   });
   it('asks for approval of a learning in progress', () => {
-    detail('L7', person({ data: withProgress({ L7: ['in-progress', 40] }) }));
+    detail('L17', person({ data: withProgress({ L17: ['in-progress', 40] }) }));
     click(/^Mark for review|^Ask/);
-    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L7', { state: 'submitted', pct: 100 });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L17', { state: 'submitted', pct: 100 });
   });
   it('lets the counsellor accept a submitted learning', async () => {
     detail('L10', person({ readOnly: true, counsellor: { id: 'c1', name: 'Sam Coach' }, data: withProgress({ L10: 'submitted' }) }), { isSystem: false, domains: [], userId: 'c1' });
     await act(async () => { click('Accept'); });
-    expect(learner.acceptLearning).toHaveBeenCalledWith('u1', 'L10');
+    expect(record.decideLearning).toHaveBeenCalledWith('u1', 'L10', 'accepted', '');
   });
   it('offers no rating or note form until notes are stored', () => {
     detail('L1');
@@ -215,6 +218,11 @@ describe('the team screen', () => {
     expect(screen.getByText('Analyst · Consulting')).toBeTruthy();
     click('Open');
     expect(onOpen).toHaveBeenCalledWith('m1');
+  });
+  it('shows each counsellee\'s last activity', () => {
+    team([kim]);
+    expect(screen.getByText('Last activity')).toBeTruthy();
+    expect(screen.getByText('No activity yet')).toBeTruthy();
   });
   it('shows levels by domain with overdue items', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -352,5 +360,59 @@ describe('the Knowledge library screen', () => {
     click('+ New bundle');
     expect(current.bundles[0].name).toBe('New bundle');
     expect(screen.getByPlaceholderText('Bundle name')).toBeTruthy();
+  });
+});
+
+describe('evidence and decisions on the learning detail (F2)', () => {
+  const detail = (id: string, subject: Subject, access: Access = { isSystem: false, domains: [], userId: subject.id }) => show((vm) => <DetailScreen vm={vm} />, { screen: 'detail', detailId: id }, subject, access);
+  it('lets the learner add a certificate link, then submit', async () => {
+    detail('L18', person({ data: withProgress({ L18: ['in-progress', 100] }) }));
+    expect(screen.getByText(/^Files are linked, not uploaded/)).toBeTruthy();
+    expect(screen.getByText('Add a link to your certificate or its number to submit')).toBeTruthy();
+    expect((screen.getByRole('button', { name: /^Ask/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByPlaceholderText(/^https:/), { target: { value: 'https://sharepoint.example/cert.pdf' } });
+    expect((screen.getByRole('button', { name: /^Ask/ }) as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => { click(/^Ask/); });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L18', { state: 'submitted', pct: 100, note: '', link: 'https://sharepoint.example/cert.pdf', ref: '' });
+  });
+  it('shows the counsellor the evidence and the requested changes stay with the learning', async () => {
+    const data = withProgress({ L18: 'submitted' });
+    data.progress.L18.evidence = { note: '', link: 'https://sharepoint.example/cert.pdf', ref: 'AZ-1' };
+    detail('L18', person({ readOnly: true, name: 'Kim Learner', counsellor: { id: 'c1', name: 'Sam Coach' }, data }), { isSystem: false, domains: [], userId: 'c1' });
+    expect(screen.getByRole('link', { name: 'https://sharepoint.example/cert.pdf' }).getAttribute('rel')).toBe('noopener noreferrer');
+    expect(screen.getByText('Certificate number · AZ-1')).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText('What is good, or what should change'), { target: { value: 'The link asks for a login; share it with the firm.' } });
+    await act(async () => { click('Request changes'); });
+    expect(record.decideLearning).toHaveBeenCalledWith('u1', 'L18', 'changes', 'The link asks for a login; share it with the firm.');
+  });
+  it('shows the learner what to change and the acceptance record', () => {
+    const decisions = [{ learningId: 'L3', verdict: 'changes' as const, comment: 'Name one idea you will apply.', by: 'c1', byName: 'Sam Coach', at: '2026-10-30T10:00:00Z', evidence: { note: '', link: '', ref: '' } }];
+    detail('L3', person({ data: withProgress({ L3: ['in-progress', 100] }, { decisions }) }));
+    expect(screen.getByText('Changes requested by Sam Coach · 30 Oct 2026')).toBeTruthy();
+    expect(screen.getAllByText('Name one idea you will apply.').length).toBe(2);
+    expect(screen.getByText('Acceptance record')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Resubmit for acceptance' })).toBeTruthy();
+  });
+});
+
+describe('the approvals screen (F3)', () => {
+  const rows = [{ userId: 'p2', name: 'Kim Learner', line: 'Audit', learningId: 'L3', submittedAt: '2026-10-30T08:00:00Z', evidence: { note: 'What I took from it.', link: '', ref: '' }, lastActivity: null }];
+  const approvals = (state: Partial<AppState>) => { const onOpen = vi.fn(); show((vm) => vm.appr && <ApprovalsScreen appr={vm.appr} onOpen={onOpen} />, { screen: 'approvals', ...state }); return onOpen; };
+  it('lists what waits with its evidence, decides and opens the person\'s app', async () => {
+    const onOpen = approvals({ queue: rows });
+    expect(screen.getByText('What I took from it.')).toBeTruthy();
+    expect(screen.getByText(/last activity: no activity yet/)).toBeTruthy();
+    click('Open in Kim’s app');
+    expect(onOpen).toHaveBeenCalledWith('p2', 'L3');
+    await act(async () => { click('Accept'); });
+    expect(record.decideLearning).toHaveBeenCalledWith('p2', 'L3', 'accepted', '');
+    expect(screen.getByText('Nothing waits for you')).toBeTruthy();
+  });
+  it('says when nothing waits, and when the queue did not load', () => {
+    approvals({ queue: [] });
+    expect(screen.getByText('Nothing waits for you')).toBeTruthy();
+    cleanup();
+    approvals({ queueError: 'permission denied' });
+    expect(screen.getByText('The approvals did not load')).toBeTruthy();
   });
 });

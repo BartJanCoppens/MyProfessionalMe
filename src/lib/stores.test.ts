@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUNDLES0 } from '../data';
 import { db, has, op } from '../test/fakeSupabase';
 import { loadContent, publishMappings, removeLearning, saveBundle, saveBundleNow, saveBundleSoon, saveLearning } from './contentStore';
-import { acceptLearning, addAmbition, addInterest, loadLearner, removeAmbition, removeInterest, savePrefs, saveProgress } from './learnerStore';
+import { addAmbition, addInterest, loadLearner, removeAmbition, removeInterest, savePrefs, saveProgress } from './learnerStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 
@@ -132,15 +132,17 @@ describe('saving bundles', () => {
 describe('learner data', () => {
   it('loads progress, ambitions, interests and avatar preferences', async () => {
     db.answer((c) => ({
-      learner_learnings: { data: [{ learning_id: 'L1', state: 'accepted', pct: 100, chosen: false }] },
+      learner_learnings: { data: [{ learning_id: 'L1', state: 'accepted', pct: 100, chosen: false, submitted_at: '2026-10-30T09:00:00Z', updated_at: '2026-10-30T09:00:00Z', evidence_note: null, evidence_link: 'https://x.example/c.pdf', evidence_ref: null }] },
+      learning_decisions: { data: [{ learning_id: 'L1', verdict: 'accepted', comment: null, decided_by: 'c1', decided_by_name: 'Sam Coach', decided_at: '2026-10-31T10:00:00Z', evidence: { link: 'https://x.example/c.pdf' } }] },
       ambitions: { data: [{ id: 5, text: 'Lead', horizon: null, domains: null, source: null }] },
       interests: { data: [{ label: 'Data', domain: 'tec' }] },
       learner_prefs: { data: null },
     } as Record<string, object>)[c.table]);
     expect(await loadLearner('u1')).toEqual({
-      progress: { L1: { state: 'accepted', pct: 100, chosen: false } },
+      progress: { L1: { state: 'accepted', pct: 100, chosen: false, submittedAt: '2026-10-30T09:00:00Z', updatedAt: '2026-10-30T09:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' } } },
       ambitions: [{ id: '5', text: 'Lead', horizon: '', doms: [], from: '' }],
       interests: [{ label: 'Data', dom: 'tec' }], prefs: { initials: '', color: '' },
+      decisions: [{ learningId: 'L1', verdict: 'accepted', comment: '', by: 'c1', byName: 'Sam Coach', at: '2026-10-31T10:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' } }],
     });
     expect(db.calls.every((c) => has(c, 'eq', 'user_id', 'u1'))).toBe(true);
   });
@@ -152,14 +154,9 @@ describe('learner data', () => {
     await saveProgress('u1', 'L3', { chosen: true });
     expect(db.calls[0]).toEqual({ table: 'rpc:save_learning', steps: [['args', [{ p_learning_id: 'L3', p_state: null, p_pct: null, p_chosen: true }]]] });
   });
-  it('accepts only a submitted learning', async () => {
-    db.answer(() => ({ data: [{ learning_id: 'L3' }] }));
-    await acceptLearning('u2', 'L3');
-    const c = db.on('learner_learnings')[0];
-    expect(c.steps[0]).toEqual(['update', [{ state: 'accepted' }]]);
-    expect(has(c, 'eq', 'state', 'submitted')).toBe(true);
-    db.answer(() => ({ data: [] }));
-    await expect(acceptLearning('u2', 'L3')).rejects.toThrow('This learning is no longer waiting for acceptance');
+  it('sends evidence with save_learning only when given', async () => {
+    await saveProgress('u1', 'L18', { state: 'submitted', pct: 100, link: 'https://x.example/c.pdf', note: '' });
+    expect(db.calls[0].steps[0][1][0]).toEqual({ p_learning_id: 'L18', p_state: 'submitted', p_pct: 100, p_chosen: null, p_note: '', p_link: 'https://x.example/c.pdf' });
   });
   it('adds and removes ambitions and interests', async () => {
     db.answer(() => ({ data: { id: 12 } }));
