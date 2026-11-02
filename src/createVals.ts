@@ -8,17 +8,17 @@ import type { AppState, Bundle, NewDraft } from './types';
 import { retrieve } from './logic/okf';
 import type { Hit } from './logic/okf';
 import {
-  CREATE_TYPES, KIND_LABEL, ROLE_OF_STEP, TAKE_MAX, allTopics, checksPass, contentChecks, daysWaiting, domainName, fmtDate, parseTopic, policyFor, policyLabel,
-  reviewBadge, rubricComplete, stageAt, stagesOf, topicKey, topicLong, topicOf,
+  CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
+  emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
 } from './logic/contribution';
-import type { Check, Contribution, CreateData, Grant, Policy, Review, Topic } from './logic/contribution';
+import type { Attrs, Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
 import { decideReview, loadCreate, removeDraft, removePolicy, saveDraft, savePolicy, submitContribution } from './lib/contributionStore';
 import type { DraftFields } from './lib/contributionStore';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
 const ST: Record<string, [string, string, string]> = { published: ['accepted', 'Published', 'check'], review: ['submitted', 'In review', 'dot'], changes: ['clarification', 'Changes requested', 'dot'], draft: ['not-started', 'Draft', 'dot'] };
 const RV: Record<string, [string, string, string]> = { approved: ['accepted', 'Approved', 'check'], changes: ['clarification', 'Changes requested', 'dot'], pending: ['in-progress', 'Reviewing', 'dot'], waiting: ['not-started', 'Waiting', 'dot'] };
-const EMPTY: CreateData = { contributions: [], reviews: [], grants: [], policies: [], peers: 0 };
+const EMPTY: CreateData = { contributions: [], reviews: [], rules: [], policies: [], peers: 0 };
 const first = (name: string) => name.split(/\s+/)[0] || name;
 const ini = (name: string) => name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 const revKey = (r: Review) => r.contribution_id + '|' + r.step + '|' + r.slot;
@@ -26,33 +26,31 @@ const dot = (c: Check) => ({ text: c.text, dot: c.ok ? '#86BC25' : '#e0a100', fg
 const names = (list: string[]) => (list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0] || '');
 const without = <T,>(o: Record<string, T>, k: string) => { const n = { ...o }; delete n[k]; return n; };
 
-// A format topic fixes the type; a domain topic fixes the domain.
-function applyTopic(nw: NewDraft): NewDraft {
-  const t = parseTopic(nw.topic);
-  return !t ? nw : t.kind === 'format' ? { ...nw, type: t.value } : t.kind === 'domain' ? { ...nw, dom: t.value } : nw;
+// A fresh form that one of the person's rules allows: the first rule's first values, the person's own line when the
+// rule leaves lines open.
+export function blankDraft(rules: RuleParts[] | null, myLine: string | null): NewDraft {
+  const r = rules && rules[0];
+  const line = !r ? myLine || '' : r.lines.length ? (myLine && r.lines.includes(myLine) ? myLine : r.lines[0]) : myLine || 'Consulting';
+  return { line, aud: r?.audiences[0] || '', type: r?.formats[0] || 'Reel', title: '', dom: r?.domains[0] || 'prof', lvl: '2', stage: 'Senior consultant', take: '',
+    outline: [], sources: [], ai: false, aiNote: '' };
 }
-export function blankDraft(grants: Grant[] | null): NewDraft {
-  const g = grants && grants[0];
-  return applyTopic({ topic: g ? topicKey(topicOf(g)) : '', type: 'Reel', title: '', dom: 'prof', lvl: '2', stage: 'Senior consultant', take: '', outline: [], sources: [], ai: false, aiNote: '' });
-}
-// The form as it applies: its topic must be one of the person's grants (the first one otherwise).
-// Once submitted, the topic, format and domain stay as they were (the database refuses a change).
+const attrsOfDraft = (nw: NewDraft): Attrs => ({ line: nw.line || null, format: nw.type, domain: nw.dom, audience: nw.aud || null });
+// The form as it applies. Once submitted, line, format, domain and audience stay as they were (the database refuses a change).
 function effective(s: AppState): NewDraft {
   const ed = submittedEdit(s);
-  if (ed) return { ...s.nw, topic: topicKey(topicOf(ed)), type: ed.type, dom: ed.domain };
-  const grants = s.create?.grants || [], keys = grants.map((g) => topicKey(topicOf(g)));
-  return applyTopic({ ...s.nw, topic: keys.includes(s.nw.topic) ? s.nw.topic : keys[0] || '' });
+  return ed ? { ...s.nw, line: ed.business_line || '', aud: ed.audience || '', type: ed.type, dom: ed.domain } : s.nw;
 }
+// The person's own line, for the default and the bundles they may use (none while viewing someone else).
+const myLine = (L: Logic) => (L.subject.readOnly ? null : L.subject.businessLine);
 function submittedEdit(s: AppState) {
   const ed = s.editing ? s.create?.contributions.find((c) => c.id === s.editing) : null;
   return ed && ed.status !== 'draft' ? ed : null;
 }
 const fieldsOf = (nw: NewDraft, bundles: string[]): DraftFields => {
-  const t = parseTopic(nw.topic)!;
-  return { topic_kind: t.kind, topic_value: t.value, type: nw.type, title: nw.title.trim().slice(0, 120), domain: nw.dom, level: +nw.lvl, audience_stage: nw.stage,
+  return { business_line: nw.line || null, audience: nw.aud || null, type: nw.type, title: nw.title.trim().slice(0, 120), domain: nw.dom, level: +nw.lvl, audience_stage: nw.stage,
     takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: nw.ai, bundle_ids: bundles };
 };
-const draftOf = (c: Contribution): NewDraft => ({ topic: topicKey(topicOf(c)), type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
+const draftOf = (c: Contribution): NewDraft => ({ line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
   outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted, aiNote: c.ai_assisted ? 'AI-assisted draft' : '' });
 
 // Bundles a creator may draw on: indexed, open to creators, Tax & Legal ones for that line only.
@@ -94,7 +92,9 @@ async function afterPublish(L: Logic, status: string) { if (status === 'publishe
 async function saveForm(L: Logic, submit: boolean) {
   if (busy(L)) return;
   const s = L.state, nw = effective(s);
-  if (!parseTopic(nw.topic)) { L.say('Ask an admin for creation rights first'); return; }
+  const rules = s.create?.rules || [];
+  if (!rules.length) { L.say('Ask an admin for creation rights first'); return; }
+  if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
   if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources }))) { L.say('Clear the open checks first'); return; }
   const again = !!s.editing && s.create?.contributions.find((c) => c.id === s.editing)?.status === 'changes';
   let id = s.editing;
@@ -102,7 +102,7 @@ async function saveForm(L: Logic, submit: boolean) {
   try {
     id = await saveDraft(fieldsOf(nw, s.nwKb), id);
     const status = submit ? await submitContribution(id) : 'draft', d = await reloaded(L), saved = id;
-    L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: saved, editing: null, nw: blankDraft(d.grants), nwKb: [], revChecks: st.revChecks }));
+    L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: saved, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], revChecks: st.revChecks }));
     L.say(doneText(status, d, saved, again));
     await afterPublish(L, status);
   } catch (err) { failed(L, err, { editing: id }); }
@@ -112,6 +112,7 @@ async function submitSaved(L: Logic, c: Contribution) {
   if (busy(L)) return;
   const bad = contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources }).find((x) => !x.ok);
   if (bad) { L.say(bad.text + ' · edit it first'); return; }
+  if (!mayCreate(L.state.create?.rules || [], attrsOf(c))) { L.say('Not allowed by your creation rules · ask an admin'); return; }
   L.setState({ createBusy: true });
   try {
     const status = await submitContribution(c.id), d = await reloaded(L);
@@ -183,7 +184,7 @@ function createScreen(L: Logic) {
   const s = L.state, me = L.access.userId, d = s.create || EMPTY, now = new Date();
   const byId = new Map(d.contributions.map((c) => [c.id, c]));
   const revsOf = (id: string) => d.reviews.filter((r) => r.contribution_id === id).sort((a, b) => a.step - b.step || a.slot - b.slot);
-  const canCreate = d.grants.length > 0, isAdmin = L.isAdmin();
+  const canCreate = d.rules.length > 0, isAdmin = L.isAdmin();
   const setState = (p: Partial<AppState>) => L.setState(p);
 
   // Mine
@@ -211,29 +212,36 @@ function createScreen(L: Logic) {
   const rs = r0 ? reviewDetail(L, byId.get(r0.contribution_id)!, r0, d, now) : null;
 
   // New
-  const nw = effective(s), topic = parseTopic(nw.topic), policy = policyFor(d.policies, topic);
-  const setNw = (p: Partial<NewDraft>) => L.setState((st) => ({ nw: applyTopic({ ...effective(st), ...p }) }));
+  const nw = effective(s), attrs = attrsOfDraft(nw), policy = policyFor(d.policies, attrs), allowed = allowedValues(d.rules), ok = mayCreate(d.rules, attrs);
+  const setNw = (p: Partial<NewDraft>) => L.setState((st) => ({ nw: { ...effective(st), ...p } }));
   const checks = contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources });
-  const line = L.subject.readOnly ? null : L.subject.businessLine;
+  const line = myLine(L);
   const editing = s.editing ? byId.get(s.editing) : null, locked = !!submittedEdit(s);
+  const fresh = () => blankDraft(d.rules, line);
+  // Pristine forms start from the person's rules (they load after the first render).
+  const pristine = !s.editing && !s.nw.title && !s.nw.take;
   const short = policy.peers > d.peers;
   const nwRoute = [
     ...Array.from({ length: policy.peers }, (_, k) => ({ n: String(k + 1), name: 'Peer reviewer ' + (k + 1) + ' of ' + policy.peers, role: line ? 'A colleague in ' + line : 'A colleague in your business line' })),
     ...(policy.expert ? [{ n: '', name: 'Subject-matter expert', role: domainName(nw.dom) + ' · or a System Admin when none is named' }] : []),
     ...(policy.quality ? [{ n: '', name: 'Learning team', role: 'Quality & risk · a General Admin' }] : []),
   ].map((x, k) => ({ ...x, n: String(k + 1) }));
+  // Pickers offer what at least one rule allows; a submitted contribution keeps its own values. Every contribution has a line.
+  const lineOptions = (locked ? [nw.line] : allowed.lines).map((v) => ({ value: v, label: v }));
+  const audOptions = (locked ? [nw.aud] : (allowed.noAudience ? [''] : []).concat(allowed.audiences)).map((v) => ({ value: v, label: v ? audienceName(v) : 'None' }));
 
-  // Review requirements (admins)
-  const canSet = (t: Topic) => L.access.isSystem || !!L.access.isGeneral || (t.kind === 'line' && L.access.domains.includes(t.value));
+  // Review requirements (admins): System and General Admins any; a Domain Admin only with lines, all of them theirs.
+  const anyLine = L.access.isSystem || !!L.access.isGeneral;
+  const canSet = (r: RuleParts) => withinLines(r, anyLine, L.access.domains);
   const policyRows = d.policies.map((p) => {
-    const t = topicOf(p), editable = canSet(t), save = (patch: Partial<Policy>) => writePolicy(L, () => savePolicy({ ...p, ...patch }), 'Saved · ' + topicLong(t) + ' · ' + policyLabel({ ...p, ...patch }));
-    return { key: topicKey(t), label: topicLong(t), summary: policyLabel(p), editable, peers: String(p.peers), expert: p.expert, quality: p.quality,
+    const editable = canSet(p), words = ruleSentence(p), save = (patch: Partial<Policy>) => writePolicy(L, () => savePolicy({ ...p, ...patch }), 'Saved · ' + words + ' · ' + policyLabel({ ...p, ...patch }));
+    return { key: String(p.id), label: words, summary: policyLabel(p), editable, peers: String(p.peers), expert: p.expert, quality: p.quality,
       setPeers: (v: string) => save({ peers: +v }), setExpert: (v: boolean) => save({ expert: v }), setQuality: (v: boolean) => save({ quality: v }),
-      remove: () => writePolicy(L, () => removePolicy(t), 'Removed · ' + topicLong(t) + ' follows the full review again') };
+      remove: () => writePolicy(L, () => removePolicy(p.id), 'Removed · ' + words) };
   });
-  const taken = new Set(d.policies.map((p) => topicKey(topicOf(p))));
-  const polTopics = allTopics().filter((t) => canSet(t) && !taken.has(topicKey(t)));
-  const pf = s.polForm, pfTopic = parseTopic(pf.topic && polTopics.some((t) => topicKey(t) === pf.topic) ? pf.topic : polTopics[0] ? topicKey(polTopics[0]) : '');
+  const pf = s.polForm, pfParts: RuleParts = { lines: pf.lines, formats: pf.formats, domains: pf.domains, audiences: pf.audiences };
+  const pfLines = anyLine ? PART_VALUES.lines : PART_VALUES.lines.filter((l) => L.access.domains.includes(l));
+  const pfProblem = ruleProblem(pfParts, anyLine, L.access.domains);
 
   const tabs = [{ value: 'mine', label: 'My contributions · ' + mine.length }, { value: 'review', label: 'Review for peers · ' + openN }, { value: 'new', label: editing ? 'Edit content' : 'New content' }]
     .concat(isAdmin ? [{ value: 'rules', label: 'Review requirements' }] : []);
@@ -242,25 +250,29 @@ function createScreen(L: Logic) {
   return {
     loading: !s.create && !s.createError, error: s.createError, retry: () => L.reloadCreate(), busy: s.createBusy,
     readOnly: L.subject.readOnly, readOnlyNote: 'Create & share shows your own work, not ' + L.subject.name + '’s. Go back to yourself to create, submit or review.',
-    lead: 'Make a reel, podcast, guide or case write-up for your colleagues. Each topic sets its own review: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
-    canCreate, noGrantText: 'You have no creation rights yet. Ask an admin for creation rights: a Domain Admin or General Admin can let you create for a business line, an industry or technology, a format or a domain.',
-    goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: blankDraft(d.grants), nwKb: [] }) : L.say('Ask an admin for creation rights first')),
+    lead: 'Make a reel, podcast, guide or case write-up for your colleagues. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
+    canCreate, noGrantText: 'You have no creation rights yet. Ask an admin for creation rights: a Domain Admin or General Admin gives you rules such as “Consulting or Tax & Legal · Podcast”.',
+    myRules: d.rules.map((r) => ruleSentence(r)),
+    goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [] }) : L.say('Ask an admin for creation rights first')),
     // The full flow, as the design shows it. Peers come from the author's business line (the design said "same domain").
     reviewSteps: REVIEW_STAGES.map((n, k) => ({ n: String(k + 1), name: n, who: k === 1 ? 'Two colleagues in your business line · 5 working days' : REVIEW_WHO[k], bg: k === 4 ? '#86BC25' : '#1a1d18', fg: k === 4 ? '#10180a' : '#fff' })),
-    tabs, tab, setTab: (v: string) => (v === 'new' && !canCreate ? L.say('Ask an admin for creation rights first') : v === 'rules' && !isAdmin ? undefined : setState({ createTab: v })),
+    tabs, tab, setTab: (v: string) => (v === 'new' && !canCreate ? L.say('Ask an admin for creation rights first') : v === 'rules' && !isAdmin ? undefined
+      : setState(v === 'new' && pristine ? { createTab: v, nw: fresh() } : { createTab: v })),
     tabMine: tab === 'mine', tabReview: tab === 'review', tabNew: tab === 'new', tabRules: tab === 'rules',
     contribList, cs, noMine: !mine.length, noMineText: canCreate ? 'Nothing yet. Make your first piece in New content.' : 'Nothing yet.',
     revList, rs, noRev: !mineRev.length, noRevText: 'No reviews for you yet. When a colleague submits, you may be asked as a peer, an expert or for quality and risk.',
     // New
     editing: !!editing, editingNote: editing ? (editing.status === 'changes' ? 'Editing after changes were requested. Submitting sends it back to the reviewer who asked.' : 'Editing your draft.') : '',
-    nw, topicOptions: locked && topic ? [{ value: nw.topic, label: topicLong(topic) }] : d.grants.map((g) => ({ value: topicKey(topicOf(g)), label: topicLong(topicOf(g)) })), nwSetTopic: (e: Sel) => setNw({ topic: e.target.value }),
-    topicNote: locked ? 'Submitted once: the topic, format and domain stay as they are.' : topic ? (topic.kind === 'format' ? 'Your topic fixes the format.' : topic.kind === 'domain' ? 'Your topic fixes the domain.' : '') + ' Review for this topic: ' + policyLabel(policy) + '.' : '',
+    nw, locked, lockedNote: locked ? 'Submitted once: business line, format, domain and audience stay as they are.' : '',
+    lineOptions, nwSetLine: (e: Sel) => setNw({ line: e.target.value }), audOptions, nwSetAud: (e: Sel) => setNw({ aud: e.target.value }),
+    nwAllowed: ok, nwRuleWarn: ok ? '' : 'Not allowed by your creation rules', nwRulesText: 'Your creation rules: ' + d.rules.map((r) => ruleSentence(r)).join('; ') + '.',
+    nwPolicyNote: 'Review for this combination: ' + policyLabel(policy) + '.',
     newTypes: CREATE_TYPES.map((x) => {
-      const on = nw.type === x[0], fixed = (locked || topic?.kind === 'format') && !on;
+      const on = nw.type === x[0], fixed = !on && (locked || !allowed.formats.includes(x[0]));
       return { label: x[0], desc: x[1], bg: on ? '#1a1d18' : '#fff', fg: on ? '#fff' : fixed ? '#b3b8ae' : '#1a1d18', bd: on ? '#1a1d18' : '#d5dacf',
-        pick: () => (fixed ? L.say(locked ? 'The format stays as submitted' : 'Your topic is ' + topic!.value + '; the format follows it') : setNw({ type: x[0] })) };
+        pick: () => (fixed ? L.say(locked ? 'The format stays as submitted' : 'Not in your creation rules') : setNw({ type: x[0] })) };
     }),
-    domainOptions: (locked || topic?.kind === 'domain' ? [nw.dom] : CREATE_DOMAINS).map((k) => ({ value: k, label: domainName(k) })),
+    domainOptions: (locked ? [nw.dom] : allowed.domains).map((k) => ({ value: k, label: domainName(k) })),
     levelOptions: LEVELS.map((l, i) => ({ value: String(i + 1), label: 'L' + (i + 1) + ' · ' + l })), stageOptions: STAGES.map((x) => ({ value: x, label: x })),
     nwSetTitle: (e: Input) => setNw({ title: e.target.value }), nwSetDom: (e: Sel) => setNw({ dom: e.target.value }), nwSetLvl: (e: Sel) => setNw({ lvl: e.target.value }),
     nwSetStage: (e: Sel) => setNw({ stage: e.target.value }), nwSetTake: (e: Area) => setNw({ take: e.target.value }),
@@ -273,34 +285,35 @@ function createScreen(L: Logic) {
     nwDraftAi: () => draftAi(L), nwAiBusy: s.nwAiBusy, nwAiLabel: s.nwAiBusy ? 'Drafting' : 'Draft with AI', nwHasAi: nw.ai && (nw.outline.length > 0 || nw.sources.length > 0), nwAiNote: nw.aiNote,
     nwAiOutline: nw.outline.map((o, k) => ({ n: (k + 1) + '.', text: o })), nwAiCites: nw.sources.map((c, k) => ({ n: String(k + 1), text: c })),
     nwFileText: nw.type + ' · the file itself (video, audio or document) is attached later; this prototype stores the text only.',
-    nwChecks: checks.map(dot), nwBlocked: !checksPass(checks) || s.createBusy || !topic,
+    nwChecks: checks.map(dot), nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
-    nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: blankDraft(d.grants), nwKb: [], createTab: 'mine' }),
-    nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this topic needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement for this topic.' : '',
+    nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: fresh(), nwKb: [], createTab: 'mine' }),
+    nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this combination needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement.' : '',
     // Review requirements
-    policyRows, defaultPolicy: 'Every other topic: ' + policyLabel(policyFor([], null)) + '.',
-    polTopicOptions: polTopics.map((t) => ({ value: topicKey(t), label: topicLong(t) })), polCanAdd: polTopics.length > 0,
-    polForm: { ...pf, topic: pfTopic ? topicKey(pfTopic) : '' }, peerOptions: ['0', '1', '2'].map((v) => ({ value: v, label: v === '0' ? 'No peers' : v === '1' ? '1 peer' : '2 peers' })),
+    policyRows, defaultPolicy: 'When no requirement matches: ' + policyLabel(policyFor([], null)) + '. When several match, the strictest counts.',
+    polGroups: PARTS.map((part) => ({ part, label: PART_LABEL[part], chips: (part === 'lines' ? pfLines : PART_VALUES[part]).map((v) => ({ value: v, label: valueName(part, v), on: pf[part].includes(v),
+      toggle: () => L.setState((st) => ({ polForm: { ...st.polForm, ...togglePart({ lines: st.polForm.lines, formats: st.polForm.formats, domains: st.polForm.domains, audiences: st.polForm.audiences }, part, v) } })) })) })),
+    polPreview: pfProblem || ruleSentence(pfParts), polProblem: pfProblem,
+    polForm: pf, peerOptions: ['0', '1', '2'].map((v) => ({ value: v, label: v === '0' ? 'No peers' : v === '1' ? '1 peer' : '2 peers' })),
     polSet: (p: Partial<AppState['polForm']>) => L.setState((st) => ({ polForm: { ...st.polForm, ...p } })),
-    polAdd: () => (pfTopic ? writePolicy(L, () => savePolicy({ topic_kind: pfTopic.kind, topic_value: pfTopic.value, peers: +pf.peers, expert: pf.expert, quality: pf.quality }),
-      'Saved · ' + topicLong(pfTopic) + ' · ' + policyLabel({ peers: +pf.peers, expert: pf.expert, quality: pf.quality })) : undefined),
-    rulesLead: (L.access.isSystem || L.access.isGeneral ? 'You can set the review requirement of any topic.' : 'You can set the review requirement of ' + L.access.domains.join(', ') + '.')
-      + ' A contribution follows the requirement of its topic when it is submitted; with no review at all it is published on submit, after the content checks.',
-    kindLabel: KIND_LABEL,
+    polAdd: () => (pfProblem ? L.say(pfProblem) : writePolicy(L, async () => {
+      await savePolicy({ ...pfParts, peers: +pf.peers, expert: pf.expert, quality: pf.quality });
+      L.setState({ polForm: { ...emptyParts(), peers: '2', expert: true, quality: true } });
+    }, 'Saved · ' + ruleSentence(pfParts) + ' · ' + policyLabel({ peers: +pf.peers, expert: pf.expert, quality: pf.quality }))),
+    rulesLead: (anyLine ? 'You can set review requirements for anything.' : 'You can set review requirements within ' + L.access.domains.join(', ') + '.')
+      + ' A requirement applies to every contribution it matches (same parts as creation rules); a contribution is routed by the strictest one when it is submitted, and with no review at all it is published on submit, after the content checks.',
   };
 }
-
-const CREATE_DOMAINS = ['tech', 'acad', 'pers', 'prof', 'ind', 'reg', 'corp', 'tec', 'lead'];
 
 function dateLine(c: Contribution) {
   return c.status === 'published' ? 'Published ' + fmtDate(c.published_at) : c.status === 'draft' ? 'Edited ' + fmtDate(c.updated_at) : 'Submitted ' + fmtDate(c.submitted_at);
 }
 
 function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
-  const st = ST[c.status], stages = stagesOf(c, revs, d.policies), policy = policyFor(d.policies, topicOf(c));
+  const st = ST[c.status], stages = stagesOf(c, revs, d.policies), policy = policyFor(d.policies, attrsOf(c));
   const learning = c.learning_id ? LEARN_BY[c.learning_id] : null;
   const base = {
-    id: c.id, eyebrow: c.type + ' · ' + domainName(c.domain) + ' · L' + c.level + ' · ' + topicLong(topicOf(c)), title: c.title || 'Untitled ' + c.type.toLowerCase(), date: dateLine(c) + ' · for ' + c.audience_stage,
+    id: c.id, eyebrow: c.type + ' · ' + domainName(c.domain) + ' · L' + c.level + ' · ' + attrsLabel(attrsOf(c)), title: c.title || 'Untitled ' + c.type.toLowerCase(), date: dateLine(c) + ' · for ' + c.audience_stage,
     st: st[0], stLabel: st[1], stIcon: st[2], stages: stages.map((x) => x.name), stage: stageAt(stages, c.step), hasTake: !!c.takeaway, takeaway: c.takeaway,
     outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft' : '',
     hasRevs: revs.length > 0,
@@ -309,7 +322,7 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
       return { key: revKey(r), name: r.reviewer_name, role: ROLE_OF_STEP[r.step], init: ini(r.reviewer_name), avBg: r.verdict === 'waiting' ? '#b3b8ae' : '#1a1d18', st: v[0], stLabel: v[1], stIcon: v[2],
         comment: r.comment ? r.comment + ' ' : r.verdict === 'waiting' ? 'Starts when the step before is done. ' : '', date: fmtDate(r.decided_at) };
     }),
-    isDraft: c.status === 'draft', draftNote: 'Only you can see a draft. Reviewers are assigned when you submit; this topic needs ' + policyLabel(policy) + '.',
+    isDraft: c.status === 'draft', draftNote: 'Only you can see a draft. Reviewers are assigned when you submit; it needs ' + policyLabel(policy) + '.',
     isPub: c.status === 'published', pubNote: c.learning_id ? 'In the library as ' + c.learning_id + ' · admins can map it to paths like any learning.' : 'Published.',
     mainLabel: '', mainVariant: 'primary', main: () => {}, secondLabel: '', second: () => {}, thirdLabel: '', third: () => {},
   };
@@ -321,9 +334,9 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
 }
 
 function reviewDetail(L: Logic, c: Contribution, r: Review, d: CreateData, now: Date) {
-  const s = L.state, key = revKey(r), chk = s.revChecks[key] || [], com = s.revComment[key] || '', policy = policyFor(d.policies, topicOf(c));
+  const s = L.state, key = revKey(r), chk = s.revChecks[key] || [], com = s.revComment[key] || '', policy = policyFor(d.policies, attrsOf(c));
   const open = r.verdict === 'pending' && c.status === 'review';
-  // A peer reads only their own review row, so the number of peers comes from the topic's policy.
+  // A peer reads only their own review row, so the number of peers comes from the effective requirement.
   const role = r.step === 1 ? 'Peer reviewer ' + r.slot + ' of ' + Math.max(r.slot, policy.peers, d.reviews.filter((x) => x.contribution_id === c.id && x.step === 1).length) : ROLE_OF_STEP[r.step];
   const next = r.step === 1 ? (policy.expert ? 'subject-matter expert' : policy.quality ? 'quality & risk' : '') : r.step === 2 ? (policy.quality ? 'quality & risk' : '') : '';
   const doneText = c.status === 'published' ? 'Published · it is in the library now.'

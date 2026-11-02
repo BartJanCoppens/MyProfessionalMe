@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from 'react';
 import * as store from './lib/contributionStore';
 import { draftFromPassages } from './createVals';
-import type { CreateData, Grant } from './logic/contribution';
+import { emptyParts } from './logic/contribution';
+import type { CreateData, PolicyRow, Rule, RuleParts } from './logic/contribution';
 import { contribution, review } from './test/contributions';
 import { domainAdmin, flush, harness, member, person, stubWindow, systemAdmin } from './test/harness';
 import type { AppState } from './types';
@@ -19,8 +20,10 @@ vi.mock('./lib/learnerStore', () => ({
 }));
 
 const ev = (value: string) => ({ target: { value } }) as ChangeEvent<HTMLInputElement & HTMLSelectElement & HTMLTextAreaElement>;
-const grant = (topic_kind: Grant['topic_kind'], topic_value: string): Grant => ({ user_id: 'u1', topic_kind, topic_value });
-const data = (o: Partial<CreateData> = {}): CreateData => ({ contributions: [], reviews: [], grants: [grant('line', 'Consulting')], policies: [], peers: 3, ...o });
+let ids = 0;
+const rule = (o: Partial<RuleParts>): Rule => ({ id: ++ids, user_id: 'u1', ...emptyParts(), ...o });
+const pol = (o: Partial<RuleParts>, peers: number, expert: boolean, quality: boolean): PolicyRow => ({ id: ++ids, ...emptyParts(), ...o, peers, expert, quality });
+const data = (o: Partial<CreateData> = {}): CreateData => ({ contributions: [], reviews: [], rules: [rule({ lines: ['Consulting'] })], policies: [], peers: 3, ...o });
 const cs = (o: { data?: CreateData; state?: Partial<AppState>; access?: ReturnType<typeof member>; readOnly?: boolean } = {}) => {
   const h = harness({ access: o.access || member('u1'), subject: person(o.readOnly ? { id: 'u9', name: 'Other Person', readOnly: true } : {}), state: { screen: 'create', create: o.data || data(), ...o.state } });
   vi.mocked(store.loadCreate).mockImplementation(async () => h.state.create!);
@@ -55,7 +58,7 @@ describe('navigation', () => {
 
 describe('no creation rights', () => {
   it('says to ask an admin and keeps the New tab closed', () => {
-    const h = cs({ data: data({ grants: [] }) });
+    const h = cs({ data: data({ rules: [] }) });
     expect(h.c().canCreate).toBe(false);
     expect(h.c().noGrantText).toMatch(/^You have no creation rights yet\. Ask an admin for creation rights/);
     h.c().setTab('new');
@@ -65,32 +68,53 @@ describe('no creation rights', () => {
     expect(h.c().tabNew).toBe(false);
   });
   it('falls back to Mine when the New tab is open without rights', () => {
-    expect(cs({ data: data({ grants: [] }), state: { createTab: 'new' } }).c().tab).toBe('mine');
+    expect(cs({ data: data({ rules: [] }), state: { createTab: 'new' } }).c().tab).toBe('mine');
   });
 });
 
 describe('the New tab', () => {
-  const grants = [grant('line', 'Consulting'), grant('format', 'Podcast'), grant('domain', 'reg')];
-  it('offers exactly the person\'s grants as topics, the first one chosen', () => {
-    const h = cs({ data: data({ grants }), state: { createTab: 'new' } });
-    expect(h.c().topicOptions.map((o) => o.label)).toEqual(['Business line · Consulting', 'Format · Podcast', 'Domain · Regulations']);
-    expect(h.c().nw.topic).toBe('line|Consulting');
-    expect(h.c().newTypes.map((t) => t.label)).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up']);
+  const rules = () => [rule({ lines: ['Consulting', 'Tax & Legal'], formats: ['Podcast'] }), rule({ lines: ['Consulting'], formats: ['Micro-guide'], domains: ['reg'], audiences: ['ind:energy'] })];
+  const open = (h: ReturnType<typeof cs>) => { h.c().setTab('new'); return h; };
+  it('starts from the first rule, on the person\'s own line', () => {
+    const h = open(cs({ data: data({ rules: rules() }) }));
+    expect(h.c().nw).toMatchObject({ line: 'Consulting', type: 'Podcast', aud: '' });
+    expect(h.c().nwAllowed).toBe(true);
+    expect(h.c().nwRulesText).toBe('Your creation rules: Consulting or Tax & Legal · Podcast; Consulting · Micro-guide · Regulations · Energy & utilities.');
     expect(h.c().stageOptions).toHaveLength(7);
   });
-  it('lets a format topic fix the type and a domain topic fix the domain', () => {
-    const h = cs({ data: data({ grants }), state: { createTab: 'new' } });
-    h.c().nwSetTopic(ev('format|Podcast'));
-    expect(h.c().nw.type).toBe('Podcast');
+  it('offers only values some rule allows', () => {
+    const h = open(cs({ data: data({ rules: rules() }) }));
+    expect(h.c().lineOptions.map((o) => o.value)).toEqual(['Consulting', 'Tax & Legal']);
+    // the first rule leaves audiences open, so every one is on offer, and none
+    expect(h.c().audOptions.map((o) => o.label).slice(0, 2)).toEqual(['None', 'Energy & utilities']);
+    expect(h.c().audOptions).toHaveLength(8);
+    expect(h.c().domainOptions).toHaveLength(9);
+    expect(h.c().newTypes.map((t) => [t.label, t.fg === '#b3b8ae'])).toEqual([['Reel', true], ['Podcast', false], ['Micro-guide', false], ['Case write-up', true]]);
     h.c().newTypes[0].pick();
+    expect(h.lastToast()).toBe('Not in your creation rules');
     expect(h.c().nw.type).toBe('Podcast');
-    expect(h.lastToast()).toBe('Your topic is Podcast; the format follows it');
-    h.c().nwSetTopic(ev('domain|reg'));
-    expect(h.c().nw.dom).toBe('reg');
-    expect(h.c().domainOptions.map((o) => o.value)).toEqual(['reg']);
+  });
+  it('says when the combination is not allowed and blocks submit', () => {
+    const h = open(cs({ data: data({ rules: rules() }) }));
+    h.c().nwSetTitle(ev('VAT basics')); h.c().nwSetTake(ev('Four boxes tell you who pays.'));
+    expect(h.c().nwBlocked).toBe(false);
+    h.c().nwSetLine(ev('Tax & Legal')); h.c().nwSetAud(ev('ind:energy'));
+    expect(h.c().nwAllowed).toBe(true);
+    h.c().nwSetDom(ev('reg'));
+    expect(h.c().nwAllowed).toBe(true);
+    // Micro-guide is only allowed by the second rule, which needs Consulting
+    h.c().newTypes[2].pick();
+    expect(h.c().nwRuleWarn).toBe('Not allowed by your creation rules');
+    expect(h.c().nwBlocked).toBe(true);
+    h.c().nwSubmit();
+    expect(h.lastToast()).toBe('Not allowed by your creation rules');
+    expect(store.saveDraft).not.toHaveBeenCalled();
+    h.c().nwSetLine(ev('Consulting'));
+    expect(h.c().nwAllowed).toBe(true);
+    expect(h.c().nwRuleWarn).toBe('');
   });
   it('runs the content checks live and blocks submit until they pass', () => {
-    const h = cs({ state: { createTab: 'new' } });
+    const h = open(cs());
     expect(h.c().nwBlocked).toBe(true);
     h.c().nwSetTitle(ev('Pricing lessons'));
     h.c().nwSetTake(ev('What we learned at Delcroix.'));
@@ -102,25 +126,27 @@ describe('the New tab', () => {
     h.c().nwSetTake(ev('Price the change, not the hours.'));
     expect(h.c().nwBlocked).toBe(false);
   });
-  it('shows the route of the topic\'s policy and warns when peers are short', () => {
-    const d = data({ grants: [grant('format', 'Micro-guide'), grant('line', 'Consulting')], policies: [{ topic_kind: 'format', topic_value: 'Micro-guide', peers: 0, expert: false, quality: true }], peers: 1 });
-    const h = cs({ data: d, state: { createTab: 'new' } });
+  it('shows the route of the strictest requirement and warns when peers are short', () => {
+    const d = data({ rules: [rule({ lines: ['Consulting'] })], policies: [pol({ formats: ['Micro-guide'] }, 0, false, true), pol({ domains: ['reg'] }, 1, false, false)], peers: 0 });
+    const h = open(cs({ data: d }));
+    h.state.nw.type = 'Micro-guide';
     expect(h.c().nwRoute.map((r) => r.name)).toEqual(['Learning team']);
     expect(h.c().nwRouteWarn).toBe('');
-    h.c().nwSetTopic(ev('line|Consulting'));
-    expect(h.c().nwRoute.map((r) => r.name)).toEqual(['Peer reviewer 1 of 2', 'Peer reviewer 2 of 2', 'Subject-matter expert', 'Learning team']);
-    expect(h.c().nwRouteWarn).toMatch(/^Only 1 colleague can peer-review you; this topic needs 2\./);
+    h.c().nwSetDom(ev('reg'));
+    expect(h.c().nwRoute.map((r) => r.name)).toEqual(['Peer reviewer 1 of 1', 'Learning team']);
+    expect(h.c().nwPolicyNote).toBe('Review for this combination: 1 peer, quality & risk.');
+    expect(h.c().nwRouteWarn).toMatch(/^Only 0 colleagues can peer-review you; this combination needs 1\./);
   });
-  it('labels the button Publish when the topic needs no review', () => {
-    const d = data({ policies: [{ topic_kind: 'line', topic_value: 'Consulting', peers: 0, expert: false, quality: false }] });
-    const h = cs({ data: d, state: { createTab: 'new' } });
+  it('labels the button Publish when no review is required', () => {
+    const d = data({ policies: [pol({ lines: ['Consulting'] }, 0, false, false)] });
+    const h = open(cs({ data: d }));
     expect(h.c().nwSubmitLabel).toBe('Publish');
     expect(h.c().nwRouteEmpty).toBe(true);
   });
 });
 
 describe('submitting', () => {
-  const filled = { createTab: 'new', nw: { topic: 'line|Consulting', type: 'Reel', title: 'Pricing lessons', dom: 'prof', lvl: '3', stage: 'Manager', take: 'Price the change, not the hours.', outline: [], sources: [], ai: false, aiNote: '' } };
+  const filled = { createTab: 'new', nw: { line: 'Consulting', aud: '', type: 'Reel', title: 'Pricing lessons', dom: 'prof', lvl: '3', stage: 'Manager', take: 'Price the change, not the hours.', outline: [], sources: [], ai: false, aiNote: '' } };
   it('saves the draft, submits it, reloads and names the reviewers', async () => {
     const h = cs({ state: filled });
     vi.mocked(store.submitContribution).mockImplementation(async () => {
@@ -129,7 +155,7 @@ describe('submitting', () => {
       return 'review';
     });
     h.c().nwSubmit(); await flush(10);
-    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ topic_kind: 'line', topic_value: 'Consulting', type: 'Reel', title: 'Pricing lessons', domain: 'prof', level: 3, audience_stage: 'Manager' }), null);
+    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ business_line: 'Consulting', audience: null, type: 'Reel', title: 'Pricing lessons', domain: 'prof', level: 3, audience_stage: 'Manager' }), null);
     expect(store.submitContribution).toHaveBeenCalledWith('new1');
     expect(h.state.createTab).toBe('mine');
     expect(h.state.contribSel).toBe('new1');
@@ -166,11 +192,12 @@ describe('submitting', () => {
 describe('My contributions', () => {
   it('lists the person\'s own work and shows the stepper of its route', () => {
     const d = data({
-      contributions: [contribution({ id: 'a', status: 'review', step: 3, topic_kind: 'format', topic_value: 'Micro-guide', type: 'Micro-guide', submitted_at: '2026-10-30T09:00:00Z' }), contribution({ id: 'theirs', author_id: 'u5' })],
+      contributions: [contribution({ id: 'a', status: 'review', step: 3, audience: 'ind:energy', type: 'Micro-guide', submitted_at: '2026-10-30T09:00:00Z' }), contribution({ id: 'theirs', author_id: 'u5' })],
       reviews: [review({ contribution_id: 'a', step: 1, verdict: 'approved', comment: 'Clear.', decided_at: '2026-10-31T09:00:00Z' }), review({ contribution_id: 'a', step: 3, reviewer_id: 'u4', reviewer_name: 'Lee Quality' }), review({ contribution_id: 'theirs', reviewer_id: 'u1' })],
     });
     const c = cs({ data: d }).c();
     expect(c.contribList.map((x) => x.id)).toEqual(['a']);
+    expect(c.cs!.eyebrow).toBe('Micro-guide · Personal growth · L2 · Consulting · Energy & utilities');
     expect(c.cs!.stages).toEqual(['Draft', 'Peer review', 'Quality & risk', 'Published']);
     expect(c.cs!.stage).toBe(2);
     expect(c.cs!.revs.map((r) => [r.name, r.role, r.stLabel])).toEqual([['Sam Peer', 'Peer reviewer', 'Approved'], ['Lee Quality', 'Quality & risk', 'Reviewing']]);
@@ -178,10 +205,10 @@ describe('My contributions', () => {
     expect(c.cs!.mainLabel).toBe('');
   });
   it('shows a draft with its policy, submit, edit and delete', async () => {
-    const d = data({ contributions: [contribution({ id: 'd1' })], policies: [{ topic_kind: 'line', topic_value: 'Consulting', peers: 1, expert: false, quality: true }] });
+    const d = data({ contributions: [contribution({ id: 'd1' })], policies: [pol({ lines: ['Consulting'] }, 1, false, false), pol({ formats: ['Reel'] }, 0, false, true)] });
     const h = cs({ data: d });
     expect(h.c().cs!.stages).toEqual(['Draft', 'Peer review', 'Quality & risk', 'Published']);
-    expect(h.c().cs!.draftNote).toMatch(/this topic needs 1 peer, quality & risk\.$/);
+    expect(h.c().cs!.draftNote).toMatch(/it needs 1 peer, quality & risk\.$/);
     h.c().cs!.second();
     expect(h.state.createTab).toBe('new');
     expect(h.state.editing).toBe('d1');
@@ -195,17 +222,26 @@ describe('My contributions', () => {
     expect(store.submitContribution).not.toHaveBeenCalled();
     expect(h.lastToast()).toBe('Write the one takeaway · edit it first');
   });
-  it('lets the author edit after changes were requested, with topic, format and domain fixed', () => {
-    const d = data({ contributions: [contribution({ id: 'ch', status: 'changes', step: 1, topic_kind: 'format', topic_value: 'Reel' })], grants: [grant('line', 'Consulting')], reviews: [review({ contribution_id: 'ch', verdict: 'changes', comment: 'Shorter.' })] });
+  it('lets the author edit after changes were requested, with line, format, domain and audience fixed', () => {
+    const d = data({ contributions: [contribution({ id: 'ch', status: 'changes', step: 1, audience: 'ind:energy' })], rules: [rule({ lines: ['Consulting', 'Audit'] })], reviews: [review({ contribution_id: 'ch', verdict: 'changes', comment: 'Shorter.' })] });
     const h = cs({ data: d });
     expect(h.c().cs!.mainLabel).toBe('Edit and resubmit');
     h.c().cs!.main();
-    expect(h.c().nw.topic).toBe('format|Reel');
-    expect(h.c().topicOptions).toEqual([{ value: 'format|Reel', label: 'Format · Reel' }]);
+    expect(h.c().locked).toBe(true);
+    expect(h.c().lineOptions).toEqual([{ value: 'Consulting', label: 'Consulting' }]);
+    expect(h.c().audOptions).toEqual([{ value: 'ind:energy', label: 'Energy & utilities' }]);
     expect(h.c().domainOptions.map((o) => o.value)).toEqual(['pers']);
     expect(h.c().nwSubmitLabel).toBe('Resubmit');
-    h.c().nwSetTopic(ev('line|Consulting'));
-    expect(h.c().nw.topic).toBe('format|Reel');
+    h.c().nwSetLine(ev('Audit'));
+    expect(h.c().nw.line).toBe('Consulting');
+    h.c().newTypes[1].pick();
+    expect(h.lastToast()).toBe('The format stays as submitted');
+  });
+  it('refuses to submit a saved draft that the rules no longer allow', () => {
+    const h = cs({ data: data({ contributions: [contribution({ business_line: 'Audit' })] }) });
+    h.c().cs!.main();
+    expect(store.submitContribution).not.toHaveBeenCalled();
+    expect(h.lastToast()).toBe('Not allowed by your creation rules · ask an admin');
   });
   it('opens a published piece in the library', () => {
     const d = data({ contributions: [contribution({ status: 'published', step: 4, learning_id: 'L45', published_at: '2026-10-03T09:00:00Z' })] });
@@ -268,7 +304,7 @@ describe('Review for peers', () => {
 describe('View as (read-only)', () => {
   it('writes nothing', async () => {
     const d = data({ contributions: [contribution({ id: 'd1' }), contribution({ id: 'r1', author_id: 'u5', status: 'review', step: 1 })], reviews: [review({ contribution_id: 'r1', reviewer_id: 'u1', rubric: [] })] });
-    const h = cs({ data: d, readOnly: true, state: { revChecks: { 'r1|1|1': [true, true, true, true] }, nw: { topic: 'line|Consulting', type: 'Reel', title: 'Ok title', dom: 'prof', lvl: '2', stage: 'Analyst', take: 'Fine.', outline: [], sources: [], ai: false, aiNote: '' } } });
+    const h = cs({ data: d, readOnly: true, state: { revChecks: { 'r1|1|1': [true, true, true, true] }, nw: { line: 'Consulting', aud: '', type: 'Reel', title: 'Ok title', dom: 'prof', lvl: '2', stage: 'Analyst', take: 'Fine.', outline: [], sources: [], ai: false, aiNote: '' } } });
     expect(h.c().readOnly).toBe(true);
     h.c().cs!.main(); h.c().nwSubmit(); h.c().nwDraft(); h.c().rs!.approve(); h.c().cs!.third(); h.c().nwDraftAi();
     await flush(10);
@@ -282,28 +318,37 @@ describe('Review requirements (admins)', () => {
     expect(cs().c().tabs.map((t) => t.value)).toEqual(['mine', 'review', 'new']);
     expect(cs({ access: systemAdmin('u1') }).c().tabs.map((t) => t.value)).toEqual(['mine', 'review', 'new', 'rules']);
   });
-  it('lets a Domain Admin set their own line only', async () => {
-    const d = data({ policies: [{ topic_kind: 'line', topic_value: 'Audit', peers: 1, expert: true, quality: true }] });
+  it('lets a Domain Admin set requirements within their own lines only', async () => {
+    const d = data({ policies: [pol({ lines: ['Audit'] }, 1, true, true), pol({ lines: ['Consulting'], formats: ['Podcast'] }, 1, false, true)] });
     const h = cs({ data: d, access: domainAdmin(['Consulting'], 'u1'), state: { createTab: 'rules' } });
-    expect(h.c().polTopicOptions.map((o) => o.value)).toEqual(['line|Consulting']);
-    expect(h.c().policyRows[0].editable).toBe(false);
+    expect(h.c().policyRows.map((p) => [p.label, p.editable])).toEqual([['Audit', false], ['Consulting · Podcast', true]]);
+    expect(h.c().polGroups[0].chips.map((c) => c.value)).toEqual(['Consulting']);
+    expect(h.c().polProblem).toBe('Pick at least one value');
+    h.c().polGroups[1].chips[0].toggle();
+    expect(h.c().polProblem).toBe('Pick at least one of your business lines, and only yours');
+    h.c().polAdd();
+    expect(store.savePolicy).not.toHaveBeenCalled();
+    h.c().polGroups[0].chips[0].toggle();
+    expect(h.c().polPreview).toBe('Consulting · Reel');
     h.c().polSet({ peers: '1', expert: false });
     h.c().polAdd(); await flush(10);
-    expect(store.savePolicy).toHaveBeenCalledWith({ topic_kind: 'line', topic_value: 'Consulting', peers: 1, expert: false, quality: true });
-    expect(h.lastToast()).toBe('Saved · Business line · Consulting · 1 peer, quality & risk');
+    expect(store.savePolicy).toHaveBeenCalledWith({ lines: ['Consulting'], formats: ['Reel'], domains: [], audiences: [], peers: 1, expert: false, quality: true });
+    expect(h.lastToast()).toBe('Saved · Consulting · Reel · 1 peer, quality & risk');
+    expect(h.state.polForm.lines).toEqual([]);
   });
   it('lets a System Admin change and remove any requirement', async () => {
-    const d = data({ policies: [{ topic_kind: 'domain', topic_value: 'reg', peers: 2, expert: true, quality: true }] });
-    const h = cs({ data: d, access: systemAdmin('u1'), state: { createTab: 'rules' } });
+    const p = pol({ domains: ['reg'] }, 2, true, true);
+    const h = cs({ data: data({ policies: [p] }), access: systemAdmin('u1'), state: { createTab: 'rules' } });
+    expect(h.c().policyRows[0].label).toBe('Any line · Regulations');
     h.c().policyRows[0].setPeers('0'); await flush(10);
-    expect(store.savePolicy).toHaveBeenCalledWith({ topic_kind: 'domain', topic_value: 'reg', peers: 0, expert: true, quality: true });
+    expect(store.savePolicy).toHaveBeenCalledWith({ ...p, peers: 0 });
     h.c().policyRows[0].remove(); await flush(10);
-    expect(store.removePolicy).toHaveBeenCalledWith({ kind: 'domain', value: 'reg' });
+    expect(store.removePolicy).toHaveBeenCalledWith(p.id);
   });
 });
 
 describe('Draft with AI', () => {
-  const nw = { topic: 'line|Consulting', type: 'Reel', title: 'Pillar Two scope', dom: 'reg', lvl: '2', stage: 'Analyst', take: '', outline: [], sources: [], ai: false, aiNote: '' };
+  const nw = { line: 'Consulting', aud: '', type: 'Reel', title: 'Pillar Two scope', dom: 'reg', lvl: '2', stage: 'Analyst', take: '', outline: [], sources: [], ai: false, aiNote: '' };
   it('asks for a bundle first', async () => {
     const h = cs({ state: { createTab: 'new', nw } });
     await h.c().nwDraftAi();

@@ -4,9 +4,10 @@ import { BUSINESS_LINES, manageUsers, PASSWORD_HINT, supabase, temporaryPassword
 import type { BusinessLine, Profile, Role } from '../lib/supabase';
 import type { Access } from '../types';
 import { DOMAINS, STAGES } from '../data';
-import { addGrant, loadExperts, loadGrants, removeGrant, setExpert } from '../lib/contributionStore';
-import { allTopics, topicKey, topicLong, topicOf } from '../logic/contribution';
-import type { Grant, Topic } from '../logic/contribution';
+import { addRule, loadExperts, loadRules, removeRule, setExpert } from '../lib/contributionStore';
+import { PARTS, PART_LABEL, PART_VALUES, emptyParts, ruleProblem, ruleSentence, togglePart, valueName, withinLines } from '../logic/contribution';
+import type { Rule, RuleParts } from '../logic/contribution';
+import RuleChips from './RuleChips';
 
 type User = Profile & { roles: Role[] };
 type Handover = { email: string; password: string; what: string };
@@ -16,13 +17,13 @@ const COLS = 'minmax(0,2.2fr) 150px 170px 190px minmax(0,2.4fr) 200px 160px 190p
 // A General Admin (no accounts to manage) lists everyone readable, to hand out creation rights.
 const fetchUsers = async (everyone = false) => {
   const [people, ids] = await Promise.all([fetchProfiles(), supabase.rpc('manageable_user_ids')]);
-  if (people.error || ids.error) return { data: null, grants: [] as Grant[], experts: {} as Record<string, string>, error: people.error || ids.error };
+  if (people.error || ids.error) return { data: null, grants: [] as Rule[], experts: {} as Record<string, string>, error: people.error || ids.error };
   const ok = new Set((ids.data as string[]) || []), data = (people.data || []).filter((p) => everyone || ok.has(p.id));
-  // Create & share: their creation grants, and the expert per domain (readable by everyone signed in).
+  // Create & share: their creation rules, and the expert per domain (readable by everyone signed in).
   try {
-    const [grants, experts] = await Promise.all([loadGrants(data.map((p) => p.id)), loadExperts()]);
+    const [grants, experts] = await Promise.all([loadRules(data.map((p) => p.id)), loadExperts()]);
     return { data, grants, experts, error: null };
-  } catch (err) { return { data, grants: [] as Grant[], experts: {} as Record<string, string>, error: { message: (err as Error).message } }; }
+  } catch (err) { return { data, grants: [] as Rule[], experts: {} as Record<string, string>, error: { message: (err as Error).message } }; }
 };
 const fetchProfiles = () => supabase.from('profiles')
   .select('id, email, full_name, business_line, must_change_password, created_at, career_stage, counsellor_id, roles:user_roles!user_roles_user_id_fkey(role, business_line)')
@@ -40,12 +41,12 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
   const [adding, setAdding] = useState(false);
   const [handover, setHandover] = useState<Handover | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  // Create & share: creation grants of the people shown, and (System Admins) the expert per domain.
-  const [grants, setGrants] = useState<Grant[]>([]);
+  // Create & share: creation rules of the people shown, and (System Admins) the expert per domain.
+  const [grants, setGrants] = useState<Rule[]>([]);
   const [experts, setExperts] = useState<Record<string, string>>({});
   const [granting, setGranting] = useState<string | null>(null);
-  // Mirrors private.can_grant_creator: System and General Admins any topic; a Domain Admin line topics of their own lines only.
-  const canGrant = (t: Topic) => access.isSystem || !!access.isGeneral || t.kind !== 'line' || access.domains.includes(t.value);
+  // Mirrors private.can_grant_rule: System and General Admins any rule; a Domain Admin only rules within their own lines.
+  const anyLine = access.isSystem || !!access.isGeneral;
 
   const apply = (r: Awaited<ReturnType<typeof fetchUsers>>) => {
     if (r.error && !r.data) { setLoadError(r.error.message); return; }
@@ -101,7 +102,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <PageTitle title="User management" lead={access.isSystem
           ? 'Create accounts, set business lines and appoint General and Domain Admins. A General Admin edits all learning content for the three business lines but manages no users. You are a System Admin: you can manage everyone and you are the only role that grants roles.'
-          : contentOnly ? 'Hand out Create & share rights per topic. As General Admin you manage no accounts: lines, stages, counsellors and passwords stay with System and Domain Admins.'
+          : contentOnly ? 'Hand out Create & share creation rules. As General Admin you manage no accounts: lines, stages, counsellors and passwords stay with System and Domain Admins.'
           : 'Create and manage accounts in ' + managed.join(', ') + '. A System Admin appoints Domain Admins.'} />
         {!contentOnly && <Button onClick={() => setAdding(true)}>+ Add user</Button>}
       </div>
@@ -175,7 +176,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
                 <div style={{ padding: '8px 12px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
                   {(() => { const mine = grants.filter((g) => g.user_id === u.id); return (
                     <>
-                      <span style={{ fontSize: 12.5, color: mine.length ? '#1a1d18' : '#8b918a' }}>{mine.length ? mine.length + (mine.length === 1 ? ' topic' : ' topics') : 'Nothing yet'}</span>
+                      <span style={{ fontSize: 12.5, color: mine.length ? '#1a1d18' : '#8b918a' }}>{mine.length ? mine.length + (mine.length === 1 ? ' rule' : ' rules') : 'Nothing yet'}</span>
                       <LinkButton onClick={() => setGranting(u.id)}>Edit</LinkButton>
                     </>
                   ); })()}
@@ -200,7 +201,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       </div>
       {access.isSystem && users && <DomainExperts users={users} experts={experts} say={say} onSaved={load} />}
       {granting && users?.some((u) => u.id === granting) && (
-        <CreatorDrawer user={users.find((u) => u.id === granting)!} grants={grants.filter((g) => g.user_id === granting)} canGrant={canGrant} say={say}
+        <CreatorDrawer user={users.find((u) => u.id === granting)!} rules={grants.filter((g) => g.user_id === granting)} anyLine={anyLine} domains={access.domains} say={say}
           onChanged={load} onClose={() => setGranting(null)} />
       )}
       {adding && <AddUserDrawer access={access} managed={managed} meId={meId} onClose={() => setAdding(false)}
@@ -256,35 +257,32 @@ function AddUserDrawer({ access, managed, meId, onClose, onCreated }: { access: 
   );
 }
 
-// Creation rights for one person: the topics they may create for in Create & share.
-function CreatorDrawer({ user, grants, canGrant, say, onChanged, onClose }: { user: User; grants: Grant[]; canGrant: (t: Topic) => boolean; say: (m: string) => void; onChanged: () => Promise<void>; onClose: () => void }) {
-  const held = new Set(grants.map((g) => topicKey(topicOf(g))));
-  const options = allTopics().filter((t) => canGrant(t) && !held.has(topicKey(t)));
-  const [pick, setPick] = useState('');
-  const sel = options.find((t) => topicKey(t) === pick) || options[0];
+// Creation rights for one person: rules of four parts (lines, formats, domains, industries and technologies).
+// Within a part the values are OR, across the parts AND; a part left empty is any. Several rules are OR.
+export function CreatorDrawer({ user, rules, anyLine, domains, say, onChanged, onClose }: { user: User; rules: Rule[]; anyLine: boolean; domains: string[]; say: (m: string) => void; onChanged: () => Promise<void>; onClose: () => void }) {
+  const [draft, setDraft] = useState<RuleParts>(() => (anyLine ? emptyParts() : { ...emptyParts(), lines: domains.slice(0, 1) }));
   const name = user.full_name || user.email;
+  const problem = ruleProblem(draft, anyLine, domains);
   const run = async (fn: () => Promise<void>, ok: string) => { try { await fn(); say(ok); } catch (err) { say((err as Error).message); } await onChanged(); };
+  const groups = PARTS.map((part) => ({ part, label: PART_LABEL[part], chips: (part === 'lines' && !anyLine ? PART_VALUES.lines.filter((l) => domains.includes(l)) : PART_VALUES[part])
+    .map((v) => ({ value: v, label: valueName(part, v), on: draft[part].includes(v), toggle: () => setDraft((d) => togglePart(d, part, v)) })) }));
   return (
-    <Drawer title={'Can create for · ' + name} subtitle="Create & share: a person creates only for the topics listed here. A topic is a business line, an industry or technology, a format or a domain." onClose={onClose} width={480}>
+    <Drawer title={'Can create for · ' + name} subtitle="A person creates in Create & share only what one of these rules allows." onClose={onClose} width={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {!grants.length && <div style={{ color: '#5a6058' }}>No creation rights yet.</div>}
-        {grants.map((g) => { const t = topicOf(g); return (
-          <div key={topicKey(t)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #eef0ea' }}>
-            <span>{topicLong(t)}</span>
-            {canGrant(t) ? <LinkButton tone="muted" onClick={() => run(() => removeGrant(user.id, t), 'Removed · ' + name + ' no longer creates for ' + topicLong(t))}>Remove</LinkButton> : <Tag tone="muted">Another admin's</Tag>}
+        {!rules.length && <div style={{ color: '#5a6058' }}>No creation rights yet.</div>}
+        {rules.map((r) => (
+          <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #eef0ea' }}>
+            <span>{ruleSentence(r)}</span>
+            {withinLines(r, anyLine, domains) ? <LinkButton tone="muted" onClick={() => run(() => removeRule(r.id), 'Removed · ' + name + ' · ' + ruleSentence(r))}>Remove</LinkButton> : <Tag tone="muted">Another admin's</Tag>}
           </div>
-        ); })}
-        {sel && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Select value={topicKey(sel)} onChange={(e) => setPick(e.target.value)} options={options.map((t) => ({ value: topicKey(t), label: topicLong(t) }))} aria-label="Topic to grant" />
-            <Button onClick={() => run(() => addGrant(user.id, sel), name + ' can create for ' + topicLong(sel))}>Add</Button>
-          </div>
-        )}
+        ))}
+        <div style={{ fontWeight: 600, marginTop: 6 }}>Add a rule</div>
+        <RuleChips groups={groups} preview={ruleSentence(draft)} problem={problem} />
+        <div><Button disabled={!!problem} onClick={() => run(async () => { await addRule(user.id, draft); setDraft(anyLine ? emptyParts() : { ...emptyParts(), lines: domains.slice(0, 1) }); }, name + ' can create · ' + ruleSentence(draft))}>Add rule</Button></div>
       </div>
     </Drawer>
   );
 }
-
 // The subject-matter expert per domain (System Admins). With none named, a System Admin does the expert review.
 function DomainExperts({ users, experts, say, onSaved }: { users: User[]; experts: Record<string, string>; say: (m: string) => void; onSaved: () => Promise<void> }) {
   const set = async (domain: string, label: string, userId: string) => {

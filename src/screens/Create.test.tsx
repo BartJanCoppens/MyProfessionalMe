@@ -18,14 +18,14 @@ function Live({ state }: { state: Partial<AppState> }) {
   const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, member('u1'), person(), async () => {}).renderVals();
   return <>{vm.create && <CreateScreen c={vm.create} />}{vm.toast && <div role="status">{vm.toast}</div>}</>;
 }
-const data = (o: Partial<CreateData> = {}): CreateData => ({ contributions: [], reviews: [], grants: [{ user_id: 'u1', topic_kind: 'line', topic_value: 'Consulting' }], policies: [], peers: 3, ...o });
+const data = (o: Partial<CreateData> = {}): CreateData => ({ contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', lines: ['Consulting'], formats: [], domains: [], audiences: [] }], policies: [], peers: 3, ...o });
 
 beforeEach(() => { window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; });
 afterEach(cleanup);
 
 describe('Create & share screen', () => {
   it('asks for creation rights and keeps New content closed without a grant', () => {
-    render(<Live state={{ create: data({ grants: [] }) }} />);
+    render(<Live state={{ create: data({ rules: [] }) }} />);
     expect(screen.getByText('Ask an admin for creation rights')).toBeTruthy();
     expect((screen.getByRole('button', { name: '+ New content' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'New content' }));
@@ -45,9 +45,11 @@ describe('Create & share screen', () => {
     screen.getAllByRole('checkbox').forEach((c) => fireEvent.click(c));
     expect(approve().disabled).toBe(false);
   });
-  it('shows the topic picker in New content', () => {
-    render(<Live state={{ create: data(), createTab: 'new' }} />);
-    expect((screen.getByLabelText('Topic') as HTMLSelectElement).value).toBe('line|Consulting');
+  it('shows the line picker from the person\'s rules in New content', () => {
+    render(<Live state={{ create: data() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'New content' }));
+    expect((screen.getByLabelText('Business line') as HTMLSelectElement).value).toBe('Consulting');
+    expect(screen.getByText('Your creation rules: Consulting.')).toBeTruthy();
     expect(screen.getByText('Who will review it')).toBeTruthy();
   });
 });

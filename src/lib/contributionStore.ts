@@ -1,8 +1,8 @@
-// Create & share in Supabase: contributions, their reviews, creation grants, review policies and domain experts.
+// Create & share in Supabase: contributions, their reviews, creation rules, review requirements and domain experts.
 // Status, steps and verdicts only change through the submit_contribution and review_contribution functions;
 // row-level security decides what each person reads and writes.
 import { supabase } from './supabase';
-import type { Contribution, CreateData, Grant, PolicyRow, Review, Topic } from '../logic/contribution';
+import type { Contribution, CreateData, Policy, PolicyRow, Review, Rule, RuleParts } from '../logic/contribution';
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(/row-level security/.test(error.message) ? 'Not allowed · ask an admin' : error.message); };
 
@@ -11,8 +11,8 @@ export async function loadCreate(userId: string): Promise<CreateData> {
   const [c, r, g, p, n] = await Promise.all([
     supabase.from('contributions').select('*').order('updated_at', { ascending: false }),
     supabase.from('contribution_reviews').select('*').order('step').order('slot'),
-    supabase.from('creator_grants').select('user_id, topic_kind, topic_value').eq('user_id', userId),
-    supabase.from('review_policies').select('topic_kind, topic_value, peers, expert, quality'),
+    supabase.from('creator_rules').select('id, user_id, lines, formats, domains, audiences').eq('user_id', userId).order('id'),
+    supabase.from('review_policies').select('id, lines, formats, domains, audiences, peers, expert, quality').order('id'),
     supabase.rpc('peer_count'),
   ]);
   [c.error, r.error, g.error, p.error, n.error].forEach(fail);
@@ -22,11 +22,11 @@ export async function loadCreate(userId: string): Promise<CreateData> {
   const kept = new Set(contributions.map((x) => x.id));
   return {
     contributions, reviews: reviews.filter((x) => kept.has(x.contribution_id)),
-    grants: (g.data || []) as Grant[], policies: (p.data || []) as PolicyRow[], peers: Number(n.data) || 0,
+    rules: (g.data || []) as Rule[], policies: (p.data || []) as PolicyRow[], peers: Number(n.data) || 0,
   };
 }
 
-export type DraftFields = Pick<Contribution, 'topic_kind' | 'topic_value' | 'type' | 'title' | 'domain' | 'level' | 'audience_stage' | 'takeaway' | 'outline' | 'sources' | 'ai_assisted' | 'bundle_ids'>;
+export type DraftFields = Pick<Contribution, 'business_line' | 'audience' | 'type' | 'title' | 'domain' | 'level' | 'audience_stage' | 'takeaway' | 'outline' | 'sources' | 'ai_assisted' | 'bundle_ids'>;
 
 // Creates a draft, or edits one (or one with changes requested). Returns its id.
 export async function saveDraft(fields: DraftFields, id?: string | null): Promise<string> {
@@ -63,29 +63,35 @@ export async function decideReview(id: string, verdict: 'approved' | 'changes', 
 
 // ---------- administration ----------
 
-export async function loadGrants(userIds: string[]): Promise<Grant[]> {
+export async function loadRules(userIds: string[]): Promise<Rule[]> {
   if (!userIds.length) return [];
-  const { data, error } = await supabase.from('creator_grants').select('user_id, topic_kind, topic_value').in('user_id', userIds);
+  const { data, error } = await supabase.from('creator_rules').select('id, user_id, lines, formats, domains, audiences').in('user_id', userIds).order('id');
   fail(error);
-  return (data || []) as Grant[];
+  return (data || []) as Rule[];
 }
 
-export async function addGrant(userId: string, t: Topic) {
-  fail((await supabase.from('creator_grants').insert({ user_id: userId, topic_kind: t.kind, topic_value: t.value })).error);
+export async function addRule(userId: string, r: RuleParts) {
+  fail((await supabase.from('creator_rules').insert({ user_id: userId, lines: r.lines, formats: r.formats, domains: r.domains, audiences: r.audiences })).error);
 }
 
-export async function removeGrant(userId: string, t: Topic) {
-  const { data, error } = await supabase.from('creator_grants').delete().eq('user_id', userId).eq('topic_kind', t.kind).eq('topic_value', t.value).select('user_id');
+export async function removeRule(id: number) {
+  const { data, error } = await supabase.from('creator_rules').delete().eq('id', id).select('id');
   fail(error);
-  if (!data?.length) throw new Error('Not removed · you cannot change this grant');
+  if (!data?.length) throw new Error('Not removed · you cannot change this rule');
 }
 
-export async function savePolicy(row: PolicyRow) {
-  fail((await supabase.from('review_policies').upsert(row)).error);
+// A new review requirement, or a change to one (with its id).
+export async function savePolicy(row: RuleParts & Policy & { id?: number }) {
+  const { id, ...fields } = row;
+  const v = { lines: fields.lines, formats: fields.formats, domains: fields.domains, audiences: fields.audiences, peers: fields.peers, expert: fields.expert, quality: fields.quality };
+  if (id == null) { fail((await supabase.from('review_policies').insert(v)).error); return; }
+  const { data, error } = await supabase.from('review_policies').update(v).eq('id', id).select('id');
+  fail(error);
+  if (!data?.length) throw new Error('Not saved · you cannot change this review requirement');
 }
 
-export async function removePolicy(t: Topic) {
-  const { data, error } = await supabase.from('review_policies').delete().eq('topic_kind', t.kind).eq('topic_value', t.value).select('topic_kind');
+export async function removePolicy(id: number) {
+  const { data, error } = await supabase.from('review_policies').delete().eq('id', id).select('id');
   fail(error);
   if (!data?.length) throw new Error('Not removed · you cannot change this review requirement');
 }
