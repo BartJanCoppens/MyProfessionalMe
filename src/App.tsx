@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrandMark, Button, LinkButton, NavGroupHeader, NavItem, StatusChip, Tag, Toast } from './ds';
 import { readConfig } from './config';
-import { ADMIN_SCREENS, initState, Logic } from './model';
+import { allowedScreen, initState, Logic } from './model';
 import type { AppState } from './types';
 import type { VM } from './model';
 import { AvatarFace } from './screens/AvatarFace';
@@ -15,6 +15,8 @@ import AdminMappingScreen from './screens/Mapping';
 import KnowledgeScreen from './screens/Knowledge';
 import CreateScreen from './screens/Create';
 import UsersScreen from './screens/Users';
+import AiConnectionsScreen from './screens/AiConnections';
+import { loadAiPage, refreshAiLive } from './aiVals';
 import SubjectPicker from './screens/SubjectPicker';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
 import { useAuth } from './lib/useAuth';
@@ -69,9 +71,8 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   const cfg = useMemo(() => readConfig(), []);
   const [state, setRaw] = useState<AppState>(() => {
     const st = { ...initState(cfg), maps: content.maps, bundles: content.bundles };
-    // Administration screens need an admin role, also when opened through ?screen=.
-    const admin = auth.access.isSystem || !!auth.access.isGeneral || auth.access.domains.length > 0;
-    return ADMIN_SCREENS.includes(st.screen) && !admin ? { ...st, screen: 'map' } : st;
+    // Administration screens need an admin role (AI connections: System Admin), also when opened through ?screen=.
+    return { ...st, screen: allowedScreen(st.screen, auth.access) };
   });
   const toastTimer = useRef<number | undefined>(undefined);
   const drag = useRef<string | null>(null);
@@ -102,6 +103,9 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   // One clock while a podcast or reel plays. Each tick reads the latest Logic, which saves progress and stops at the end.
   const logicRef = useRef(logic);
   useEffect(() => { logicRef.current = logic; });
+  // AI: which uses answer through a connection (everyone); the AI connections page loads its data when it opens.
+  useEffect(() => { refreshAiLive(logicRef.current); }, [me]);
+  useEffect(() => { if (state.screen === 'adminAi') loadAiPage(logicRef.current); }, [state.screen]);
   useEffect(() => {
     if (!state.media.playing) return;
     const t = window.setInterval(() => logicRef.current.tick(), 250);
@@ -133,6 +137,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
           {vm.screen === 'adminMap' && <AdminMappingScreen vm={vm} />}
           {vm.kb && <KnowledgeScreen kb={vm.kb} />}
           {vm.create && <CreateScreen c={vm.create} />}
+          {vm.ai && <AiConnectionsScreen ai={vm.ai} />}
           {vm.screen === 'users' && <UsersScreen access={auth.access} meId={auth.profile!.id} say={(m) => logic.say(m)} />}
         </div>
       </main>
@@ -178,6 +183,7 @@ function Sidebar({ vm, auth, teamOverdue, canPick, onPick, onBackToMe }: { vm: V
             <NavItem label="Curriculum mapping" count={vm.pendingLabel} active={vm.navAdminMap} onClick={vm.goAdminMap} />
             <NavItem label="Knowledge library" count={vm.kbCount} active={vm.navKb} onClick={vm.goKb} />
             {vm.showUsers && <NavItem label="User management" active={vm.navUsers} onClick={vm.goUsers} />}
+            {vm.showAi && <NavItem label="AI connections" active={vm.navAi} onClick={vm.goAi} />}
           </>
         )}
       </nav>

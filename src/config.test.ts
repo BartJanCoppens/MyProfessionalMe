@@ -19,7 +19,7 @@ describe('readConfig', () => {
     expect(readConfig('?screen=create').startScreen).toBe('create');
   });
   it('accepts every admin screen (the app still checks the role)', () => {
-    expect(['adminLib', 'adminMap', 'adminKb', 'users'].map((s) => readConfig('?screen=' + s).startScreen)).toEqual(['adminLib', 'adminMap', 'adminKb', 'users']);
+    expect(['adminLib', 'adminMap', 'adminKb', 'users', 'adminAi'].map((s) => readConfig('?screen=' + s).startScreen)).toEqual(['adminLib', 'adminMap', 'adminKb', 'users', 'adminAi']);
   });
 });
 

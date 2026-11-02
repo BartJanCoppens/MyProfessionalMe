@@ -375,7 +375,8 @@ describe('the learner\'s eye', () => {
     const h = curr();
     expect(h.vm().readLabel).toBe('Read it as Robin');
     await h.vm().readAs();
-    expect(h.vm().read).toEqual({ text: 'This looks like a plan I can finish. The business-line items set the floor and the rest follows what I asked for.', fix: 'No change needed; check again after the next evaluation round.' });
+    expect(h.vm().read).toEqual({ text: 'This looks like a plan I can finish. The business-line items set the floor and the rest follows what I asked for.', fix: 'No change needed; check again after the next evaluation round.', ai: false });
+    expect(h.vm().readTag).toBe('Scripted reading');
     expect(Object.keys(h.state.reads)).toHaveLength(1);
     expect(h.state.readBusy).toBe(false);
   });
@@ -389,7 +390,8 @@ describe('the learner\'s eye', () => {
     stubWindow({ claude: { complete: async () => '{"text":"Too much.","fix":"Drop one."}' } });
     const h = harness({ access: systemAdmin(), config: { liveAssistant: true }, state: { screen: 'adminMap' } });
     await h.vm().readAs();
-    expect(h.vm().read).toEqual({ text: 'Too much.', fix: 'Drop one.' });
+    expect(h.vm().read).toEqual({ text: 'Too much.', fix: 'Drop one.', ai: true });
+    expect(h.vm().readTag).toBe('AI reading');
   });
   const persona = (stage: string, aud: Partial<Persona[4]>): Persona => ['p', 'Kim', 'Kim Learner', stage, { bl: 'Consulting', ind: null, tec: null, amb: null, pro: null, ...aud }];
   it('counts a learning that arrives through two audiences once', () => {

@@ -1,4 +1,5 @@
 import type { CreateData } from './logic/contribution';
+import type { AiAdmin, AiForm, AiUseEdit } from './logic/ai';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
 export type Learn = [string, string, string, number, string, string, number, number, string, string];
 // learning id, stage, obligation
@@ -34,7 +35,8 @@ export type AvatarSpec = {
 export type Op = { op: 'add' | 'remove' | 'setOb'; aud: string; lid: string; stage?: string; ob?: string };
 export type Signal = { id: string; kind: string; st: string; op: Op; evidence: string; quote: string };
 export type Persona = [string, string, string, string, Record<string, string | null>];
-export type Read = { text: string; fix: string };
+// ai: written by AI (false: the scripted reading)
+export type Read = { text: string; fix: string; ai?: boolean };
 
 export type CloudKey = 'proj' | 'pers' | 'amb';
 export type CloudMeta = {
@@ -42,7 +44,7 @@ export type CloudMeta = {
   anchor: number; frac: number; screen: Screen; goLabel: string;
 };
 
-export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'create' | 'adminLib' | 'adminMap' | 'adminKb' | 'users';
+export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'create' | 'adminLib' | 'adminMap' | 'adminKb' | 'users' | 'adminAi';
 
 // What the signed-in account may administer (from public.user_roles).
 // isGeneral: General Admin, edits all content (catalogue, every curriculum audience, all bundles) but no users.
@@ -91,13 +93,17 @@ export type AppState = {
   // Knowledge library (admin): bundles are in memory this session, like the learning catalogue
   bundles: Bundle[]; kbSel: string; kbOpen: boolean; kbTopic: string; kbSearch: string; kbTagF: string | null; kbSort: string; kbTab: string; kbFile: string;
   kbModel: string | null; kbTestModel: string | null; kbTagIn: string; kbValid: [boolean, string][] | null; kbEdit: boolean; kbAdd: { conn: string; name: string; sens: string };
-  kbQ: string; kbBusy: boolean; kbHits: { text: string; src: string; score: number; disp?: number }[] | null; kbAnswer: string;
+  kbQ: string; kbBusy: boolean; kbAnswerAi: boolean; kbHits: { text: string; src: string; score: number; disp?: number }[] | null; kbAnswer: string;
   cpInput: string; cpBusy: boolean; cpReply: string; cpOpsP: Op[] | null;
   // Create & share: the signed-in person's own work (not the viewed person's), loaded from Supabase.
   create: CreateData | null; createError: string | null; createBusy: boolean; createTab: string; contribSel: string | null; revSel: string | null;
   // rubric ticks and comments per review (contribution|step|slot), the New form, the contribution being edited
   revChecks: Record<string, boolean[]>; revComment: Record<string, string>; nw: NewDraft; editing: string | null; nwKb: string[]; nwAiBusy: boolean;
   polForm: { lines: string[]; formats: string[]; domains: string[]; audiences: string[]; peers: string; expert: boolean; quality: boolean };
+  // AI: the uses the app may call now (everyone), and per use whether the last attempt was answered by AI or fell back.
+  // The AI connections page (System Admin): its data, the connection form (with a typed key until it is saved) and test results.
+  aiLive: string[]; aiOut: Record<string, 'ai' | 'scripted'>;
+  aiAdmin: AiAdmin | null; aiError: string | null; aiBusy: boolean; aiForm: AiForm | null; aiConfirm: string | null; aiUseEdit: AiUseEdit | null; aiTests: Record<string, { ok: boolean | null; text: string }>;
 };
 
 // The New content form. line and aud are '' for none; type is the format; lvl stays text for the select; outline and

@@ -20,9 +20,22 @@ import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
 import { currentPos, podSave, podView, reelView, startPos, step } from './logic/media';
+import { aiVals } from './aiVals';
+import { canComplete, complete } from './lib/ai';
+import type { AiRequest } from './lib/ai';
+import type { AiUseKey } from './logic/ai';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
-export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'adminKb', 'users'];
+export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'adminKb', 'users', 'adminAi'];
+// Administration screens for System Admins only.
+export const SYSTEM_SCREENS: Screen[] = ['adminAi'];
+// The screen this person may open: an admin screen without the role (also from ?screen=) opens the map.
+export function allowedScreen(screen: Screen, access: Access): Screen {
+  const admin = access.isSystem || !!access.isGeneral || access.domains.length > 0;
+  return (SYSTEM_SCREENS.includes(screen) && !access.isSystem) || (ADMIN_SCREENS.includes(screen) && !admin) ? 'map' : screen;
+}
+// The JSON object in a model's reply, or null.
+const jsonIn = <T>(text: string): T | null => { const m = text.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) as T : null; };
 const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!;
 
 type Evidence = { id: string; text: string; src: string };
@@ -43,13 +56,14 @@ export function initState(cfg: Config): AppState {
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
     mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, zoom: null, libForm: null, media: { playing: null, pos: {}, speed: '1' }, answers: {}, answersFor: null,
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
-    kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
+    kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbAnswerAi: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
     projSel: 'P2', clouds: { proj: true, pers: true, amb: true }, share: {},
     chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
     chat: [],
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwAiBusy: false,
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
+    aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {},
   };
 }
 
@@ -60,10 +74,6 @@ export type Refs = {
   chat: RefObject<HTMLDivElement | null>;
 };
 type SetState = (patch: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
-
-declare global {
-  interface Window { claude?: { complete?: (req: unknown) => Promise<string> } }
-}
 
 export class Logic {
   readonly state: AppState;
@@ -224,7 +234,7 @@ export class Logic {
   }
   items() { return LEARN.map((r, i) => { const it = this.item(r); return { ...it, ...cover(r, i, it.state, it.pct) }; }); }
   openDetail(id: string, origin?: Screen) { this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0); }
-  go(screen: Screen) { this.setState({ screen: ADMIN_SCREENS.includes(screen) && !this.isAdmin() ? 'map' : screen, sel: null, mapSel: null }); window.scrollTo(0, 0); }
+  go(screen: Screen) { this.setState({ screen: allowedScreen(screen, this.access), sel: null, mapSel: null }); window.scrollTo(0, 0); }
   // Managing accounts: System Admins and Domain Admins. A General Admin opens User management only to hand out creation rights.
   canManageUsers() { return this.access.isSystem || this.access.domains.length > 0; }
   isAdmin() { return this.access.isSystem || !!this.access.isGeneral || this.access.domains.length > 0; }
@@ -562,7 +572,7 @@ export class Logic {
     const proposalItems = pp ? (pp.ambition ? [{ kind: 'Ambition', text: pp.ambition.text + ' · ' + (pp.ambition.horizon || '3 years') }] : []).concat(pp.interests.map((i) => ({ kind: 'Interest', text: i.label + ' · ' + domName(i.domain) }))) : [];
     const titles: Record<Screen, [string, string]> = {
       projects: ['Me · Projects & evaluations', 'Projects & evaluations'], profile: ['Me · My profile', 'My profile'], map: ['Me · ' + [this.subject.stage, bl].filter(Boolean).join(' · '), 'My growth map'], library: ['Me · Library', 'Library'],
-      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminKb: ['Administration · Knowledge library', 'Knowledge library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'], create: ['Me · Create & share', 'Create & share'],
+      detail: ['Me · Library · ' + d0.domLabel, d0.title], team: ['Counsellor · counsellees', 'My team'], adminLib: ['Administration · Learning library', 'Learning library'], adminKb: ['Administration · Knowledge library', 'Knowledge library'], adminMap: ['Administration · Curriculum mapping · ' + bl, 'Curriculum mapping'], users: ['Administration · User management', 'User management'], adminAi: ['Administration · AI connections', 'AI connections'], create: ['Me · Create & share', 'Create & share'],
     };
     const hubDock = sel && sel.type === 'hub' ? (() => {
       const di = DOMAINS.findIndex((d) => d[0] === sel.id); const list = items.filter((it) => it.dom === sel.id);
@@ -606,6 +616,7 @@ export class Logic {
       marks: [this.levels.every((l) => l > 0) ? 'All nine domains touched' : '', items.some((it) => it.state === 'accepted' && it.format === 'Certification') ? 'First certification' : ''].filter(Boolean),
       ...kbVals(this),
       ...createVals(this),
+      ...aiVals(this),
       // library
       libLead: LEARN.length + ' learnings across nine domains · levels L1 Foundation to L5 Thought leader', libQ: s.libQ, setLibQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ libQ: e.target.value }),
       obOptions: [opt('all', 'All'), opt('mandatory', 'Mandatory'), opt('advised', 'Advised'), opt('chosen', 'Chosen'), opt('open', 'Open')], libOb: s.libOb, setLibOb: (v: string) => this.setState({ libOb: v }),
@@ -629,7 +640,7 @@ export class Logic {
       chat: ([{ role: 'assistant', text: this.greeting() }] as ChatMsg[]).concat(this.myChat()), chatBusy: s.chatBusy, chatInput: s.chatInput, setChatInput: (e: ChangeEvent<HTMLInputElement>) => this.setState({ chatInput: e.target.value }),
       chatKey: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') this.send(s.chatInput); }, sendChat: () => this.send(s.chatInput),
       chatPrompts: ['Where could I be in five years?', 'I enjoyed the energy client most', 'What do my evaluations say?'].map((l) => ({ label: l, send: () => this.send(l) })),
-      chatSub: (this.props.liveAssistant === false || !window.claude?.complete ? 'Scripted assistant' : 'AI assistant') + ' · reads your projects and profiles · saves nothing until you confirm',
+      chatSub: this.aiLabel('profile_chat') + ' · reads your projects and profiles · saves nothing until you confirm',
       hasProposal: !!pp, proposalItems, saveProposal: () => this.saveProposal(), dropProposal: () => this.setState({ proposal: null }),
       // team
       teamLead: (n: number) => (n === 0 ? 'Nobody names ' : n === 1 ? 'One person names ' : n + ' people name ') + (this.subject.readOnly ? this.subject.name : 'you') + ' as counsellor. Readiness is measured against each person\'s next stage in their business line; mandatory items are the ones the firm chases.',
@@ -677,6 +688,26 @@ export class Logic {
     };
   }
 
+  // ---------- AI (src/lib/ai.ts: Claude Design, then the ai edge function, then scripted) ----------
+  aiOpts() { return { enabled: this.props.liveAssistant !== false, live: this.state.aiLive }; }
+  aiCan(use: AiUseKey) { return canComplete(use, this.aiOpts()); }
+  // Says "AI" only when AI would answer and the last attempt for this use did; otherwise it says scripted.
+  aiLabel(use: AiUseKey) {
+    if (!this.aiCan(use)) return 'Scripted assistant';
+    return this.state.aiOut[use] === 'scripted' ? 'Scripted assistant · AI did not answer' : 'AI assistant';
+  }
+  // Asks AI for one use and parses the text; null (scripted reply) when the use is not live, the call fails or the
+  // reply does not parse. Records which it was, for the labels.
+  async viaAi<T>(use: AiUseKey, req: AiRequest, parse: (text: string) => T | null): Promise<T | null> {
+    if (!this.aiCan(use)) return null;
+    // A reached daily limit is said once per reply; other failures only show in the label.
+    const out = await complete(use, req, { ...this.aiOpts(), onError: (err) => { if (/daily ai limit/i.test(err.message)) this.say(err.message); } });
+    let res: T | null = null;
+    try { res = out ? parse(out.text) : null; } catch { res = null; }
+    this.setState((s) => ({ aiOut: { ...s.aiOut, [use]: res ? 'ai' : 'scripted' } }));
+    return res;
+  }
+
   addToPath(id: string) {
     if (this.subject.data.progress[id]?.chosen) return;
     this.persist(() => saveProgress(this.subject.id, id, { chosen: true }), 'Added to your path · it now shows on your map with a green ring');
@@ -713,14 +744,10 @@ export class Logic {
     const text = (raw || '').trim(); if (!text || this.state.chatBusy || this.readOnly()) return;
     const chat: ChatMsg[] = this.myChat().concat([{ role: 'user', text }]);
     this.setState({ chat, chatFor: this.subject.id, chatInput: '', chatBusy: true, proposal: null });
-    let res: ChatReply | null = null;
-    if (this.props.liveAssistant !== false && window.claude?.complete) {
-      try {
-        const out = await window.claude.complete({ system: this.sysPrompt(), messages: chat.map((m) => ({ role: m.role, content: m.text })), max_tokens: 600 });
-        const m = String(out).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
-      } catch { res = null; }
-    }
-    if (!res || !res.reply) res = this.scripted(text);
+    let res = await this.viaAi('profile_chat', { system: this.sysPrompt(), messages: chat.map((m) => ({ role: m.role, content: m.text })), max_tokens: 600 }, (t) => {
+      const r = jsonIn<ChatReply>(t); return r && r.reply ? r : null;
+    });
+    if (!res) res = this.scripted(text);
     const reply = res.reply;
     const ints = (res.interests || []).filter((i) => i && i.label && DOMAINS.some((d) => d[0] === i.domain));
     const amb = res.ambition && res.ambition.text ? res.ambition : null;
@@ -791,16 +818,11 @@ export class Logic {
   }
   async readAs(P: Persona, st: Stack) {
     if (this.state.readBusy) return; this.setState({ readBusy: true });
-    let res: Read | null = null;
-    if (this.props.liveAssistant !== false && window.claude?.complete) {
-      try {
-        const lines = st.layers.map((l) => l.lens + ' (' + l.aud + '): ' + (l.titles.length ? l.titles.join(', ') : 'nothing')).join('\n');
-        const raw = await window.claude.complete({ messages: [{ role: 'user', content: 'You are ' + P[2] + ', ' + P[3] + ' at a consulting, audit, tax and legal firm. This is the learning your firm has lined up for you this year, stacked from every audience you belong to:\n' + lines + '\nTotal ' + Math.round(st.tot) + ' h of an 80 h budget; mandatory ' + Math.round(st.mand) + ' h of a 40 h budget. Arrives twice: ' + (st.dups.map((d) => d.title).join(', ') || 'none') + '.\nReply ONLY with JSON {"text": your honest first-person reaction, 2 sentences, at most 45 words, plain, no emoji, no exclamation marks, "fix": one concrete change for the curriculum team, at most 25 words, naming the audience and the learning}.' }], max_tokens: 300 });
-        const m = String(raw).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
-      } catch { res = null; }
-    }
-    if (!res || !res.text) res = this.scriptedRead(P, st);
-    const read = res;
+    const lines = st.layers.map((l) => l.lens + ' (' + l.aud + '): ' + (l.titles.length ? l.titles.join(', ') : 'nothing')).join('\n');
+    const res = await this.viaAi('learners_eye', { messages: [{ role: 'user', content: 'You are ' + P[2] + ', ' + P[3] + ' at a consulting, audit, tax and legal firm. This is the learning your firm has lined up for you this year, stacked from every audience you belong to:\n' + lines + '\nTotal ' + Math.round(st.tot) + ' h of an 80 h budget; mandatory ' + Math.round(st.mand) + ' h of a 40 h budget. Arrives twice: ' + (st.dups.map((d) => d.title).join(', ') || 'none') + '.\nReply ONLY with JSON {"text": your honest first-person reaction, 2 sentences, at most 45 words, plain, no emoji, no exclamation marks, "fix": one concrete change for the curriculum team, at most 25 words, naming the audience and the learning}.' }], max_tokens: 300 }, (t) => {
+      const r = jsonIn<Read>(t); return r && r.text ? r : null;
+    });
+    const read: Read = res ? { text: String(res.text), fix: String(res.fix || ''), ai: true } : { ...this.scriptedRead(P, st), ai: false };
     // functional update: this.state is stale after the await
     this.setState((s) => ({ readBusy: false, reads: { ...s.reads, [this.subject.id + '|' + P[0]]: read } }));
   }
@@ -823,16 +845,12 @@ export class Logic {
   async askCp(raw: string) {
     const text = (raw || '').trim(); if (!text || this.state.cpBusy) return;
     this.setState({ cpBusy: true, cpInput: '', cpReply: '', cpOpsP: null });
-    let res: { reply: string; ops?: Op[] } | null = null;
-    if (this.props.liveAssistant !== false && window.claude?.complete) {
-      try {
-        const s = this.state;
-        const sys = 'You are the curriculum copilot of a consulting, audit, tax and legal firm. Learnings are mapped to audiences at career stages. Audiences (key = name): ' + Object.keys(AUD_INFO).map((k) => k + ' = ' + AUD_INFO[k].name + ' (' + lensOf(k)[1] + ', ' + AUD_INFO[k].reach + ' people)').join('; ') + '. Stages: ' + STAGES.join(', ') + '. Ambition and Profile audiences can only be advised, never mandatory.\nLearnings: ' + LEARN.map((r) => r[0] + ' ' + r[1] + ' (' + r[2] + ', L' + r[3] + ', ' + r[6] + ' h)').join('; ') + '.\nCurrent mappings: ' + Object.keys(s.maps).filter((k) => AUD_INFO[k] && s.maps[k].length).map((k) => k + ': ' + s.maps[k].map((m) => m[0] + '@' + m[1] + '/' + m[2]).join(' ')).join(' | ') + '.\nYearly budget: 80 h total, 40 h mandatory.\nReply ONLY with JSON {"reply": string, at most 60 words, plain matter-of-fact English, no emoji, "ops": [{"op": "add"|"remove"|"setOb", "aud": key, "lid": id, "stage": stage, "ob": "mandatory"|"advised"}]}. Propose at most 5 ops and only when the request asks for a change.';
-        const out = await window.claude.complete({ system: sys, messages: [{ role: 'user', content: text }], max_tokens: 700 });
-        const m = String(out).match(/\{[\s\S]*\}/); if (m) res = JSON.parse(m[0]);
-      } catch { res = null; }
-    }
-    if (!res || !res.reply) res = this.scriptedCp(text);
+    const s = this.state;
+    const sys = 'You are the curriculum copilot of a consulting, audit, tax and legal firm. Learnings are mapped to audiences at career stages. Audiences (key = name): ' + Object.keys(AUD_INFO).map((k) => k + ' = ' + AUD_INFO[k].name + ' (' + lensOf(k)[1] + ', ' + AUD_INFO[k].reach + ' people)').join('; ') + '. Stages: ' + STAGES.join(', ') + '. Ambition and Profile audiences can only be advised, never mandatory.\nLearnings: ' + LEARN.map((r) => r[0] + ' ' + r[1] + ' (' + r[2] + ', L' + r[3] + ', ' + r[6] + ' h)').join('; ') + '.\nCurrent mappings: ' + Object.keys(s.maps).filter((k) => AUD_INFO[k] && s.maps[k].length).map((k) => k + ': ' + s.maps[k].map((m) => m[0] + '@' + m[1] + '/' + m[2]).join(' ')).join(' | ') + '.\nYearly budget: 80 h total, 40 h mandatory.\nReply ONLY with JSON {"reply": string, at most 60 words, plain matter-of-fact English, no emoji, "ops": [{"op": "add"|"remove"|"setOb", "aud": key, "lid": id, "stage": stage, "ob": "mandatory"|"advised"}]}. Propose at most 5 ops and only when the request asks for a change.';
+    let res = await this.viaAi('curriculum_copilot', { system: sys, messages: [{ role: 'user', content: text }], max_tokens: 700 }, (t) => {
+      const r = jsonIn<{ reply: string; ops?: Op[] }>(t); return r && r.reply ? r : null;
+    });
+    if (!res) res = this.scriptedCp(text);
     this.setState({ cpBusy: false, cpReply: res.reply, cpOpsP: this.validOps(res.ops) });
   }
   // Mappings whose learning this viewer can see (drafts are hidden from those who cannot edit them).
@@ -950,6 +968,7 @@ export class Logic {
       cpKey: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') this.askCp(s.cpInput); }, cpSend: () => this.askCp(s.cpInput), cpBusy: s.cpBusy,
       cpHasReply: !!s.cpReply, cpReply: s.cpReply, cpHasOps: cpOps.length > 0, cpOps,
       cpApply: () => { const n = cpOpsP.length; this.applyOps(cpOpsP, n + ' change' + (n > 1 ? 's' : '') + ' applied · publish to apply'); this.setState({ cpOpsP: null }); }, cpDrop: () => this.setState({ cpOpsP: null }),
+      cpMode: this.aiLabel('curriculum_copilot'), readTag: rd ? (rd.ai ? 'AI reading' : 'Scripted reading') : '',
       cpPrompts: ['What do Energy seniors still miss?', 'Where does a learning arrive twice?', 'Draft a path for the Business developer ambition'].map((l) => ({ label: l, send: () => this.askCp(l) })),
       pz,
       readAs: () => this.readAs(P, stk), readBusy: s.readBusy, readLabel: s.readBusy ? 'Reading the stack' : 'Read it as ' + P[1], read: rd || null, readHead: 'As ' + P[2] + ' would read it',

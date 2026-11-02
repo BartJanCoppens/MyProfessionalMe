@@ -14,6 +14,8 @@ import {
 import type { Attrs, Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
 import { decideReview, loadCreate, removeDraft, removePolicy, saveDraft, savePolicy, submitContribution } from './lib/contributionStore';
 import type { DraftFields } from './lib/contributionStore';
+import { canComplete } from './lib/ai';
+import type { AiRequest } from './lib/ai';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
 const ST: Record<string, [string, string, string]> = { published: ['accepted', 'Published', 'check'], review: ['submitted', 'In review', 'dot'], changes: ['clarification', 'Changes requested', 'dot'], draft: ['not-started', 'Draft', 'dot'] };
@@ -51,24 +53,27 @@ const fieldsOf = (nw: NewDraft, bundles: string[]): DraftFields => {
     takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: nw.ai, bundle_ids: bundles };
 };
 const draftOf = (c: Contribution): NewDraft => ({ line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
-  outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted, aiNote: c.ai_assisted ? 'AI-assisted draft' : '' });
+  outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '' });
 
 // Bundles a creator may draw on: indexed, open to creators, Tax & Legal ones for that line only.
 export function usableBundles(bundles: Bundle[], line: string | null) {
   return bundles.filter((b) => b.status !== 'draft' && b.access !== 'admins' && (b.access !== 'tl' || line === 'Tax & Legal'));
 }
 
-// "Draft with AI": an outline and a takeaway from the retrieved passages, by the model when one is reachable,
-// otherwise the design's scripted outline. Either way the draft is labelled as assisted.
-export async function draftFromPassages(nw: NewDraft, hits: Hit[], live: boolean): Promise<{ takeaway: string; outline: string[]; note: string }> {
-  const scripted = { takeaway: hits[0].text.slice(0, 170) + ' [1]', outline: hits.map((h, k) => h.text.split('. ')[0].slice(0, 88) + ' [' + (k + 1) + ']') };
-  if (!live || !window.claude?.complete) return { ...scripted, note: 'Scripted outline from the passages · no AI in this environment' };
-  try {
-    const raw = await window.claude.complete({ messages: [{ role: 'user', content: 'You help a consultant draft a ' + nw.type + ' for colleagues titled "' + (nw.title || 'untitled') + '". Use ONLY these passages:\n'
-      + hits.map((h, k) => '[' + (k + 1) + '] ' + h.text).join('\n') + '\nReply ONLY with JSON {"takeaway": one sentence under 180 characters with citation like [1], "outline": [3 short steps, each under 90 characters, with citations]}. Plain English, no emoji.' }], max_tokens: 400 });
-    const m = String(raw).match(/\{[\s\S]*\}/), res = m ? JSON.parse(m[0]) : null;
-    if (res && res.takeaway) return { takeaway: String(res.takeaway).slice(0, TAKE_MAX), outline: (Array.isArray(res.outline) ? res.outline : []).slice(0, 4).map(String), note: 'AI-assisted draft · grounded on keyword-ranked passages · edit it in your own words' };
-  } catch { /* the scripted outline below */ }
+// "Draft with AI": an outline and a takeaway from the retrieved passages, by AI when the use is live (ask is null
+// otherwise), else the design's scripted outline, labelled as scripted. ai says which it was; only an AI draft is
+// saved as AI-assisted.
+export type AskAi = <T>(req: AiRequest, parse: (text: string) => T | null) => Promise<T | null>;
+export async function draftFromPassages(nw: NewDraft, hits: Hit[], ask: AskAi | null): Promise<{ takeaway: string; outline: string[]; note: string; ai: boolean }> {
+  const scripted = { takeaway: hits[0].text.slice(0, 170) + ' [1]', outline: hits.map((h, k) => h.text.split('. ')[0].slice(0, 88) + ' [' + (k + 1) + ']'), ai: false };
+  if (!ask) return { ...scripted, note: 'Scripted outline from the passages · no AI connection for this use' };
+  const res = await ask({ messages: [{ role: 'user', content: 'You help a consultant draft a ' + nw.type + ' for colleagues titled "' + (nw.title || 'untitled') + '". Use ONLY these passages:\n'
+    + hits.map((h, k) => '[' + (k + 1) + '] ' + h.text).join('\n') + '\nReply ONLY with JSON {"takeaway": one sentence under 180 characters with citation like [1], "outline": [3 short steps, each under 90 characters, with citations]}. Plain English, no emoji.' }], max_tokens: 400 },
+  (raw) => {
+    const m = String(raw).match(/\{[\s\S]*\}/), r = m ? JSON.parse(m[0]) : null;
+    return r && r.takeaway ? { takeaway: String(r.takeaway).slice(0, TAKE_MAX), outline: (Array.isArray(r.outline) ? r.outline : []).slice(0, 4).map(String) } : null;
+  });
+  if (res) return { ...res, note: 'AI-assisted draft · grounded on keyword-ranked passages · edit it in your own words', ai: true };
   return { ...scripted, note: 'AI outline unavailable · scripted outline from the passages' };
 }
 
@@ -166,8 +171,8 @@ async function draftAi(L: Logic) {
   }).slice(0, 3);
   if (!hits.length) { L.say('These bundles have no passages a creator may use'); return; }
   L.setState({ nwAiBusy: true });
-  const out = await draftFromPassages(nw, hits, L.props.liveAssistant !== false);
-  L.setState((st) => ({ nwAiBusy: false, nw: { ...effective(st), take: out.takeaway, outline: out.outline, sources: hits.map((h) => h.src), ai: true, aiNote: out.note } }));
+  const out = await draftFromPassages(nw, hits, canComplete('draft_outline', L.aiOpts()) ? (req, parse) => L.viaAi('draft_outline', req, parse) : null);
+  L.setState((st) => ({ nwAiBusy: false, nw: { ...effective(st), take: out.takeaway, outline: out.outline, sources: hits.map((h) => h.src), ai: out.ai, aiNote: out.note } }));
 }
 
 // ---------- view-model ----------
@@ -282,7 +287,7 @@ function createScreen(L: Logic) {
       return { id: b.id, label: b.name, meta: b.access === 'tl' ? 'Tax & Legal' : b.sources.filter((r) => r[5] !== 'client' && r[5] !== 'licensed').reduce((a, r) => a + r[3], 0) + ' passages', on,
         toggle: () => L.setState((st) => ({ nwKb: on ? st.nwKb.filter((k) => k !== b.id) : st.nwKb.concat([b.id]) })) };
     }),
-    nwDraftAi: () => draftAi(L), nwAiBusy: s.nwAiBusy, nwAiLabel: s.nwAiBusy ? 'Drafting' : 'Draft with AI', nwHasAi: nw.ai && (nw.outline.length > 0 || nw.sources.length > 0), nwAiNote: nw.aiNote,
+    nwDraftAi: () => draftAi(L), nwAiBusy: s.nwAiBusy, nwAiLabel: s.nwAiBusy ? 'Drafting' : 'Draft with AI', nwHasAi: nw.outline.length > 0 || nw.sources.length > 0, nwAiNote: nw.aiNote,
     nwAiOutline: nw.outline.map((o, k) => ({ n: (k + 1) + '.', text: o })), nwAiCites: nw.sources.map((c, k) => ({ n: String(k + 1), text: c })),
     nwFileText: nw.type + ' · the file itself (video, audio or document) is attached later; this prototype stores the text only.',
     nwChecks: checks.map(dot), nwBlocked: !checksPass(checks) || s.createBusy || !ok,
