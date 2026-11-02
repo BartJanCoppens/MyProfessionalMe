@@ -102,7 +102,7 @@ export type AppState = {
   // Create & share: the signed-in person's own work (not the viewed person's), loaded from Supabase.
   create: CreateData | null; createError: string | null; createBusy: boolean; createTab: string; contribSel: string | null; revSel: string | null;
   // rubric ticks and comments per review (contribution|step|slot), the New form, the contribution being edited
-  revChecks: Record<string, boolean[]>; revComment: Record<string, string>; nw: NewDraft; editing: string | null; nwKb: string[]; nwAiBusy: boolean;
+  revChecks: Record<string, boolean[]>; revComment: Record<string, string>; nw: NewDraft; editing: string | null; nwKb: string[]; nwKbQ: string; nwAiBusy: boolean;
   polForm: { lines: string[]; formats: string[]; domains: string[]; audiences: string[]; peers: string; expert: boolean; quality: boolean };
   // Learning record (F2): the learner's evidence being typed for one learning (key subject|learning), before it is saved.
   evDraft: { key: string; note: string; link: string; ref: string } | null;

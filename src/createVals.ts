@@ -60,6 +60,44 @@ export function usableBundles(bundles: Bundle[], line: string | null) {
   return bundles.filter((b) => b.status !== 'draft' && b.access !== 'admins' && (b.access !== 'tl' || line === 'Tax & Legal'));
 }
 
+const STOP = new Set(['with', 'that', 'your', 'from', 'this', 'what', 'when', 'into', 'about', 'their', 'than', 'more', 'less', 'make']);
+const words = (t: string) => t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4 && !STOP.has(w));
+const haystack = (b: Bundle) => [b.name, b.desc, b.owner, ...b.tags].join(' ').toLowerCase();
+// A few bundles out of possibly hundreds. A search keeps those matching every word typed, most used first. Without one:
+// those that fit the piece (a title word counts double a domain word; the author's line breaks ties), else the most used.
+export function findBundles(bundles: Bundle[], query: string, piece: { title: string; dom: string; line: string }, limit = 5) {
+  const q = query.trim().toLowerCase();
+  const byUse = (a: Bundle, b: Bundle) => b.usedBy - a.usedBy;
+  if (q) {
+    const hits = bundles.filter((b) => q.split(/\s+/).every((w) => haystack(b).includes(w))).sort(byUse);
+    return { mode: 'search' as const, rows: hits.slice(0, limit), total: hits.length };
+  }
+  const tw = words(piece.title), dw = words(domainName(piece.dom));
+  const fit = bundles.map((b) => { const h = haystack(b); return { b, n: 2 * tw.filter((w) => h.includes(w)).length + dw.filter((w) => h.includes(w)).length }; })
+    .filter((x) => x.n > 0)
+    .sort((x, y) => y.n - x.n || +(y.b.line === piece.line) - +(x.b.line === piece.line) || byUse(x.b, y.b));
+  if (fit.length) return { mode: 'suggest' as const, rows: fit.slice(0, limit).map((x) => x.b), total: fit.length };
+  return { mode: 'popular' as const, rows: bundles.slice().sort(byUse).slice(0, limit), total: bundles.length };
+}
+
+// The grounding picker: the picked bundles as chips, a search box and at most five rows to add from.
+function bundleFinder(L: Logic, nw: NewDraft, line: string | null) {
+  const s = L.state, usable = usableBundles(s.bundles, line);
+  const meta = (b: Bundle) => b.access === 'tl' ? 'Tax & Legal' : b.sources.filter((r) => r[5] !== 'client' && r[5] !== 'licensed').reduce((a, r) => a + r[3], 0) + ' passages';
+  const f = findBundles(usable.filter((b) => !s.nwKb.includes(b.id)), s.nwKbQ, { title: nw.title, dom: nw.dom, line: nw.line });
+  const n = (k: number, one: string, many: string) => k + ' ' + (k === 1 ? one : many);
+  return {
+    nwKbCount: n(usable.length, 'bundle', 'bundles'), nwKbQuery: s.nwKbQ, nwKbSetQuery: (e: Input) => L.setState({ nwKbQ: e.target.value }),
+    nwKbPicked: usable.filter((b) => s.nwKb.includes(b.id)).map((b) => ({ id: b.id, label: b.name, meta: meta(b),
+      remove: () => L.setState((st) => ({ nwKb: st.nwKb.filter((k) => k !== b.id) })) })),
+    nwKbFound: f.rows.map((b) => ({ id: b.id, label: b.name, meta: meta(b) + ' · ' + b.owner, desc: b.desc,
+      add: () => L.setState((st) => ({ nwKb: st.nwKb.includes(b.id) ? st.nwKb : st.nwKb.concat([b.id]), nwKbQ: '' })) })),
+    nwKbFoundTitle: f.mode === 'search' ? n(f.total, 'match', 'matches') + ' for “' + s.nwKbQ.trim() + '”' : f.mode === 'suggest' ? 'Suggested for this piece' : 'Most used by creators',
+    nwKbMore: f.total > f.rows.length ? (f.total - f.rows.length) + ' more · narrow the search' : '',
+    nwKbEmpty: !usable.length ? 'No knowledge bundles are open to creators yet.' : f.mode === 'search' && !f.total ? 'No bundle matches “' + s.nwKbQ.trim() + '”' : '',
+  };
+}
+
 // "Draft with AI": an outline and a takeaway from the retrieved passages, by AI when the use is live (ask is null
 // otherwise), else the design's scripted outline, labelled as scripted. ai says which it was; only an AI draft is
 // saved as AI-assisted.
@@ -107,7 +145,7 @@ async function saveForm(L: Logic, submit: boolean) {
   try {
     id = await saveDraft(fieldsOf(nw, s.nwKb), id);
     const status = submit ? await submitContribution(id) : 'draft', d = await reloaded(L), saved = id;
-    L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: saved, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], revChecks: st.revChecks }));
+    L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: saved, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], nwKbQ: '', revChecks: st.revChecks }));
     L.say(doneText(status, d, saved, again));
     await afterPublish(L, status);
   } catch (err) { failed(L, err, { editing: id }); }
@@ -258,7 +296,7 @@ function createScreen(L: Logic) {
     lead: 'Make a reel, podcast, guide or case write-up for your colleagues. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
     canCreate, noGrantText: 'You have no creation rights yet. Ask an admin for creation rights: a Domain Admin or General Admin gives you rules such as “Consulting or Tax & Legal · Podcast”.',
     myRules: d.rules.map((r) => ruleSentence(r)),
-    goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [] }) : L.say('Ask an admin for creation rights first')),
+    goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [], nwKbQ: '' }) : L.say('Ask an admin for creation rights first')),
     // The full flow, as the design shows it. Peers come from the author's business line (the design said "same domain").
     reviewSteps: REVIEW_STAGES.map((n, k) => ({ n: String(k + 1), name: n, who: k === 1 ? 'Two colleagues in your line or the content\'s line · 5 working days' : REVIEW_WHO[k], bg: k === 4 ? '#86BC25' : '#1a1d18', fg: k === 4 ? '#10180a' : '#fff' })),
     tabs, tab, setTab: (v: string) => (v === 'new' && !canCreate ? L.say('Ask an admin for creation rights first') : v === 'rules' && !isAdmin ? undefined
@@ -282,17 +320,13 @@ function createScreen(L: Logic) {
     nwSetTitle: (e: Input) => setNw({ title: e.target.value }), nwSetDom: (e: Sel) => setNw({ dom: e.target.value }), nwSetLvl: (e: Sel) => setNw({ lvl: e.target.value }),
     nwSetStage: (e: Sel) => setNw({ stage: e.target.value }), nwSetTake: (e: Area) => setNw({ take: e.target.value }),
     nwTakeHint: 'Reviewers judge the piece against this sentence. ' + nw.take.length + ' / ' + TAKE_MAX,
-    nwBundles: usableBundles(s.bundles, line).map((b) => {
-      const on = s.nwKb.includes(b.id);
-      return { id: b.id, label: b.name, meta: b.access === 'tl' ? 'Tax & Legal' : b.sources.filter((r) => r[5] !== 'client' && r[5] !== 'licensed').reduce((a, r) => a + r[3], 0) + ' passages', on,
-        toggle: () => L.setState((st) => ({ nwKb: on ? st.nwKb.filter((k) => k !== b.id) : st.nwKb.concat([b.id]) })) };
-    }),
+    ...bundleFinder(L, nw, line),
     nwDraftAi: () => draftAi(L), nwAiBusy: s.nwAiBusy, nwAiLabel: s.nwAiBusy ? 'Drafting' : 'Draft with AI', nwHasAi: nw.outline.length > 0 || nw.sources.length > 0, nwAiNote: nw.aiNote,
     nwAiOutline: nw.outline.map((o, k) => ({ n: (k + 1) + '.', text: o })), nwAiCites: nw.sources.map((c, k) => ({ n: String(k + 1), text: c })),
     nwFileText: nw.type + ' · the file itself (video, audio or document) is attached later; this prototype stores the text only.',
     nwChecks: checks.map(dot), nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
-    nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: fresh(), nwKb: [], createTab: 'mine' }),
+    nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: fresh(), nwKb: [], nwKbQ: '', createTab: 'mine' }),
     nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this combination needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement.' : '',
     // Review requirements
     policyRows, defaultPolicy: 'When no requirement matches: ' + policyLabel(policyFor([], null)) + '. When several match, the strictest counts.',
@@ -331,7 +365,7 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
     isPub: c.status === 'published', pubNote: c.learning_id ? 'In the library as ' + c.learning_id + ' · admins can map it to paths like any learning.' : 'Published.',
     mainLabel: '', mainVariant: 'primary', main: () => {}, secondLabel: '', second: () => {}, thirdLabel: '', third: () => {},
   };
-  const edit = () => L.setState({ createTab: 'new', editing: c.id, nw: draftOf(c), nwKb: c.bundle_ids || [] });
+  const edit = () => L.setState({ createTab: 'new', editing: c.id, nw: draftOf(c), nwKb: c.bundle_ids || [], nwKbQ: '' });
   if (c.status === 'published') return { ...base, mainLabel: learning ? 'Open in library' : '', mainVariant: 'secondary', main: () => L.openDetail(c.learning_id!, 'create') };
   if (c.status === 'changes') return { ...base, mainLabel: 'Edit and resubmit', main: edit, secondLabel: 'Resubmit as it is', second: () => submitSaved(L, c) };
   if (c.status === 'review') return { ...base, secondLabel: '', mainLabel: '' };

@@ -372,9 +372,9 @@ describe('Draft with AI', () => {
     expect(h.state.nw.ai).toBe(false);
   });
   it('only offers bundles the author may use: Tax & Legal bundles to Tax & Legal people', () => {
-    expect(cs({ state: { createTab: 'new' } }).c().nwBundles.map((b) => b.id)).not.toContain('B2');
-    const tl = harness({ access: member('u1'), subject: person({ businessLine: 'Tax & Legal' }), state: { screen: 'create', createTab: 'new', create: data() } });
-    expect(tl.vm().create!.nwBundles.map((b) => b.id)).toContain('B2');
+    expect(cs({ state: { createTab: 'new', nwKbQ: 'belgian' } }).c().nwKbFound.map((b) => b.id)).toEqual([]);
+    const tl = harness({ access: member('u1'), subject: person({ businessLine: 'Tax & Legal' }), state: { screen: 'create', createTab: 'new', create: data(), nwKbQ: 'belgian' } });
+    expect(tl.vm().create!.nwKbFound.map((b) => b.id)).toEqual(['B2']);
   });
   it('says the AI outline is unavailable when the model fails, and the form stays usable', async () => {
     const out = await draftFromPassages(nw, [{ text: 'Groups above €750m are in scope. Minimum rate 15%.', src: 'Guide · B2', score: 1 }], async () => null);
@@ -392,5 +392,41 @@ describe('Draft with AI', () => {
     await h.c().nwDraftAi();
     expect(h.state.nw).toMatchObject({ take: 'Price the change [1]', outline: ['Scope [1]'], ai: true });
     expect(h.c().nwAiNote).toMatch(/^AI-assisted draft/);
+  });
+});
+
+describe('grounding in knowledge bundles (scales to hundreds)', () => {
+  const nw = { line: 'Consulting', aud: '', type: 'Reel', title: 'Run a better workshop', dom: 'pers', lvl: '2', stage: 'Analyst', take: '', outline: [], sources: [], ai: false, aiNote: '' };
+  it('shows the picked bundles as chips and suggests a few others that fit the piece', () => {
+    const h = cs({ state: { createTab: 'new', nw, nwKb: ['B1'] } });
+    expect(h.c().nwKbPicked.map((b) => b.id)).toEqual(['B1']);
+    expect(h.c().nwKbFoundTitle).toBe('Suggested for this piece');
+    expect(h.c().nwKbFound[0].id).toBe('B8');
+    expect(h.c().nwKbFound.map((b) => b.id)).not.toContain('B1');
+    expect(h.c().nwKbFound.length).toBeLessThanOrEqual(5);
+    h.c().nwKbFound[0].add();
+    expect(h.state.nwKb).toEqual(['B1', 'B8']);
+    h.c().nwKbPicked[0].remove();
+    expect(h.state.nwKb).toEqual(['B8']);
+  });
+  it('falls back to the most used bundles when nothing fits the piece yet', () => {
+    const c = cs({ state: { createTab: 'new', nw: { ...nw, title: '', dom: 'acad' } } }).c();
+    expect(c.nwKbFoundTitle).toBe('Most used by creators');
+    expect(c.nwKbFound[0].id).toBe('B4');
+  });
+  it('searches name, description and tags, shows at most five and says how many more', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ ...harness().state.bundles[0], id: 'X' + i, name: 'VAT pack ' + i, usedBy: i }));
+    const h = cs({ state: { createTab: 'new', nw, bundles: many } });
+    expect(h.c().nwKbCount).toBe('30 bundles');
+    h.c().nwKbSetQuery(ev('vat'));
+    expect(h.c().nwKbFoundTitle).toBe('30 matches for “vat”');
+    expect(h.c().nwKbFound.map((b) => b.id)).toEqual(['X29', 'X28', 'X27', 'X26', 'X25']);
+    expect(h.c().nwKbMore).toBe('25 more · narrow the search');
+    h.c().nwKbFound[0].add();
+    expect(h.state.nwKb).toEqual(['X29']);
+    expect(h.state.nwKbQ).toBe('');
+    h.c().nwKbSetQuery(ev('zzz'));
+    expect(h.c().nwKbFound).toEqual([]);
+    expect(h.c().nwKbEmpty).toBe('No bundle matches “zzz”');
   });
 });
