@@ -50,5 +50,5 @@ Working folder: repo root.
 None; use the standard agents.
 
 ## Pointers
-- `docs/implementation-notes.md`, `docs/product/`, `docs/testing/functional-test-cases.md`.
+- `docs/implementation-notes.md`, `docs/decisions.md`, `docs/product/`, `docs/testing/functional-test-cases.md`.
 - `Design/` holds the full design export (git-ignored).
