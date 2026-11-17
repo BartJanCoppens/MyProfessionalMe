@@ -12,7 +12,7 @@
 // (ai_count_call). Answers made by the voice carry X-AI-Generated: true. The text is never logged; a log line holds the
 // use, the outcome, the characters and the duration.
 import { withSupabase } from '@supabase/server';
-import { callerRoles, connectionKey, countCall, fail, isLive, useRow } from '../_shared/aiUse.ts';
+import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
 import { VOICE_MODEL } from '../_shared/narrationText.ts';
 import { sampleResponse, speakResponse, VOICE_LIMITS, VOICE_USE } from './core.ts';
 import type { VoiceTarget } from './core.ts';
@@ -29,7 +29,7 @@ export default {
     const admin = ctx.supabaseAdmin, caller = ctx.supabase;
     const live = async () => (await isLive(admin, VOICE_USE)) === true;
     const target = async (): Promise<VoiceTarget | null> => {
-      const use = await useRow(admin, VOICE_USE);
+      const use = await readUse(admin, VOICE_USE);
       const key = use?.connection ? await connectionKey(admin, use.connection.id) : null;
       return use?.connection && key ? { key, baseUrl: use.connection.base_url, model: use.model || use.connection.default_model || VOICE_MODEL } : null;
     };

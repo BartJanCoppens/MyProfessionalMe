@@ -10,7 +10,7 @@
 // request size are capped (core.ts). Nothing of the messages or the reply is logged; a log line holds the use, the
 // outcome and the duration.
 import { withSupabase } from '@supabase/server';
-import { callerRoles, connectionKey, countCall, fail, isLive, useRow } from '../_shared/aiUse.ts';
+import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
 import type { Conn } from '../_shared/aiUse.ts';
 import { callProvider, inputChars, limitMessage, LIMITS, readAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
 
@@ -47,7 +47,7 @@ export default {
     const live = await isLive(admin, r.use);
     if (live === null) return fail(500, 'Could not read the AI settings');
     if (!live) return fail(409, 'This AI use is not live: a System Admin sets its connection in Administration · AI connections');
-    const use = await useRow(admin, r.use);
+    const use = await readUse(admin, r.use);
     if (!use || !use.connection) return fail(409, 'This AI use has no connection');
     // Voice uses are live too (ai_live_uses), but only the `voice` function serves them.
     if (use.kind !== 'text') return fail(409, 'This is not a text use: the voice function serves it');

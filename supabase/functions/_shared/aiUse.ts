@@ -24,7 +24,7 @@ export async function isLive(admin: Admin, use: string): Promise<boolean | null>
   return error ? null : ((data as string[] | null) || []).includes(use);
 }
 
-export async function useRow(admin: Admin, use: string): Promise<UseRow | null> {
+export async function readUse(admin: Admin, use: string): Promise<UseRow | null> {
   const { data } = await admin.from('ai_uses').select('kind, admins_only, model, preamble, daily_limit, connection:ai_connections(id, provider, base_url, default_model)')
     .eq('key', use).maybeSingle<UseRow>();
   return data || null;

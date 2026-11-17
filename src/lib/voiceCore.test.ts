@@ -102,7 +102,7 @@ describe('speakResponse', () => {
     expect(d.fetch).not.toHaveBeenCalled();
   });
   it('refuses a missing or someone else\'s contribution (the media write rule) with 403, before anything is counted or sent', async () => {
-    const canWrite = vi.fn(async () => false), count = vi.fn(async () => 'ok' as const), d = deps({ canWrite, count });
+    const canWrite = vi.fn(async (_path: string) => false), count = vi.fn(async () => 'ok' as const), d = deps({ canWrite, count });
     const r = await speakResponse(ask(), d);
     expect(r.status).toBe(403);
     expect((await body(r)).error).toMatch(/your own draft/);
