@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { Banner, Button, DotLegend, Eyebrow, FilterChip, Hover, KeyValueList, LinkButton, PageTitle, ProgressRing, SegmentedControl, StatCard, StatusChip, Tag } from '../ds';
 import type { VM } from '../model';
+import { CertChip, CertDock, CertDockLink, CertLabels, CertLegend, CertMarks, CertPolygons, CertThreads } from './MapCert';
 
 const card: CSSProperties = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' };
 const dockHead: CSSProperties = { padding: '14px 18px', borderBottom: '1px solid #eef0ea', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: '#fafbf8' };
@@ -23,7 +24,9 @@ export default function MapScreen({ vm }: { vm: VM }) {
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: cc.color, flex: 'none' }} />{cc.label}<span style={{ fontWeight: 400, opacity: 0.75 }}>{cc.count}</span>
           </FilterChip>
         ))}
+        <CertChip vm={vm} />
         <span style={{ fontSize: 12, color: '#8b918a' }}>{vm.cloudRowHint}</span>
+        <CertDockLink vm={vm} />
       </div>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 600px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -31,6 +34,7 @@ export default function MapScreen({ vm }: { vm: VM }) {
           {vm.view === 'radar' && <Radar vm={vm} />}
           {vm.view === 'road' && <Road vm={vm} />}
           <Docks vm={vm} />
+          <CertDock vm={vm} />
         </div>
         <MapAside vm={vm} />
       </div>
@@ -52,6 +56,7 @@ function Constellation({ vm }: { vm: VM }) {
             </g>
           ))}
           {vm.cEdges.map((e, i) => <line key={i} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={e.stroke} strokeWidth={e.w} opacity={e.op} style={{ transition: 'opacity .15s' }} />)}
+          <CertThreads vm={vm} />
           {vm.cHubs.map((h) => (
             <g key={h.id} opacity={h.op} onClick={h.onClick} onDoubleClick={h.zoom} style={{ cursor: 'pointer', transition: 'opacity .15s', transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmPop .45s cubic-bezier(.2,.7,.3,1) backwards', animationDelay: h.delay }}>
               <circle cx={h.x} cy={h.y} r="15" fill="#fff" stroke={h.stroke} strokeWidth={h.sw} />
@@ -69,6 +74,7 @@ function Constellation({ vm }: { vm: VM }) {
               <title>{n.title}</title>
             </g>
           ))}
+          <CertMarks vm={vm} />
           <g onClick={vm.selectMe} style={{ cursor: 'pointer' }}>
             <circle cx="540" cy="330" r="41" fill="none" stroke="#86BC25" strokeWidth="1.5" style={{ pointerEvents: 'none', transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmPulse 3.6s ease-out 1s infinite', opacity: 0 }} />
             <circle cx="540" cy="330" r="38" fill="none" stroke="#eef0ec" strokeWidth="5" />
@@ -100,6 +106,7 @@ function Constellation({ vm }: { vm: VM }) {
               </div>
             </div>
           ))}
+          <CertLabels vm={vm} />
         </div>
       </div>
       )}
@@ -124,6 +131,7 @@ function Radar({ vm }: { vm: VM }) {
             <polygon key={rc.key} points={rc.points} fill={rc.color} fillOpacity={rc.fo} stroke={rc.color} strokeWidth="1.3" strokeDasharray="2 3" onClick={rc.select}
               style={{ cursor: 'pointer', transformBox: 'view-box', transformOrigin: '540px 280px', animation: 'pmGrow .8s ease-out backwards, pmSwell 9s ease-in-out infinite', animationDelay: rc.delay }} />
           ))}
+          <CertPolygons vm={vm} />
           <polygon points={vm.rCur} fill="rgba(134,188,37,.14)" stroke="#86BC25" strokeWidth="2" style={{ pointerEvents: 'none', transformBox: 'view-box', transformOrigin: '540px 280px', animation: 'pmGrow .7s cubic-bezier(.2,.7,.3,1) backwards' }} />
           {vm.rDots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r="4.5" fill="#86BC25" stroke="#fff" strokeWidth="1.5" style={{ transformBox: 'fill-box', transformOrigin: 'center', animation: 'pmPop .35s cubic-bezier(.2,.7,.3,1) backwards', animationDelay: d.delay }} />)}
           <circle cx="540" cy="280" r="14.5" fill="#fff" stroke="#86BC25" strokeWidth="1.5" />
@@ -150,6 +158,7 @@ function Radar({ vm }: { vm: VM }) {
             <span style={{ width: 14, height: 10, borderRadius: 3, background: rc.wash, border: '1px dashed ' + rc.color }} />{rc.legend}
           </span>
         ))}
+        <CertLegend vm={vm} />
         <span>{vm.radarGapText}</span>
       </div>
     </div>

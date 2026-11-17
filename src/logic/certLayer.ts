@@ -63,7 +63,7 @@ export function certRadar(entries: CertEntry[], learning: Record<string, { dom: 
 const ROAD_START = 2026 * 12 + 9;
 const quarterOf = (month: number) => Math.max(0, Math.min(3, Math.floor((month - ROAD_START) / 3)));
 
-type RoadItem = { id: string; av: boolean; avInit: string; title: string; sub: string; ringCss: string; onClick: () => void };
+type RoadItem = { id: string; av: boolean; avInit: string; title: string; sub: string; ringCss: string; onClick: () => void; delay?: string };
 
 export function certRoadLanes(entries: CertEntry[], titleOf: TitleOf, counsellor: string) {
   return entries.filter((x) => !x.pg.complete).map(({ t, e, pg, open }) => {
@@ -80,7 +80,7 @@ export function certRoadLanes(entries: CertEntry[], titleOf: TitleOf, counsellor
     });
     const credAt = e.start_month + t.months;
     cells[quarterOf(credAt)].items.push({ id: t.id + ':credential', av: false, avInit: '', title: '◆ ' + (t.credential || t.name), sub: 'Credential · ' + monthLabel(credAt), ringCss: '2px solid #7a5000', onClick: open });
-    return { key: 'cert-' + t.id, label: '◆ ' + t.name, sub: pg.reqDone + ' of ' + pg.reqN + ' required steps · credential by ' + monthLabel(credAt), color: '#e0a100', cells, select: open };
+    return { key: 'cert-' + t.id, label: '◆ ' + t.name, sub: pg.reqDone + ' of ' + pg.reqN + ' required steps · credential by ' + monthLabel(credAt), color: '#e0a100', cells, select: open, delay: undefined as string | undefined };
   });
 }
 

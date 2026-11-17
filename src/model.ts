@@ -16,6 +16,7 @@ import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import { kbVals } from './kbVals';
 import { trajectoryAdminVals, trajectoryCount } from './trajectoryAdminVals';
+import { certMapVals } from './trajectoryMap';
 import { navScreen, trajectoryVals } from './trajectoryVals';
 import { blankDraft, createVals } from './createVals';
 import { loadCreate } from './lib/contributionStore';
@@ -65,7 +66,7 @@ export function initState(cfg: Config): AppState {
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
     kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbAnswerAi: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
-    projSel: '', clouds: { proj: true, pers: true, amb: true },
+    projSel: '', clouds: { proj: true, pers: true, amb: true }, certOn: true, certFocus: null,
     chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
     chat: [],
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwKbQ: '', nwAiBusy: false,
@@ -473,7 +474,7 @@ export class Logic {
     const hoursSplit = fmtH(items.reduce((a, it) => a + (it.state === 'accepted' ? it.hours : 0), 0)) + ' h accepted · ' + fmtH(items.reduce((a, it) => a + (it.state === 'submitted' ? it.hours : 0), 0)) + ' h awaiting acceptance';
     const cpdYear = items.filter((it) => it.state === 'accepted').reduce((a, it) => a + it.cpd, 0);
     const clouds = this.clouds(items, byId);
-    const c = this.constellation(items, clouds), r = this.radar(clouds), rd = this.road(items, clouds);
+    const c = this.constellation(items, clouds), r = this.radar(clouds), rd = this.road(items, clouds), cert = certMapVals(this, byId, c.nodes);
     const nextUp = items.filter((it) => it.state !== 'accepted' && it.state !== 'submitted' && (it.ob === 'mandatory' || it.ob === 'advised' || it.ob === 'chosen'))
       .sort((a, b) => (a.ob === 'mandatory' ? 0 : 1) - (b.ob === 'mandatory' ? 0 : 1) || Number(b.state === 'in-progress') - Number(a.state === 'in-progress')).slice(0, 4)
       .map((it) => ({ id: it.id, title: it.title, meta: (it.hasDue ? 'Due ' + it.due : it.obLabel) + ' · ' + it.stateLabel + ' · ' + it.hoursLabel, dot: it.ob === 'mandatory' ? '#1a1d18' : it.ob === 'advised' ? '#2f7fc1' : '#86BC25', open: it.open }));
@@ -619,7 +620,7 @@ export class Logic {
       cEdges: c.edges, cHubs: c.hubs, cNodes: c.nodes, cClouds: c.clouds, isZoom: !!s.zoom, zm: s.zoom ? this.zoomVals(items, clouds) : null, zoomOut: () => this.setState({ zoom: null, sel: null }),
       cHint: s.zoom ? 'Rings are levels L1 (inner) to L5: green is your level now, dashed is the level needed for ' + this.nextStage() + '. Click a learning for details.' : 'Click a dot or a domain. Press + or double-click a domain to zoom in.', clearSel: () => this.setState({ sel: null }), selectMe: () => this.setState({ sel: null, view: 'radar' }),
       rRings: r.rings, rAxes: r.axes, rCur: r.cur, rTarget: r.target, rDots: r.dots, rClouds: r.clouds, radarGapText: r.gapText,
-      roadLanes: rd.lanes, roadQuarters: rd.quarters, roadInflight: rd.inflight, roadBehind: rd.behind, inflightCount: rd.inflightCount,
+      roadLanes: [...rd.lanes, ...cert.certLanes], roadQuarters: rd.quarters, roadInflight: rd.inflight, roadBehind: rd.behind, inflightCount: rd.inflightCount,
       cloudChips, cloudRowLabel: s.view === 'road' ? 'Paths' : 'Learning clouds', cloudRowHint: s.view === 'road' ? 'Each cloud adds its own lane next to the firm path.' : 'Click a cloud label to see what put it there.',
       cloudDock, dock, hubDock, nextUp, showStreak: this.props.showMarks !== false,
       // Earned marks only; private to the person.
@@ -627,6 +628,7 @@ export class Logic {
       ...kbVals(this),
       ...trajectoryAdminVals(this),
       ...trajectoryVals(this, byId),
+      ...cert,
       ...createVals(this),
       ...recordVals(this, d0),
       ...completionVals(this, d0),

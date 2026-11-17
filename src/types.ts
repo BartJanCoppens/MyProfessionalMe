@@ -76,7 +76,7 @@ export type AidContent = { kind: 'aid'; items: string[] };
 export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent;
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null };
 export type View = 'constellation' | 'radar' | 'road';
-export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | null;
+export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | { type: 'cert' } | null;
 
 export type ChatMsg = { role: 'assistant' | 'user'; text: string };
 export type Proposal = {
@@ -92,6 +92,8 @@ export type AppState = {
   blState: string | null; maps: Record<string, Mapping[]>; pending: Record<string, boolean>; mapSel: string | null; overStage: string | null;
   toast: string | null; noteOpen: boolean; myRating: string;
   projSel: string; clouds: Record<CloudKey, boolean>;
+  // The certification layer of the growth map: shown or not, and the trajectory the radar highlights.
+  certOn: boolean; certFocus: string | null;
   // The assistant chat and its proposal belong to one person (chatFor), never to whoever is viewed next.
   chatInput: string; chatBusy: boolean; proposal: Proposal | null; chatFor: string | null;
   // Avatar edits shown before the save round-trips, for the person being edited.
