@@ -25,3 +25,9 @@ Known proof-of-concept shortcuts and what a production version replaces them wit
 - **Why.** The database stores no industry or technology membership, so it cannot tell who a mandatory `ind:`/`tec:` trajectory binds (auto-enrolment, no withdrawal). Refusing the map keeps the SQL and the screens consistent.
 - **Production replacement.** Store `ind:`/`tec:` membership per person (a table with versioned changes), extend `private.in_mandatory_audience` to it, then allow `mandatory` on those audiences.
 
+
+## Flash cards and practice exams are drafted in the upload form, not a studio (design v4, Task 12, 2026-11-17)
+
+- **What.** Flash cards and Practice exam are contribution formats (SQL lists and TS lists change together; `src/logic/items.test.ts` checks the migration). A contribution keeps its items in `contributions.items` (jsonb) and publishes them as `learnings.content`. Items come from AI (`draft_items`, off by default), a scripted fallback for cards only (top passages of the picked bundles, labelled "Scripted from the bundle", never AI) or a CSV. A published deck sets `due` to its size and `next` to empty; a published exam sets `bank` to its size and a fixed `real` text.
+- **Why.** Owner decision D1 (default): only the flash card and exam studio, text only; this is its upload-form half. Exam questions cannot be scripted from a passage without inventing wrong options, so they need AI or a CSV.
+- **Shortcuts and production replacements.** No spaced-repetition schedule (`due`/`next` are placeholders), no `real` exam description from the author, no per-item review comments (reviewers judge the whole set), CSV rows cannot span lines. A production version would add per-item review, an author-written exam description and multi-line CSV fields.

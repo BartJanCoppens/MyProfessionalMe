@@ -9,7 +9,7 @@ export type Verdict = 'waiting' | 'pending' | 'approved' | 'changes';
 export type Contribution = {
   id: string; author_id: string; author_name: string; business_line: string | null; audience: string | null;
   type: string; title: string; domain: string; level: number; audience_stage: string; takeaway: string; outline: string; sources: string[];
-  ai_assisted: boolean; bundle_ids: string[]; status: ContributionStatus; step: number; learning_id: string | null;
+  ai_assisted: boolean; bundle_ids: string[]; items: unknown[] | null; status: ContributionStatus; step: number; learning_id: string | null;
   created_at: string; updated_at: string; submitted_at: string | null; published_at: string | null;
 };
 export type Review = {
@@ -92,9 +92,9 @@ const cap = (w: string) => w.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
 export type Check = { ok: boolean; text: string };
 // Before submit: a title of at most 60 characters, one takeaway, no client names.
-// Client names are searched in every text field: title, takeaway, outline and cited sources.
-export function contentChecks(d: { title: string; takeaway: string; outline?: string[]; sources?: string[] }): Check[] {
-  const title = d.title.trim(), take = d.takeaway.trim(), hit = blockedTerm([d.title, d.takeaway].concat(d.outline || [], d.sources || []).join(' '));
+// Client names are searched in every text field: title, takeaway, outline, cited sources and the items of cards and exams.
+export function contentChecks(d: { title: string; takeaway: string; outline?: string[]; sources?: string[]; items?: string[] }): Check[] {
+  const title = d.title.trim(), take = d.takeaway.trim(), hit = blockedTerm([d.title, d.takeaway].concat(d.outline || [], d.sources || [], d.items || []).join(' '));
   return [
     { ok: title.length > 0 && title.length <= TITLE_MAX, text: !title ? 'Add a title' : title.length <= TITLE_MAX ? 'Title is clear and short' : 'Title is over 60 characters (' + title.length + ')' },
     { ok: !!take && take.length <= TAKE_MAX, text: !take ? 'Write the one takeaway' : take.length <= TAKE_MAX ? 'One takeaway, ' + take.length + ' of ' + TAKE_MAX + ' characters' : 'Takeaway is too long for one point' },

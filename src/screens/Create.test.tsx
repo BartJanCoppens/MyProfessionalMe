@@ -52,4 +52,18 @@ describe('Create & share screen', () => {
     expect(screen.getByText('Your creation rules: Consulting.')).toBeTruthy();
     expect(screen.getByText('Who will review it')).toBeTruthy();
   });
+  it('imports a CSV into a flash card deck, shows the checklist line and enables submit', () => {
+    const nw = { line: 'Consulting', aud: '', type: 'Flash cards', title: 'Rates', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One fact per card.', outline: [], sources: [], ai: false, aiNote: '' };
+    render(<Live state={{ create: data(), createTab: 'new', nw }} />);
+    expect(screen.getByText('Generate with AI or import a CSV')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Submit for review' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('CSV lines'), { target: { value: 'What is the rate?,25 %\nbroken' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import CSV' }));
+    expect(screen.getByText('1 card imported from a CSV · check each one')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toBe('Line 2: expected front,back');
+    expect(screen.getByText('What is the rate?')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Submit for review' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(screen.getByText('Generate with AI or import a CSV')).toBeTruthy();
+  });
 });

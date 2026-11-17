@@ -4,7 +4,7 @@
 export type AiProvider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'heygen' | 'other';
 export type AiKind = 'text' | 'embedding' | 'voice' | 'avatar';
 // The text uses the app calls today; each has a scripted fallback.
-export type AiUseKey = 'profile_chat' | 'curriculum_copilot' | 'learners_eye' | 'kb_answer' | 'draft_outline' | 'teach_back';
+export type AiUseKey = 'profile_chat' | 'curriculum_copilot' | 'learners_eye' | 'kb_answer' | 'draft_outline' | 'teach_back' | 'draft_items';
 
 export type AiConnection = { id: string; name: string; provider: AiProvider; base_url: string | null; default_model: string | null; region: string | null; key_hint: string | null; updated_at?: string };
 export type AiUse = {

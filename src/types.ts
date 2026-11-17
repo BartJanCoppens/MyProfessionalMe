@@ -1,3 +1,4 @@
+import type { DraftItems } from './logic/items';
 import type { CreateData } from './logic/contribution';
 import type { Trajectory } from './logic/trajectory';
 import type { TrjMine } from './logic/trajectoryLearner';
@@ -148,7 +149,7 @@ export type CredDraft = { name: string; issuer: string; earned: string; expires:
 
 // The New content form. line and aud are '' for none; type is the format; lvl stays text for the select; outline and
 // sources come from Draft with AI.
-export type NewDraft = { line: string; aud: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string };
+export type NewDraft = { line: string; aud: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string; items?: DraftItems };
 
 // Knowledge library: retrieval models and bundles
 export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };

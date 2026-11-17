@@ -26,7 +26,7 @@ export async function loadCreate(userId: string): Promise<CreateData> {
   };
 }
 
-export type DraftFields = Pick<Contribution, 'business_line' | 'audience' | 'type' | 'title' | 'domain' | 'level' | 'audience_stage' | 'takeaway' | 'outline' | 'sources' | 'ai_assisted' | 'bundle_ids'>;
+export type DraftFields = Pick<Contribution, 'business_line' | 'audience' | 'type' | 'title' | 'domain' | 'level' | 'audience_stage' | 'takeaway' | 'outline' | 'sources' | 'ai_assisted' | 'bundle_ids' | 'items'>;
 
 // Creates a draft, or edits one (or one with changes requested). Returns its id.
 export async function saveDraft(fields: DraftFields, id?: string | null): Promise<string> {

@@ -172,8 +172,11 @@ describe('the review badge', () => {
 
 describe('types', () => {
   it('leave out the avatar scenario until the avatar studio exists', () => {
-    expect(NEW_TYPES).toHaveLength(5);
+    expect(NEW_TYPES).toHaveLength(7);
     expect(CREATE_TYPES.map((t) => t[0])).not.toContain('Avatar scenario');
+  });
+  it('offer flash cards and practice exams', () => {
+    expect(CREATE_TYPES.map((t) => t[0])).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam']);
   });
 });
 

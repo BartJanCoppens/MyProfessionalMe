@@ -90,7 +90,7 @@ describe('the New tab', () => {
     expect(h.c().audOptions.map((o) => o.label).slice(0, 2)).toEqual(['None', 'Energy & utilities']);
     expect(h.c().audOptions).toHaveLength(8);
     expect(h.c().domainOptions).toHaveLength(9);
-    expect(h.c().newTypes.map((t) => [t.label, t.fg === '#b3b8ae'])).toEqual([['Reel', true], ['Podcast', false], ['Micro-guide', false], ['Case write-up', true]]);
+    expect(h.c().newTypes.map((t) => [t.label, t.fg === '#b3b8ae'])).toEqual([['Reel', true], ['Podcast', false], ['Micro-guide', false], ['Case write-up', true], ['Flash cards', true], ['Practice exam', true]]);
     h.c().newTypes[0].pick();
     expect(h.lastToast()).toBe('Not in your creation rules');
     expect(h.c().nw.type).toBe('Podcast');
@@ -428,5 +428,116 @@ describe('grounding in knowledge bundles (scales to hundreds)', () => {
     h.c().nwKbSetQuery(ev('zzz'));
     expect(h.c().nwKbFound).toEqual([]);
     expect(h.c().nwKbEmpty).toBe('No bundle matches “zzz”');
+  });
+});
+
+describe('Flash cards and practice exams', () => {
+  const base = { line: 'Consulting', aud: '', type: 'Flash cards', title: 'Corporate tax basics', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One fact per card.', outline: [], sources: [], ai: false, aiNote: '' };
+  const deck = (n: number) => ({ list: Array.from({ length: n }, (_, i) => ['Front ' + i, 'Back ' + i] as [string, string]), how: 'scripted' as const, problems: [] });
+  const open = (nw: object = {}, o: Parameters<typeof cs>[0] = {}) => cs({ ...o, state: { createTab: 'new', nw: { ...base, ...nw }, nwKb: ['B1'], ...o.state } });
+  const checks = (h: ReturnType<typeof cs>) => h.c().nwChecks.map((c) => c.text);
+  it('offers the item panel for these two formats only', () => {
+    expect(open().c().itemsPanel).toMatchObject({ noun: 'cards', lim: 'up to 40 cards, one fact per card' });
+    expect(open({ type: 'Practice exam' }).c().itemsPanel).toMatchObject({ noun: 'questions', lim: 'up to 30 questions, each with an explanation' });
+    expect(open({ type: 'Reel' }).c().itemsPanel).toBeNull();
+  });
+  it('asks to generate or import until there are items, and blocks submit', () => {
+    const h = open();
+    expect(checks(h)).toContain('Generate with AI or import a CSV');
+    expect(h.c().nwBlocked).toBe(true);
+  });
+  it('scripts the cards from the bundle when AI is off, says so, and does not save them as AI-assisted', async () => {
+    const h = open();
+    await h.c().itemsPanel!.draft();
+    const n = h.state.nw.items!.list.length;
+    expect(n).toBeGreaterThan(0);
+    expect(checks(h)).toContain(n + (n === 1 ? ' card' : ' cards') + ' drafted from the bundle · check each one');
+    expect(h.c().itemsPanel!.note).toBe('Scripted from the bundle · no AI connection for this use');
+    expect(h.state.nw.ai).toBe(false);
+    expect(h.c().itemsPanel!.rows[0].front).toMatch(/\?$/);
+  });
+  it('asks for a bundle first', async () => {
+    const h = open({}, { state: { nwKb: [] } });
+    await h.c().itemsPanel!.draft();
+    expect(h.lastToast()).toBe('Pick at least one knowledge bundle');
+  });
+  it('has no scripted exam: it says to use AI or a CSV', async () => {
+    const h = open({ type: 'Practice exam' });
+    await h.c().itemsPanel!.draft();
+    expect(h.state.nw.items?.list ?? []).toEqual([]);
+    expect(h.lastToast()).toBe('Practice questions have no scripted version · generate with AI or import a CSV');
+  });
+  it('uses the draft_items answer when AI is live, and saves it as AI-assisted', async () => {
+    const complete = vi.fn(async () => '{"cards":[{"front":"Standard rate?","back":"25 %"},{"front":"SME rate?","back":"20 %"}]}');
+    stubWindow({ claude: { complete } });
+    const h = open({}, { live: true });
+    await h.c().itemsPanel!.draft();
+    expect(h.state.nw.items).toMatchObject({ how: 'ai', list: [['Standard rate?', '25 %'], ['SME rate?', '20 %']] });
+    expect(h.state.nw.ai).toBe(true);
+    expect(h.c().itemsPanel!.note).toMatch(/^AI-assisted draft/);
+    expect(JSON.stringify(complete.mock.calls[0])).toContain('Corporate tax basics');
+  });
+  it('falls back to the scripted cards, never labelled AI, when the answer is malformed', async () => {
+    stubWindow({ claude: { complete: vi.fn(async () => '{"cards":[{"front":"only a front"}]}') } });
+    const h = open({}, { live: true });
+    await h.c().itemsPanel!.draft();
+    expect(h.state.nw.items!.how).toBe('scripted');
+    expect(h.state.nw.ai).toBe(false);
+    expect(h.c().itemsPanel!.note).toBe('AI draft unavailable · scripted from the bundle');
+  });
+  it('imports a CSV, reports bad lines by number and lets the creator remove an item', () => {
+    const h = open();
+    h.c().itemsPanel!.importCsv('front,back\nWhat is VAT?,A tax on spending\nbroken line');
+    expect(h.state.nw.items!.list).toEqual([['What is VAT?', 'A tax on spending']]);
+    expect(h.c().itemsPanel!.problems).toEqual(['Line 3: expected front,back']);
+    expect(checks(h)).toContain('1 card imported from a CSV · check each one');
+    h.c().itemsPanel!.rows[0].remove();
+    expect(h.state.nw.items!.list).toEqual([]);
+  });
+  it('drops the items when the format changes', () => {
+    const h = open({ items: deck(3) }, { data: data({ rules: [rule({ lines: ['Consulting'] })] }) });
+    h.c().newTypes.find((t) => t.label === 'Practice exam')!.pick();
+    expect(h.state.nw.type).toBe('Practice exam');
+    expect(h.state.nw.items!.list).toEqual([]);
+  });
+  it('refuses to submit without items, with a clear message', () => {
+    const h = open();
+    h.c().nwSubmit();
+    expect(h.lastToast()).toBe('Add the cards first · generate them with AI or import a CSV');
+    expect(store.saveDraft).not.toHaveBeenCalled();
+  });
+  it('saves the items with the draft and submits', async () => {
+    const h = open({ items: deck(2) });
+    expect(h.c().nwBlocked).toBe(false);
+    h.c().nwSubmit(); await flush(10);
+    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ type: 'Flash cards', items: [['Front 0', 'Back 0'], ['Front 1', 'Back 1']] }), null);
+    expect(store.submitContribution).toHaveBeenCalled();
+  });
+  it('saves no items for other formats', async () => {
+    const h = open({ type: 'Reel', items: deck(2) });
+    h.c().nwDraft(); await flush(10);
+    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ type: 'Reel', items: null }), null);
+  });
+  it('looks for client names inside the items', () => {
+    const h = open({ items: { ...deck(1), list: [['What did Delcroix pay?', 'Too much']] } });
+    expect(checks(h).some((t) => t.includes('Delcroix'))).toBe(true);
+    expect(h.c().nwBlocked).toBe(true);
+  });
+  it('edits a saved deck with its items, and submits a saved one only with items', () => {
+    const d = data({ contributions: [contribution({ id: 'f1', type: 'Flash cards', items: [['F', 'B']] }), contribution({ id: 'f2', type: 'Flash cards', items: null })] });
+    const h = cs({ data: d, state: { contribSel: 'f1' } });
+    h.c().cs!.second();
+    expect(h.state.nw.items).toMatchObject({ how: 'saved', list: [['F', 'B']] });
+    const e = cs({ data: d, state: { contribSel: 'f2' } });
+    e.c().cs!.main();
+    expect(e.lastToast()).toBe('Add the cards first · edit it first');
+    expect(store.submitContribution).not.toHaveBeenCalled();
+  });
+  it('shows reviewers the items they are judging', () => {
+    const d = data({ contributions: [contribution({ id: 'r1', author_id: 'u5', author_name: 'Kim Author', type: 'Flash cards', items: [['F', 'B'], ['F2', 'B2']], status: 'review', step: 1 })], reviews: [review({ contribution_id: 'r1', reviewer_id: 'u1' })] });
+    const rs = cs({ data: d, state: { createTab: 'review' } }).c().rs!;
+    expect(rs.itemsHead).toBe('2 cards to check');
+    expect(rs.itemRows).toEqual([{ front: 'F', back: 'B' }, { front: 'F2', back: 'B2' }]);
+    expect(rs.fileNote).toBe('Check each card against the takeaway.');
   });
 });

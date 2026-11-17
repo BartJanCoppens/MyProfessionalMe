@@ -1400,5 +1400,66 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","r
 insert into results (check_name, expected, actual) select 'TR after expiry the guard allows another credential', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
 insert into results (check_name, expected, actual) select 'TR after expiry a second credential is added', '2', count(*)::text from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
 reset role;
+-- ---------- Flash cards and practice exams (FX) ----------
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e1','t.podcaster@test.local'), ('00000000-0000-0000-0000-0000000000e2','t.deckmaker@test.local');
+update public.profiles set business_line='Consulting' where id in ('00000000-0000-0000-0000-0000000000e1','00000000-0000-0000-0000-0000000000e2');
+insert into public.creator_rules (user_id, lines, formats) values
+ ('00000000-0000-0000-0000-0000000000e1','{Consulting}','{Podcast}'),
+ ('00000000-0000-0000-0000-0000000000e2','{Consulting}','{"Flash cards","Practice exam"}');
+delete from public.review_policies; -- earlier checks left broader requirements; the strictest would win
+insert into public.review_policies (formats, peers, expert, quality) values ('{"Flash cards"}', 0, false, false), ('{"Practice exam"}', 0, false, false);
+insert into results (check_name, expected, actual) select 'FX draft_items use is seeded, text and off', 'text/false', kind||'/'||enabled from public.ai_uses where key = 'draft_items';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e1","role":"authenticated"}';
+do $$ begin
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, items) values ('Consulting','Flash cards','T fx podcaster cards','pers','x','[["f","b"]]');
+    insert into results (check_name, expected, actual) values ('FX a Podcast-only rule cannot create Flash cards', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX a Podcast-only rule cannot create Flash cards', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.contributions (business_line, type, title, domain, takeaway) values ('Consulting','Practice exam','T fx podcaster exam','pers','x');
+    insert into results (check_name, expected, actual) values ('FX a Podcast-only rule cannot create a Practice exam', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX a Podcast-only rule cannot create a Practice exam', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway) values ('Consulting','Podcast','T fx podcast','pers','Listen first.') returning 1)
+  insert into results (check_name, expected, actual) select 'FX the same person still creates a Podcast', '1 rows', count(*)||' rows' from i;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e2","role":"authenticated"}';
+insert into public.contributions (business_line, type, title, domain, takeaway, items) values
+ ('Consulting','Flash cards','T fx cards','pers','Lead with the answer.','[["What is the standard rate?","25 %"],["Reduced SME rate?","20 %"]]'),
+ ('Consulting','Flash cards','T fx no items','pers','Lead with the answer.',null),
+ ('Consulting','Flash cards','T fx bad shape','pers','Lead with the answer.','[["only a front"]]'),
+ ('Consulting','Flash cards','T fx client','pers','Lead with the answer.','[["What did Delcroix pay?","Too much"]]'),
+ ('Consulting','Practice exam','T fx exam','pers','Read the stem twice.','[{"t":"Rates","q":"Standard rate?","o":["20 %","25 %","29 %","34 %"],"a":1,"why":"Since 2020."}]'),
+ ('Consulting','Practice exam','T fx exam bad answer','pers','Read the stem twice.','[{"t":"Rates","q":"Standard rate?","o":["20 %","25 %","29 %","34 %"],"a":4,"why":"Since 2020."}]'),
+ ('Consulting','Practice exam','T fx exam three options','pers','Read the stem twice.','[{"t":"Rates","q":"Standard rate?","o":["20 %","25 %","29 %"],"a":1,"why":"Since 2020."}]');
+do $$ begin
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, items) values ('Consulting','Flash cards','T fx too many','pers','x', (select jsonb_agg(jsonb_build_array('f'||g, 'b')) from generate_series(1, 41) g));
+    insert into results (check_name, expected, actual) values ('FX more than 40 items', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX more than 40 items', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T fx no items'));
+    insert into results (check_name, expected, actual) values ('FX submit without items', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX submit without items', 'blocked: P0001', 'blocked: '||sqlstate); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T fx bad shape'));
+    insert into results (check_name, expected, actual) values ('FX submit with a card of one side', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX submit with a card of one side', 'blocked: P0001', 'blocked: '||sqlstate); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T fx client'));
+    insert into results (check_name, expected, actual) values ('FX a client name inside a card', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX a client name inside a card', 'blocked: P0001', 'blocked: '||sqlstate); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T fx exam bad answer'));
+    insert into results (check_name, expected, actual) values ('FX an exam answer outside 0 to 3', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX an exam answer outside 0 to 3', 'blocked: P0001', 'blocked: '||sqlstate); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T fx exam three options'));
+    insert into results (check_name, expected, actual) values ('FX an exam question with three options', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX an exam question with three options', 'blocked: P0001', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'FX cards with items publish when no review is required', 'published', public.submit_contribution((select id from public.contributions where title = 'T fx cards'));
+insert into results (check_name, expected, actual) select 'FX the exam publishes the same way', 'published', public.submit_contribution((select id from public.contributions where title = 'T fx exam'));
+insert into results (check_name, expected, actual) select 'FX the deck becomes flash content', 'flash/2/2/2', l.content ->> 'kind' || '/' || (l.content ->> 'total') || '/' || (l.content ->> 'due') || '/' || jsonb_array_length(l.content -> 'cards')
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T fx cards';
+insert into results (check_name, expected, actual) select 'FX the exam becomes exam content', 'exam/1/1', l.content ->> 'kind' || '/' || (l.content ->> 'bank') || '/' || jsonb_array_length(l.content -> 'qs')
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T fx exam';
+insert into results (check_name, expected, actual) select 'FX the published learning keeps the format', 'Flash cards/published', l.format || '/' || l.status
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T fx cards';
+with u as (update public.contributions set items = '[["changed","after publishing"]]' where title = 'T fx cards' returning 1)
+  insert into results (check_name, expected, actual) select 'FX items cannot change after publishing', '0 rows', count(*)||' rows' from u;
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

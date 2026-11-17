@@ -6,6 +6,9 @@ import { LEARN_BY, LEVELS, REVIEW_STAGES, REVIEW_WHO, RUBRIC, STAGES } from './d
 import type { Logic } from './model';
 import type { AppState, Bundle, NewDraft } from './types';
 import { retrieve } from './logic/okf';
+import { addFirst, itemsPanel, viewItems } from './createItems';
+import type { SetNw } from './createItems';
+import { hasItems, itemsCheck, itemsFromSaved, itemsText, noItems } from './logic/items';
 import type { Hit } from './logic/okf';
 import {
   CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
@@ -34,7 +37,7 @@ export function blankDraft(rules: RuleParts[] | null, myLine: string | null): Ne
   const r = rules && rules[0];
   const line = !r ? myLine || '' : r.lines.length ? (myLine && r.lines.includes(myLine) ? myLine : r.lines[0]) : myLine || 'Consulting';
   return { line, aud: r?.audiences[0] || '', type: r?.formats[0] || 'Reel', title: '', dom: r?.domains[0] || 'prof', lvl: '2', stage: 'Senior consultant', take: '',
-    outline: [], sources: [], ai: false, aiNote: '' };
+    outline: [], sources: [], ai: false, aiNote: '', items: noItems() };
 }
 const attrsOfDraft = (nw: NewDraft): Attrs => ({ line: nw.line || null, format: nw.type, domain: nw.dom, audience: nw.aud || null });
 // The form as it applies. Once submitted, line, format, domain and audience stay as they were (the database refuses a change).
@@ -50,10 +53,12 @@ function submittedEdit(s: AppState) {
 }
 const fieldsOf = (nw: NewDraft, bundles: string[]): DraftFields => {
   return { business_line: nw.line || null, audience: nw.aud || null, type: nw.type, title: nw.title.trim().slice(0, 120), domain: nw.dom, level: +nw.lvl, audience_stage: nw.stage,
-    takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: nw.ai, bundle_ids: bundles };
+    takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: nw.ai, bundle_ids: bundles,
+    items: hasItems(nw.type) ? nw.items?.list ?? [] : null };
 };
 const draftOf = (c: Contribution): NewDraft => ({ line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
-  outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '' });
+  outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
+  items: hasItems(c.type) ? { ...noItems(), list: itemsFromSaved(c.type, c.items), how: 'saved' } : noItems() });
 
 // Bundles a creator may draw on: indexed, open to creators, Tax & Legal ones for that line only.
 export function usableBundles(bundles: Bundle[], line: string | null) {
@@ -138,7 +143,8 @@ async function saveForm(L: Logic, submit: boolean) {
   const rules = s.create?.rules || [];
   if (!rules.length) { L.say('Ask an admin for creation rights first'); return; }
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
-  if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources }))) { L.say('Clear the open checks first'); return; }
+  if (submit && hasItems(nw.type) && !nw.items?.list.length) { L.say(addFirst(nw.type, 'generate them with AI or import a CSV')); return; }
+  if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) }))) { L.say('Clear the open checks first'); return; }
   const again = !!s.editing && s.create?.contributions.find((c) => c.id === s.editing)?.status === 'changes';
   let id = s.editing;
   L.setState({ createBusy: true });
@@ -153,7 +159,9 @@ async function saveForm(L: Logic, submit: boolean) {
 
 async function submitSaved(L: Logic, c: Contribution) {
   if (busy(L)) return;
-  const bad = contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources }).find((x) => !x.ok);
+  const items = itemsFromSaved(c.type, c.items);
+  if (hasItems(c.type) && !items.length) { L.say(addFirst(c.type, 'edit it first')); return; }
+  const bad = contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(items) }).find((x) => !x.ok);
   if (bad) { L.say(bad.text + ' · edit it first'); return; }
   if (!mayCreate(L.state.create?.rules || [], attrsOf(c))) { L.say('Not allowed by your creation rules · ask an admin'); return; }
   L.setState({ createBusy: true });
@@ -256,8 +264,9 @@ function createScreen(L: Logic) {
 
   // New
   const nw = effective(s), attrs = attrsOfDraft(nw), policy = policyFor(d.policies, attrs), allowed = allowedValues(d.rules), ok = mayCreate(d.rules, attrs);
-  const setNw = (p: Partial<NewDraft>) => L.setState((st) => ({ nw: { ...effective(st), ...p } }));
-  const checks = contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources });
+  const setNw: SetNw = (p) => L.setState((st) => { const cur = effective(st); return { nw: { ...cur, ...(typeof p === 'function' ? p(cur) : p) } }; });
+  const checks = contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) })
+    .concat(hasItems(nw.type) ? [itemsCheck(nw.type, nw.items ?? noItems())] : []);
   const line = myLine(L);
   const editing = s.editing ? byId.get(s.editing) : null, locked = !!submittedEdit(s);
   const fresh = () => blankDraft(d.rules, line);
@@ -293,7 +302,7 @@ function createScreen(L: Logic) {
   return {
     loading: !s.create && !s.createError, error: s.createError, retry: () => L.reloadCreate(), busy: s.createBusy,
     readOnly: L.subject.readOnly, readOnlyNote: 'Create & share shows your own work, not ' + L.subject.name + '’s. Go back to yourself to create, submit or review.',
-    lead: 'Make a reel, podcast, guide or case write-up for your colleagues. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
+    lead: 'Make a reel, podcast, guide, case write-up, flash card deck or practice exam for your colleagues. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
     canCreate, noGrantText: 'You have no creation rights yet. Ask an admin for creation rights: a Domain Admin or General Admin gives you rules such as “Consulting or Tax & Legal · Podcast”.',
     myRules: d.rules.map((r) => ruleSentence(r)),
     goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [], nwKbQ: '' }) : L.say('Ask an admin for creation rights first')),
@@ -313,7 +322,7 @@ function createScreen(L: Logic) {
     newTypes: CREATE_TYPES.map((x) => {
       const on = nw.type === x[0], fixed = !on && (locked || !allowed.formats.includes(x[0]));
       return { label: x[0], desc: x[1], bg: on ? '#1a1d18' : '#fff', fg: on ? '#fff' : fixed ? '#b3b8ae' : '#1a1d18', bd: on ? '#1a1d18' : '#d5dacf',
-        pick: () => (fixed ? L.say(locked ? 'The format stays as submitted' : 'Not in your creation rules') : setNw({ type: x[0] })) };
+        pick: () => (fixed ? L.say(locked ? 'The format stays as submitted' : 'Not in your creation rules') : setNw((cur) => (cur.type === x[0] ? {} : { type: x[0], items: noItems() }))) };
     }),
     domainOptions: (locked ? [nw.dom] : allowed.domains).map((k) => ({ value: k, label: domainName(k) })),
     levelOptions: LEVELS.map((l, i) => ({ value: String(i + 1), label: 'L' + (i + 1) + ' · ' + l })), stageOptions: STAGES.map((x) => ({ value: x, label: x })),
@@ -323,6 +332,7 @@ function createScreen(L: Logic) {
     ...bundleFinder(L, nw, line),
     nwDraftAi: () => draftAi(L), nwAiBusy: s.nwAiBusy, nwAiLabel: s.nwAiBusy ? 'Drafting' : 'Draft with AI', nwHasAi: nw.outline.length > 0 || nw.sources.length > 0, nwAiNote: nw.aiNote,
     nwAiOutline: nw.outline.map((o, k) => ({ n: (k + 1) + '.', text: o })), nwAiCites: nw.sources.map((c, k) => ({ n: String(k + 1), text: c })),
+    itemsPanel: itemsPanel(L, nw, usableBundles(s.bundles, line).filter((b) => s.nwKb.includes(b.id)), setNw),
     nwFileText: nw.type + ' · the file itself (video, audio or document) is attached later; this prototype stores the text only.',
     nwChecks: checks.map(dot), nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
@@ -354,7 +364,7 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
   const base = {
     id: c.id, eyebrow: c.type + ' · ' + domainName(c.domain) + ' · L' + c.level + ' · ' + attrsLabel(attrsOf(c)), title: c.title || 'Untitled ' + c.type.toLowerCase(), date: dateLine(c) + ' · for ' + c.audience_stage,
     st: st[0], stLabel: st[1], stIcon: st[2], stages: stages.map((x) => x.name), stage: stageAt(stages, c.step), hasTake: !!c.takeaway, takeaway: c.takeaway,
-    outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft' : '',
+    outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft' : '', ...viewItems(c, ''),
     hasRevs: revs.length > 0,
     revs: revs.map((r) => {
       const v = RV[r.verdict];
@@ -386,8 +396,10 @@ function reviewDetail(L: Logic, c: Contribution, r: Review, d: CreateData, now: 
     key, ai: ini(c.author_name), eyebrow: c.type + ' · ' + domainName(c.domain) + ' · L' + c.level + ' · ' + role, title: c.title,
     meta: 'By ' + c.author_name + ' · for ' + c.audience_stage + ' · ' + (open ? daysWaiting(c.submitted_at, now) : 'submitted ' + fmtDate(c.submitted_at)),
     takeaway: c.takeaway, outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft · check the cited sources' : '',
-    fileNote: 'The ' + (c.type === 'Podcast' ? 'audio' : c.type === 'Reel' ? 'video' : 'document') + ' is attached later; review the takeaway and outline for now.',
-    checks: contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources }).map(dot),
+    ...viewItems(c, ' to check'),
+    fileNote: hasItems(c.type) ? 'Check each ' + (c.type === 'Flash cards' ? 'card' : 'question') + ' against the takeaway.'
+      : 'The ' + (c.type === 'Podcast' ? 'audio' : c.type === 'Reel' ? 'video' : 'document') + ' is attached later; review the takeaway and outline for now.',
+    checks: contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(itemsFromSaved(c.type, c.items)) }).map(dot),
     open, closed: !open, bannerTone: r.verdict === 'approved' || c.status === 'published' ? 'success' : 'warning', doneText,
     rubric: RUBRIC.map((l, k) => ({ label: l, on: !!chk[k], toggle: (v: boolean) => L.setState((st) => { const cur = RUBRIC.map((_, j) => !!(st.revChecks[key] || [])[j]); cur[k] = v; return { revChecks: { ...st.revChecks, [key]: cur } }; }) })),
     comment: com, setComment: (e: Area) => L.setState((st) => ({ revComment: { ...st.revComment, [key]: e.target.value } })),

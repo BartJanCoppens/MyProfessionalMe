@@ -2,6 +2,7 @@
 // A transcription of the template's CREATE & SHARE block; it only reads from the view-model (createVals.ts).
 import { Banner, Button, Checkbox, Eyebrow, Field, Hover, Input, LinkButton, PageTitle, Select, StatusChip, Stepper, Tabs, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
+import { ItemList, ItemPanel } from './CreateItems';
 import RuleChips from './RuleChips';
 
 type CS = NonNullable<VM['create']>;
@@ -89,6 +90,7 @@ function Mine({ c }: { c: CS }) {
           </div>
           {cs.hasTake && <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea' }}><div style={label}>Takeaway</div><p style={{ margin: '4px 0 0', textWrap: 'pretty' }}>{cs.takeaway}</p></div>}
           <Outline outline={cs.outline} sources={cs.sources} aiTag={cs.aiTag} />
+          <ItemList head={cs.itemsHead} rows={cs.itemRows} />
           {cs.hasRevs && (
             <div style={{ padding: '4px 20px 8px', borderBottom: '1px solid #eef0ea' }}>
               {cs.revs.map((rv) => (
@@ -145,6 +147,7 @@ function ReviewTab({ c }: { c: CS }) {
           </div>
           <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea' }}><div style={label}>Author's takeaway</div><p style={{ margin: '4px 0 0', textWrap: 'pretty' }}>{rs.takeaway}</p></div>
           <Outline outline={rs.outline} sources={rs.sources} aiTag={rs.aiTag} />
+          <ItemList head={rs.itemsHead} rows={rs.itemRows} />
           <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={label}>Automatic checks</div>
             {rs.checks.map((ck) => <div key={ck.text} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: ck.dot, flex: 'none' }} /><span style={{ color: ck.fg }}>{ck.text}</span></div>)}
@@ -248,7 +251,7 @@ function NewTab({ c }: { c: CS }) {
         <Field label="The one takeaway" hint={c.nwTakeHint}>
           <Textarea value={nw.take} onChange={c.nwSetTake} placeholder="One or two sentences. Reviewers judge the piece against this." aria-label="The one takeaway" />
         </Field>
-        <div style={{ padding: 12, border: '1px dashed #cfd4c9', borderRadius: 6, fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' }}>{c.nwFileText}</div>
+        {c.itemsPanel ? <ItemPanel p={c.itemsPanel} /> : <div style={{ padding: 12, border: '1px dashed #cfd4c9', borderRadius: 6, fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' }}>{c.nwFileText}</div>}
         {c.nwRuleWarn && <Banner tone="warning">{c.nwRuleWarn}</Banner>}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button onClick={c.nwSubmit} disabled={c.nwBlocked}>{c.nwSubmitLabel}</Button>
