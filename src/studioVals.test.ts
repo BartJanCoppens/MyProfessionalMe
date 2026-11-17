@@ -20,6 +20,7 @@ const rule = (o: Partial<RuleParts>): Rule => ({ id: 1, user_id: 'u1', ...emptyP
 const data = (o: Partial<CreateData> = {}): CreateData => ({ contributions: [], reviews: [], rules: [rule({ lines: ['Consulting'] })], policies: [], peers: 3, ...o });
 const base = { line: 'Consulting', aud: '', type: 'Flash cards', title: 'Corporate tax basics', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One fact per card.', outline: [], sources: [], ai: false, aiNote: '' };
 const deck = (n: number, how: 'scripted' | 'ai' = 'scripted') => ({ list: Array.from({ length: n }, (_, i) => ['Front ' + i, 'Back ' + i] as [string, string]), how, problems: [], note: '' });
+const flashCard = (h: { st: () => { cards: { id: string }[] } }) => h.st().cards.find((x) => x.id === 'flash')! as ReturnType<typeof h.st>['cards'][number] & { open: () => void; disabled: boolean };
 const open = (o: { nw?: object; studio?: AppState['studio']; data?: CreateData; live?: boolean; readOnly?: boolean } = {}) => {
   const h = harness({ access: member('u1'), subject: person(o.readOnly ? { id: 'u9', name: 'Other Person', readOnly: true } : {}), config: { liveAssistant: !!o.live },
     state: { screen: 'create', create: o.data || data(), createTab: 'new', nw: { ...base, ...o.nw }, nwKb: ['B1'], studio: { view: 'studio', step: 0 }, ...(o.studio && { studio: o.studio }) } });
@@ -31,15 +32,16 @@ beforeEach(() => { stubWindow(); vi.clearAllMocks(); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('the hub', () => {
-  it('opens on the hub with exactly one studio and the link to the upload form', () => {
+  it('opens on the hub with ten studios, one of them available and the link to the upload form', () => {
     const h = open({ studio: { view: 'hub', step: 0 } });
     expect(h.c().newView).toBe('hub');
-    expect(h.st().cards.map((x) => x.name)).toEqual(['Flash card & Exam Studio']);
+    expect(h.st().cards.map((x) => x.name)).toHaveLength(10);
+    expect(h.st().cards.filter((x) => !x.disabled).map((x) => x.name)).toEqual(['Flash card & Exam Studio']);
     expect(h.st().uploadLabel).toBe('Upload something you already made →');
   });
   it('opens the studio at step one with a format a studio makes', () => {
     const h = open({ studio: { view: 'hub', step: 0 }, nw: { type: 'Reel' } });
-    h.st().cards[0].open();
+    flashCard(h).open();
     expect(h.state.studio).toEqual({ view: 'studio', step: 0 });
     expect(h.state.nw.type).toBe('Flash cards');
   });
@@ -52,8 +54,8 @@ describe('the hub', () => {
   });
   it('keeps the studio closed when no rule allows cards or exams', () => {
     const h = open({ studio: { view: 'hub', step: 0 }, data: data({ rules: [rule({ lines: ['Consulting'], formats: ['Reel'] })] }) });
-    expect(h.st().cards[0].disabled).toBe(true);
-    h.st().cards[0].open();
+    expect(flashCard(h).disabled).toBe(true);
+    flashCard(h).open();
     expect(h.state.studio.view).toBe('hub');
     expect(h.lastToast()).toBe('Not in your creation rules');
   });
@@ -73,7 +75,7 @@ describe('rules with several combinations', () => {
   const two = data({ rules: [rule({ lines: ['Consulting'], formats: ['Podcast'] }), rule({ lines: ['Audit'], formats: ['Flash cards'] })] });
   it('moves the draft to the line of the rule that allows the format, and can reach Send', () => {
     const h = open({ studio: { view: 'hub', step: 0 }, data: two, nw: { type: 'Podcast', line: 'Consulting', items: deck(2) } });
-    h.st().cards[0].open();
+    flashCard(h).open();
     expect(h.state.nw).toMatchObject({ type: 'Flash cards', line: 'Audit' });
     h.L().setState({ studio: { view: 'studio', step: 3 }, nw: { ...h.state.nw, items: deck(2) } });
     expect(h.st().send.blocked).toBe(false);
@@ -87,7 +89,7 @@ describe('rules with several combinations', () => {
   });
   it('disables the card natively when the only rule is another format', () => {
     const h = open({ studio: { view: 'hub', step: 0 }, data: data({ rules: [rule({ lines: ['Consulting'], formats: ['Podcast'] })] }) });
-    expect(h.st().cards[0].disabled).toBe(true);
+    expect(flashCard(h).disabled).toBe(true);
     expect(h.st().formats).toEqual([]);
   });
 });

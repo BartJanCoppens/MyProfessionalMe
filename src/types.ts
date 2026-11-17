@@ -1,4 +1,5 @@
 import type { DraftItems } from './logic/items';
+import type { StudioItem } from './logic/studios';
 import type { CreateData } from './logic/contribution';
 import type { Trajectory } from './logic/trajectory';
 import type { TrjMine } from './logic/trajectoryLearner';
@@ -155,7 +156,10 @@ export type RenewDraft = { id: string; link: string; ref: string; expires: strin
 
 // The New content form. line and aud are '' for none; type is the format; lvl stays text for the select; outline and
 // sources come from Draft with AI.
-export type NewDraft = { line: string; aud: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string; items?: DraftItems };
+export type NewDraft = { line: string; aud: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string; items?: DraftItems;
+  // Generic studios (Task 1.2): the Shape answers (question to answer), the Produce choices (row label to option), the picked stock look and voices
+  // (role label to stock name) and the studio's own item rows. Flash cards and Practice exams keep `items`.
+  shape?: Record<string, string>; produce?: Record<string, string>; cast?: Record<string, string>; studioItems?: StudioItem[] };
 
 // Knowledge library: retrieval models and bundles
 export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };
@@ -192,4 +196,5 @@ export type FmtDraft = {
   text: string | null; busy: boolean; res: TeachResult | null;
 };
 
-export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number };
+// `id` is the open studio (Flash card & Exam Studio when absent); `step` indexes visibleSteps of that studio.
+export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string };
