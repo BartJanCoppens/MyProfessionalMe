@@ -251,6 +251,18 @@ describe('sanitizeSvg: dangerous content is removed', () => {
     expect(dangers(out)).toEqual([]);
   });
 
+  // XML keeps attributeName and ATTRIBUTENAME apart; the HTML parser then keeps one of them. Every one is judged.
+  it.each([
+    ['a harmless one first', '<set attributeName="fill" ATTRIBUTENAME="href" to="https://evil.example"/>'],
+    ['a harmless one last', '<set ATTRIBUTENAME="onclick" attributeName="opacity" to="alert(1)"/>'],
+    ['three spellings', '<animate attributeName="opacity" AttributeName="r" attributename="style" values="fill:red"/>'],
+  ])('drops an animation when any of its attributeName spellings is forbidden (%s)', (_label, anim) => {
+    const out = sanitizeSvg(svg(`<rect width="1">${anim}</rect>`));
+    expect(out).not.toMatch(/<set|<animate/);
+    expect(out).toContain('width="1"');
+    expect(dangers(out)).toEqual([]);
+  });
+
   it('keeps animations that target harmless attributes', () => {
     const out = sanitizeSvg(svg('<rect><set attributeName="fill" to="red"/><animate attributeName="opacity" values="0;1"/></rect>'));
     expect(out).toContain('<set');

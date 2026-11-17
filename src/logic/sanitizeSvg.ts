@@ -6,7 +6,8 @@
 // After the fix round: attributes are judged by their local name (lower case) and kept only without a namespace (but
 // xlink:href); animations may not target href, style, class or any on... name however it is spelt; title and desc keep
 // text only (they are HTML integration points, so an element inside them would re-parse as HTML); a CSS declaration with
-// a forbidden token is dropped whole; and every url() goes through the one rule (URL_ID / strayUrl).
+// a forbidden token is dropped whole; and every url() goes through the one rule (URL_ID / strayUrl). Task 2.3: every
+// attributeName spelling of an animation is judged, not only the first.
 /**
  * Allowlist sanitiser for model-generated SVG. Keeps static shapes, text, gradients, filters and SMIL animation;
  * drops scripts, styles, foreign content, event handlers and every link that leaves the document.
@@ -58,9 +59,10 @@ function walk(src: Element, out: Document, ids: Set<string>): Element | null {
   // Only attributes without a namespace count (xlink:href aside); a prefixed one is dropped, so no spelling of a name
   // in another namespace reaches the checks below.
   const attrs = [...src.attributes].filter(a => !a.namespaceURI || (a.namespaceURI === XLINK && a.localName.toLowerCase() === 'href'));
-  const target = attrs.find(a => a.localName.toLowerCase() === 'attributename');
+  // XML keeps attributeName and ATTRIBUTENAME apart and the page keeps one of them, so every spelling is judged.
+  const targets = attrs.filter(a => a.localName.toLowerCase() === 'attributename');
   // An animation that names no plain target (animateMotion needs none) does nothing; one with a forbidden target goes.
-  if (ANIMATION.has(name) && (target ? forbiddenTarget(target.value) : name !== 'animateMotion')) return null;
+  if (ANIMATION.has(name) && (targets.length ? targets.some(t => forbiddenTarget(t.value)) : name !== 'animateMotion')) return null;
   const el = out.createElementNS('http://www.w3.org/2000/svg', name);
   for (const a of attrs) {
     const low = a.localName.toLowerCase().trim(), v = a.value;
