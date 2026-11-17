@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addMap, addStep, blankTrajectory, earlierSteps, moveStep, nextStepId, removeStep, saveable } from './trajectoryEdit';
 import type { Trajectory, TrjStep } from './trajectory';
 
@@ -15,24 +15,37 @@ describe('blankTrajectory', () => {
 });
 
 describe('step ids', () => {
-  it('uses s plus the next unused integer', () => {
-    expect(nextStepId([])).toBe('s1');
-    expect(nextStepId([step('s1'), step('s7'), step('s3')])).toBe('s8');
+  it('never reuses an id, also after the highest step was removed', () => {
+    const once = [step('s1'), step('s2')];
+    const added = addStep(once, { k: 'evidence' }, 12);
+    const removed = removeStep(added, added[2].id);
+    const again = addStep(removed, { k: 'evidence' }, 12);
+    expect(again[2].id).not.toBe(added[2].id);
+    expect(again[2].id).toMatch(/^s[0-9a-z]+$/);
+    expect(new Set(again.map((x) => x.id)).size).toBe(3);
   });
-  it('appends new steps with fresh ids and the design defaults', () => {
+  it('regenerates on a clash with an existing id', () => {
+    const spy = vi.spyOn(Math, 'random');
+    spy.mockReturnValueOnce(0.5).mockReturnValueOnce(0.5).mockReturnValue(0.123);
+    const first = nextStepId([]);
+    const second = nextStepId([step(first)]);
+    expect(second).not.toBe(first);
+    spy.mockRestore();
+  });
+  it('appends new steps with the design defaults', () => {
     let steps = [step('s1', { k: 'learn', lid: 'L1', win: 6 })];
     steps = addStep(steps, { k: 'elect' }, 12);
     steps = addStep(steps, { k: 'evidence' }, 12);
     steps = addStep(steps, { k: 'check' }, 12);
     steps = addStep(steps, { k: 'exam' }, 12);
-    expect(steps.map((s) => s.id)).toEqual(['s1', 's2', 's3', 's4', 's5']);
+    expect(new Set(steps.map((s) => s.id)).size).toBe(5);
     expect(steps[1]).toMatchObject({ k: 'elect', opts: [], pick: 1, win: 6, req: true, pre: null });
     expect(steps[2]).toMatchObject({ title: 'Describe the evidence', hours: 0, pre: null });
-    expect(steps[3]).toMatchObject({ title: 'Counsellor sign-off', pre: 's3' });
-    expect(steps[4]).toMatchObject({ title: 'Exam', hours: 2, win: 12, pre: 's4' });
+    expect(steps[3]).toMatchObject({ title: 'Counsellor sign-off', pre: steps[2].id });
+    expect(steps[4]).toMatchObject({ title: 'Exam', hours: 2, win: 12, pre: steps[3].id });
   });
   it('a learning step carries its library id', () => {
-    expect(addStep([], { k: 'learn', lid: 'L9' }, 12)[0]).toMatchObject({ id: 's1', k: 'learn', lid: 'L9', req: true, pre: null });
+    expect(addStep([], { k: 'learn', lid: 'L9' }, 12)[0]).toMatchObject({ k: 'learn', lid: 'L9', req: true, pre: null });
   });
 });
 

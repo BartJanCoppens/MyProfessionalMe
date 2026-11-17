@@ -43,7 +43,8 @@ describe('the trajectory editor', () => {
   it('adds an exam step and opens its editor', () => {
     show([trajectory()]);
     fireEvent.click(screen.getByRole('button', { name: '+ Exam' }));
-    expect(current.trjs[0].steps.map((s) => s.id)).toEqual(['s1', 's2', 's3']);
+    expect(current.trjs[0].steps.map((s) => s.id).slice(0, 2)).toEqual(['s1', 's2']);
+    expect(current.trjs[0].steps).toHaveLength(3);
     expect(screen.getByText('Step 3 · Exam')).toBeTruthy();
     expect(vi.mocked(store.saveTrajectorySoon)).toHaveBeenCalled();
   });

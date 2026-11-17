@@ -3,8 +3,15 @@
 import { BLS } from '../data';
 import type { StepKind, Trajectory, TrjStep } from './trajectory';
 
-const idNumber = (id: string) => Number(id.slice(1)) || 0;
-export const nextStepId = (steps: TrjStep[]) => 's' + (Math.max(0, ...steps.map((s) => idNumber(s.id))) + 1);
+// Step ids are never derived from the current steps: an enrolment keeps its state by step id, so an id freed by a removed step
+// must not come back. Seed ids (s1...) stay; new ones are s + time + two random characters, regenerated on a clash.
+export function nextStepId(steps: TrjStep[]): string {
+  const taken = new Set(steps.map((s) => s.id));
+  for (;;) {
+    const id = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4).padEnd(2, '0');
+    if (!taken.has(id)) return id;
+  }
+}
 
 // The database refuses an empty name or credential, so a trajectory with either is kept on screen but not saved.
 export const saveable = (t: Trajectory) => t.name.trim() !== '' && t.credential.trim() !== '';

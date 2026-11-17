@@ -63,14 +63,14 @@ function TrajectoryBody({ vm }: { vm: VM }) {
           <SegmentedControl options={vm.trjStatusOptions} value={tj.status} onChange={tj.setStatus} size="md" />
         </div>
         <div style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
-          <Field label="Trajectory name" size="sm"><Input size="md" value={tj.name} onChange={tj.setName} /></Field>
-          <Field label="Credential awarded" size="sm"><Input size="md" value={tj.cred} placeholder="e.g. Certified tax adviser" onChange={tj.setCred} /></Field>
+          <Field label="Trajectory name" size="sm"><Input size="md" maxLength={160} value={tj.name} onChange={tj.setName} /></Field>
+          <Field label="Credential awarded" size="sm"><Input size="md" maxLength={160} value={tj.cred} placeholder="e.g. Certified tax adviser" onChange={tj.setCred} /></Field>
           <Field label="Issuing body" size="sm"><Select size="md" options={tj.issuerOptions} value={tj.issuer} onChange={tj.setIssuer} /></Field>
           <Field label="How people enter" size="sm"><Select size="md" options={vm.trjEnrolOptions} value={tj.enrol} onChange={tj.setEnrol} /></Field>
           <Field label="Expected duration" size="sm"><Select size="md" options={tj.monthOptions} value={tj.months} onChange={tj.setMonths} /></Field>
           <Field label="Credential valid for" size="sm"><Select size="md" options={tj.validOptions} value={tj.valid} onChange={tj.setValid} /></Field>
-          <Field label="Renewal rule" size="sm"><Input size="md" value={tj.renew} placeholder="e.g. Free online renewal assessment" onChange={tj.setRenew} /></Field>
-          <Field label="Cost and sponsorship" size="sm"><Input size="md" value={tj.cost} placeholder="e.g. Exam fee paid by the firm" onChange={tj.setCost} /></Field>
+          <Field label="Renewal rule" size="sm"><Input size="md" maxLength={500} value={tj.renew} placeholder="e.g. Free online renewal assessment" onChange={tj.setRenew} /></Field>
+          <Field label="Cost and sponsorship" size="sm"><Input size="md" maxLength={500} value={tj.cost} placeholder="e.g. Exam fee paid by the firm" onChange={tj.setCost} /></Field>
         </div>
         <div style={{ borderTop: '1px solid #eef0ea', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))' }}>
           {tj.stats.map((st) => (

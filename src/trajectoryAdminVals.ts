@@ -82,7 +82,7 @@ export function trajectoryAdminVals(L: Logic) {
   const liveBlocked = !managesMandatory(L) && !!t && hasMandatory(t);
   const base = {
     mapMode: s.mapMode, setMapMode: (v: string) => L.setState({ mapMode: v === 'traj' ? 'traj' : 'learn' }), isTrjMode: s.mapMode === 'traj', isLearnMode: s.mapMode !== 'traj',
-    mapModeTabs: [opt('learn', 'Single learnings'), opt('traj', 'Certification trajectories · ' + visible.filter((x) => x.status !== 'retired').length)],
+    mapModeTabs: [opt('learn', 'Single learnings'), opt('traj', 'Certification trajectories · ' + visible.length)],
     mapModeHint: s.mapMode === 'traj' ? 'Build certification and accreditation journeys, then map them to audiences.' : 'Map single learnings to audiences and stages.',
     trjCount: String(visible.length), trjList: list, trjNew: () => startNew(L),
     trjStatusOptions: [opt('draft', 'Draft'), { ...opt('live', 'Live'), disabled: liveBlocked }, opt('retired', 'Retired')],
@@ -98,9 +98,10 @@ export function trajectoryAdminVals(L: Logic) {
   if (!t) return { ...base, tj: null, tse: null };
   const edit = (change: (x: Trajectory) => Trajectory | null) => patch(L, t.id, change);
   const editStep = (id: string, change: (x: TrjStep) => TrjStep) => edit((x) => ({ ...x, steps: x.steps.map((st) => (st.id === id ? change(st) : st)) }));
+  // The new step is made once (its id is random), so the state, the save and the selection all carry the same id.
   const add = (what: { k: StepKind; lid?: string }) => {
-    const r = edit((x) => ({ ...x, steps: addStep(x.steps, what, x.months) }));
-    if (r) L.setState({ trjStep: r.steps[r.steps.length - 1].id });
+    const made = addStep(t.steps, what, t.months)[t.steps.length];
+    if (edit((x) => ({ ...x, steps: x.steps.concat([made]) }))) L.setState({ trjStep: made.id });
   };
   const used = new Set<string>(); t.steps.forEach((st) => { if (st.lid) used.add(st.lid); (st.opts || []).forEach((o) => used.add(o)); });
   const learnChoices = (empty: string) => [opt('', empty)].concat(offerable.filter((r) => !used.has(r[0])).map((r) => opt(r[0], r[1] + ' · ' + fmtHours(r[6]))));
@@ -128,7 +129,7 @@ export function trajectoryAdminVals(L: Logic) {
       remove: () => edit((x) => ({ ...x, maps: x.maps.filter((_y, j) => j !== mi) })),
     };
   });
-  const warns = adminWarnings(t, byId, YEARLY_GOAL);
+  const warns = (saveable(t) ? [] : ['Not saved until it has a name and a credential.']).concat(adminWarnings(t, byId, YEARLY_GOAL));
   const ySplit = tot.perYear.map((h, i) => (h ? 'Y' + (i + 1) + ' ' + fmtHours(h) : null)).filter(Boolean).join(' · ') || '0 h';
   const tj = {
     name: t.name, cred: t.credential, issuer: t.issuer, enrol: t.enrol as string, months: String(t.months), valid: String(t.valid_months ?? 0), renew: t.renewal, cost: t.cost, status: t.status as string,

@@ -66,9 +66,11 @@ describe('steps', () => {
     h.vm().tj!.addLearn(ev('L2'));
     h.vm().tj!.addElect(); h.vm().tj!.addEvidence(); h.vm().tj!.addCheck(); h.vm().tj!.addExam();
     const steps = h.state.trjs[0].steps;
-    expect(steps.map((s) => [s.id, s.k])).toEqual([['s1', 'learn'], ['s2', 'exam'], ['s3', 'learn'], ['s4', 'elect'], ['s5', 'evidence'], ['s6', 'check'], ['s7', 'exam']]);
+    expect(steps.map((s) => s.k)).toEqual(['learn', 'exam', 'learn', 'elect', 'evidence', 'check', 'exam']);
+    expect(steps.slice(0, 2).map((s) => s.id)).toEqual(['s1', 's2']);
+    expect(new Set(steps.map((s) => s.id)).size).toBe(7);
     expect(steps[2].lid).toBe('L2');
-    expect(h.state.trjStep).toBe('s7');
+    expect(h.state.trjStep).toBe(steps[6].id);
   });
   it('offers only published learnings that no step uses', () => {
     const h = setup([T('T1')]);
@@ -214,6 +216,17 @@ describe('warnings and the learner\'s eye', () => {
     expect(w).toContain('Only business-line audiences are auto-enrolled; people in other audiences see a suggestion.');
     expect(w).toContain('Name the credential people earn.');
     expect(h.vm().tj!.hasWarn).toBe(true);
+  });
+  it('warns, first, that a trajectory without a name or credential is not saved', () => {
+    const h = setup([T('T1', { credential: ' ' })]);
+    expect(h.vm().tj!.warns[0].text).toBe('Not saved until it has a name and a credential.');
+    expect(setup([T('T1', { name: '' })]).vm().tj!.warns[0].text).toBe('Not saved until it has a name and a credential.');
+    expect(setup([T('T1')]).vm().tj!.warns.map((w) => w.text)).not.toContain('Not saved until it has a name and a credential.');
+  });
+  it('counts the same trajectories on the tab and in the list', () => {
+    const h = setup([T('T1'), T('T2', { status: 'retired' })]);
+    expect(h.vm().trjCount).toBe('2');
+    expect(h.vm().mapModeTabs[1].label).toBe('Certification trajectories · 2');
   });
   it('draws a stone per step, dashed when optional, then the credential and the renewal', () => {
     const h = setup([T('T1', { valid_months: 24, steps: [
