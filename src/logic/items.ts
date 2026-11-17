@@ -113,8 +113,8 @@ export function itemRows(type: string, list: Item[]): { front: string; back: str
   return validItems(type, list).map((x) => (isFlash(type) ? { front: (x as Card)[0], back: (x as Card)[1] }
     : { front: (x as ExamQuestion).q, back: 'Answer: ' + (x as ExamQuestion).o[(x as ExamQuestion).a] + ' · ' + (x as ExamQuestion).why }));
 }
-// Saved as AI-assisted when the outline was drafted by AI or the items were.
-export const aiAssisted = (nw: { ai: boolean; type: string; items?: DraftItems }) => nw.ai || (hasItems(nw.type) && nw.items?.how === 'ai');
+// Saved as AI-assisted when the outline was drafted by AI or the items were, in any studio; scripted and manual items never are.
+export const aiAssisted = (nw: { ai: boolean; items?: DraftItems }) => nw.ai || nw.items?.how === 'ai';
 // Every text of the items, for the client-name check.
 export const itemsText = (list: Item[]): string[] => list.flatMap((x) => (Array.isArray(x) ? x : [x.t, x.q, ...(x.o || []), x.why]));
 

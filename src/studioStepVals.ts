@@ -1,8 +1,10 @@
 // The Shape, Draft and Produce steps of a generic studio, as view-model: questions and produce rows as chip choices and the
 // studio's rows as label/text(/text2). Answers live on the draft: `nw.shape`, `nw.produce`, `nw.cast`, `nw.build` and, for the
 // rows, `nw.items` (the one item store, with its `how` provenance, like every format).
-import type { NewDraft } from './types';
+import type { Logic } from './model';
+import type { Bundle, NewDraft } from './types';
 import type { SetNw } from './createItems';
+import { draftItems, studioQuery, studioSpec } from './studioDraft';
 import { noItems } from './logic/items';
 import type { StudioRow } from './logic/items';
 import { startBuild } from './logic/studioBuild';
@@ -25,7 +27,7 @@ function castPickers(def: StudioDef) {
     : def.cast === 'voices' ? [{ key: 'Host voice', options: STOCK_VOICES }, { key: 'Guest voice', options: STOCK_VOICES }] : [];
 }
 
-export function stepVals(def: StudioDef, nw: NewDraft, setNw: SetNw) {
+export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
   const list = (nw.items?.list ?? []) as StudioItem[], text2 = def.items.some((i) => i.length === 3);
   // Editing keeps the items' provenance; a hand-made list says 'manual'.
   const change = (f: (rows: StudioItem[]) => StudioItem[]) => setNw((cur) => { const it = cur.items ?? noItems();
@@ -39,8 +41,9 @@ export function stepVals(def: StudioDef, nw: NewDraft, setNw: SetNw) {
       remove: () => change((rows) => rows.filter((_, i) => i !== k)) })),
     hasText2: text2, problems: itemsValid(def, list),
     add: () => change((rows) => [...rows, (text2 ? ['', '', ''] : ['', '']) as StudioItem]),
-    // Task 1.4: "Draft with AI" for the other studios goes here (one more action in this object). Flash keeps its own draft button in the item panel.
-    aiDraft: null,
+    // "Draft with AI" (the one pipeline in studioDraft.ts). Flash keeps its own draft button in the item panel and does not use this.
+    aiDraft: { label: L.state.nwAiBusy ? 'Drafting' : 'Draft with AI', busy: L.state.nwAiBusy,
+      run: () => draftItems(L, nw, bundles, setNw, studioQuery(nw), studioSpec(def, nw)) },
     build: def.build ? { steps: nw.build ?? startBuild(def.build), set: (b: NonNullable<NewDraft['build']>) => setNw({ build: b }) } : null,
   };
 }

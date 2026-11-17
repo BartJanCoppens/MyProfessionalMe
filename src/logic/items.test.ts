@@ -131,10 +131,10 @@ describe('hardening', () => {
   });
   it('derives AI assistance from the outline flag or AI-drafted items', () => {
     const d = (how: 'ai' | 'scripted' | 'csv' | 'manual' | 'saved' | '') => ({ ...noItems(), how });
-    expect(aiAssisted({ ai: false, type: 'Flash cards', items: d('ai') })).toBe(true);
-    expect(aiAssisted({ ai: false, type: 'Flash cards', items: d('scripted') })).toBe(false);
-    expect(aiAssisted({ ai: true, type: 'Flash cards', items: d('scripted') })).toBe(true);
-    expect(aiAssisted({ ai: false, type: 'Reel', items: d('ai') })).toBe(false);
+    expect(aiAssisted({ ai: false, items: d('ai') })).toBe(true);
+    expect(aiAssisted({ ai: false, items: d('scripted') })).toBe(false);
+    expect(aiAssisted({ ai: true, items: d('scripted') })).toBe(true);
+    expect(aiAssisted({ ai: false, items: d('manual') })).toBe(false);
   });
 });
 

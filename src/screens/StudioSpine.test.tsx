@@ -78,6 +78,10 @@ describe('the steps', () => {
     fireEvent.click(screen.getByRole('button', { name: '20 min' }));
     expect(screen.getByRole('button', { name: '20 min' }).getAttribute('aria-pressed')).toBe('true');
   });
+  it('offers Draft with AI on the Draft step', () => {
+    render(atStep(2));
+    expect(screen.getByRole('button', { name: 'Draft with AI' })).toBeTruthy();
+  });
   it('edits items as label, text and text 2 rows and shows what is wrong inline', () => {
     render(atStep(2));
     fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
@@ -125,7 +129,7 @@ describe('Check & send', () => {
 
 describe('View as', () => {
   it('hides every action in each step', () => {
-    for (const [step, gone] of [[1, 'Two AI hosts'], [2, 'Add item'], [3, 'Short jingle'], [5, 'Send for review']] as const) {
+    for (const [step, gone] of [[1, 'Two AI hosts'], [2, 'Add item'], [2, 'Draft with AI'], [3, 'Short jingle'], [5, 'Send for review']] as const) {
       render(atStep(step, true));
       expect(screen.queryByRole('button', { name: gone }), 'step ' + step).toBeNull();
       cleanup();

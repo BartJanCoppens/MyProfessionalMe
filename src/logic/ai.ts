@@ -3,8 +3,8 @@
 
 export type AiProvider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'heygen' | 'other';
 export type AiKind = 'text' | 'embedding' | 'voice' | 'avatar';
-// The text uses the app calls today. Most have a scripted fallback; draft_items has one for flash cards only (exam questions are AI or CSV).
-export type AiUseKey = 'profile_chat' | 'curriculum_copilot' | 'learners_eye' | 'kb_answer' | 'draft_outline' | 'teach_back' | 'draft_items';
+// The text uses the app calls today. Most have a scripted fallback; draft_items has one for flash cards only (exam questions are AI or CSV); studio_draft has one for every studio but Game.
+export type AiUseKey = 'profile_chat' | 'curriculum_copilot' | 'learners_eye' | 'kb_answer' | 'draft_outline' | 'teach_back' | 'draft_items' | 'studio_draft';
 
 export type AiConnection = { id: string; name: string; provider: AiProvider; base_url: string | null; default_model: string | null; region: string | null; key_hint: string | null; updated_at?: string };
 export type AiUse = {

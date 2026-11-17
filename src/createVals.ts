@@ -74,6 +74,7 @@ function createScreen(L: Logic) {
   const checks = contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) })
     .concat(hasItems(nw.type) ? [itemsCheck(nw.type, nw.items ?? noItems())] : []);
   const line = myLine(L);
+  const picked = usableBundles(s.bundles, line).filter((b) => s.nwKb.includes(b.id));
   const editing = s.editing ? byId.get(s.editing) : null, locked = !!submittedEdit(s);
   const fresh = () => blankDraft(d.rules, line);
   // Pristine forms start from the person's rules (they load after the first render).
@@ -138,7 +139,7 @@ function createScreen(L: Logic) {
     ...bundleFinder(L, nw, line),
     nwDraftAi: () => draftAi(L), nwAiBusy: s.nwAiBusy, nwAiLabel: s.nwAiBusy ? 'Drafting' : 'Draft with AI', nwHasAi: nw.outline.length > 0 || nw.sources.length > 0, nwAiNote: nw.aiNote,
     nwAiOutline: nw.outline.map((o, k) => ({ n: (k + 1) + '.', text: o })), nwAiCites: nw.sources.map((c, k) => ({ n: String(k + 1), text: c })),
-    itemsPanel: itemsPanel(L, nw, usableBundles(s.bundles, line).filter((b) => s.nwKb.includes(b.id)), setNw),
+    itemsPanel: itemsPanel(L, nw, picked, setNw),
     nwFileText: nw.type + ' · the file itself (video, audio or document) is attached later; this prototype stores the text only.',
     nwChecks: checks.map(dot), nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
@@ -160,7 +161,7 @@ function createScreen(L: Logic) {
   };
   // The Studios hub arranges what the form already computed (studioVals.ts); an edit always shows the form.
   const chk = s.studio.check, checkReasons = chk && chk.key === checkKey(nw, s.nwKb) ? chk.reasons : null;
-  const studio = studioVals(L, { nw, setNw, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
+  const studio = studioVals(L, { nw, setNw, bundles: picked, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
     routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, checkReasons, runCheck: () => runCheck(L) });
   return { ...vm, studio, newView: s.editing ? 'form' as const : s.studio.view };
 }

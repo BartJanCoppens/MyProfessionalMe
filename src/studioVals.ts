@@ -3,7 +3,7 @@
 // (AppState.nw), so "Send for review" is the form's save and submit: nothing is written twice.
 // Flash card & Exam Studio is compact: its Draft step is the form's item panel and it has four steps, as in v4.
 import type { Logic } from './model';
-import type { AppState, ExamQuestion, NewDraft, StudioState } from './types';
+import type { AppState, Bundle, ExamQuestion, NewDraft, StudioState } from './types';
 import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { noItems, validItems } from './logic/items';
@@ -28,7 +28,7 @@ export const studioOf = (s: AppState) => (s.studio.view === 'studio' && !s.editi
 
 // What createVals already computed for the form; the studio only arranges it.
 export type StudioSrc = {
-  nw: NewDraft; setNw: SetNw; rules: RuleParts[]; canCreate: boolean; busy: boolean;
+  nw: NewDraft; setNw: SetNw; bundles: Bundle[]; rules: RuleParts[]; canCreate: boolean; busy: boolean;
   checks: { text: string; dot: string; fg: string }[]; blocked: boolean; route: { n: string; name: string; role: string }[]; policyNote: string; routeWarn: string;
   submitLabel: string; submit: () => void; saveDraft: () => void;
   checkReasons: string[] | null; runCheck: () => void; // the automatic check of the draft on screen: null when not run on it, [] when passed
@@ -42,7 +42,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
   const formats = formatsOf(def);
   const set = (p: Partial<StudioState>) => L.setState((s) => ({ studio: { ...s.studio, ...p } }));
   const items = validItems(nw.type, nw.items?.list ?? []);
-  const parts = stepVals(def, nw, setNw);
+  const parts = stepVals(L, def, nw, setNw, src.bundles);
   const pick = (f: string) => (L.state.nwAiBusy ? L.say('Wait for the draft to finish') : setNw((cur) => (cur.type === f ? {} : { type: f, items: noItems(), ...fit(src.rules, cur, f) })));
   // Why a studio cannot be opened, once per card; '' when it can.
   const reason = (d: StudioDef) => (!d.available ? 'Coming in a later release' : formatsOf(d).length ? '' : 'Not in your creation rules');

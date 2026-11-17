@@ -18,7 +18,7 @@ export function Shape({ st }: { st: ST }) {
 export function DraftRows({ st }: { st: ST }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: '1px solid #e1e5dc', borderRadius: 6, background: '#fafbf8' }}>
-      {/* Task 1.4: the "Draft with AI" action for this studio (st.aiDraft) goes here; today only Flash has a draft, in its item panel. */}
+      {!st.readOnly && <div><Button size="sm" variant="dark" onClick={st.aiDraft.run} disabled={st.aiDraft.busy}>{st.aiDraft.label}</Button></div>}
       <Problems list={st.problems} />
       <ItemRows head={'Items · label and text' + (st.hasText2 ? ' · text 2' : '')} note={st.itemsLabel} gap={8}
         rows={st.rows.map((r, k) => (st.readOnly ? { cells: [<b key="l">{r.label}</b>, r.text, ...(st.hasText2 ? [r.text2] : [])] }
