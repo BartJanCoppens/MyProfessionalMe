@@ -1,7 +1,7 @@
 // AI connections and the places AI is used: providers, which provider fits which kind of use, and the status the
 // admin page shows per use. Mirrors private.ai_provider_fits() and public.ai_live_uses() in the database. Also the
 // stock voices a creator may choose (public.stock_voices).
-import { VOICE_MODEL } from '../../supabase/functions/_shared/narrationText.ts';
+import { VOICE_ID, VOICE_MODEL } from '../../supabase/functions/_shared/voiceRules.ts';
 
 export type AiProvider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'heygen' | 'other';
 export type AiKind = 'text' | 'embedding' | 'voice' | 'avatar';
@@ -93,14 +93,12 @@ export const formFor = (c: AiConnection): AiForm => ({ id: c.id, name: c.name, p
 // its language and accent, and whether creators are offered it. Voices are deactivated, never deleted.
 export type StockVoice = { id: string; name: string; voice_id: string; language: string; accent: string | null; active: boolean };
 export type StockVoiceForm = { name: string; voice_id: string; language: string; accent: string };
-// As stock_voices.voice_id and the voice function (VOICE_ID in supabase/functions/voice/core.ts) accept it.
-export const STOCK_VOICE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 export const blankVoice = (): StockVoiceForm => ({ name: '', voice_id: '', language: 'en', accent: '' });
 
 export function stockVoiceProblem(f: StockVoiceForm): string | null {
   const name = f.name.trim();
   if (!name || name.length > 80) return 'Name the voice as a role, e.g. Narrator · warm, 40s';
-  if (!STOCK_VOICE_ID.test(f.voice_id.trim())) return 'The ElevenLabs voice id is letters, digits, - and _';
+  if (!VOICE_ID.test(f.voice_id.trim())) return 'The ElevenLabs voice id is letters, digits, - and _';
   if (f.language.trim().length < 2 || f.language.trim().length > 40) return 'Give the language, e.g. en or nl-BE';
   if (f.accent.trim().length > 40) return 'The accent is at most 40 characters';
   return null;

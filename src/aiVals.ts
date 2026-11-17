@@ -53,8 +53,9 @@ async function saveUseEdit(L: Logic) {
   const e = L.state.aiUseEdit; if (!e) return;
   const problem = aiUseEditProblem(e); if (problem) { L.say(problem); return; }
   const label = L.state.aiAdmin?.uses.find((u) => u.key === e.key)?.label || e.key;
-  const chars = e.chars === null ? {} : { daily_chars: e.chars.trim() ? Number(e.chars) : null };
-  if (await write(L, () => updateUse(e.key, { preamble: e.preamble.trim(), daily_limit: Number(e.limit), ...chars }), label + ' · instruction and daily limit saved')) L.setState({ aiUseEdit: null });
+  // A voice use has no instruction (nothing reads it): its daily calls and characters only.
+  const patch = e.chars === null ? { preamble: e.preamble.trim(), daily_limit: Number(e.limit) } : { daily_limit: Number(e.limit), daily_chars: e.chars.trim() ? Number(e.chars) : null };
+  if (await write(L, () => updateUse(e.key, patch), label + (e.chars === null ? ' · instruction and daily limit saved' : ' · daily limits saved'))) L.setState({ aiUseEdit: null });
 }
 
 async function test(L: Logic, id: string) {
@@ -118,7 +119,8 @@ function aiScreen(L: Logic) {
         modelKeyDown: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') e.currentTarget.blur(); },
         enabled: u.enabled, toggle: () => write(L, () => updateUse(u.key, { enabled: !u.enabled }), u.label + (u.enabled ? ' switched off' : ' switched on')),
         usageLine: u.waiting_for ? '' : times(usage.uses[u.key]?.today || 0) + ' today · ' + (usage.uses[u.key]?.week || 0) + ' in 7 days · limit ' + u.daily_limit + ' a day per person' + (u.daily_chars != null ? ' · ' + u.daily_chars + ' characters a day' : ''),
-        instruction: u.preamble ? 'Instruction: ' + (u.preamble.length > 90 ? u.preamble.slice(0, 88) + '…' : u.preamble) : 'No fixed instruction',
+        instruction: u.kind === 'voice' ? '' : u.preamble ? 'Instruction: ' + (u.preamble.length > 90 ? u.preamble.slice(0, 88) + '…' : u.preamble) : 'No fixed instruction',
+        editLabel: u.kind === 'voice' ? 'Daily limits' : 'Instruction and limit',
         editInstruction: () => L.setState({ aiUseEdit: { key: u.key, preamble: u.preamble, limit: String(u.daily_limit), chars: u.kind === 'voice' ? String(u.daily_chars ?? '') : null } }),
       };
     }),
@@ -136,7 +138,9 @@ function aiScreen(L: Logic) {
     groups,
     usageTop: usage.top.map((x) => ({ name: x.name, calls: times(x.calls) })), usageNote: 'Calls in the last 7 days (UTC), all uses. Messages and replies are never stored.',
     useEdit: s.aiUseEdit ? {
-      title: (uses.find((u) => u.key === s.aiUseEdit!.key)?.label || '') + ' · instruction and limit',
+      title: (uses.find((u) => u.key === s.aiUseEdit!.key)?.label || '') + (s.aiUseEdit.chars === null ? ' · instruction and limit' : ' · daily limits'),
+      subtitle: s.aiUseEdit.chars === null ? 'The ai function always sends this instruction first; the app\'s own context follows it. A person who reaches the daily limit gets the scripted reply until tomorrow (UTC).'
+        : 'Beyond either limit the studios offer the browser voice, which is not saved, until tomorrow (UTC).',
       preamble: s.aiUseEdit.preamble, limit: s.aiUseEdit.limit, count: s.aiUseEdit.preamble.length + ' of ' + PREAMBLE_MAX + ' characters',
       chars: s.aiUseEdit.chars ?? '', hasChars: s.aiUseEdit.chars !== null,
       setChars: (e: Field) => { const v = e.target.value; L.setState((st) => ({ aiUseEdit: st.aiUseEdit && { ...st.aiUseEdit, chars: v } })); },

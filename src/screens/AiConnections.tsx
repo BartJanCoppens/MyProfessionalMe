@@ -72,8 +72,8 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
                     <div style={{ fontSize: 12, color: '#5a6058' }}>{u.place}</div>
                     <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>{u.description}</div>
                     <div style={{ fontSize: 11.5, color: '#8b918a', display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', marginTop: 2 }}>
-                      <span style={{ fontStyle: 'italic', textWrap: 'pretty' }}>{u.instruction}</span>
-                      <LinkButton size={11.5} onClick={u.editInstruction}>Instruction and limit</LinkButton>
+                      {u.instruction && <span style={{ fontStyle: 'italic', textWrap: 'pretty' }}>{u.instruction}</span>}
+                      <LinkButton size={11.5} onClick={u.editInstruction}>{u.editLabel}</LinkButton>
                     </div>
                   </div>
                   <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start', minWidth: 0 }}>
@@ -106,9 +106,9 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
       {ai.form && <ConnectionDrawer f={ai.form} />}
       {ai.voices.form && <VoiceDrawer f={ai.voices.form} />}
       {ai.useEdit && (
-        <Drawer title={ai.useEdit.title} subtitle="The ai function always sends this instruction first; the app's own context follows it. A person who reaches the daily limit gets the scripted reply until tomorrow (UTC)." onClose={ai.useEdit.cancel} width={480}>
+        <Drawer title={ai.useEdit.title} subtitle={ai.useEdit.subtitle} onClose={ai.useEdit.cancel} width={480}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Field label="Fixed instruction" hint={ai.useEdit.count}><Textarea minHeight={140} aria-label="Fixed instruction" value={ai.useEdit.preamble} onChange={ai.useEdit.setPreamble} /></Field>
+            {!ai.useEdit.hasChars && <Field label="Fixed instruction" hint={ai.useEdit.count}><Textarea minHeight={140} aria-label="Fixed instruction" value={ai.useEdit.preamble} onChange={ai.useEdit.setPreamble} /></Field>}
             <Field label="Calls per person per day" hint="0 stops the use for everyone."><Input aria-label="Calls per person per day" inputMode="numeric" value={ai.useEdit.limit} onChange={ai.useEdit.setLimit} /></Field>
             {ai.useEdit.hasChars && <Field label="Characters per person per day" hint="Spoken characters; empty for no character limit."><Input aria-label="Characters per person per day" inputMode="numeric" value={ai.useEdit.chars} onChange={ai.useEdit.setChars} /></Field>}
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

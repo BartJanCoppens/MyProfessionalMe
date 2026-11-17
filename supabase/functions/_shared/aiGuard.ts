@@ -1,5 +1,8 @@
-// Guard rails both AI edge functions (`ai`, `voice`) apply to what leaves them. Pure, so Vitest tests them through
+// Guard rails both AI edge functions (`ai`, `voice`) apply to what leaves them, and their one error answer. Pure, so Vitest tests them through
 // src/lib/aiCore.test.ts and src/lib/voiceCore.test.ts.
+
+// An error answer: { error } with the status.
+export const fail = (status: number, error: string) => Response.json({ error }, { status });
 
 export type Provider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'heygen' | 'other';
 

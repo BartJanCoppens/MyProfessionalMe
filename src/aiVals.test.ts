@@ -255,13 +255,15 @@ describe('guard rails on the page and in the app', () => {
     expect(h.vm().ai!.useEdit).toBeNull();
     u.editInstruction();
     const e = () => h.vm().ai!.useEdit!;
-    expect(e()).toMatchObject({ chars: '30000', hasChars: true });
+    expect(u).toMatchObject({ instruction: '', editLabel: 'Daily limits' });
+    expect(e()).toMatchObject({ chars: '30000', hasChars: true, title: 'Studio voice-over · daily limits' });
     e().setChars(ev('many'));
     await e().save();
     expect(h.lastToast()).toBe('The daily characters are a whole number from 0 to 10000000');
     e().setChars(ev('20000'));
     await e().save(); await flush();
-    expect(store.updateUse).toHaveBeenCalledWith('studio_voice', { preamble: '', daily_limit: 50, daily_chars: 20000 });
+    expect(store.updateUse).toHaveBeenCalledWith('studio_voice', { daily_limit: 50, daily_chars: 20000 });
+    expect(h.lastToast()).toBe('Studio voice-over · daily limits saved');
   });
   it('says when the daily limit is reached and gives the scripted reply', async () => {
     const msg = 'Daily AI limit reached (50 a day per person for this use); the scripted reply is used until tomorrow (UTC)';

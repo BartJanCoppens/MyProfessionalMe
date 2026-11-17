@@ -3,11 +3,12 @@
 // Vitest tests them (src/lib/voiceCore.test.ts). index.ts wires those steps to Supabase. Copied from Horizon's
 // server/voice.ts (markTimes, the with-timestamps call and its reading).
 // The key is only ever put in a request header to ElevenLabs; errors are scrubbed of it before they leave.
-import { scrub } from '../_shared/aiGuard.ts';
+import { fail, scrub } from '../_shared/aiGuard.ts';
 import { CUE_MARK, NEXT_MARK, spoken } from '../_shared/narrationText.ts';
 import type { Mark } from '../_shared/narrationText.ts';
+import { VOICE_ID, VOICE_USE } from '../_shared/voiceRules.ts';
 
-export const VOICE_USE = 'studio_voice';
+export { VOICE_ID, VOICE_USE };
 export const ELEVENLABS = 'https://api.elevenlabs.io';
 export const VOICE_LIMITS = {
   chars: 5000, // per call (studios rule); longer narration is split by the caller
@@ -16,8 +17,6 @@ export const VOICE_LIMITS = {
   audioBytes: 25 * 1024 * 1024, // an audio file in `media` (MEDIA_KINDS.mp3 in src/logic/mediaFiles.ts)
   sampleBytes: 5_000_000,
 };
-// A provider voice id, as stock_voices.voice_id accepts it.
-export const VOICE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // EU AI Act Art. 50 marking, as Taxatar's: on every answer the voice made.
 export const AI_HEADER = { 'X-AI-Generated': 'true' } as const;
@@ -27,7 +26,6 @@ export type Speak = { contributionId: string; voiceId: string; text: string };
 export type VoiceTarget = { key: string; baseUrl: string | null; model: string };
 type Read<T> = { ok: true } & T | { ok: false; error: string };
 
-const fail = (status: number, error: string) => Response.json({ error }, { status });
 const record = (b: unknown) => (b && typeof b === 'object' ? b : {}) as Record<string, unknown>;
 
 // { contributionId, voiceId, text }: a saved contribution, a voice id and up to 5,000 characters with words.
@@ -71,6 +69,12 @@ export function ttsRequest(t: VoiceTarget, voiceId: string, text: string) {
   };
 }
 
+// ElevenLabs' detail as words: text, { message }, or a list of { msg } (validation errors); nothing else.
+function detailText(d: unknown): string {
+  const one = (x: unknown) => (typeof x === 'string' ? x : x && typeof x === 'object' ? String((x as Record<string, unknown>).message ?? (x as Record<string, unknown>).msg ?? '') : '');
+  return Array.isArray(d) ? d.map(one).filter(Boolean).join('; ') : one(d);
+}
+
 type Called = { ok: true; json: Record<string, any> } | { ok: false; status: number; error: string };
 // One JSON call to ElevenLabs with a timeout: its answer, or a refusal in words with the key scrubbed out.
 async function callElevenLabs(t: VoiceTarget, url: string, init: RequestInit, fetchFn: typeof fetch): Promise<Called> {
@@ -79,7 +83,7 @@ async function callElevenLabs(t: VoiceTarget, url: string, init: RequestInit, fe
     const json = await res.json().catch(() => ({}));
     if (res.ok) return { ok: true, json };
     if (res.status === 401 || res.status === 403) return { ok: false, status: 502, error: 'ElevenLabs refused the key: a System Admin checks it in Administration · AI connections' };
-    const msg = String(json?.detail?.message ?? json?.detail ?? '').slice(0, 200);
+    const msg = detailText(json?.detail).slice(0, 200);
     return { ok: false, status: 502, error: scrub('ElevenLabs refused it' + (msg ? ': ' + msg : ''), t.key) };
   } catch (err) {
     const timedOut = (err as Error)?.name === 'TimeoutError';

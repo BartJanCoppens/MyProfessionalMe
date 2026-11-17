@@ -1,7 +1,7 @@
 // Providers per kind of use, the status of a use, and the connection form check (mirror the database rules).
 import { describe, expect, it } from 'vitest';
-import { AI_USE_KEYS, answersText, blankForm, fits, formFor, formProblem, providersFor, STOCK_VOICE_ID, statusOfUse, stockVoiceProblem } from './ai';
-import { VOICE_ID } from '../../supabase/functions/voice/core.ts';
+import { AI_USE_KEYS, answersText, blankForm, fits, formFor, formProblem, providersFor, statusOfUse, stockVoiceProblem } from './ai';
+import { VOICE_ID } from '../../supabase/functions/_shared/voiceRules.ts';
 import type { AiConnection, AiUse } from './ai';
 
 const conn = (over: Partial<AiConnection> = {}): AiConnection => ({ id: 'c1', name: 'Claude', provider: 'anthropic', base_url: null, default_model: 'claude-opus-5-5', region: 'global', key_hint: 'abcd', ...over });
@@ -50,9 +50,8 @@ describe('a voice use', () => {
 });
 
 describe('a stock voice', () => {
-  it('takes the voice ids stock_voices and the voice function take', () => {
-    expect(STOCK_VOICE_ID.source).toBe(VOICE_ID.source);
-    expect(migrations).toContain("voice_id ~ '" + STOCK_VOICE_ID.source + "'");
+  it('takes the voice ids stock_voices takes (the one VOICE_ID the voice function uses too)', () => {
+    expect(migrations).toContain("voice_id ~ '" + VOICE_ID.source + "'");
   });
   it('is named as a role, with an id and a language', () => {
     const f = { name: 'Narrator · warm, 40s', voice_id: 'tVoiceWarm01', language: 'en', accent: '' };

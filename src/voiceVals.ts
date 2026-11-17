@@ -26,7 +26,8 @@ async function save(L: Logic, write: Write) {
 }
 
 export function stockVoicesVals(L: Logic, write: Write) {
-  const s = L.state, live = voiceLive(s.aiLive), f = s.voiceForm;
+  // As every AI use: live in ai_live_uses() and not switched off for this session (?live=off).
+  const s = L.state, ai = L.aiOpts(), live = ai.enabled && voiceLive(ai.live), f = s.voiceForm;
   const set = (k: keyof StockVoiceForm) => (e: Field) => { const v = e.target.value; L.setState((st) => ({ voiceForm: st.voiceForm && { ...st.voiceForm, [k]: v } })); };
   return {
     loading: !s.stockVoices && !s.aiError, empty: !!s.stockVoices && !s.stockVoices.length,

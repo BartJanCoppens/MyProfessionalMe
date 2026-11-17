@@ -66,12 +66,16 @@ describe('speakInBrowser', () => {
     expect(await b.done).toBe('blocked');
     expect(synth.cancel).toHaveBeenCalled();
   });
-  it('reports a failure and stops on request', async () => {
+  it('reports a failure, and a stop on request as stopped', async () => {
     const b = speakInBrowser('Hello');
     (synth.speak.mock.calls[0][0] as Utterance).onerror?.();
     expect(await b.done).toBe('failed');
-    speakInBrowser('Again').stop();
-    expect(synth.cancel).toHaveBeenCalled();
+    synth.cancel.mockClear();
+    const again = speakInBrowser('Again');
+    synth.cancel.mockClear();
+    again.stop();
+    expect(synth.cancel).toHaveBeenCalledTimes(1);
+    expect(await again.done).toBe('stopped');
   });
   it('says when the browser has no voice at all', async () => {
     vi.stubGlobal('speechSynthesis', undefined);

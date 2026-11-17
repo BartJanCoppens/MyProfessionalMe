@@ -6,8 +6,9 @@
 import { invokeFunction } from './aiStore';
 import { spoken } from '../logic/narration';
 import type { RunMark } from '../logic/narration';
+import { VOICE_USE } from '../../supabase/functions/_shared/voiceRules.ts';
 
-export const VOICE_USE = 'studio_voice';
+export { VOICE_USE };
 export const BROWSER_VOICE = 'Browser voice · not saved';
 // Stored audio made by the voice: its path in `media`, its length, and when its marks fall.
 export type StoredVoice = { path: string; seconds: number; marks: RunMark[]; made: 'voice' };
@@ -29,7 +30,7 @@ export async function hearStockVoice(voiceId: string): Promise<string> {
   return data.audio;
 }
 
-export type BrowserOutcome = 'ended' | 'blocked' | 'failed' | 'unsupported';
+export type BrowserOutcome = 'ended' | 'stopped' | 'blocked' | 'failed' | 'unsupported';
 export type BrowserSpeech = { label: typeof BROWSER_VOICE; done: Promise<BrowserOutcome>; stop: () => void };
 
 // Says the words with the browser's voice. A browser that never starts (no voices, autoplay rules) is given up after
@@ -49,5 +50,5 @@ export function speakInBrowser(text: string, opts: { lang?: string; startMs?: nu
   u.onerror = () => finish('failed');
   synth.cancel();
   synth.speak(u);
-  return { label: BROWSER_VOICE, done, stop: () => { synth.cancel(); finish('ended'); } };
+  return { label: BROWSER_VOICE, done, stop: () => { synth.cancel(); finish('stopped'); } };
 }

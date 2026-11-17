@@ -36,7 +36,7 @@ Working folder: repo root.
 
 ## Data & deploy
 - Supabase project `myprofessionalme` (ref `njhrxshysipssjyeyivm`, West EU Paris). Accounts, roles, learner data, catalogue, mappings and knowledge bundles live there.
-- No Docker. Apply with the CLI: `supabase db push`, `supabase config push`, `supabase functions deploy manage-users --use-api`, `supabase functions deploy ai --use-api`. Run `supabase db advisors --linked` after schema changes.
+- No Docker. Apply with the CLI: `supabase db push`, `supabase config push`, `supabase functions deploy manage-users --use-api`, `supabase functions deploy ai --use-api`, `supabase functions deploy voice --use-api` (`ai` and `voice` import `supabase/functions/_shared/`: redeploy both when it changes). Run `supabase db advisors --linked` after schema changes.
 - Each new table needs `revoke all ... from anon, authenticated` plus minimal grants (this project still has Supabase's default grants). One permissive policy per table and action.
 - Roles: System Admin, Domain Admin (per business line), General Admin. Enforcement is in RLS, `private.*` helpers and `manage-users`; the UI only hides. Sign-up is closed; `[auth.email] enable_signup` must stay `true`.
 - Ship with `vercel deploy --prod`.

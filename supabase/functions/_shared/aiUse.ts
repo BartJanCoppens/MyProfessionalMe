@@ -3,14 +3,14 @@
 // against the use's daily limits (public.ai_count_call), and the connection's key from Vault. The key stays in the
 // function's process.
 import type { SupabaseContext } from '@supabase/server';
-import { isLimitError } from './aiGuard.ts';
+import { fail, isLimitError } from './aiGuard.ts';
 import type { Provider } from './aiGuard.ts';
 
 type Admin = SupabaseContext['supabaseAdmin'];
 export type Conn = { id: string; provider: Provider; base_url: string | null; default_model: string | null };
 export type UseRow = { kind: string; admins_only: boolean; model: string | null; preamble: string; daily_limit: number; connection: Conn | null };
 
-export const fail = (status: number, error: string) => Response.json({ error }, { status });
+export { fail };
 
 // The caller's roles, or null when they could not be read.
 export async function callerRoles(admin: Admin, userId: string): Promise<string[] | null> {

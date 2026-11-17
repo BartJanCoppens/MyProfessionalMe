@@ -2,7 +2,7 @@
 // with-timestamps call, the marks' times, and the whole speak and sample answers with their outside steps as fakes.
 // The key never leaves; every answer made by the voice is marked X-AI-Generated.
 import { describe, expect, it, vi } from 'vitest';
-import { AI_HEADER, ELEVENLABS, markTimes, readSpeak, sampleResponse, speakResponse, ttsRequest, VOICE_ID, VOICE_LIMITS, voiceFileName } from '../../supabase/functions/voice/core.ts';
+import { AI_HEADER, ELEVENLABS, markTimes, readSpeak, sampleResponse, speakResponse, ttsRequest, VOICE_LIMITS, voiceFileName } from '../../supabase/functions/voice/core.ts';
 import type { SampleDeps, SpeakDeps } from '../../supabase/functions/voice/core.ts';
 import { MEDIA_KINDS, MEDIA_PATH } from '../logic/mediaFiles';
 
@@ -38,9 +38,6 @@ describe('readSpeak', () => {
     expect(readSpeak(ask({ contributionId: undefined }))).toEqual({ ok: false, error: 'Save the contribution before voicing it' });
     expect(readSpeak(ask({ contributionId: 'C1' })).ok).toBe(false);
     expect(readSpeak(null).ok).toBe(false);
-  });
-  it('accepts the voice ids stock_voices accepts', () => {
-    expect(VOICE_ID.source).toBe('^[A-Za-z0-9_-]{1,64}$');
   });
 });
 
@@ -129,6 +126,13 @@ describe('speakResponse', () => {
     expect(text).toContain('[key]');
     expect(JSON.stringify(d.lines)).not.toContain(KEY);
     expect(r.headers.get('X-AI-Generated')).toBeNull();
+  });
+  it('says ElevenLabs\' refusal in words, whatever shape its detail has', async () => {
+    const refuse = (detail: unknown) => deps({ fetch: vi.fn(async () => new Response(JSON.stringify({ detail }), { status: 422 })) });
+    expect((await body(await speakResponse(ask(), refuse([{ loc: ['body', 'text'], msg: 'field required' }, { msg: 'too long' }])))).error).toBe('ElevenLabs refused it: field required; too long');
+    expect((await body(await speakResponse(ask(), refuse({ status: 'quota_exceeded', message: 'Quota exceeded' })))).error).toBe('ElevenLabs refused it: Quota exceeded');
+    expect((await body(await speakResponse(ask(), refuse({ status: 'odd' })))).error).toBe('ElevenLabs refused it');
+    expect((await body(await speakResponse(ask(), refuse([{ msg: 'bad ' + KEY }])))).error).toBe('ElevenLabs refused it: bad [key]');
   });
   it('says the key was refused in words, and stores nothing when no audio came', async () => {
     const r = await speakResponse(ask(), deps({ fetch: vi.fn(async () => new Response('{}', { status: 401 })) }));

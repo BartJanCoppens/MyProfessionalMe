@@ -37,7 +37,8 @@ function Live({ access = systemAdmin(), live = [] as string[] }) {
   const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'adminAi', aiAdmin: access.isSystem ? data() : null, stockVoices: VOICES, aiLive: live }));
   useEffect(() => { current = st; });
   const refs = { toastTimer: { current: undefined }, drag: { current: null }, file: { current: null }, chat: { current: null } };
-  const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, refs, access, person(), async () => {}).renderVals();
+  const conf = { ...cfg, liveAssistant: true };
+  const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), conf, refs, access, person(), async () => {}).renderVals();
   return <>{vm.ai && <AiConnectionsScreen ai={vm.ai} />}{vm.toast && <div role="status">{vm.toast}</div>}</>;
 }
 const click = async (name: string | RegExp) => { await act(async () => { fireEvent.click(screen.getAllByRole('button', { name })[0]); }); };
@@ -145,11 +146,15 @@ describe('the stock voices', () => {
     expect(screen.queryByRole('button', { name: '+ Add connection' })).toBeNull();
     expect(screen.queryByText('Text and assistants')).toBeNull();
   });
-  it('edits a voice use\'s characters a day', async () => {
+  it('edits a voice use\'s daily limits only: it has no instruction, and beyond the limit the browser voice is offered', async () => {
     render(<Live />);
-    await act(async () => { fireEvent.click(within(row('studio_voice')).getByRole('button', { name: 'Instruction and limit' })); });
+    expect(within(row('studio_voice')).queryByText('No fixed instruction')).toBeNull();
+    await act(async () => { fireEvent.click(within(row('studio_voice')).getByRole('button', { name: 'Daily limits' })); });
+    expect(screen.queryByLabelText('Fixed instruction')).toBeNull();
+    expect(screen.getByText('Beyond either limit the studios offer the browser voice, which is not saved, until tomorrow (UTC).')).toBeTruthy();
+    expect(screen.queryByText(/gets the scripted reply/)).toBeNull();
     fireEvent.change(screen.getByLabelText('Characters per person per day'), { target: { value: '12000' } });
     await click('Save');
-    expect(store.updateUse).toHaveBeenCalledWith('studio_voice', { preamble: '', daily_limit: 50, daily_chars: 12000 });
+    expect(store.updateUse).toHaveBeenCalledWith('studio_voice', { daily_limit: 50, daily_chars: 12000 });
   });
 });

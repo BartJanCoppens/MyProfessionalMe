@@ -6,5 +6,3 @@ export const NEXT_MARK = '⟨next⟩', CUE_MARK = '⟨cue⟩';
 export type Mark = { kind: 'next' | 'cue'; at: number };
 // The text without its marks, as a voice speaks it.
 export const spoken = (t: string): string => t.split(NEXT_MARK).join(' ').split(CUE_MARK).join(' ').replace(/\s+/g, ' ').replace(/\s+([.,!?;:])/g, '$1').trim();
-// The ElevenLabs model that voices narration unless the AI use or its connection names another.
-export const VOICE_MODEL = 'eleven_multilingual_v2';

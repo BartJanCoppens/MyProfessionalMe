@@ -19,7 +19,7 @@ const VOICES: StockVoice[] = [
   { id: 'v2', name: 'Interviewer · calm', voice_id: 'tVoiceCalm02', language: 'nl', accent: null, active: false },
 ];
 const admin = (): AiAdmin => ({ connections: [], uses: [], usage: { uses: {}, top: [] } });
-const page = (access = systemAdmin(), state = {}) => harness({ access, state: { screen: 'adminAi', aiAdmin: access.isSystem ? admin() : null, stockVoices: VOICES, ...state } });
+const page = (access = systemAdmin(), state = {}, config = { liveAssistant: true }) => harness({ access, config, state: { screen: 'adminAi', aiAdmin: access.isSystem ? admin() : null, stockVoices: VOICES, ...state } });
 const ev = (value: string) => ({ target: { value } }) as never;
 const played = vi.fn(async () => {});
 
@@ -100,6 +100,10 @@ describe('the stock voices', () => {
     expect(voice.hearStockVoice).toHaveBeenCalledWith('tVoiceWarm01');
     expect(played).toHaveBeenCalled();
     expect(h.state.voiceHearing).toBeNull();
+  });
+  it('hides "Hear the voice" with the AI switched off in the URL (?live=off)', () => {
+    const row = page(systemAdmin(), { aiLive: ['studio_voice'] }, { liveAssistant: false }).vm().ai!.voices.rows[0];
+    expect(row.canHear).toBe(false);
   });
   it('says why a sample did not play', async () => {
     vi.mocked(voice.hearStockVoice).mockRejectedValueOnce(new Error('ElevenLabs has no sample of that voice'));

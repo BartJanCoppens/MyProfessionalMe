@@ -1,7 +1,7 @@
 // Narration that Slides, Podcast and Horizon presentations share (studios plan, Task 3.2), copied from Horizon's
 // narrativeText.ts and narrativeRun.ts: the ⟨next⟩ and ⟨cue⟩ marks inside a passage, the text as a voice speaks it,
 // and the steps a narration runs in. A step lasts its voice's seconds, with the marks where the voice timed them; in
-// your own words (no stored voice), its words at a pace. The step player (src/screens/useStepPlayer.ts) plays them.
+// your own words (no stored voice), its words at a pace. The step player (src/screens/StepPlayer.tsx) plays them.
 // The marks and the spoken text are the ones the `voice` edge function uses, from one shared file.
 import { CUE_MARK, NEXT_MARK, spoken } from '../../supabase/functions/_shared/narrationText.ts';
 

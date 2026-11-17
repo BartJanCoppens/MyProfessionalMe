@@ -13,7 +13,7 @@
 // use, the outcome, the characters and the duration.
 import { withSupabase } from '@supabase/server';
 import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
-import { VOICE_MODEL } from '../_shared/narrationText.ts';
+import { VOICE_MODEL } from '../_shared/voiceRules.ts';
 import { sampleResponse, speakResponse, VOICE_LIMITS, VOICE_USE } from './core.ts';
 import type { VoiceTarget } from './core.ts';
 
