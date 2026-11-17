@@ -2231,6 +2231,15 @@ do $$ begin
   begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/sub/x.mp3');
     insert into results (check_name, expected, actual) values ('ME no upload outside <user>/<contribution>/<file>', 'blocked: 42501', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('ME no upload outside <user>/<contribution>/<file>', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into storage.objects (bucket_id, name) values ('media', upper('00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c'))||'/x.mp3');
+    insert into results (check_name, expected, actual) values ('ME no upload under upper-case ids', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME no upload under upper-case ids', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/../x.mp3');
+    insert into results (check_name, expected, actual) values ('ME no upload with a .. segment', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME no upload with a .. segment', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/..');
+    insert into results (check_name, expected, actual) values ('ME no file named ..', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME no file named ..', 'blocked: 42501', 'blocked: '||sqlstate); end;
   begin update storage.objects set name = '00000000-0000-0000-0000-0000000000f2/'||current_setting('test.me_o')||'/moved.mp3' where bucket_id = 'media' and name = current_setting('test.me_b');
     insert into results (check_name, expected, actual) values ('ME no move to someone else''s contribution', 'blocked: 42501', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('ME no move to someone else''s contribution', 'blocked: 42501', 'blocked: '||sqlstate); end;
@@ -2259,6 +2268,18 @@ select set_config('test.me_r', (select reviewer_id::text from public.contributio
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.me_r'), 'role', 'authenticated')::text, true);
 insert into results (check_name, expected, actual) select 'ME the reviewer reads the contribution''s files', '2', count(*)::text from storage.objects where bucket_id = 'media' and name like '00000000-0000-0000-0000-0000000000f1/%';
+do $$ begin
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/reviewer.mp3');
+    insert into results (check_name, expected, actual) values ('ME the reviewer adds no file to the contribution', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME the reviewer adds no file to the contribution', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into storage.objects (bucket_id, name) values ('media', current_setting('test.me_r')||'/'||current_setting('test.me_c')||'/reviewer.mp3');
+    insert into results (check_name, expected, actual) values ('ME the reviewer adds no file under their own id for it', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME the reviewer adds no file under their own id for it', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+with u as (update storage.objects set metadata = '{"size":2}' where bucket_id = 'media' and name = current_setting('test.me_a') returning 1)
+  insert into results (check_name, expected, actual) select 'ME the reviewer replaces no file', '0 rows', count(*)||' rows' from u;
+with d as (delete from storage.objects where bucket_id = 'media' and name = current_setting('test.me_a') returning 1)
+  insert into results (check_name, expected, actual) select 'ME the reviewer removes no file', '0 rows', count(*)||' rows' from d;
 insert into results (check_name, expected, actual) select 'ME the peer approves; published', 'published', public.review_contribution(current_setting('test.me_c')::uuid, 'approved', '{t,t,t,t}', '');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f3","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'ME a published learning that names no file opens none', '0', count(*)::text from storage.objects where bucket_id = 'media';
@@ -2271,6 +2292,11 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f3","r
 insert into results (check_name, expected, actual) select 'ME a signed-in learner reads the file a published learning names', '1', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.me_a');
 insert into results (check_name, expected, actual) select 'ME but not the files it does not name', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.me_b');
 insert into results (check_name, expected, actual) select 'ME nor another contribution''s file it names', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.me_x');
+reset role;
+update public.learnings set status = 'review' where id = (select learning_id from public.contributions where id = current_setting('test.me_c')::uuid);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'ME the file closes again when its learning is set back from published', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.me_a');
 reset role;
 set local role anon;
 set local request.jwt.claims = '';
