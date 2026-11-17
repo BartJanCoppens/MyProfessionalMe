@@ -4,6 +4,7 @@
 // step retried alone, the drawing kept in the items and dropped when the stages change, and nothing sent without the
 // animation and its text alternative (Review Focus 1).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as aiStore from './lib/aiStore';
 import * as store from './lib/contributionStore';
 import { emptyParts } from './logic/contribution';
 import type { CreateData } from './logic/contribution';
@@ -15,13 +16,15 @@ import { retryStep, runBuild } from './logic/studioBuild';
 import { ALT_NEEDED, BUILD_FIRST, LENGTH_CHANGED, MOTION_LENGTH } from './logic/studioContent';
 import type { StudioEntry, StudioItem } from './logic/studios';
 import { flush, harness, member, person, stubWindow } from './test/harness';
-import { SCRIPTED_INSTEAD } from './studioMotion';
+import { NO_AI, SCRIPTED_INSTEAD } from './studioMotion';
 import type { NewDraft } from './types';
 
 vi.mock('./lib/contributionStore', () => ({
   loadCreate: vi.fn(), saveDraft: vi.fn(async (_f: unknown, id?: string | null) => id ?? 'new1'), removeDraft: vi.fn(async () => {}), submitContribution: vi.fn(async () => 'review'),
   checkContribution: vi.fn(async () => ({ passed: true, reasons: [] })), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(async () => {}), removePolicy: vi.fn(async () => {}),
 }));
+
+vi.mock('./lib/aiStore', async (orig) => ({ ...(await orig<typeof import('./lib/aiStore')>()), askAi: vi.fn() }));
 
 const STAGES: StudioItem[] = [['Order', 'The customer orders.'], ['Deliver', 'Goods leave.'], ['Collect', 'Payment arrives.']];
 const STAGE_OBJ = STAGES.map(([label, text]) => ({ label, text }));
@@ -30,11 +33,12 @@ const nwOf = (o: Partial<NewDraft> = {}): NewDraft => ({ line: 'Consulting', aud
   take: 'Cash follows the order.', outline: [], sources: [], ai: false, aiNote: '', ...o });
 const data = (): CreateData => ({ contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 });
 const PRODUCE = 2; // Idea & sources, Shape it, Draft, Produce
-const open = (o: { list?: StudioEntry[]; shape?: Record<string, string>; live?: boolean; step?: number; ai?: () => Promise<string> } = {}) => {
+// live: AI inside Claude Design; uses: the uses a System Admin switched on (the ai edge function, aiStore.askAi).
+const open = (o: { list?: StudioEntry[]; shape?: Record<string, string>; live?: boolean; uses?: string[]; step?: number; ai?: () => Promise<string> } = {}) => {
   const complete = vi.fn(o.ai ?? (async () => AI_SVG));
   stubWindow(o.live ? { claude: { complete } } : {});
-  const h = harness({ access: member('u1'), subject: person(), config: { liveAssistant: !!o.live },
-    state: { screen: 'create', create: data(), createTab: 'new', nwKb: ['B1'], aiLive: o.live ? ['studio_draft'] : [], studio: { view: 'studio', step: o.step ?? PRODUCE + 1, id: 'motion' },
+  const h = harness({ access: member('u1'), subject: person(), config: { liveAssistant: !!o.live || !!o.uses },
+    state: { screen: 'create', create: data(), createTab: 'new', nwKb: ['B1'], aiLive: o.uses ?? (o.live ? ['studio_motion'] : []), studio: { view: 'studio', step: o.step ?? PRODUCE + 1, id: 'motion' },
       nw: nwOf({ shape: o.shape ?? { [MOTION_LENGTH]: '20 s' }, items: { list: (o.list ?? STAGES) as never, how: 'manual', problems: [], note: '' } }) } });
   vi.mocked(store.loadCreate).mockImplementation(async () => h.state.create!);
   const st = () => h.vm().create!.studio;
@@ -46,6 +50,25 @@ const open = (o: { list?: StudioEntry[]; shape?: Record<string, string>; live?: 
 
 beforeEach(() => { vi.clearAllMocks(); });
 afterEach(() => { vi.unstubAllGlobals(); });
+
+describe('the Motion Studio\'s AI use', () => {
+  it('animates through its own use studio_motion, whose instruction asks for one SVG', async () => {
+    vi.mocked(aiStore.askAi).mockResolvedValue(AI_SVG);
+    const h = open({ uses: ['studio_motion'] });
+    expect(h.st().motion).toMatchObject({ note: '' });
+    await h.build();
+    expect(aiStore.askAi).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(aiStore.askAi).mock.calls[0][0]).toBe('studio_motion');
+    expect(h.drawing()).toMatchObject({ svg: AI_SVG, made: 'ai' });
+  });
+  it('is scripted when only the studio drafts (studio_draft) are switched on', async () => {
+    const h = open({ uses: ['studio_draft'] });
+    expect(h.st().motion).toMatchObject({ note: NO_AI });
+    await h.build();
+    expect(aiStore.askAi).not.toHaveBeenCalled();
+    expect(h.drawing()).toMatchObject({ made: 'scripted' });
+  });
+});
 
 describe('building an Animated flow with AI', () => {
   it('draws the layout, animates it in one AI call and writes the text alternative from the stages', async () => {

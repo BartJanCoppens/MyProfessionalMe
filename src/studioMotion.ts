@@ -1,6 +1,6 @@
 // Motion Studio (studios plan, Task 2.3): its build runner and what its Produce step shows. The three build steps:
 // "Drawing the flow" lays the stages out as scripted boxes and arrows; "Animating each stage" is the one AI call
-// (studio_draft through Logic.viaAi, read strictly by readMotionSvg), or without AI the scripted build-in of the same
+// (its own use studio_motion through Logic.viaAi, read strictly by readMotionSvg), or without AI the scripted build-in of the same
 // boxes; "Writing the text alternative" writes it from the stages, for the creator to edit. Each step's output is the
 // drawing after the stage rows in the items (motionBuilt counts how far it got), so a failed step is retried alone and
 // a reloaded draft shows its build. A drawing is built for its stages and its length: editing the stages drops it (the
@@ -19,6 +19,8 @@ import { motionProblems, motionSeconds } from './logic/studioContent';
 import { labelledRows, stepsOf } from './logic/studios';
 import type { StudioEntry } from './logic/studios';
 
+// The Motion Studio's AI use: its preamble asks for one SVG, where studio_draft's asks for JSON items.
+const MOTION_USE = 'studio_motion';
 export type BuildCtx = { L: Logic; nw: NewDraft; setNw: SetNw };
 export const NO_AI = 'AI is not switched on, so the build animates a scripted flow of boxes and arrows from your stages.';
 export const UNUSABLE = 'AI did not return a usable animation · retry this step';
@@ -54,9 +56,9 @@ export function motionRunner({ L, nw, setNw }: BuildCtx): BuildRunner {
   const steps = [
     async () => put(() => ({ svg: motionLayout(stages, seconds, false), alt: '', made: 'layout', seconds })),
     async () => {
-      const ai = L.aiCan('studio_draft');
+      const ai = L.aiCan(MOTION_USE);
       const svg = !ai ? motionLayout(stages, seconds, true)
-        : await L.viaAi('studio_draft', motionRequest({ title: nw.title, take: nw.take, stages, seconds, choices: { ...nw.shape, ...nw.produce }, layout: motionLayout(stages, seconds, false) }), readMotionSvg);
+        : await L.viaAi(MOTION_USE, motionRequest({ title: nw.title, take: nw.take, stages, seconds, choices: { ...nw.shape, ...nw.produce }, layout: motionLayout(stages, seconds, false) }), readMotionSvg);
       if (!svg) throw new Error(UNUSABLE);
       put((d) => (d ? { svg, alt: '', made: ai ? 'ai' : 'scripted', seconds } : null));
     },
@@ -74,7 +76,7 @@ export function motionProduce(L: Logic, nw: NewDraft, setNw: SetNw) {
   const list = listOf(nw), d = drawingOf(list), animated = !!d && d.made !== 'layout', from = builtFrom(nw);
   const failed = d?.made === 'layout' && nw.build?.[1]?.status === 'failed';
   return {
-    made: d ? MADE_LABEL[d.made] : '', note: L.aiCan('studio_draft') ? '' : NO_AI, problems: animated ? motionProblems(list, nw.shape ?? {}) : [],
+    made: d ? MADE_LABEL[d.made] : '', note: L.aiCan(MOTION_USE) ? '' : NO_AI, problems: animated ? motionProblems(list, nw.shape ?? {}) : [],
     scripted: failed ? { label: SCRIPTED_INSTEAD, run: () => putDrawing(setNw, (x) => (x ? scriptedFlow(nw) : null), from) } : null,
     alt: animated ? { value: d.alt, set: (v: string) => putDrawing(setNw, (x) => (x ? { ...x, alt: v } : null)) } : null,
     restart: () => setNw((cur) => ({ items: { ...(cur.items ?? noItems()), list: stepsOf(listOf(cur)) as Item[] }, build: undefined })),

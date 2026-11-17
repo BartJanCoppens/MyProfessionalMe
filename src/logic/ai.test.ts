@@ -1,6 +1,6 @@
 // Providers per kind of use, the status of a use, and the connection form check (mirror the database rules).
 import { describe, expect, it } from 'vitest';
-import { answersText, blankForm, fits, formFor, formProblem, providersFor, statusOfUse } from './ai';
+import { AI_USE_KEYS, answersText, blankForm, fits, formFor, formProblem, providersFor, statusOfUse } from './ai';
 import type { AiConnection, AiUse } from './ai';
 
 const conn = (over: Partial<AiConnection> = {}): AiConnection => ({ id: 'c1', name: 'Claude', provider: 'anthropic', base_url: null, default_model: 'claude-opus-5-5', region: 'global', key_hint: 'abcd', ...over });
@@ -45,5 +45,21 @@ describe('the connection form', () => {
   });
   it('edits a connection with an empty key field and the stored hint', () => {
     expect(formFor(conn())).toEqual({ id: 'c1', name: 'Claude', provider: 'anthropic', base_url: '', default_model: 'claude-opus-5-5', region: 'global', key: '', hint: 'abcd' });
+  });
+});
+
+// Every text use the app calls is seeded in a migration as a text use, off by default (sync with the database).
+const migrations = Object.values(import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>).join('\n');
+describe('the text uses the app calls', () => {
+  it('are each seeded as a text use that starts switched off or as configured', () => {
+    for (const key of AI_USE_KEYS) expect(migrations, key).toMatch(new RegExp("\\('" + key + "', \\d+, 'text'"));
+  });
+  it('give the Motion Studio its own use, with an instruction for one SVG, separate from the studio drafts', () => {
+    expect(AI_USE_KEYS).toContain('studio_motion');
+    const seed = /\('studio_motion', \d+, 'text', '[^']*', '[^']*', '((?:[^']|'')*)', null, false, false,\s*'((?:[^']|'')*)'\)/.exec(migrations);
+    expect(seed).not.toBeNull();
+    expect(seed![1]).toMatch(/animat/i);
+    expect(seed![2]).toMatch(/SVG only/);
+    expect(seed![2]).not.toMatch(/JSON/);
   });
 });

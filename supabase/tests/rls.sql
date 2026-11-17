@@ -2142,5 +2142,8 @@ select public.save_learning((select learning_id from public.contributions where 
 insert into results (check_name, expected, actual) select 'MO a learner completes an Animated flow without a counsellor', 'accepted', state
   from public.learner_learnings where user_id = '00000000-0000-0000-0000-0000000000e5' and learning_id = (select learning_id from public.contributions where title = 'T mo flow');
 reset role;
+-- ---------- Phase 2 review fixes (P2) ----------
+insert into results (check_name, expected, actual) values ('P2 studio_motion use is seeded, text and off, asking for one SVG', 'text/false/true/false',
+  (select kind||'/'||enabled||'/'||(preamble like '%SVG only%')||'/'||(preamble like '%JSON%') from public.ai_uses where key = 'studio_motion'));
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
