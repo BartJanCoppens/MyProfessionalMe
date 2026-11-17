@@ -195,6 +195,12 @@ function LearnersEye({ vm }: { vm: VM }) {
               </div>
             ))}
           </div>
+          {pz.trjRows.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: '#3d423b', borderTop: '1px solid #eef0ea', paddingTop: 10 }}>
+              <span style={{ fontWeight: 600, color: '#1a1d18' }}>Certification trajectories · only this year's share of the hours counts</span>
+              {pz.trjRows.map((row) => <div key={row} style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}><span aria-hidden="true" style={{ color: '#7a5000', fontWeight: 600 }}>◆</span><span style={{ textWrap: 'pretty' }}>{row}</span></div>)}
+            </div>
+          )}
           {pz.hasDup && <div style={{ fontSize: 12.5, color: '#3d423b', textWrap: 'pretty' }}><span style={{ fontWeight: 600 }}>Arrives twice · </span>{pz.dupText}</div>}
         </div>
         <div style={{ flex: '0 1 340px', minWidth: 260, display: 'flex', flexDirection: 'column', gap: 8 }}>

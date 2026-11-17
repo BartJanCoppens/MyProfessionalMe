@@ -7,6 +7,7 @@ import { emptyData } from '../test/harness';
 import * as data from '../data';
 import * as content from './contentStore';
 import * as learner from './learnerStore';
+import * as trajectories from './trajectoryStore';
 import { useAuth } from './useAuth';
 import type { Auth } from './useAuth';
 import { useContent } from './useContent';
@@ -16,6 +17,7 @@ import { useTeam } from './useTeam';
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 vi.mock('./learnerStore', () => ({ loadLearner: vi.fn() }));
 vi.mock('./contentStore', async (orig) => ({ ...(await orig<object>()), loadContent: vi.fn() }));
+vi.mock('./trajectoryStore', () => ({ loadEnrolments: vi.fn(async () => ({})), loadCredentials: vi.fn(async () => []) }));
 vi.mock('../data', async (orig) => ({ ...(await orig<object>()), setCatalogue: vi.fn() }));
 
 beforeEach(() => { db.reset(); vi.clearAllMocks(); sessionStorage.clear(); localStorage.clear(); });
@@ -149,9 +151,19 @@ describe('useTeam', () => {
     vi.mocked(learner.loadLearner).mockResolvedValue(emptyData());
     const { result } = renderHook(() => useTeam('c1'));
     expect(result.current.members).toBeNull();
-    await waitFor(() => expect(result.current.members).toEqual([{ id: 'm1', name: 'm1@example.com', stage: null, businessLine: 'Audit', data: emptyData() }]));
+    await waitFor(() => expect(result.current.members).toEqual([{ id: 'm1', name: 'm1@example.com', stage: null, businessLine: 'Audit', data: emptyData(), trj: { enrols: {}, creds: [] } }]));
     expect(result.current.error).toBeNull();
     expect(has(db.on('profiles')[0], 'eq', 'counsellor_id', 'c1')).toBe(true);
+  });
+  it('reloads one person\'s trajectories after a decision', async () => {
+    db.answer(() => ({ data: [{ id: 'm1', email: 'm1@example.com', full_name: null, business_line: 'Audit', career_stage: null }] }));
+    vi.mocked(learner.loadLearner).mockResolvedValue(emptyData());
+    const { result } = renderHook(() => useTeam('c1'));
+    await waitFor(() => expect(result.current.members).toHaveLength(1));
+    const enrols = { T1: { status: 'enrolled' as const, start_month: 1, steps: {} } };
+    vi.mocked(trajectories.loadEnrolments).mockResolvedValueOnce(enrols);
+    await act(() => result.current.refresh('m1'));
+    expect(result.current.members![0].trj).toEqual({ enrols, creds: [] });
   });
   it('reports a team that cannot load, and loads it again on retry', async () => {
     db.answer(() => ({ error: { message: 'denied' } }));

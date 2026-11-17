@@ -159,7 +159,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
           {vm.screen === 'projects' && <ProjectsScreen vm={vm} />}
           {vm.screen === 'profile' && <ProfileScreen vm={vm} fileRef={file} chatRef={chat} />}
           {vm.appr && <ApprovalsScreen appr={vm.appr} onOpen={(id, lid) => { select(id); logic.openDetail(lid, 'approvals'); }} />}
-          {vm.screen === 'team' && <TeamScreen vm={vm} members={team.members} error={team.error} onRetry={team.retry} onOpen={(id) => { select(id); logic.go('map'); }} />}
+          {vm.screen === 'team' && <TeamScreen vm={vm} members={team.members} error={team.error} onRetry={team.retry} onRefresh={team.refresh} onOpen={(id) => { select(id); logic.go('map'); }} />}
           {vm.screen === 'adminLib' && <AdminLibraryScreen vm={vm} />}
           {vm.screen === 'adminMap' && <AdminMappingScreen vm={vm} />}
           {vm.kb && <KnowledgeScreen kb={vm.kb} />}

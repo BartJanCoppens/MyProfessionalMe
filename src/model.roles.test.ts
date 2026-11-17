@@ -170,7 +170,7 @@ describe('the counsellor team view', () => {
   });
   it('switches between roster and levels by domain', () => {
     const h = harness();
-    expect(h.vm().teamTabs.map((t) => t.value)).toEqual(['roster', 'heat']);
+    expect(h.vm().teamTabs.map((t) => t.value)).toEqual(['roster', 'heat', 'trj']);
     h.vm().setTeamTab('heat');
     expect(h.state.teamTab).toBe('heat');
     expect(h.vm().domShort).toEqual(DOMAINS.map((d) => d[2]));

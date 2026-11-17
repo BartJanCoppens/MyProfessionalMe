@@ -44,7 +44,7 @@ function setup({ a = auth(), subject = person() as Subject | null, subj = {}, co
   vi.mocked(useSubject).mockReturnValue(s as unknown as ReturnType<typeof useSubject>);
   const c = { content: loaded, error: null, retry: vi.fn(), reload: vi.fn(async () => loaded), ...cont };
   vi.mocked(useContent).mockReturnValue(c);
-  vi.mocked(useTeam).mockReturnValue({ members: teamError ? null : team, error: teamError, retry: vi.fn() });
+  vi.mocked(useTeam).mockReturnValue({ members: teamError ? null : team, error: teamError, retry: vi.fn(), refresh: vi.fn(async () => {}) });
   render(<App />);
   return { a, s, c };
 }

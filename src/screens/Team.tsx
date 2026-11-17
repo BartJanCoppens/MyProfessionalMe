@@ -1,11 +1,12 @@
 import { Avatar, Hover, LinkButton, PageTitle, StatusChip, Tabs } from '../ds';
 import type { VM } from '../model';
 import type { Member } from '../logic/team';
+import TeamTrajectories from './TeamTrajectories';
 
 const ROSTER_COLS = 'minmax(0,2fr) minmax(0,1.6fr) 90px minmax(0,1.4fr) 120px 70px';
 const HEAT_COLS = '200px repeat(9,minmax(0,1fr))';
 
-export default function TeamScreen({ vm, members, error = null, onRetry, onOpen }: { vm: VM; members: Member[] | null; error?: string | null; onRetry?: () => void; onOpen: (id: string) => void }) {
+export default function TeamScreen({ vm, members, error = null, onRetry, onRefresh, onOpen }: { vm: VM; members: Member[] | null; error?: string | null; onRetry?: () => void; onRefresh?: (personId: string) => Promise<void>; onOpen: (id: string) => void }) {
   const team = members ? vm.teamRows(members, onOpen) : null;
   const note = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '18px 20px', color: '#5a6058' } as const;
   return (
@@ -43,6 +44,7 @@ export default function TeamScreen({ vm, members, error = null, onRetry, onOpen 
           </div>
         </div>
       )}
+      {team && team.length > 0 && vm.teamTab === 'trj' && members && <TeamTrajectories v={vm.teamTrjVals(members, onRefresh ?? (async () => {}))} />}
       {team && team.length > 0 && vm.teamTab === 'heat' && (
         <>
           <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflowX: 'auto' }}>

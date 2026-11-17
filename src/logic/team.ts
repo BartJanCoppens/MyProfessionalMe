@@ -2,9 +2,11 @@
 import { DOMAINS, LEARN, STAGES } from '../data';
 import type { LearnerData } from '../lib/learnerStore';
 import type { Mapping } from '../types';
+import type { Credential, Enrolment } from './trajectory';
 import { levelsByDomain, stageIndex } from './learner';
 
-export type Member = { id: string; name: string; stage: string | null; businessLine: string | null; data: LearnerData };
+// trj: the person's certification enrolments and credentials (absent until loaded).
+export type Member = { id: string; name: string; stage: string | null; businessLine: string | null; data: LearnerData; trj?: { enrols: Record<string, Enrolment>; creds: Credential[] } };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 

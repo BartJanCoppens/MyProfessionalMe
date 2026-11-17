@@ -18,6 +18,7 @@ import { kbVals } from './kbVals';
 import { trajectoryAdminVals, trajectoryCount } from './trajectoryAdminVals';
 import { certMapVals } from './trajectoryMap';
 import { navScreen, trajectoryVals } from './trajectoryVals';
+import { personTrajectories, teamTrjVals } from './teamTrjVals';
 import { blankDraft, createVals } from './createVals';
 import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
@@ -674,7 +675,7 @@ export class Logic {
           open: () => open(m.id),
         };
       }),
-      teamTabs: [opt('roster', 'Roster'), opt('heat', 'Levels by domain')], teamTab: s.teamTab, setTeamTab: (v: string) => this.setState({ teamTab: v }),
+      teamTabs: [opt('roster', 'Roster'), opt('heat', 'Levels by domain'), opt('trj', 'Certifications')], teamTrjVals: (members: Member[], reload: (id: string) => Promise<void>) => teamTrjVals(this, members, reload), teamTab: s.teamTab, setTeamTab: (v: string) => this.setState({ teamTab: v }),
       domShort: DOMAINS.map((d) => d[2]), heatTargets: TARGET.map((v) => 'L' + v),
       // admin library
       adminLead: LEARN.length + ' learnings · ' + LEARN.filter((r) => LEARN_META[r[0]]?.status !== 'published').length + ' not yet published · the program panel shows example data', programs, adminQ: s.adminQ, setAdminQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ adminQ: e.target.value }),
@@ -986,7 +987,7 @@ export class Logic {
       cpApply: () => { const n = cpOpsP.length; this.applyOps(cpOpsP, n + ' change' + (n > 1 ? 's' : '') + ' applied · publish to apply'); this.setState({ cpOpsP: null }); }, cpDrop: () => this.setState({ cpOpsP: null }),
       cpMode: this.aiLabel('curriculum_copilot'), readTag: rd ? (rd.ai ? 'AI reading' : 'Scripted reading') : '',
       cpPrompts: ['What do Energy seniors still miss?', 'Where does a learning arrive twice?', 'Draft a path for the Business developer ambition'].map((l) => ({ label: l, send: () => this.askCp(l) })),
-      pz,
+      pz: { ...pz, trjRows: personTrajectories(s.trjs, [P[4].bl || this.bl()], P[3]) },
       readAs: () => this.readAs(P, stk), readBusy: s.readBusy, readLabel: s.readBusy ? 'Reading the stack' : 'Read it as ' + P[1], read: rd || null, readHead: 'As ' + P[2] + ' would read it',
     };
   }
