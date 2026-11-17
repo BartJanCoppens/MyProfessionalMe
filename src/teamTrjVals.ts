@@ -34,8 +34,8 @@ export function personTrajectories(trjs: Trajectory[], audiences: string[], stag
 
 // One decision per row at a time (a double click sends one). The view-model is rebuilt every render, so the set is module-level.
 const busy = new Set<string>();
-// Runs one write, then reloads that person; a failed reload keeps the success truthful.
-function decideRow(L: Logic, key: string, userId: string, reload: (id: string) => Promise<void>, write: () => Promise<{ error: string | null }>, done: string) {
+// Runs one write, then reloads that person; a failed reload keeps the success truthful. Also used by membershipVals.ts.
+export function decideRow(L: Logic, key: string, userId: string, reload: (id: string) => Promise<void>, write: () => Promise<{ error: string | null }>, done: string) {
   return async () => {
     if (busy.has(key)) return;
     busy.add(key);

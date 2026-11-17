@@ -1,6 +1,7 @@
 import { Avatar, Hover, LinkButton, PageTitle, StatusChip, Tabs } from '../ds';
 import type { VM } from '../model';
 import type { Member } from '../logic/team';
+import Membership from './Membership';
 import TeamTrajectories from './TeamTrajectories';
 
 const ROSTER_COLS = 'minmax(0,2fr) minmax(0,1.6fr) 90px minmax(0,1.4fr) 120px 70px';
@@ -39,6 +40,7 @@ export default function TeamScreen({ vm, members, error = null, onRetry, onRefre
                 <div style={{ padding: '10px 12px' }}><StatusChip status={p.mandStatus} label={p.mandLabel} icon={p.mandIcon} /></div>
                 <div style={{ padding: '10px 12px', fontSize: 12.5, color: '#5a6058' }}>{p.lastActive}</div>
                 <div style={{ padding: '10px 12px' }}><LinkButton onClick={p.open}>Open</LinkButton></div>
+                <div style={{ gridColumn: '1 / -1', padding: '0 12px 10px 54px' }}><Membership v={vm.teamMembership(members!.find((m) => m.id === p.id)!, onRefresh ?? (async () => {}))} /></div>
               </Hover>
             ))}
           </div>

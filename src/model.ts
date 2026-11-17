@@ -19,6 +19,7 @@ import { trajectoryAdminVals, trajectoryCount } from './trajectoryAdminVals';
 import { certMapVals } from './trajectoryMap';
 import { navScreen, trajectoryVals } from './trajectoryVals';
 import { audiencesOf } from './trajectoryCtx';
+import { memberMembership } from './membershipVals';
 import { personTrajectories, teamTrjVals } from './teamTrjVals';
 import { blankDraft, createVals } from './createVals';
 import { loadCreate } from './lib/contributionStore';
@@ -677,7 +678,8 @@ export class Logic {
           open: () => open(m.id),
         };
       }),
-      teamTabs: [opt('roster', 'Roster'), opt('heat', 'Levels by domain'), opt('trj', 'Certifications')], teamTrjVals: (members: Member[], reload: (id: string) => Promise<void>) => teamTrjVals(this, members, reload), teamTab: s.teamTab, setTeamTab: (v: string) => this.setState({ teamTab: v }),
+      teamTabs: [opt('roster', 'Roster'), opt('heat', 'Levels by domain'), opt('trj', 'Certifications')], teamTrjVals: (members: Member[], reload: (id: string) => Promise<void>) => teamTrjVals(this, members, reload),
+      teamMembership: (m: Member, reload: (id: string) => Promise<void>) => memberMembership(this, m, reload), teamTab: s.teamTab, setTeamTab: (v: string) => this.setState({ teamTab: v }),
       domShort: DOMAINS.map((d) => d[2]), heatTargets: TARGET.map((v) => 'L' + v),
       // admin library
       adminLead: LEARN.length + ' learnings · ' + LEARN.filter((r) => LEARN_META[r[0]]?.status !== 'published').length + ' not yet published · the program panel shows example data', programs, adminQ: s.adminQ, setAdminQ: (e: ChangeEvent<HTMLInputElement>) => this.setState({ adminQ: e.target.value }),

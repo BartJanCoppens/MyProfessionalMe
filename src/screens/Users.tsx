@@ -3,10 +3,12 @@ import { Avatar, Banner, Button, Checkbox, Drawer, Field, FilterChip, Hover, Inp
 import { BUSINESS_LINES, manageUsers, PASSWORD_HINT, supabase, temporaryPassword } from '../lib/supabase';
 import type { BusinessLine, Profile, Role } from '../lib/supabase';
 import type { Access } from '../types';
-import { DOMAINS, STAGES } from '../data';
+import { AUD_INFO, DOMAINS, STAGES } from '../data';
 import { addExpert, addRule, loadExperts, loadRules, removeExpert, removeRule } from '../lib/contributionStore';
 import { PARTS, PART_LABEL, PART_VALUES, emptyParts, ruleProblem, ruleSentence, togglePart, valueName, withinLines } from '../logic/contribution';
 import type { Rule, RuleParts } from '../logic/contribution';
+import { loadAudiencesOf, setAudience } from '../lib/membershipStore';
+import Membership from './Membership';
 import RuleChips from './RuleChips';
 
 type User = Profile & { roles: Role[] };
@@ -17,13 +19,13 @@ const COLS = 'minmax(0,2.2fr) 150px 170px 190px minmax(0,2.4fr) 200px 160px 190p
 // A General Admin (no accounts to manage) lists everyone readable, to hand out creation rights.
 const fetchUsers = async (everyone = false) => {
   const [people, ids] = await Promise.all([fetchProfiles(), supabase.rpc('manageable_user_ids')]);
-  if (people.error || ids.error) return { data: null, grants: [] as Rule[], experts: {} as Record<string, string[]>, error: people.error || ids.error };
+  if (people.error || ids.error) return { data: null, grants: [] as Rule[], experts: {} as Record<string, string[]>, audiences: null, error: people.error || ids.error };
   const ok = new Set((ids.data as string[]) || []), data = (people.data || []).filter((p) => everyone || ok.has(p.id));
-  // Create & share: their creation rules, and the experts per domain (readable by everyone signed in).
+  // Create & share: their creation rules, and the experts per domain (readable by everyone signed in); industries & technologies.
   try {
-    const [grants, experts] = await Promise.all([loadRules(data.map((p) => p.id)), loadExperts()]);
-    return { data, grants, experts, error: null };
-  } catch (err) { return { data, grants: [] as Rule[], experts: {} as Record<string, string[]>, error: { message: (err as Error).message } }; }
+    const [grants, experts, audiences] = await Promise.all([loadRules(data.map((p) => p.id)), loadExperts(), loadAudiencesOf(data.map((p) => p.id))]);
+    return { data, grants, experts, audiences, error: null };
+  } catch (err) { return { data, grants: [] as Rule[], experts: {} as Record<string, string[]>, audiences: null, error: { message: (err as Error).message } }; }
 };
 const fetchProfiles = () => supabase.from('profiles')
   .select('id, email, full_name, business_line, must_change_password, created_at, career_stage, counsellor_id, roles:user_roles!user_roles_user_id_fkey(role, business_line)')
@@ -46,12 +48,14 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
   const [experts, setExperts] = useState<Record<string, string[]>>({});
   const [tab, setTab] = useState<'people' | 'experts'>('people');
   const [granting, setGranting] = useState<string | null>(null);
+  // Industries & technologies per person (null: did not load).
+  const [audiences, setAudiences] = useState<Record<string, string[]> | null>(null);
   // Mirrors private.can_grant_rule: System and General Admins any rule; a Domain Admin only rules within their own lines.
   const anyLine = access.isSystem || !!access.isGeneral;
 
   const apply = (r: Awaited<ReturnType<typeof fetchUsers>>) => {
     if (r.error && !r.data) { setLoadError(r.error.message); return; }
-    setLoadError(r.error ? r.error.message : null); setUsers(r.data as unknown as User[]); setGrants(r.grants); setExperts(r.experts);
+    setLoadError(r.error ? r.error.message : null); setUsers(r.data as unknown as User[]); setGrants(r.grants); setExperts(r.experts); setAudiences(r.audiences);
   };
   const load = async () => apply(await fetchUsers(contentOnly));
   useEffect(() => {
@@ -95,6 +99,10 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
     catch (err) { say((err as Error).message); }
   };
   const remove = (u: User) => run(() => manageUsers({ action: 'remove', user_id: u.id }), (u.full_name || u.email) + ' removed');
+  // The database refuses your own (nobody sets their own) and people you may not manage.
+  const toggleAudience = (u: User) => (audience: string, on: boolean) => run(async () => {
+    const { error } = await setAudience(u.id, audience, on); if (error) throw new Error(error);
+  }, AUD_INFO[audience].name + (on ? ' added for ' : ' removed for ') + (u.full_name || u.email));
 
   const lineOptions = [{ value: 'all', label: 'All' }].concat(managed.map((l) => ({ value: l, label: l }))).concat(access.isSystem ? [{ value: 'none', label: 'No line' }] : []);
 
@@ -193,6 +201,9 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
                   {!me && canEditLine && (confirmRemove === u.id
                     ? <><LinkButton tone="muted" onClick={() => setConfirmRemove(null)}>Cancel</LinkButton><Button size="sm" variant="dark" onClick={() => { setConfirmRemove(null); remove(u); }}>Remove</Button></>
                     : <LinkButton tone="muted" onClick={() => setConfirmRemove(u.id)}>Remove</LinkButton>)}
+                </div>
+                <div style={{ gridColumn: '1 / -1', padding: '0 12px 10px 54px' }}>
+                  <Membership v={{ name: u.full_name || u.email, audiences: audiences ? audiences[u.id] ?? [] : undefined, canEdit: !me, toggle: toggleAudience(u) }} />
                 </div>
               </Hover>
             );

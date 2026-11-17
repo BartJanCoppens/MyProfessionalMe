@@ -1,8 +1,10 @@
-// Counsellees of a person: the profiles whose counsellor they are, with their learner data (RLS: counsellors may read both).
+// Counsellees of a person: the profiles whose counsellor they are, with their learner data, trajectory data and industry
+// and technology memberships (RLS: counsellors may read all of them).
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { loadLearner } from './learnerStore';
 import { latestOnly } from './latestOnly';
+import { loadAudiences } from './membershipStore';
 import { loadCredentials, loadEnrolments } from './trajectoryStore';
 import type { Member } from '../logic/team';
 
@@ -12,9 +14,10 @@ const loadTrj = async (id: string) => { const [enrols, creds] = await Promise.al
 async function fetchTeam(counsellorId: string): Promise<{ id: string; members: Member[] }> {
   const { data, error } = await supabase.from('profiles').select('id, email, full_name, business_line, career_stage').eq('counsellor_id', counsellorId).order('full_name');
   if (error) throw new Error(error.message);
-  // A failed trajectory load leaves trj unset for that person; the roster and levels still work.
+  // A failed trajectory or membership load leaves trj or audiences unset for that person; the roster and levels still work.
   const members = await Promise.all((data || []).map(async (p) => ({
-    id: p.id, name: p.full_name || p.email, stage: p.career_stage, businessLine: p.business_line, data: await loadLearner(p.id), trj: await loadTrj(p.id).catch(() => undefined),
+    id: p.id, name: p.full_name || p.email, stage: p.career_stage, businessLine: p.business_line, data: await loadLearner(p.id),
+    trj: await loadTrj(p.id).catch(() => undefined), audiences: await loadAudiences(p.id).catch(() => undefined),
   })));
   return { id: counsellorId, members };
 }
@@ -28,10 +31,11 @@ export function useTeam(counsellorId: string): { members: Member[] | null; error
     apply(fetchTeam(counsellorId)).catch((err) => setTeam({ id: counsellorId, members: null, error: (err as Error).message }));
   }, [apply, counsellorId, attempt]);
   const mine = team && team.id === counsellorId ? team : null;
-  // Reloads one person's trajectory data after a decision (functional update: the team may have changed meanwhile).
+  // Reloads one person's trajectory data and memberships after a decision or a membership change (functional update:
+  // the team may have changed meanwhile).
   const refresh = async (personId: string) => {
-    const trj = await loadTrj(personId);
-    setTeam((t) => (t && t.id === counsellorId && t.members ? { ...t, members: t.members.map((m) => (m.id === personId ? { ...m, trj } : m)) } : t));
+    const [trj, audiences] = await Promise.all([loadTrj(personId), loadAudiences(personId)]);
+    setTeam((t) => (t && t.id === counsellorId && t.members ? { ...t, members: t.members.map((m) => (m.id === personId ? { ...m, trj, audiences } : m)) } : t));
   };
   return { members: mine?.members ?? null, error: mine?.error ?? null, retry: () => { setTeam(null); setAttempt((n) => n + 1); }, refresh };
 }

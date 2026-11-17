@@ -7,6 +7,7 @@ import { emptyData } from '../test/harness';
 import * as data from '../data';
 import * as content from './contentStore';
 import * as learner from './learnerStore';
+import * as membership from './membershipStore';
 import * as trajectories from './trajectoryStore';
 import { useAuth } from './useAuth';
 import type { Auth } from './useAuth';
@@ -18,6 +19,7 @@ vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupaba
 vi.mock('./learnerStore', () => ({ loadLearner: vi.fn() }));
 vi.mock('./contentStore', async (orig) => ({ ...(await orig<object>()), loadContent: vi.fn() }));
 vi.mock('./trajectoryStore', () => ({ loadEnrolments: vi.fn(async () => ({})), loadCredentials: vi.fn(async () => []) }));
+vi.mock('./membershipStore', () => ({ loadAudiences: vi.fn(async () => []) }));
 vi.mock('../data', async (orig) => ({ ...(await orig<object>()), setCatalogue: vi.fn() }));
 
 beforeEach(() => { db.reset(); vi.clearAllMocks(); sessionStorage.clear(); localStorage.clear(); });
@@ -151,7 +153,7 @@ describe('useTeam', () => {
     vi.mocked(learner.loadLearner).mockResolvedValue(emptyData());
     const { result } = renderHook(() => useTeam('c1'));
     expect(result.current.members).toBeNull();
-    await waitFor(() => expect(result.current.members).toEqual([{ id: 'm1', name: 'm1@example.com', stage: null, businessLine: 'Audit', data: emptyData(), trj: { enrols: {}, creds: [] } }]));
+    await waitFor(() => expect(result.current.members).toEqual([{ id: 'm1', name: 'm1@example.com', stage: null, businessLine: 'Audit', data: emptyData(), trj: { enrols: {}, creds: [] }, audiences: [] }]));
     expect(result.current.error).toBeNull();
     expect(has(db.on('profiles')[0], 'eq', 'counsellor_id', 'c1')).toBe(true);
   });
@@ -163,6 +165,23 @@ describe('useTeam', () => {
     await waitFor(() => expect(result.current.members).toHaveLength(1));
     expect(result.current.members![0].trj).toBeUndefined();
     expect(result.current.error).toBeNull();
+  });
+  it('loads each counsellee\'s industries and technologies, and keeps the team when they fail', async () => {
+    db.answer(() => ({ data: [{ id: 'm1', email: 'm1@example.com', full_name: null, business_line: 'Audit', career_stage: null }, { id: 'm2', email: 'm2@example.com', full_name: null, business_line: 'Audit', career_stage: null }] }));
+    vi.mocked(learner.loadLearner).mockResolvedValue(emptyData());
+    vi.mocked(membership.loadAudiences).mockImplementation(async (id) => { if (id === 'm2') throw new Error('denied'); return ['tec:data']; });
+    const { result } = renderHook(() => useTeam('c1'));
+    await waitFor(() => expect(result.current.members).toHaveLength(2));
+    expect(result.current.members!.map((m) => m.audiences)).toEqual([['tec:data'], undefined]);
+  });
+  it('reloads one person\'s industries and technologies with their trajectories', async () => {
+    db.answer(() => ({ data: [{ id: 'm1', email: 'm1@example.com', full_name: null, business_line: 'Audit', career_stage: null }] }));
+    vi.mocked(learner.loadLearner).mockResolvedValue(emptyData());
+    const { result } = renderHook(() => useTeam('c1'));
+    await waitFor(() => expect(result.current.members).toHaveLength(1));
+    vi.mocked(membership.loadAudiences).mockResolvedValueOnce(['ind:energy']);
+    await act(() => result.current.refresh('m1'));
+    expect(result.current.members![0].audiences).toEqual(['ind:energy']);
   });
   it('reloads one person\'s trajectories after a decision', async () => {
     db.answer(() => ({ data: [{ id: 'm1', email: 'm1@example.com', full_name: null, business_line: 'Audit', career_stage: null }] }));
