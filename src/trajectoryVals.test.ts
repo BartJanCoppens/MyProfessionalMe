@@ -411,6 +411,11 @@ describe('industry and technology membership', () => {
     expect(v.tv!.callout).toMatch(/^Enrolled automatically: mandatory for Data & Azure at Consultant\./);
     expect(v.tv!.secondary).toBeNull();
   });
+  it('does not say Mandatory to a member at another stage than the mandatory map', () => {
+    const v = page(data, member, person({ stage: 'Senior consultant', counsellor: boss })).vm();
+    expect(v.tv!.obLabel).not.toBe('Mandatory');
+    expect(v.tv!.obLabel).toBe('Suggested');
+  });
   it('a removed membership lets the person leave while no step is done', () => {
     expect(page(data, mine({ T9: enrolled() })).vm().tv!.secondary!.label).toBe('Leave this trajectory');
   });

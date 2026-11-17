@@ -1,7 +1,7 @@
 // View-model of the learner's trajectory page (design v4): the steps with their actions, progress, and the credential.
 // Actions render only when the subject is the signed-in person; View as shows the viewed person's progress and nothing to click.
 import { AUD_INFO } from './data';
-import { canBeMandatory, monthLabel, relevantMap, stepHours, stepProofProblem, totals, trajectoryProgress } from './logic/trajectory';
+import { canBeMandatory, mapAtStage, monthLabel, relevantMap, stepHours, stepProofProblem, totals, trajectoryProgress } from './logic/trajectory';
 import type { Enrolment, StepProgress, Trajectory, TrjStep } from './logic/trajectory';
 import { canWithdraw, stepAction, talkNote } from './logic/trajectoryLearner';
 import { STEP_KINDS, enrolLabel, fmtHours, stepTitle, validLabel } from './logic/trajectoryView';
@@ -112,7 +112,8 @@ export function trajectoryPage(c: Ctx, t: Trajectory) {
   const e = enrolmentOf(c, t), enrolled = e?.status === 'enrolled', pg = trajectoryProgress(t, e, c.byId), tot = totals(t, c.byId);
   const start = e ? e.start_month : (c.now.getUTCFullYear() * 12 + c.now.getUTCMonth()), validity = t.valid_months ? validLabel(t.valid_months) : '';
   const m = relevantMap(t, keysOf(c), c.person.stage);
-  const mandatory = !!m && m[2] === 'mandatory' && canBeMandatory(m[0]);
+  // Mandatory only where the map binds the person: one at their own stage (relevantMap may fall back to another stage).
+  const bound = mapAtStage(t, keysOf(c), c.person.stage), mandatory = !!bound && bound[2] === 'mandatory' && canBeMandatory(bound[0]);
   const ob = m ? (mandatory ? ['neutral', 'Mandatory'] : m[2] === 'advised' && canBeMandatory(m[0]) ? ['blue', 'Advised'] : ['muted', 'Suggested']) : e ? ['green', 'Chosen by me'] : ['muted', 'Open'];
   const binds = enrolled && !c.enrols[t.id];
   return {
