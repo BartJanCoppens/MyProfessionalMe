@@ -15,6 +15,7 @@ import { memberSummary } from './logic/team';
 import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import { kbVals } from './kbVals';
+import { trajectoryAdminVals, trajectoryCount } from './trajectoryAdminVals';
 import { blankDraft, createVals } from './createVals';
 import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
@@ -59,7 +60,7 @@ export function initState(cfg: Config): AppState {
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, sigDone: {}, reads: {}, readBusy: false, zoom: null, libForm: null, media: { playing: null, pos: {}, speed: '1' }, answers: {}, answersFor: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, trjs: [], mapMode: 'learn', trjSel: null, trjStep: null, trjAud: '', trjStage: STAGES[0], sigDone: {}, reads: {}, readBusy: false, zoom: null, libForm: null, media: { playing: null, pos: {}, speed: '1' }, answers: {}, answersFor: null,
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
     kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbAnswerAi: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
@@ -623,6 +624,7 @@ export class Logic {
       // Earned marks only; private to the person.
       marks: [this.levels.every((l) => l > 0) ? 'All nine domains touched' : '', items.some((it) => it.state === 'accepted' && it.format === 'Certification') ? 'First certification' : ''].filter(Boolean),
       ...kbVals(this),
+      ...trajectoryAdminVals(this),
       ...createVals(this),
       ...recordVals(this, d0),
       ...completionVals(this, d0),
@@ -876,12 +878,12 @@ export class Logic {
       return {
         key: a[0], name: a[1], reach: a[2] + ' people', rowBg: a[0] === audKey ? '#f3f5f0' : 'transparent', hasSig: sig > 0, sig: String(sig), pick: pick(a[0]),
         cells: STAGES.map((st) => {
-          const list = (maps[a[0]] || []).filter((m) => m[1] === st); const h = list.reduce((x, m) => x + byId[m[0]].hours, 0); const nm = canMand ? list.filter((m) => m[2] === 'mandatory').length : 0;
+          const list = (maps[a[0]] || []).filter((m) => m[1] === st); const h = list.reduce((x, m) => x + byId[m[0]].hours, 0); const nm = canMand ? list.filter((m) => m[2] === 'mandatory').length : 0; const tn = trajectoryCount(this, a[0], st);
           const on = a[0] === audKey && s.mapStage === st; const k = Math.min(list.length, 4);
           return {
             stage: st, label: list.length ? String(list.length) : '—', sub: list.length ? Math.round(h) + ' h' : '', bg: list.length ? 'rgba(134,188,37,' + (0.14 + k * 0.14).toFixed(2) + ')' : '#fafbf8',
             fg: list.length ? '#10180a' : '#b3b8ae', bd: on ? '#1a1d18' : '#eef0ea', ring: on ? '0 0 0 3px rgba(134,188,37,.45)' : 'none',
-            tip: a[1] + ' · ' + st + ' · ' + list.length + ' learnings' + (nm ? ' · ' + nm + ' mandatory' : '') + ' · ' + this.reachAt(a[0], st) + ' people', pick: pick(a[0], st),
+            tip: a[1] + ' · ' + st + ' · ' + list.length + ' learnings' + (nm ? ' · ' + nm + ' mandatory' : '') + (tn ? ' · ' + tn + (tn > 1 ? ' trajectories' : ' trajectory') : '') + ' · ' + this.reachAt(a[0], st) + ' people', hasTrj: tn > 0, trjN: String(tn), pick: pick(a[0], st),
           };
         }),
       };

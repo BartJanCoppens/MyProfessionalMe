@@ -3,7 +3,7 @@
 import { Fragment, useState } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 
-export type Opt = { value: string; label: string };
+export type Opt = { value: string; label: string; disabled?: boolean };
 export type Status = 'not-started' | 'in-progress' | 'submitted' | 'clarification' | 'accepted' | 'na';
 
 // ---------- actions ----------
@@ -95,9 +95,9 @@ export function SegmentedControl({ options = [], value, onChange, size = 'lg', s
       {options.map((o, i) => {
         const on = o.value === value;
         return (
-          <button key={o.value} type="button" onClick={() => onChange && onChange(o.value)}
+          <button key={o.value} type="button" disabled={o.disabled} onClick={() => onChange && onChange(o.value)}
             style={{ height: h, padding: '0 ' + padX + 'px', border: 0, borderLeft: i ? '1px solid var(--tc-line)' : 0, background: on ? 'var(--tc-ink)' : '#fff',
-              color: on ? '#fff' : 'var(--tc-ink-3)', fontFamily: 'inherit', fontSize: h >= 32 ? 13 : 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              color: on ? '#fff' : 'var(--tc-ink-3)', fontFamily: 'inherit', fontSize: h >= 32 ? 13 : 12, fontWeight: 600, cursor: o.disabled ? 'not-allowed' : 'pointer', opacity: o.disabled ? 0.45 : 1, whiteSpace: 'nowrap' }}>
             {o.label}
           </button>
         );

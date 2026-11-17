@@ -1,4 +1,5 @@
 import type { CreateData } from './logic/contribution';
+import type { Trajectory } from './logic/trajectory';
 import type { QueueRow } from './lib/recordStore';
 import type { RosterRow } from './lib/attendanceStore';
 import type { AiAdmin, AiForm, AiUseEdit } from './logic/ai';
@@ -97,6 +98,8 @@ export type AppState = {
   chat: ChatMsg[];
   // curriculum mapping: lens, selected audience and stage, signals handled, learner's-eye reads, copilot
   mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>;
+  // certification trajectories (admin): the tab, the trajectory and step being edited (step by id), and the audience and stage about to be mapped
+  trjs: Trajectory[]; mapMode: 'learn' | 'traj'; trjSel: string | null; trjStep: string | null; trjAud: string; trjStage: string;
   reads: Record<string, Read>; readBusy: boolean;
   // growth map: the domain zoomed into (domain key), or null for all domains
   zoom: string | null;
