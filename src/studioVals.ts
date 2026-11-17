@@ -15,6 +15,7 @@ import { STUDIOS } from './studioData';
 import { changeFormat, reachable } from './studioRules';
 import { BUILDS } from './studioRunners';
 import { stepVals } from './studioStepVals';
+import { stillMotion } from './fmtMotion';
 
 export const HUB: StudioState = { view: 'hub', step: 0 };
 const HINTS: Record<string, string> = {
@@ -91,6 +92,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     // Any other studio previews the content publishing makes of its rows (studioContent), once they are valid.
     content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioEntry[], nw.shape ?? {}),
     // Why there is nothing to preview yet.
+    still: stillMotion(L), // the Animated flow's preview holds its last frame with motion off
     previewNote: parts.problems.length ? 'Fix the items in the Draft step first; the preview shows them as learners will.' : unsent[0] ?? '',
     // Send for review opens once the automatic check (check_contribution) passed on the draft on screen.
     send: { checks: src.checks, blocked: src.blocked || unsent.length > 0 || !passed, problems: [...unsent, ...reasons],

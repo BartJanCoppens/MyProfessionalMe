@@ -3,9 +3,10 @@
 import { LEARN_META } from './data';
 import { detailOf, handedIn } from './fmtShared';
 import { countLabel, dueCards } from './logic/formats';
+import { MADE_LABEL } from './logic/motionSvg';
 import type { Item, Logic } from './model';
 
-const KIND: Record<string, string> = { 'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid', 'Interactive explainer': 'explainer' };
+const KIND: Record<string, string> = { 'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid', 'Interactive explainer': 'explainer', 'Animated flow': 'motion' };
 type Lines = { cvMeta: string; cvMeta2: string; exBars: { w: string; c: string }[]; aidRows: { bg: string }[]; stepDots: { bg: string }[] };
 
 function lines(L: Logic, it: Item): Partial<Lines> {
@@ -34,6 +35,11 @@ function lines(L: Logic, it: Item): Partial<Lines> {
       const seen = !!detailOf<'explainer'>(L, it.id).last;
       return { cvMeta: c.steps.length + ' steps', cvMeta2: seen ? 'Seen to the end' : c.check ? 'Ends with a check' : 'Click through',
         stepDots: c.steps.slice(0, 6).map((_, k) => ({ bg: seen || k === 0 ? '#86BC25' : '#fff' })) };
+    }
+    case 'motion': {
+      const d = detailOf<'motion'>(L, it.id), seen = done || !!(d.played || d.read);
+      return { cvMeta: c.stages.length + ' stages · ' + c.seconds + ' s', cvMeta2: d.played ? 'Played to the end' : d.read ? 'Text version read' : MADE_LABEL[c.made],
+        stepDots: c.stages.slice(0, 6).map((_, k) => ({ bg: seen || k === 0 ? '#86BC25' : '#fff' })) };
     }
     default: return {};
   }

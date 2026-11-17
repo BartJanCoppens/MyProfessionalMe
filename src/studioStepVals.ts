@@ -15,7 +15,7 @@ import { questionsOf, stepsOf } from './logic/studios';
 import type { StudioDef, StudioEntry, StudioItem } from './logic/studios';
 import { STOCK_LOOKS, STOCK_VOICES } from './studioData';
 import type { Chip } from './screens/ChipGroup';
-import { motionVals } from './studioMotion';
+import { motionProduce } from './studioMotion';
 import { BUILDS } from './studioRunners';
 
 type Field = 'shape' | 'produce' | 'cast';
@@ -66,6 +66,6 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     aiDraft: { label: L.state.nwAiBusy ? 'Drafting' : 'Draft with AI', busy: L.state.nwAiBusy,
       run: () => draftItems(L, nw, bundles, setNw, studioQuery(nw), studioSpec(def, nw)) },
     build: def.build ? { steps: built(def, nw, list), set: (b: NonNullable<NewDraft['build']>) => setNw({ build: b }) } : null,
-    motion: def.id === 'motion' ? motionVals(L, nw, setNw) : null,
+    motion: def.id === 'motion' ? motionProduce(L, nw, setNw) : null,
   };
 }

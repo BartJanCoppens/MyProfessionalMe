@@ -13,7 +13,7 @@ import { motionRequest } from './logic/motionPrompt';
 import { MADE_LABEL, drawingOf, motionLayout, readMotionSvg, textAlternative } from './logic/motionSvg';
 import type { MotionDrawing } from './logic/motionSvg';
 import type { BuildRunner } from './logic/studioBuild';
-import { motionSeconds } from './logic/studioContent';
+import { motionProblems, motionSeconds } from './logic/studioContent';
 import { stepsOf } from './logic/studios';
 import type { StudioEntry } from './logic/studios';
 
@@ -59,13 +59,13 @@ export function motionRunner({ L, nw, setNw }: BuildCtx): BuildRunner {
   };
 }
 
-// The Produce step's part for the drawing: who made it, why it is scripted, the text alternative once it is animated,
-// and building it again from the start.
-export function motionVals(L: Logic, nw: NewDraft, setNw: SetNw) {
+// The Produce step's part for the drawing: who made it, why it is scripted, the text alternative once it is animated
+// (with what is wrong with it), and building it again from the start.
+export function motionProduce(L: Logic, nw: NewDraft, setNw: SetNw) {
   const d = drawingOf(listOf(nw)), animated = !!d && d.made !== 'layout';
   const keep = (cur: NewDraft) => ({ ...(cur.items ?? noItems()), list: stepsOf(listOf(cur)) as Item[] });
   return {
-    made: d ? MADE_LABEL[d.made] : '', note: L.aiCan('studio_draft') ? '' : NO_AI,
+    made: d ? MADE_LABEL[d.made] : '', note: L.aiCan('studio_draft') ? '' : NO_AI, problems: animated ? motionProblems(listOf(nw)) : [],
     alt: animated ? { value: d.alt, set: (v: string) => setNw((cur) => { const x = drawingOf(listOf(cur)), k = keep(cur); return x ? { items: { ...k, list: [...k.list, { ...x, alt: v }] } } : {}; }) } : null,
     restart: () => setNw((cur) => ({ items: keep(cur), build: undefined })),
   };

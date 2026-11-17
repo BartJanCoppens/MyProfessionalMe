@@ -1,7 +1,8 @@
 // The step bodies a generic studio adds to the spine: Shape it (questions), Draft (item rows) and Produce (choices,
-// stock look and voice, build). They only read from the view-model (studioVals.ts, studioStepVals.ts) and use the shared
-// ChipGroup and ItemRows. In View as the choices show as plain text and every action is gone.
-import { Button, Input, LinkButton } from '../ds';
+// stock look and voice, build, and the Motion Studio's drawing). They only read from the view-model (studioVals.ts,
+// studioStepVals.ts) and use the shared ChipGroup and ItemRows. In View as the choices show as plain text and every
+// action is gone.
+import { Button, Input, LinkButton, Textarea } from '../ds';
 import type { VM } from '../model';
 import ChipGroup from './ChipGroup';
 import { ItemRows, Problems } from './CreateShared';
@@ -37,12 +38,30 @@ export function DraftRows({ st }: { st: ST }) {
   );
 }
 
+// The Motion Studio's drawing: why it is scripted, who made it, its text alternative and building it again.
+function MotionOutput({ m, readOnly }: { m: NonNullable<ST['motion']>; readOnly: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {m.note && <div style={{ fontSize: 12.5, color: '#5a6058' }}>{m.note}</div>}
+      {m.made && <div style={{ fontSize: 12, fontWeight: 600, color: '#3f6a0a' }}>{m.made}</div>}
+      {m.alt && (readOnly ? <div style={{ fontSize: 13 }}>{m.alt.value}</div> : (
+        <>
+          <Textarea value={m.alt.value} onChange={(e) => m.alt!.set(e.target.value)} aria-label="Text alternative · learners who cannot watch read this" />
+          <Problems list={m.problems} />
+        </>
+      ))}
+      {m.made && !readOnly && <div><LinkButton tone="muted" onClick={m.restart}>Build it again</LinkButton></div>}
+    </div>
+  );
+}
+
 export function Produce({ st }: { st: ST }) {
   return (
     <>
       {st.cast.map((g) => <Group key={g.key} g={g} st={st} />)}
       {st.produce.map((g) => <Group key={g.key} g={g} st={st} />)}
       {st.build && <StudioBuild steps={st.build.steps} onChange={st.build.set} runner={st.buildRunner} readOnly={st.readOnly} />}
+      {st.motion && <MotionOutput m={st.motion} readOnly={st.readOnly} />}
     </>
   );
 }

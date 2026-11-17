@@ -171,7 +171,7 @@ export function CoverArt({ cv, title, avInit }: { cv: Cover; title: string; avIn
           <Meta cv={cv} />
         </div>
       )}
-      {cv.kind === 'explainer' && (
+      {(cv.kind === 'explainer' || cv.kind === 'flow') && (
         <div style={row}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             {cv.stepDots.map((d, k) => <span key={k} style={{ display: 'flex', alignItems: 'center' }}>{k > 0 && <span style={{ width: 8, height: 2, background: '#1a1d18' }} />}<span style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid #1a1d18', background: d.bg }} /></span>)}

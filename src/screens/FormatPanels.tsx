@@ -1,9 +1,10 @@
-// The detail page's panels for the study formats of design v4: flash cards, practice exam, teach-back, and the interactive
-// explainer (ExplainerPanel.tsx, also the Explainer Studio's preview). The work formats
+// The detail page's panels for the study formats of design v4: flash cards, practice exam, teach-back, the interactive
+// explainer (ExplainerPanel.tsx) and the Animated flow (AnimatedFlowPanel.tsx), each also its studio's preview. The work formats
 // (case, stretch, webinar, job aid) are in FormatWork.tsx. They read from VM only (fmtVals.ts, fmtStudy.ts).
 import type { CSSProperties } from 'react';
 import { Button, Card, LinkButton, ProgressRing, Textarea } from '../ds';
 import type { VM } from '../model';
+import AnimatedFlowPanel from './AnimatedFlowPanel';
 import ExplainerPanel from './ExplainerPanel';
 import { WorkPanels } from './FormatWork';
 import QuestionRound from './QuestionRound';
@@ -115,6 +116,7 @@ export function FormatPanels({ vm }: { vm: VM }) {
       {det.ex && <ExamPanel ex={det.ex} />}
       {det.tb && <TeachPanel tb={det.tb} />}
       {det.ie && <ExplainerPanel ie={det.ie} />}
+      {det.af && <AnimatedFlowPanel fl={det.af} />}
       <WorkPanels det={det} />
     </>
   );
