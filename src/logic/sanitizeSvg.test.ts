@@ -201,16 +201,16 @@ describe('sanitizeSvg: dangerous content is removed', () => {
     expect(out).toContain('width="3"');
   });
 
-  it('neutralises external url() inside style, keeping url(#id)', () => {
+  // Hardened here (Task 2.2): a declaration with any other url() is dropped whole instead of set to none.
+  it('drops a style declaration with an external url(), keeping url(#id)', () => {
     const out = sanitizeSvg(svg(
       '<defs><clipPath id="c"/></defs>' +
       '<rect style="fill: url(https://evil.example/a); clip-path: url(#c); stroke: URL( \'http://evil.example/b\' ); opacity: .5"/>'
     ));
     const style = render(out).querySelector('rect')!.getAttribute('style')!;
     expect(style).not.toContain('evil');
-    expect(style).toContain('fill: none');
+    expect(style).not.toMatch(/fill|stroke/);
     expect(style).toContain('url(#__hzid__-c)');
-    expect(style).toContain('stroke: none');
     expect(style).toContain('opacity: .5');
   });
 
@@ -417,13 +417,33 @@ describe('sanitizeSvg: no reach outside the drawing', () => {
     expect(out).not.toContain('outside');
     expect(render(out).querySelector('[href]')).toBeNull();
   });
-  it('turns url() to an id the drawing does not define into none, in attributes and in style', () => {
+  it('turns url() to an id the drawing does not define into none in an attribute, and drops it from a style', () => {
     const out = sanitizeSvg(svg('<defs><linearGradient id="g"/></defs><rect fill="url(#outside)" stroke="url(#g)" style="clip-path: url(#outside); fill: url(#g)"/>'));
     expect(out).not.toContain('outside');
     expect(out).toContain('fill="none"');
     expect(out).toContain('stroke="url(#__hzid__-g)"');
-    expect(out).toMatch(/clip-path: none/);
+    expect(out).not.toMatch(/clip-path/);
     expect(out).toMatch(/fill: url\(#__hzid__-g\)/);
+  });
+  it('keeps only SMIL timing it knows: offsets, clock values, indefinite and events of its own ids', () => {
+    const begin = (b: string) => render(sanitizeSvg(svg('<rect id="a"><animate attributeName="x" begin="' + b + '"/></rect>'))).querySelector('animate')!.getAttribute('begin');
+    expect(begin('x.click')).toBeNull();
+    expect(begin('foo(1)')).toBeNull();
+    expect(begin('accessKey(a)')).toBeNull();
+    expect(begin('wallclock(2026-01-01T00:00:00Z)')).toBeNull();
+    expect(begin('click')).toBeNull();
+    expect(begin('2s')).toBe('2s');
+    expect(begin('indefinite')).toBe('indefinite');
+    expect(begin('-0.5s; 1:30; 250ms')).toBe('-0.5s; 1:30; 250ms');
+    expect(begin('a.click+1s; a.repeat(2)')).toBe('__hzid__-a.click+1s; __hzid__-a.repeat(2)');
+    expect(begin('a.click(javascript)')).toBeNull();
+  });
+  it('neutralises url() forms the plain url(#id) rule does not match', () => {
+    const out = sanitizeSvg(svg('<rect id="a" fill="url( #a" stroke="url(#a) url(http://x.example)" mask="url(#a" style="fill:url(\\23 a); opacity: 1; stroke: url(#a) url(//x.example)"/>'));
+    const rect = render(out).querySelector('rect')!;
+    ['fill', 'stroke', 'mask'].forEach((n) => expect(rect.getAttribute(n), n).toBeNull());
+    expect(rect.getAttribute('style')).toBe(' opacity: 1');
+    expect(out).not.toContain('x.example');
   });
   it('drops a SMIL begin or end that waits on an element outside the drawing, keeping the rest', () => {
     const out = sanitizeSvg(svg('<rect id="a"><animate attributeName="x" begin="outside.click" end="outside.end; 2s"/><set attributeName="y" BEGIN="outside.click; a.click" to="1"/></rect>'));

@@ -29,11 +29,15 @@ const CANONICAL = new Set(['id', 'begin', 'end']);
 /** CSS that can load something without a plain `url(`: image functions, and escapes that spell `url(` in disguise. */
 const LOADS = /\\|image-set\s*\(|(^|[^\w-])image\s*\(|cross-fade\s*\(|element\s*\(/i;
 
+/** The one url() form that survives: a plain same-document reference, url(#id), quoted or not. */
+const URL_ID = /url\(\s*(['"]?)#([\w-]+)\1\s*\)/gi;
+/** Whether a value has a url( other than the plain url(#id) form (unclosed, escaped, external, odd whitespace...). */
+const strayUrl = (v: string) => /url\(/i.test(v.replace(URL_ID, ''));
+
 function cleanStyle(s: string) {
   // Only same-document url(#id) references survive; everything that could load or execute is removed.
-  // A declaration using a CSS escape or an image function is dropped whole.
-  return s.split(';').filter(d => !LOADS.test(d)).join(';')
-    .replace(/url\(\s*(['"]?)(?!#)[^)]*\1\s*\)/gi, 'none')
+  // A declaration using a CSS escape, an image function or any other url() is dropped whole.
+  return s.split(';').filter(d => !LOADS.test(d) && !strayUrl(d)).join(';')
     .replace(/expression\s*\(|@import|behavior\s*:|-moz-binding|javascript:/gi, '');
 }
 
@@ -62,6 +66,19 @@ function walk(src: Element, out: Document, ids: Set<string>): Element | null {
   return el;
 }
 
+const CLOCK = '(\\d+(\\.\\d+)?(h|min|s|ms)?|\\d+:\\d{2}(:\\d{2})?(\\.\\d+)?)';
+/** A SMIL offset or clock value ("2s", "-0.5s", "1:30"), and what may follow an id: ".end", ".click+1s", ".repeat(2)". */
+const OFFSET = new RegExp('^[+-]?\\s*' + CLOCK + '$');
+const AFTER_ID = new RegExp('^\\.[A-Za-z][\\w-]*(\\(\\d+\\))?(\\s*[+-]\\s*' + CLOCK + ')?$');
+
+/** A value with its url(#id) references namespaced; null when it refers to an id the drawing lacks or has another url(. */
+function withIds(v: string, ids: Set<string>, to: (id: string) => string): string | null {
+  if (strayUrl(v)) return null;
+  let known = true;
+  const w = v.replace(URL_ID, (m, _q, id) => { if (!ids.has(id)) known = false; return m.replace('#' + id, '#' + to(id)); });
+  return known ? w : null;
+}
+
 /**
  * Namespaces every id and every reference to it: href="#id", url(#id) in attributes and styles, and SMIL timing
  * like "id.end+0.2s". Works on attributes only, so text that mentions "#id" and colours like "#ace" stay as they are.
@@ -76,13 +93,15 @@ function namespace(root: Element, ids: Set<string>) {
       if (name === 'id') w = to(v);
       else if (name === 'href') w = v.startsWith('#') && ids.has(v.slice(1)) ? '#' + to(v.slice(1)) : null;
       else if (name === 'begin' || name === 'end') w = v.split(';').flatMap(part => {
-        // A timing entry like " c+d.end+0.2s" refers to the longest id it starts with, followed by a dot; one that starts
-        // like a name and has a dot but names no id of the drawing refers outside it.
-        const lead = part.match(/^\s*/)![0], rest = part.slice(lead.length);
+        // An allow-list: a timing entry like " c+d.end+0.2s" refers to the longest id of the drawing it starts with,
+        // followed by an event or sync name and an offset; otherwise only an offset, a clock value or "indefinite" stays.
+        const lead = part.match(/^\s*/)![0], rest = part.slice(lead.length).trimEnd();
         const id = [...ids].filter(i => rest.startsWith(i + '.')).sort((x, y) => y.length - x.length)[0];
-        return id ? [lead + to(id) + rest.slice(id.length)] : /^[^\d\s+.-][^]*\./.test(rest) ? [] : [part];
+        if (id) return AFTER_ID.test(rest.slice(id.length)) ? [lead + to(id) + rest.slice(id.length)] : [];
+        return rest === 'indefinite' || OFFSET.test(rest) ? [part] : [];
       }).join(';') || null;
-      else w = v.replace(/url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/gi, (m, _q, id) => ids.has(id) ? m.replace('#' + id, '#' + to(id)) : 'none');
+      else if (name === 'style') w = v.split(';').map(d => withIds(d, ids, to)).filter(d => d !== null).join(';') || null;
+      else w = withIds(v, ids, to) ?? (/url\(/i.test(v) ? 'none' : v);
       if (w === null) el.removeAttribute(a.name);
       else if (w !== v) el.setAttribute(a.name, w);
     }
