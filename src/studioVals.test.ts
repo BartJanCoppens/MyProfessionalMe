@@ -231,6 +231,30 @@ describe('Check & send', () => {
     h.st().send.check(); await flush(10);
     expect(vi.mocked(store.saveDraft).mock.calls[1]).toEqual([expect.not.objectContaining({ studio: expect.anything() }), 'new1']);
   });
+  it('after All studios and back, the next check updates the same draft', async () => {
+    const h = at();
+    h.st().send.check(); await flush(10);
+    h.st().toHub();
+    flashCard(h).open();
+    h.st().send.check(); await flush(10);
+    expect(store.saveDraft).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(store.saveDraft).mock.calls[1][1]).toBe('new1');
+  });
+  it('moving to the upload form and saving continues the same row', async () => {
+    const h = at();
+    h.st().send.check(); await flush(10);
+    h.st().openUpload();
+    h.c().nwDraft(); await flush(10);
+    expect(vi.mocked(store.saveDraft).mock.calls[1][1]).toBe('new1');
+  });
+  it('a new draft started after the check is a new row', async () => {
+    const h = at();
+    h.st().send.check(); await flush(10);
+    h.c().goNew();
+    expect(h.state.nw.savedId).toBeUndefined();
+    h.c().nwCancel();
+    expect(h.state.nw.savedId).toBeUndefined();
+  });
   it('an edit after the check closes Send again until it is re-run', async () => {
     const h = at();
     h.st().send.check(); await flush(10);

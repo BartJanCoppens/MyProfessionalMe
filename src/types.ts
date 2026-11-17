@@ -162,7 +162,10 @@ export type RenewDraft = { id: string; link: string; ref: string; expires: strin
 export type NewDraft = { line: string; aud: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string; items?: DraftItems;
   // Generic studios (Task 1.2): the Shape answers (question to answer), the Produce choices (row label to option), the picked stock look and voices
   // (role label to stock name) and the build steps' state. A studio's rows live in `items` like every format's.
-  shape?: Record<string, string>; produce?: Record<string, string>; cast?: Record<string, string>; build?: BuildStepState[] };
+  shape?: Record<string, string>; produce?: Record<string, string>; cast?: Record<string, string>; build?: BuildStepState[];
+  // The row this draft was saved as while it is on screen (a studio check saves it); the studio and the upload form both continue it.
+  // A new draft (blankDraft) has none.
+  savedId?: string };
 
 // Knowledge library: retrieval models and bundles
 export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };
@@ -200,5 +203,5 @@ export type FmtDraft = {
 };
 
 // `id` is the open studio (Flash card & Exam Studio when absent); `step` indexes visibleSteps of that studio.
-// check: the draft the studio saved (id), what was checked (key, see createVals) and the reasons it failed (none: passed).
-export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; check?: { id: string; key: string; reasons: string[] } };
+// check: what the automatic check ran on (key, see createVals) and the reasons it failed (none: passed).
+export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; check?: { key: string; reasons: string[] } };

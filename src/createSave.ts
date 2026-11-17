@@ -54,8 +54,8 @@ export const draftOf = (c: Contribution): NewDraft => ({ line: c.business_line |
 
 const busy = (L: Logic) => L.readOnly() || L.state.createBusy;
 async function reloaded(L: Logic) { return loadCreate(L.access.userId); }
-function failed(L: Logic, err: unknown, patch: Partial<AppState> = {}) {
-  L.setState({ createBusy: false, ...patch }); L.say((err as Error).message); L.reloadCreate();
+function failed(L: Logic, err: unknown, patch: (st: AppState) => Partial<AppState> = () => ({})) {
+  L.setState((st) => ({ createBusy: false, ...patch(st) })); L.say((err as Error).message); L.reloadCreate();
 }
 function doneText(status: string, d: CreateData, id: string, again: boolean) {
   const c = d.contributions.find((x) => x.id === id);
@@ -76,12 +76,12 @@ async function submitChecked(id: string, studio: string | null | undefined) {
 // otherwise the draft on screen is saved (an edited or already checked draft is the same row, a new studio draft says
 // its studio) and next runs on it. keep(id) is the state to keep when anything fails after the save started.
 type Saved = { s: AppState; nw: NewDraft; studio: string | null; id: string };
-async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => Partial<AppState>) {
+async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>) {
   if (busy(L)) return;
   const s = L.state, nw = effective(s), rules = s.create?.rules || [], studio = studioOf(s);
   if (!rules.length) { L.say('Ask an admin for creation rights first'); return; }
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
-  let id = s.editing ?? (studio ? s.studio.check?.id : null) ?? null;
+  let id = s.editing ?? nw.savedId ?? null;
   L.setState({ createBusy: true });
   try {
     id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
@@ -101,7 +101,7 @@ export async function saveForm(L: Logic, submit: boolean) {
     L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: id, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], nwKbQ: '', revChecks: st.revChecks, studio: HUB }));
     L.say(doneText(status, d, id, ed?.status === 'changes'));
     await afterPublish(L, status);
-  }, (id) => ({ editing: id }));
+  }, (id) => () => ({ editing: id }));
 }
 
 export async function submitSaved(L: Logic, c: Contribution) {
@@ -126,9 +126,9 @@ export async function runCheck(L: Logic) {
   if (!studioOf(L.state)) return;
   await saveThen(L, async ({ s, nw, id }) => {
     const r = await checkContribution(id), d = await reloaded(L), key = checkKey(nw, s.nwKb);
-    L.setState((st) => ({ create: d, createError: null, createBusy: false, studio: { ...st.studio, check: { id, key, reasons: r.reasons } } }));
+    L.setState((st) => ({ create: d, createError: null, createBusy: false, nw: { ...st.nw, savedId: id }, studio: { ...st.studio, check: { key, reasons: r.reasons } } }));
     L.say(r.passed ? 'Automatic check passed · send it for review' : 'Saved as draft · fix what the check found');
-  }, (id) => (id ? { studio: { ...L.state.studio, check: { id, key: '', reasons: [] } } } : {}));
+  }, (id) => (st) => (id ? { nw: { ...st.nw, savedId: id } } : {}));
 }
 
 export async function deleteDraft(L: Logic, c: Contribution) {
