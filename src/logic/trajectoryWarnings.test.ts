@@ -24,7 +24,7 @@ describe('adminWarnings', () => {
       steps: [{ id: 's1', k: 'learn', lid: 'a', win: 1, req: true, pre: null }, { id: 's2', k: 'exam', title: 'Exam', win: 2, req: true, pre: null }],
     };
     const w = adminWarnings(t, byId, 200);
-    expect(w).toContain('Ambition and profile audiences are never auto-enrolled: people there only see a suggestion.');
+    expect(w).toContain('Only business-line audiences are auto-enrolled; people in other audiences see a suggestion.');
     expect(w).toContain('Mandatory for Audit: needs a System or General Admin to publish.');
     expect(w).toContain('Step 2 (exam) has no prerequisite, so people could book it before the learnings are done.');
     expect(w).toContain('Name the credential people earn.');

@@ -10,7 +10,7 @@ export function adminWarnings(t: Trajectory, byId: Record<string, LearningRef | 
   const goal = yearlyGoal > 0 ? yearlyGoal : 80;
   const warns: string[] = [];
   if (!t.maps.length) warns.push('Not mapped to any audience yet, so nobody sees it.');
-  if (t.enrol === 'auto' && t.maps.some((m) => !BUSINESS_LINES.includes(m[0]))) warns.push('Ambition and profile audiences are never auto-enrolled: people there only see a suggestion.');
+  if (t.enrol === 'auto' && t.maps.some((m) => !BUSINESS_LINES.includes(m[0]))) warns.push('Only business-line audiences are auto-enrolled; people in other audiences see a suggestion.');
   t.maps.filter((m) => m[2] === 'mandatory').forEach((m) => warns.push('Mandatory for ' + m[0] + ': needs a System or General Admin to publish.'));
   t.steps.forEach((st, i) => {
     if (st.k === 'exam' && !st.pre && i > 0) warns.push('Step ' + (i + 1) + ' (exam) has no prerequisite, so people could book it before the learnings are done.');
