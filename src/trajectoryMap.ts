@@ -6,7 +6,11 @@ import { certConstellation, certDockRows, certRadar, certRoadLanes } from './log
 import type { CertEntry, NodePos } from './logic/certLayer';
 import { trajectoryProgress } from './logic/trajectory';
 import type { Item, Logic } from './model';
+import type { AppState } from './types';
 import { context, credentialEarned, enrolmentOf, openTrajectory } from './trajectoryCtx';
+
+// What to clear when the viewed person changes: the dock and the radar focus belong to one person.
+export const certResetPatch = (s: AppState): Partial<AppState> => ({ certFocus: null, ...(s.sel?.type === 'cert' ? { sel: null } : {}) });
 
 export function certMapVals(L: Logic, byId: Record<string, Item>, nodes: (NodePos & { id: string })[]) {
   const s = L.state, c = context(L, byId), sel = s.sel, dockOpen = sel?.type === 'cert';

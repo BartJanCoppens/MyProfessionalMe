@@ -32,6 +32,7 @@ import { loadCreate } from './lib/contributionStore';
 import { loadQueue } from './lib/recordStore';
 import { loadTrajectories } from './lib/trajectoryStore';
 import { loadMine } from './trajectoryCtx';
+import { certResetPatch } from './trajectoryMap';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import type { Auth } from './lib/useAuth';
@@ -125,6 +126,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   // The viewed person's enrolments and credentials load when the subject changes; every learner action reloads them.
   useEffect(() => {
     let live = true;
+    logicRef.current.setState((st) => certResetPatch(st));
     loadMine(logicRef.current, () => live).catch((err) => { if (live) logicRef.current.say('Trajectories did not load · ' + (err as Error).message); });
     return () => { live = false; };
   }, [subject.id]);

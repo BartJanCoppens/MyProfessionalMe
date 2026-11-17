@@ -9,6 +9,7 @@ import type { Credential, Enrolment, Trajectory } from '../logic/trajectory';
 import { blankTrajectory } from '../logic/trajectoryEdit';
 import { cfg, person } from '../test/harness';
 import type { AppState } from '../types';
+import { certResetPatch } from '../trajectoryMap';
 import MapScreen from './Map';
 
 vi.mock('../lib/learnerStore', () => ({ loadLearner: vi.fn(), saveProgress: vi.fn(), savePrefs: vi.fn() }));
@@ -130,5 +131,21 @@ describe('the radar and the road', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Road' }));
     expect(screen.getByText('0 of 2 required steps · credential by Oct 2027')).toBeTruthy();
     expect(screen.getByText('◆ Certified adviser')).toBeTruthy();
+  });
+});
+
+describe('the cert dock is not a focus', () => {
+  it('leaves hubs, nodes and clouds at their no-selection opacity', () => {
+    const opacities = (c: HTMLElement) => Array.from(c.querySelectorAll('svg g[opacity], svg line[opacity]')).map((e) => e.getAttribute('opacity'));
+    const none = show();
+    const base = opacities(none.container);
+    cleanup();
+    const open = show({ sel: { type: 'cert' } });
+    expect(opacities(open.container)).toEqual(base);
+  });
+  it('is cleared, with the radar focus, when the viewed person changes', () => {
+    const patch = certResetPatch({ ...initState(cfg), sel: { type: 'cert' }, certFocus: 'T1' });
+    expect(patch).toEqual({ certFocus: null, sel: null });
+    expect(certResetPatch({ ...initState(cfg), sel: { type: 'hub', id: 'corp' }, certFocus: 'T1' })).toEqual({ certFocus: null });
   });
 });

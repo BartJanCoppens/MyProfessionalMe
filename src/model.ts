@@ -6,7 +6,7 @@ import {
   MEDIA, OB_LABEL, OB_TONE, OUTCOMES, PROGRAM_OF, PROGRAMS, SIGNALS, STAGE_FR, STAGES, STATE_LABEL, STG_SHORT, TARGET,
 } from './data';
 import type { Config } from './config';
-import type { Access, Ambition, AppState, ChatMsg, CloudKey, Interest, Learn, LearnForm, LearnMeta, Op, Persona, Proposal, Read, Screen, Signal, Test } from './types';
+import type { Sel, Access, Ambition, AppState, ChatMsg, CloudKey, Interest, Learn, LearnForm, LearnMeta, Op, Persona, Proposal, Read, Screen, Signal, Test } from './types';
 import { dueQuarter, levelLabel, levelsByDomain, stageIndex } from './logic/learner';
 import type { LearnState } from './logic/learner';
 import { addAmbition, addInterest, removeAmbition, removeInterest, saveProgress, savePrefs } from './lib/learnerStore';
@@ -55,6 +55,9 @@ const MEDIA_SAVED = new Map<string, number>();
 const BUSY = new Set<string>();
 // Publication status in the admin library: chip status and label.
 const PUB_STATUS: Record<LearnMeta['status'], [string, string]> = { published: ['accepted', 'Published'], review: ['clarification', 'Needs review'], draft: ['not-started', 'Draft'] };
+
+// The certification dock is a layer, not a focus: the rest of the map reads it as no selection.
+const noCert = (sel: Sel): Sel => (sel?.type === 'cert' ? null : sel);
 
 export function initState(cfg: Config): AppState {
   return {
@@ -330,7 +333,7 @@ export class Logic {
   }
   // One domain up close (design v3): rings are levels L1–L5, green is the person's level now, dashed the next stage's target.
   zoomVals(items: Item[], clouds: Cloud[]) {
-    const s = this.state, i = Math.max(0, DOMAINS.findIndex((d) => d[0] === s.zoom)), d = DOMAINS[i], sel = s.sel, cur = this.levels[i], tgt = TARGET[i];
+    const s = this.state, i = Math.max(0, DOMAINS.findIndex((d) => d[0] === s.zoom)), d = DOMAINS[i], sel = noCert(s.sel), cur = this.levels[i], tgt = TARGET[i];
     const list = items.filter((it) => it.dom === d[0]), R = (k: number) => 52 + k * 43, RX = (k: number) => R(k) * 1.55;
     const hub = this.polar(540, 330, 272, 186, i, 9);
     const rings = [5, 4, 3, 2, 1].map((k) => ({ k, rx: RX(k), ry: R(k), stroke: k === tgt ? '#1a1d18' : k === cur ? '#86BC25' : '#e1e5dc', sw: k === tgt || k === cur ? 1.5 : 1, dash: k === tgt && k !== cur ? '4 3' : 'none',
@@ -364,7 +367,7 @@ export class Logic {
     };
   }
   constellation(items: Item[], clouds: Cloud[]) {
-    const cx = 540, cy = 330, rx = 272, ry = 186, sel = this.state.sel;
+    const cx = 540, cy = 330, rx = 272, ry = 186, sel = noCert(this.state.sel);
     const cs = sel && sel.type === 'cloud' ? clouds.find((x) => x.key === sel.id) : null;
     const edges: { x1: number; y1: number; x2: number; y2: number; stroke: string; w: number; op: number }[] = [];
     const hubs: { delay: string; id: string; x: number; y: number; xP: string; yP: string; lxP: string; lyP: string; tf: string; ta: 'left' | 'right' | 'center'; label: string; cur: string; lvl: string; stroke: string; sw: number; op: number; onClick: () => void; zoom: () => void; zoomTitle: string }[] = [];
@@ -419,7 +422,7 @@ export class Logic {
     });
     const cur = DOMAINS.map((_d, i) => pt(i, this.levels[i])), tgt = DOMAINS.map((_d, i) => pt(i, TARGET[i]));
     const gaps = DOMAINS.map((_d, i) => TARGET[i] - this.levels[i]); const big = gaps.map((g, i) => [g, i]).filter((x) => x[0] >= 2).map((x) => DOMAINS[x[1]][1]);
-    const sel = this.state.sel;
+    const sel = noCert(this.state.sel);
     const rc = clouds.filter((x) => x.on).map((x, k) => ({
       key: x.key, delay: (0.25 + k * 0.12) + 's, ' + (1.2 + k * 1.5) + 's', color: x.color, wash: x.wash, fo: sel && sel.type === 'cloud' && sel.id === x.key ? 0.22 : 0.08, legend: x.long,
       points: DOMAINS.map((d, i) => pt(i, Math.min(5, this.levels[i] + (x.w[d[0]] ? Math.min(2, x.w[d[0]]) : 0))).join(',')).join(' '),
