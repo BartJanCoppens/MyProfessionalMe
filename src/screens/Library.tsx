@@ -4,6 +4,7 @@ import type { VM } from '../model';
 import { AvatarBadge } from './Map';
 import { CoverArt } from './Cover';
 import { FormatPanels } from './FormatPanels';
+import { LibraryTrajectories } from './Trajectory';
 
 export function LibraryScreen({ vm }: { vm: VM }) {
   return (
@@ -26,6 +27,7 @@ export function LibraryScreen({ vm }: { vm: VM }) {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {vm.domChips.map((dc) => <FilterChip key={dc.key} selected={dc.on} onClick={dc.onClick}>{dc.label}</FilterChip>)}
       </div>
+      <LibraryTrajectories vm={vm} />
       {vm.showReels && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><span style={{ fontWeight: 600, fontSize: 14 }}>Quick learning</span><span style={{ fontSize: 12, color: '#5a6058' }}>{vm.reelSub}</span></div>

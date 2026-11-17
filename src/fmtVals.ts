@@ -8,6 +8,7 @@ import { examVals, flashVals, teachVals } from './fmtStudy';
 import { countLabel } from './logic/formats';
 import { webinarIcs } from './logic/ics';
 import { submit } from './recordVals';
+import { examTrajectory } from './trajectoryVals';
 import type { Item, Logic } from './model';
 import type { AidContent, CaseContent, StretchContent, WebinarContent } from './types';
 
@@ -59,7 +60,7 @@ export function fmtVals(L: Logic, it: Item) {
   const stretch = contentOf(it.id, 'stretch'), webinar = contentOf(it.id, 'webinar'), aid = contentOf(it.id, 'aid');
   return {
     isFlash: !!flash, isExam: !!exam, isCase: !!kase, isTeach: !!teach, isStretch: !!stretch, isWebinar: !!webinar, isAid: !!aid,
-    fl: flash && flashVals(L, it, flash), ex: exam && examVals(L, it, exam), ce: kase && caseVals(L, it, kase), tb: teach && teachVals(L, it, teach),
+    fl: flash && flashVals(L, it, flash), ex: exam && { ...examVals(L, it, exam), ...examTrajectory(L, it.id) }, ce: kase && caseVals(L, it, kase), tb: teach && teachVals(L, it, teach),
     sa: stretch && stretchVals(L, it, stretch), wb: webinar && webinarVals(L, it, webinar), ja: aid && aidVals(L, it, aid),
   };
 }

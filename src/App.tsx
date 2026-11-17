@@ -14,6 +14,7 @@ import { AdminLibraryScreen, AddLearningDrawer } from './screens/Admin';
 import AdminMappingScreen from './screens/Mapping';
 import KnowledgeScreen from './screens/Knowledge';
 import CreateScreen from './screens/Create';
+import TrajectoryScreen from './screens/Trajectory';
 import ApprovalsScreen from './screens/Approvals';
 import UsersScreen from './screens/Users';
 import AiConnectionsScreen from './screens/AiConnections';
@@ -30,6 +31,7 @@ import { useTeam } from './lib/useTeam';
 import { loadCreate } from './lib/contributionStore';
 import { loadQueue } from './lib/recordStore';
 import { loadTrajectories } from './lib/trajectoryStore';
+import { loadMine } from './trajectoryCtx';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import type { Auth } from './lib/useAuth';
@@ -120,6 +122,8 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
     loadTrajectories().then((trjs) => { if (live) setRaw((s) => ({ ...s, trjs })); }, (err) => { if (live) logicRef.current.say('Trajectories did not load · ' + (err as Error).message); });
     return () => { live = false; };
   }, [me]);
+  // The viewed person's enrolments and credentials load when the subject changes; every learner action reloads them.
+  useEffect(() => { loadMine(logicRef.current).catch((err) => logicRef.current.say('Trajectories did not load · ' + (err as Error).message)); }, [subject.id]);
   useEffect(() => { if (state.screen === 'adminAi') loadAiPage(logicRef.current); }, [state.screen]);
   useEffect(() => {
     if (!state.media.playing) return;
@@ -145,6 +149,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
           {vm.screen === 'map' && <MapScreen vm={vm} />}
           {vm.screen === 'library' && <LibraryScreen vm={vm} />}
           {vm.screen === 'detail' && <DetailScreen vm={vm} />}
+          {vm.isTrjPage && <TrajectoryScreen vm={vm} />}
           {vm.screen === 'projects' && <ProjectsScreen vm={vm} />}
           {vm.screen === 'profile' && <ProfileScreen vm={vm} fileRef={file} chatRef={chat} />}
           {vm.appr && <ApprovalsScreen appr={vm.appr} onOpen={(id, lid) => { select(id); logic.openDetail(lid, 'approvals'); }} />}

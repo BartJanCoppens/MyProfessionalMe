@@ -46,6 +46,12 @@ function ExamPanel({ ex }: { ex: NonNullable<Det['ex']> }) {
     <Card title="Practice exam" subtitle={ex.sub}>
       <div style={col}>
         {ex.ro && <ViewOnly note={ex.note} />}
+        {ex.hasTrj && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', fontSize: 12.5, border: '1px solid #f0dca3', background: '#fdf7e6', borderRadius: 6, padding: '8px 12px' }}>
+            <span><span aria-hidden="true" style={{ color: '#7a5000', fontWeight: 600 }}>◆ </span>{ex.trjText}</span>
+            <LinkButton onClick={ex.openTrj ?? undefined}>Open the trajectory →</LinkButton>
+          </div>
+        )}
         {ex.active && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 12, color: '#5a6058' }}><span>{ex.pos}</span><Tag tone="muted">{ex.topic}</Tag></div>

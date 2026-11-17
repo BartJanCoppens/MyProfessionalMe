@@ -1,5 +1,6 @@
 import type { CreateData } from './logic/contribution';
 import type { Trajectory } from './logic/trajectory';
+import type { TrjMine } from './logic/trajectoryLearner';
 import type { QueueRow } from './lib/recordStore';
 import type { RosterRow } from './lib/attendanceStore';
 import type { AiAdmin, AiForm, AiUseEdit } from './logic/ai';
@@ -49,7 +50,7 @@ export type CloudMeta = {
   anchor: number; frac: number; screen: Screen; goLabel: string;
 };
 
-export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'approvals' | 'create' | 'adminLib' | 'adminMap' | 'adminKb' | 'users' | 'adminAi';
+export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'approvals' | 'create' | 'adminLib' | 'adminMap' | 'adminKb' | 'users' | 'adminAi' | 'trajectory';
 
 // What the signed-in account may administer (from public.user_roles).
 // isGeneral: General Admin, edits all content (catalogue, every curriculum audience, all bundles) but no users.
@@ -100,6 +101,9 @@ export type AppState = {
   mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>;
   // certification trajectories (admin): the tab, the trajectory and step being edited (step by id), and the audience and stage about to be mapped
   trjs: Trajectory[]; mapMode: 'learn' | 'traj'; trjSel: string | null; trjStep: string | null; trjAud: string; trjStage: string;
+  // certification trajectories (learner): the page being viewed and where it was opened from, the subject's enrolments and credentials,
+  // the proof being typed per step (key subject|trajectory|step) and the external credential being added
+  trjView: string | null; trjOrigin: Screen; trjMine: TrjMine | null; stepDraft: Record<string, StepDraft>; credForm: CredDraft | null;
   reads: Record<string, Read>; readBusy: boolean;
   // growth map: the domain zoomed into (domain key), or null for all domains
   zoom: string | null;
@@ -136,6 +140,9 @@ export type AppState = {
   aiLive: string[]; aiOut: Record<string, 'ai' | 'scripted'>;
   aiAdmin: AiAdmin | null; aiError: string | null; aiBusy: boolean; aiForm: AiForm | null; aiConfirm: string | null; aiUseEdit: AiUseEdit | null; aiTests: Record<string, { ok: boolean | null; text: string }>;
 };
+
+export type StepDraft = { link: string; ref: string; note: string };
+export type CredDraft = { name: string; issuer: string; earned: string; expires: string; link: string; ref: string };
 
 // The New content form. line and aud are '' for none; type is the format; lvl stays text for the select; outline and
 // sources come from Draft with AI.

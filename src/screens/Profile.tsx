@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import { Banner, Button, ChatBubble, Eyebrow, FilterChip, Hover, Input, LinkButton, PageTitle, Tag } from '../ds';
 import type { VM } from '../model';
 import { AvatarFace } from './AvatarFace';
+import Wallet from './Wallet';
 
 type Props = { vm: VM; fileRef: RefObject<HTMLInputElement | null>; chatRef: RefObject<HTMLDivElement | null> };
 const panelHead = { padding: '14px 18px', background: '#fafbf8' } as const;
@@ -46,6 +47,8 @@ export default function ProfileScreen({ vm, fileRef, chatRef }: Props) {
           </div>
         </div>
       </div>
+
+      <Wallet vm={vm} />
 
       {!vm.tests.length && (
         <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '18px 20px', color: '#5a6058', textWrap: 'pretty' }}>
