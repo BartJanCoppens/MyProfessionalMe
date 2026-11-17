@@ -13,19 +13,19 @@ function lines(L: Logic, it: Item): Partial<Lines> {
   switch (c?.kind) {
     case 'flash': {
       const due = detailOf<'flash'>(L, it.id).due;
-      return { cvMeta: c.total + ' cards', cvMeta2: done ? 'All reviewed' : (due ? dueCards(c, { due }, new Date()).length : c.due) + ' due today' };
+      return { cvMeta: c.cards.length + ' cards', cvMeta2: done ? 'All reviewed' : (due ? dueCards(c, { due }, new Date()).length : c.due) + ' due today' };
     }
     case 'exam': {
       const best = detailOf<'exam'>(L, it.id).best;
       return { cvMeta: best != null ? best + '%' : c.bank + ' Q', cvMeta2: best != null ? 'Best score' : 'Not taken yet', exBars: c.qs.map(() => ({ w: (best ?? 20) + '%', c: best != null ? '#86BC25' : 'rgba(255,255,255,.35)' })) };
     }
-    case 'case': return { cvMeta: c.deliv.length + ' deliverables', cvMeta2: handedIn(it) ? 'Handed in' : 'Reviewed by a peer' };
+    case 'case': return { cvMeta: c.deliv.length + ' deliverables', cvMeta2: handedIn(it) ? 'Handed in' : 'Reviewed by your counsellor' };
     case 'teach': {
       const score = detailOf<'teach'>(L, it.id).score;
       return { cvMeta: 'Explain it back', cvMeta2: score != null ? 'Score ' + score + ' of ' + c.crit.length : 'Feedback on your answer' };
     }
     case 'stretch': return { cvMeta: countLabel((detailOf<'stretch'>(L, it.id).checks ?? []).length, c.checks.length, 'checkpoints'), cvMeta2: handedIn(it) ? 'Agreed with ' + L.counsellorFirst() : 'On the job' };
-    case 'webinar': return { cvMeta: c.day + ' ' + c.mon.charAt(0) + c.mon.slice(1).toLowerCase() + ' · ' + c.time, cvMeta2: detailOf<'webinar'>(L, it.id).registered ? 'You are registered' : 'Live, then recorded' };
+    case 'webinar': return { cvMeta: c.day + ' ' + c.mon.charAt(0) + c.mon.slice(1).toLowerCase() + ' · ' + c.time, cvMeta2: detailOf<'webinar'>(L, it.id).registered ? 'You plan to attend' : 'Live, then recorded' };
     case 'aid': {
       const lit = Math.round((detailOf<'aid'>(L, it.id).ticks ?? []).length / c.items.length * 5);
       return { cvMeta: c.items.length + '-point checklist', cvMeta2: 'One page · PDF', aidRows: [0, 1, 2, 3, 4].map((k) => ({ bg: k < lit ? '#86BC25' : '#fff' })) };

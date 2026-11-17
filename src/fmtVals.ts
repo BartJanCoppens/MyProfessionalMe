@@ -30,7 +30,7 @@ function stretchVals(L: Logic, it: Item, c: StretchContent) {
     ro: L.subject.readOnly, sub: it.hoursLabel + ' on the job · ' + it.source, brief: c.brief,
     checks: c.checks.map((t, k) => ({ t, on: ticked.includes(k), toggle: () => saveDetail(L, it, { checks: toggled(ticked, k) }) })),
     handed, agreeLabel: handed ? 'Sent to ' + boss : 'Agree with ' + boss,
-    note: countLabel(ticked.length, c.checks.length, 'checkpoints') + ' done. ' + (handed ? L.counsellorFull() + ' has your reflection.' : 'Write your reflection in the evidence below (at least 140 characters); ' + L.counsellorFull() + ' confirms the engagement and when it counts.'),
+    note: countLabel(ticked.length, c.checks.length, 'checkpoints') + ' done. ' + (handed ? L.counsellorFull() + ' has your reflection.' : L.subject.readOnly ? 'Not handed in yet.' : 'Write your reflection in the evidence below (at least 140 characters); ' + L.counsellorFull() + ' confirms the engagement and when it counts.'),
     agree: () => submit(L, it),
   };
 }
@@ -39,7 +39,7 @@ function webinarVals(L: Logic, it: Item, c: WebinarContent) {
   const registered = detailOf<'webinar'>(L, it.id).registered ?? false, ics = webinarIcs(it.title, c.when);
   return {
     ro: L.subject.readOnly, sub: c.when, mon: c.mon, day: c.day, time: c.time, speakers: c.speakers, agenda: numbered(c.agenda),
-    registered, regLabel: registered ? 'Registered ✓' : 'Register', register: () => saveDetail(L, it, { registered: !registered }),
+    registered, regLabel: registered ? 'I’ll attend ✓' : 'I’ll attend', register: () => saveDetail(L, it, { registered: !registered }),
     ics, calendar: () => { if (ics) downloadText(it.title + '.ics', ics, 'text/calendar'); },
   };
 }

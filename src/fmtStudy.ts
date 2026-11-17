@@ -24,7 +24,7 @@ export function flashVals(L: Logic, it: Item, c: FlashContent) {
   const asked = d.good + d.again;
   return {
     ro, note: ro ? viewOnly(L, 'study this deck') : '',
-    sub: c.total + ' cards · ' + dueCards(c, { due }, now).length + ' due now · spaced repetition',
+    sub: c.cards.length + ' cards · ' + dueCards(c, { due }, now).length + ' due now · spaced repetition',
     active: !ro && !fin, finished: !ro && fin, pos: d.at + 1 + ' / ' + queue.length, side: d.flip ? 'Answer' : 'Question',
     face: fin || !card ? '' : d.flip ? card[1] : card[0], bg: d.flip ? '#f6f9ef' : '#fff', bd: d.flip ? '#c9e39a' : '#1a1d18',
     showRate: !ro && !fin && d.flip, showFlip: !ro && !fin && !d.flip,

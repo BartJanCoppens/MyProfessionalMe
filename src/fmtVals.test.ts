@@ -58,6 +58,9 @@ describe('panels need content', () => {
 });
 
 describe('flash cards', () => {
+  it('states the real deck size, the cards that get completed', () => {
+    expect(on('L60').vm().det.fl!.sub).toBe('3 cards · 3 due now · spaced repetition');
+  });
   it('starts on the front of the first due card, flips, and shows three ratings', () => {
     const h = on('L60');
     expect(h.vm().det.fl!).toMatchObject({ active: true, pos: '1 / 3', face: 'Q one', side: 'Question', showFlip: true, showRate: false });
@@ -239,13 +242,13 @@ describe('stretch assignment', () => {
 describe('webinar', () => {
   it('registers and unregisters through detail.webinar', async () => {
     const h = on('L67');
-    expect(h.vm().det.wb!).toMatchObject({ mon: 'DEC', day: '4', time: '12:30–13:30', regLabel: 'Register', registered: false });
+    expect(h.vm().det.wb!).toMatchObject({ mon: 'DEC', day: '4', time: '12:30–13:30', regLabel: 'I’ll attend', registered: false });
     h.vm().det.wb!.register();
     await flush();
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L67', { detail: { registered: true } });
     vi.mocked(learner.saveProgress).mockClear();
     const again = on('L67', {}, { L67: { registered: true } });
-    expect(again.vm().det.wb!).toMatchObject({ regLabel: 'Registered ✓', registered: true });
+    expect(again.vm().det.wb!).toMatchObject({ regLabel: 'I’ll attend ✓', registered: true });
     again.vm().det.wb!.register();
     await flush();
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L67', { detail: { registered: false } });
@@ -255,6 +258,19 @@ describe('webinar', () => {
     LEARN_META.L67 = { line: null, status: 'published', content: parseFormatContent({ ...(CONTENT.L67 as object), when: 'Soon' }) };
     expect(on('L67').vm().det.wb!.ics).toBeNull();
     LEARN_META.L67 = { line: null, status: 'published', content: parseFormatContent(CONTENT.L67) };
+  });
+});
+
+describe('the generic mark button', () => {
+  it('is hidden for the four auto-completing formats that have a panel, and stays for e-learning', () => {
+    expect(['L60', 'L61', 'L65', 'L68'].map((id) => on(id).vm().done.mark)).toEqual([null, null, null, null]);
+    expect(on('L17').vm().done.mark).not.toBeNull();
+  });
+});
+
+describe('stretch in View as', () => {
+  it('does not tell the viewer to write a reflection', () => {
+    expect(viewAs('L66').vm().det.sa!.note).toBe('0 of 3 checkpoints done. Not handed in yet.');
   });
 });
 
@@ -297,9 +313,9 @@ describe('View as', () => {
 describe('covers', () => {
   const cover = (id: string, rows: Rows = {}, detail: Record<string, LearningDetail> = {}) => on(id, rows, detail).vm().libItems.find((i) => i.id === id)!;
   it('draws each of the seven covers with its meta lines', () => {
-    expect(cover('L60')).toMatchObject({ cvFlash: true, cvMeta: '40 cards', cvMeta2: '3 due today' });
+    expect(cover('L60')).toMatchObject({ cvFlash: true, cvMeta: '3 cards', cvMeta2: '3 due today' });
     expect(cover('L61')).toMatchObject({ cvExam: true, cvMeta: '40 Q', cvMeta2: 'Not taken yet' });
-    expect(cover('L64')).toMatchObject({ cvCase: true, cvMeta: '2 deliverables', cvMeta2: 'Reviewed by a peer' });
+    expect(cover('L64')).toMatchObject({ cvCase: true, cvMeta: '2 deliverables', cvMeta2: 'Reviewed by your counsellor' });
     expect(cover('L65')).toMatchObject({ cvTeach: true, cvMeta: 'Explain it back', cvMeta2: 'Feedback on your answer' });
     expect(cover('L66')).toMatchObject({ cvStretch: true, cvMeta: '0 of 3 checkpoints', cvMeta2: 'On the job' });
     expect(cover('L67')).toMatchObject({ cvWebinar: true, cvMeta: '4 Dec · 12:30–13:30', cvMeta2: 'Live, then recorded' });
@@ -310,7 +326,7 @@ describe('covers', () => {
     expect(cover('L60', { L60: 'accepted' })).toMatchObject({ cvMeta2: 'All reviewed' });
     expect(cover('L65', { L65: 'accepted' }, { L65: { text: 'x', score: 3 } })).toMatchObject({ cvMeta2: 'Score 3 of 4' });
     expect(cover('L66', { L66: 'submitted' }, { L66: { checks: [0, 1] } })).toMatchObject({ cvMeta: '2 of 3 checkpoints', cvMeta2: 'Agreed with Sam' });
-    expect(cover('L67', {}, { L67: { registered: true } })).toMatchObject({ cvMeta2: 'You are registered' });
+    expect(cover('L67', {}, { L67: { registered: true } })).toMatchObject({ cvMeta2: 'You plan to attend' });
     expect(cover('L64', { L64: 'submitted' })).toMatchObject({ cvMeta2: 'Handed in' });
   });
 });

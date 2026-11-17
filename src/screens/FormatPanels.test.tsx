@@ -45,7 +45,7 @@ const viewAs = () => person({ id: 'p2', name: 'Kim Learner', readOnly: true, dat
 
 describe('the seven covers', () => {
   it.each([
-    ['40 cards', '3 due today'], ['40 Q', 'Not taken yet'], ['2 deliverables', 'Reviewed by a peer'], ['Explain it back', 'Feedback on your answer'],
+    ['6 cards', '3 due today'], ['40 Q', 'Not taken yet'], ['2 deliverables', 'Reviewed by your counsellor'], ['Explain it back', 'Feedback on your answer'],
     ['0 of 2 checkpoints', 'On the job'], ['4 Dec · 12:30–13:30', 'Live, then recorded'], ['2-point checklist', 'One page · PDF'],
   ])('renders the line %s on the library card', (meta, meta2) => {
     show('', person(), { libFormat: 'all' });
@@ -103,7 +103,7 @@ describe('the work panels', () => {
   });
   it('offers the calendar file for a webinar', () => {
     show('L67');
-    expect(screen.getByRole('button', { name: 'Register' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'I’ll attend' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add to calendar' })).toBeTruthy();
   });
   it('shows nothing extra for a learning without content', () => {
