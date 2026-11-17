@@ -116,10 +116,12 @@ function renewalLine(L: Logic, member: Member, c: Credential, now: Date) {
 function credentialRow(L: Logic, member: Member, c: Credential, canDecide: boolean, reload: (id: string) => Promise<void>, now: Date) {
   const key = member.id + '|cred|' + c.id, first = member.name.split(' ')[0];
   const renewal = c.renewal_of ? renewalLine(L, member, c, now) : null;
+  // confirm_credential refuses an external renewal whose expiry date has passed (UTC days, as the database's current_date).
+  const stale = !!renewal && !c.trajectory_id && !!c.expires_on && c.expires_on <= now.toISOString().slice(0, 10);
   return {
     key, userId: member.id, initials: initialsOf(member.name), name: member.name, trj: c.issuer, kind: renewal ? 'Renewal' : 'Credential',
-    text: renewal ? renewal.text : c.name + ' · ' + c.issuer, proof: { link: c.link, note: '', ref: c.ref }, approveLabel: 'Confirm', talkForm: null,
-    approve: canDecide ? decideRow(L, key, member.id, reload, () => confirmCredential(c.id), renewal ? renewal.done : 'Confirmed · ' + first + '\'s credential is in their wallet') : null,
+    text: renewal ? renewal.text + (stale ? ' · expiry date has passed; ask for a new one' : '') : c.name + ' · ' + c.issuer, proof: { link: c.link, note: '', ref: c.ref }, approveLabel: 'Confirm', talkForm: null,
+    approve: canDecide && !stale ? decideRow(L, key, member.id, reload, () => confirmCredential(c.id), renewal ? renewal.done : 'Confirmed · ' + first + '\'s credential is in their wallet') : null,
     talk: null,
   };
 }

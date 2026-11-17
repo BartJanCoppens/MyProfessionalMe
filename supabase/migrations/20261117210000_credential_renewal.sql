@@ -12,7 +12,7 @@
 --    (trajectory.sync.test.ts).
 -- 3. confirm_credential: unchanged for a new credential. For a renewal, in the same transaction: earned today, a
 --    trajectory credential runs valid_months from today (null: does not expire), and the renewed row is stamped
---    superseded (refused when it already is).
+--    superseded (refused when it already is). An external renewal whose expiry date has passed by then is refused.
 
 alter table public.credentials
   add column renewal_of uuid references public.credentials (id) on delete set null,
@@ -86,6 +86,9 @@ begin
     raise exception 'This credential is already confirmed' using errcode = 'P0002';
   end if;
   if c.renewal_of is not null then
+    if c.trajectory_id is null and (c.expires_on is null or c.expires_on <= current_date) then
+      raise exception 'This renewal''s expiry date has passed; ask for a new one' using errcode = 'P0002';
+    end if;
     update public.credentials set superseded_at = now() where id = c.renewal_of and superseded_at is null;
     if not found then
       raise exception 'The credential this renews was already replaced' using errcode = 'P0002';

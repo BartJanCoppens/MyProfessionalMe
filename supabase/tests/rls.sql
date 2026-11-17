@@ -1765,6 +1765,18 @@ do $$ begin
     insert into results (check_name, expected, actual) values ('RN confirming the same renewal twice', 'blocked: P0002', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('RN confirming the same renewal twice', 'blocked: P0002', 'blocked: '||sqlstate); end;
 end $$;
+-- an external renewal whose date passed while it waited is refused at confirm (put in by hand: submit_renewal needs a future date)
+reset role;
+insert into public.credentials (user_id, name, issuer, earned_on, ref, renewal_of, expires_on) values ('00000000-0000-0000-0000-0000000000d1', 'T ext no expiry', 'T issuer', current_date, 'R-STALE', (select id from public.credentials where name = 'T ext no expiry' and renewal_of is null), current_date);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+do $$ begin
+  begin perform public.confirm_credential((select id from public.credentials where ref = 'R-STALE'));
+    insert into results (check_name, expected, actual) values ('RN confirming an external renewal whose expiry date has passed', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN confirming an external renewal whose expiry date has passed', 'blocked: P0002', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
+delete from public.credentials where ref = 'R-STALE';
 -- a renewal of an already superseded credential (put in by hand: submit_renewal refuses it) is refused at confirm
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
 do $$ begin

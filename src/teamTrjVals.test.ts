@@ -176,6 +176,11 @@ describe('renewals', () => {
     const { v } = setup([kim({}, [{ ...old, trajectory_id: null }, renewal({ trajectory_id: null, expires_on: day(400) })])], [trj('T1')]);
     expect(v.approvals[0].text).toBe('Certified · ITAA · expires ' + label(day(10)) + ' → new expiry on confirm: ' + label(day(400)));
   });
+  it('an external renewal whose date has passed cannot be confirmed: the row says why', () => {
+    const { v } = setup([kim({}, [{ ...old, trajectory_id: null }, renewal({ trajectory_id: null, expires_on: day(0) })])], [trj('T1')]);
+    expect(v.approvals[0].approve).toBeNull();
+    expect(v.approvals[0].text).toMatch(/expiry date has passed; ask for a new one$/);
+  });
   it('says "from the trajectory" when the trajectory is not loaded, and the toast claims no date', async () => {
     const { h, v } = setup([kim({}, [old, renewal()])], []);
     expect(v.approvals[0].text).toMatch(/→ new expiry on confirm: from the trajectory$/);
