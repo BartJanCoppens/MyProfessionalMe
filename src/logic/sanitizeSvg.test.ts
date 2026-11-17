@@ -372,8 +372,9 @@ describe('sanitizeSvg: id namespacing', () => {
     expect(out).toContain('begin="__hzid__-c+d.end"');
   });
 
+  // The animation names its target here: since the Task 2.2 fix round an animation without one is dropped.
   it('instance() swaps the token for a per-copy prefix, so two copies get distinct ids', () => {
-    const markup = sanitizeSvg(svg('<defs><linearGradient id="g"/></defs><rect fill="url(#g)"/><animate id="t" begin="t.end"/>'));
+    const markup = sanitizeSvg(svg('<defs><linearGradient id="g"/></defs><rect fill="url(#g)"/><animate id="t" attributeName="x" begin="t.end"/>'));
     const one = instance(markup, 'hz1'), two = instance(markup, 'hz2');
     expect(one).not.toContain('__hzid__');
     expect(one).toContain('id="hz1-g"');
@@ -451,5 +452,39 @@ describe('sanitizeSvg: no reach outside the drawing', () => {
     expect(out).not.toMatch(/ begin="outside/);
     expect(out).toContain('end=" 2s"');
     expect(out).toContain('begin=" __hzid__-a.click"');
+  });
+});
+
+// Fix round of Task 2.2 (review with jsdom probes): what the browser re-parses must equal what was sanitised.
+describe('sanitizeSvg: parser differentials', () => {
+  it('keeps text only in desc and title, so later siblings stay SVG after the HTML parser re-reads the markup', () => {
+    const host = render(sanitizeSvg(svg('<desc><rect/>A chart</desc><circle r="5"/><text>after</text><title><title/>T</title><g/>')));
+    expect(host.querySelector('desc')!.children).toHaveLength(0);
+    expect(host.querySelector('desc')!.textContent).toBe('A chart');
+    expect([...host.children].map((e) => e.localName + ':' + e.namespaceURI!.split('/').pop())).toEqual(['desc:svg', 'circle:svg', 'text:svg', 'title:svg', 'g:svg']);
+    expect(host.querySelector('text')!.textContent).toBe('after');
+    host.remove();
+  });
+  it('judges attributes by local name: prefixed handlers and prefixed or padded animation targets do not survive', () => {
+    const out = sanitizeSvg(svg('<rect xmlns:e="urn:e" e:onclick="alert(1)" width="1"/>'
+      + '<a:set xmlns:a="http://www.w3.org/2000/svg" a:attributeName="href" to="javascript:x"/>'
+      + '<set xmlns:z="urn:z" z:attributeName="href" to="https://evil.example"/>'
+      + '<rect><set attributeName=" on&#x09;click" to="alert(2)"/><animate attributeName="a:href" values="x"/><animate attributeName="opacity" values="0;1"/></rect>'));
+    expect(out).not.toMatch(/onclick|alert|evil|e:|z:|a:attributeName/);
+    expect(out).toContain('width="1"');
+    expect(out).toContain('attributeName="opacity"');
+    expect(dangers(out)).toEqual([]);
+  });
+  it('drops a style declaration with src(), or with a forbidden token that patching would rebuild', () => {
+    const style = (s: string) => render(sanitizeSvg(svg('<rect style="' + s + '; opacity: .5"/>'))).querySelector('rect')!.getAttribute('style')!;
+    expect(style("background: src('https://evil.example/x')")).toBe(' opacity: .5');
+    expect(style('width: exexpression(pression(alert(1))')).toBe(' opacity: .5');
+    expect(style('behavior: x.htc')).toBe(' opacity: .5');
+  });
+  it('keeps a url(#id) in an attribute only in the one plain form', () => {
+    const out = sanitizeSvg(svg('<linearGradient id="a"/><rect fill="url(\'#a&quot;)" stroke="url(#a)"/>'));
+    const rect = render(out).querySelector('rect')!;
+    expect(rect.getAttribute('fill')).toBeNull();
+    expect(rect.getAttribute('stroke')).toBe('url(#__hzid__-a)');
   });
 });

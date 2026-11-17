@@ -3,6 +3,10 @@
 // Hardened here after a security review (Task 2.2), so it differs from Horizon's: the attribute names id, href, begin and
 // end are written in lower case and compared in lower case everywhere, every id is prefixed, and a reference (#id href,
 // url(#id), SMIL begin/end) to an id the drawing does not define is dropped, so it can never reach the rest of the page.
+// After the fix round: attributes are judged by their local name (lower case) and kept only without a namespace (but
+// xlink:href); animations may not target href, style, class or any on... name however it is spelt; title and desc keep
+// text only (they are HTML integration points, so an element inside them would re-parse as HTML); a CSS declaration with
+// a forbidden token is dropped whole; and every url() goes through the one rule (URL_ID / strayUrl).
 /**
  * Allowlist sanitiser for model-generated SVG. Keeps static shapes, text, gradients, filters and SMIL animation;
  * drops scripts, styles, foreign content, event handlers and every link that leaves the document.
@@ -18,8 +22,12 @@ const ELEMENTS = new Set([
 ]);
 
 const ANIMATION = new Set(['animate', 'animateTransform', 'animateMotion', 'set']);
-/** Attributes an animation may not target: changing them could turn a safe element into a link or handler. */
-const FORBIDDEN_TARGETS = /^(href|xlink:href|style|class|on\w*)$/i;
+/** Attributes an animation may not target: changing them could turn a safe element into a link or handler. Judged on the
+ * target without whitespace, prefix or case, so " on&#x09;click", "a:href" and "HREF" are all caught. */
+const forbiddenTarget = (v: string) => { const t = v.replace(/\s/g, '').toLowerCase().split(':').pop() || ''; return /^(href|style|class)$/.test(t) || t.startsWith('on'); };
+const XLINK = 'http://www.w3.org/1999/xlink';
+/** title and desc are HTML integration points: an element inside them would be parsed as HTML when rendered. */
+const TEXT_ONLY = new Set(['title', 'desc']);
 const ID_TOKEN = '__hzid__';
 
 const LINK_ATTRS = new Set(['href', 'xlink:href']);
@@ -27,7 +35,9 @@ const LINK_ATTRS = new Set(['href', 'xlink:href']);
 const CANONICAL = new Set(['id', 'begin', 'end']);
 
 /** CSS that can load something without a plain `url(`: image functions, and escapes that spell `url(` in disguise. */
-const LOADS = /\\|image-set\s*\(|(^|[^\w-])image\s*\(|cross-fade\s*\(|element\s*\(/i;
+const LOADS = /\\|image-set\s*\(|(^|[^\w-])image\s*\(|cross-fade\s*\(|element\s*\(|(^|[^\w-])src\s*\(/i;
+/** CSS that runs or imports something: a declaration holding one is dropped whole (patching it could rebuild it). */
+const RUNS = /expression\s*\(|@import|behavior\s*:|-moz-binding|javascript:/i;
 
 /** The one url() form that survives: a plain same-document reference, url(#id), quoted or not. */
 const URL_ID = /url\(\s*(['"]?)#([\w-]+)\1\s*\)/gi;
@@ -37,8 +47,7 @@ const strayUrl = (v: string) => /url\(/i.test(v.replace(URL_ID, ''));
 function cleanStyle(s: string) {
   // Only same-document url(#id) references survive; everything that could load or execute is removed.
   // A declaration using a CSS escape, an image function or any other url() is dropped whole.
-  return s.split(';').filter(d => !LOADS.test(d) && !strayUrl(d)).join(';')
-    .replace(/expression\s*\(|@import|behavior\s*:|-moz-binding|javascript:/gi, '');
+  return s.split(';').filter(d => !LOADS.test(d) && !RUNS.test(d) && !strayUrl(d)).join(';');
 }
 
 function walk(src: Element, out: Document, ids: Set<string>): Element | null {
@@ -46,22 +55,26 @@ function walk(src: Element, out: Document, ids: Set<string>): Element | null {
   if (!ELEMENTS.has(name)) return null;
   // Attribute names are compared in lower case: when the markup is put into the page, the HTML parser
   // lower-cases them (HREF → href, attributename → attributeName), so every spelling must be caught here.
-  if (ANIMATION.has(name) && [...src.attributes].some(a => a.name.toLowerCase() === 'attributename' && FORBIDDEN_TARGETS.test(a.value.trim()))) return null;
+  // Only attributes without a namespace count (xlink:href aside); a prefixed one is dropped, so no spelling of a name
+  // in another namespace reaches the checks below.
+  const attrs = [...src.attributes].filter(a => !a.namespaceURI || (a.namespaceURI === XLINK && a.localName.toLowerCase() === 'href'));
+  const target = attrs.find(a => a.localName.toLowerCase() === 'attributename');
+  // An animation that names no plain target (animateMotion needs none) does nothing; one with a forbidden target goes.
+  if (ANIMATION.has(name) && (target ? forbiddenTarget(target.value) : name !== 'animateMotion')) return null;
   const el = out.createElementNS('http://www.w3.org/2000/svg', name);
-  for (const a of [...src.attributes]) {
-    const n = a.name, low = n.toLowerCase(), v = a.value;
-    if (/^on/i.test(n) || /^(xmlns|xml:base)/i.test(n) || low === 'class') continue;
+  for (const a of attrs) {
+    const low = a.localName.toLowerCase().trim(), v = a.value;
+    if (low.startsWith('on') || low === 'xmlns' || low === 'class') continue;
     if (/javascript:|data:|vbscript:/i.test(v)) continue;
     if (LINK_ATTRS.has(low)) { if (/^#[\w-]+$/.test(v)) el.setAttribute('href', v); continue; }
     if (low === 'style') { el.setAttribute('style', cleanStyle(v)); continue; }
-    if (LOADS.test(v)) continue;
-    if (/url\(/i.test(v) && !/^url\(\s*['"]?#[\w-]+['"]?\s*\)$/i.test(v.trim())) continue;
+    if (LOADS.test(v) || strayUrl(v)) continue;
     if (low === 'id') ids.add(v);
-    el.setAttribute(CANONICAL.has(low) ? low : n, v);
+    el.setAttribute(CANONICAL.has(low) ? low : a.localName, v);
   }
   for (const child of [...src.childNodes]) {
     if (child.nodeType === Node.TEXT_NODE) el.appendChild(out.createTextNode(child.textContent || ''));
-    else if (child.nodeType === Node.ELEMENT_NODE) { const c = walk(child as Element, out, ids); if (c) el.appendChild(c); }
+    else if (child.nodeType === Node.ELEMENT_NODE && !TEXT_ONLY.has(name)) { const c = walk(child as Element, out, ids); if (c) el.appendChild(c); }
   }
   return el;
 }
