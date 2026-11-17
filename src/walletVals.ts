@@ -2,7 +2,7 @@
 // and the form for adding an external credential (it waits for the counsellor). View as shows the viewed person's wallet, read-only.
 import { monthLabel, stepProofProblem, trajectoryProgress } from './logic/trajectory';
 import { credentialLook, dayLabel } from './logic/trajectoryLearner';
-import { addExternalCredential } from './lib/trajectoryStore';
+import { addExternalCredential, removeCredential } from './lib/trajectoryStore';
 import type { CredDraft } from './types';
 import { act, enrolmentOf, openTrajectory, visibleTo } from './trajectoryCtx';
 import type { Ctx } from './trajectoryCtx';
@@ -42,6 +42,9 @@ export function walletVals(c: Ctx) {
     return {
       id: cr.id, name: cr.name, issuer: cr.issuer, st: look.status, stLabel: look.label, bd: soon ? '#f0dca3' : '#e1e5dc', bg: soon ? '#fdf7e6' : '#fff',
       dates: 'Earned ' + dayLabel(cr.earned_on) + ' · ' + (cr.expires_on ? 'expires ' + dayLabel(cr.expires_on) : 'does not expire') + (cr.ref ? ' · no. ' + cr.ref : ''), link: cr.link,
+      // One added by mistake: the owner removes it while it waits (a confirmed one stays); not in View as.
+      remove: cr.status === 'waiting' && !c.ro
+        ? { label: 'Remove', run: () => act(c, () => removeCredential(cr.id), 'Removed · “' + cr.name + '” is no longer in your wallet', undefined, c.me + '|cred|' + cr.id) } : null,
     };
   });
   const walletWork = visibleTo(c).flatMap((t) => {

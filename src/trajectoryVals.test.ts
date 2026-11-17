@@ -4,12 +4,12 @@ import { parseFormatContent } from './lib/contentStore';
 import * as store from './lib/trajectoryStore';
 import type { Credential, Enrolment, Trajectory, TrjStep } from './logic/trajectory';
 import { blankTrajectory } from './logic/trajectoryEdit';
-import { flush, harness, person, stubWindow, withProgress } from './test/harness';
+import { deferred, flush, harness, person, stubWindow, withProgress } from './test/harness';
 import type { AppState } from './types';
 
 vi.mock('./lib/trajectoryStore', async (orig) => ({
   ...(await orig<object>()),
-  requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(),
+  requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), removeCredential: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(),
 }));
 const m = vi.mocked(store);
 const boss = { id: 'c1', name: 'Casey Boss' };
@@ -27,6 +27,7 @@ beforeEach(() => {
   m.withdrawTrajectory.mockResolvedValue(ok);
   m.submitTrajectoryStep.mockResolvedValue({ state: 'submitted', error: null });
   m.addExternalCredential.mockResolvedValue(ok);
+  m.removeCredential.mockResolvedValue(ok);
   m.loadEnrolments.mockResolvedValue({});
   m.loadCredentials.mockResolvedValue([]);
 });
@@ -85,6 +86,26 @@ describe('starting and asking', () => {
     const t = trj('T1', { enrol: 'auto', maps: [['Tax & Legal', 'Consultant', 'mandatory']] });
     expect(page(t, mine({})).vm().tv!.primary!.label).toBe('Start this trajectory');
   });
+  it('a second click while the start is on its way does nothing', async () => {
+    const d = deferred<{ status: 'enrolled'; error: null }>();
+    m.requestTrajectory.mockReturnValue(d.promise);
+    const h = page(trj('T1'), mine({}));
+    const run = h.vm().tv!.primary!.run;
+    run(); run(); await flush();
+    expect(m.requestTrajectory).toHaveBeenCalledTimes(1);
+    d.resolve({ status: 'enrolled', error: null }); await flush(8);
+    h.vm().tv!.primary?.run(); await flush();
+    expect(m.requestTrajectory).toHaveBeenCalledTimes(2);
+  });
+  it('a reload that lands after the viewed person changed leaves the other person\'s data alone', async () => {
+    const d = deferred<Record<string, Enrolment>>();
+    m.loadEnrolments.mockReturnValue(d.promise);
+    const h = page(trj('T1'), mine({}));
+    h.vm().tv!.primary!.run(); await flush();
+    h.L().setState({ trjMine: { userId: 'p2', enrols: {}, creds: [] } });
+    d.resolve({ T1: enrolled() }); await flush(8);
+    expect(h.state.trjMine?.userId).toBe('p2');
+  });
   it('a refusal comes back as a toast and nothing is reloaded', async () => {
     m.requestTrajectory.mockResolvedValue({ status: null, error: 'This trajectory is not open' });
     const h = page(trj('T1'), mine({}));
@@ -95,6 +116,16 @@ describe('starting and asking', () => {
 });
 
 describe('leaving', () => {
+  it('asks again before leaving, because leaving drops what was sent or booked', async () => {
+    const h = page(trj('T1'), mine({ T1: enrolled() }));
+    expect(h.vm().tv!.secondary!.label).toBe('Leave this trajectory');
+    await h.vm().tv!.secondary!.run(); await flush();
+    expect(m.withdrawTrajectory).not.toHaveBeenCalled();
+    expect(h.vm().tv!.secondary!.label).toBe('Click again to leave · what you sent or booked is dropped');
+    await h.vm().tv!.secondary!.run(); await flush();
+    expect(m.withdrawTrajectory).toHaveBeenCalledWith('T1');
+    expect(h.lastToast()).toBe('You left this trajectory');
+  });
   it('withdraws a request and reloads', async () => {
     const h = page(trj('T1', { enrol: 'approval' }), mine({ T1: { ...enrolled(), status: 'requested' } }));
     await h.vm().tv!.secondary!.run(); await flush();
@@ -128,6 +159,15 @@ describe('steps of an enrolled learner', () => {
     act(h, 0)!.form!.set('note', 'Workpaper summary');
     await act(h, 0)!.run(); await flush();
     expect(m.submitTrajectoryStep).toHaveBeenCalledWith('T1', 'a', 'submitted', { link: '', ref: '', note: 'Workpaper summary' });
+  });
+  it('a second click while a step is on its way does nothing', async () => {
+    const d = deferred<{ state: 'submitted'; error: null }>();
+    m.submitTrajectoryStep.mockReturnValue(d.promise);
+    const h = page(t, mine({ T1: enrolled({ a: { state: 'done' } }) }));
+    const run = act(h, 1)!.run;
+    run(); run(); await flush();
+    expect(m.submitTrajectoryStep).toHaveBeenCalledTimes(1);
+    d.resolve({ state: 'submitted', error: null }); await flush(8);
   });
   it('a sign-off is requested with no proof', async () => {
     const h = page(t, mine({ T1: enrolled({ a: { state: 'done' } }) }));
@@ -216,6 +256,11 @@ describe('credentials and hints', () => {
     expect(has.tv!.callout).toMatch(/in the wallet/);
     expect(has.libTrj[0].status).toBe('Credential earned');
   });
+  it('an expired credential is not "earned"', () => {
+    const v = page(one, mine({ T1: enrolled(done) }, [cred({ trajectory_id: 'T1', expires_on: '2020-01-01' })])).vm();
+    expect(v.tv!.callout).toBe('All required steps are done.');
+    expect(v.libTrj[0].status).not.toBe('Credential earned');
+  });
   it('offers no start on a trajectory that is not live', () => {
     expect(page(trj('T1', { status: 'draft' }), mine({})).vm().tv!.primary).toBeNull();
   });
@@ -241,6 +286,26 @@ describe('the credentials wallet', () => {
     const v = harness({ subject: person({ counsellor: boss }), state: mine({}, creds) }).vm();
     expect(v.wallet.map((w) => w.stLabel)).toEqual(['Valid', expect.stringMatching(/^Renew by /), 'Waiting for Casey Boss']);
     expect(v.wallet[1].st).toBe('clarification');
+  });
+  it('offers Remove on a waiting credential only, and removes it', async () => {
+    const creds = [cred({ id: 'a' }), cred({ id: 'w', name: 'External', status: 'waiting' })];
+    const h = harness({ subject: person({ counsellor: boss }), state: mine({}, creds) });
+    expect(h.vm().wallet.map((w) => w.remove?.label ?? null)).toEqual([null, 'Remove']);
+    m.loadCredentials.mockResolvedValue([cred({ id: 'a' })]);
+    await h.vm().wallet[1].remove!.run(); await flush();
+    expect(m.removeCredential).toHaveBeenCalledWith('w');
+    expect(h.lastToast()).toBe('Removed · “External” is no longer in your wallet');
+    expect(h.state.trjMine?.creds.map((c) => c.id)).toEqual(['a']);
+  });
+  it('says why when the credential could not be removed', async () => {
+    m.removeCredential.mockResolvedValue({ error: 'Not removed · only your own credential still waiting for your counsellor can be removed' });
+    const h = harness({ subject: person({ counsellor: boss }), state: mine({}, [cred({ id: 'w', status: 'waiting' })]) });
+    await h.vm().wallet[0].remove!.run(); await flush();
+    expect(h.lastToast()).toBe('Not removed · only your own credential still waiting for your counsellor can be removed');
+  });
+  it('offers no Remove in View as', () => {
+    const v = harness({ subject: person({ readOnly: true, counsellor: boss }), state: mine({}, [cred({ id: 'w', status: 'waiting' })]) }).vm();
+    expect(v.wallet[0].remove).toBeNull();
   });
   it('lists the subject\'s enrolments under Working toward', () => {
     const t = trj('T1', { credential: 'Certified adviser' });

@@ -106,7 +106,7 @@ export type AppState = {
   trjs: Trajectory[]; mapMode: 'learn' | 'traj'; trjSel: string | null; trjStep: string | null; trjAud: string; trjStage: string;
   // certification trajectories (learner): the page being viewed and where it was opened from, the subject's enrolments and credentials,
   // the proof being typed per step (key subject|trajectory|step) and the external credential being added
-  trjView: string | null; trjOrigin: Screen; trjMine: TrjMine | null; stepDraft: Record<string, StepDraft>; credForm: CredDraft | null;
+  trjView: string | null; trjOrigin: Screen; trjMine: TrjMine | null; trjLeave: string | null; stepDraft: Record<string, StepDraft>; credForm: CredDraft | null;
   reads: Record<string, Read>; readBusy: boolean;
   // growth map: the domain zoomed into (domain key), or null for all domains
   zoom: string | null;

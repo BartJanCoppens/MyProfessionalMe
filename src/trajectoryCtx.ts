@@ -5,7 +5,7 @@ import { effectiveEnrolment } from './logic/trajectoryLearner';
 import type { TrjMine } from './logic/trajectoryLearner';
 import type { Credential, Enrolment, Trajectory } from './logic/trajectory';
 import type { Item, Logic } from './model';
-import type { Screen } from './types';
+import type { AppState, Screen } from './types';
 
 export type Ctx = {
   L: Logic; byId: Record<string, Item>; me: string; ro: boolean; now: Date; boss: string; bossFirst: string;
@@ -28,23 +28,35 @@ export const enrolmentOf = (c: Ctx, t: Trajectory) => effectiveEnrolment(t, c.en
 // Live trajectories, plus any the person is enrolled in (a retired one still lets them finish).
 export const visibleTo = (c: Ctx) => c.L.state.trjs.filter((t) => t.status === 'live' || !!c.enrols[t.id]);
 
-// A confirmed credential from this trajectory: the only proof that it ended in one.
-export const credentialEarned = (c: Ctx, t: Trajectory) => c.creds.some((cr) => cr.trajectory_id === t.id && cr.status === 'confirmed');
+// A confirmed, unexpired credential from this trajectory: the only proof that it ended in one (as on My team).
+export const credentialEarned = (c: Ctx, t: Trajectory) => {
+  const today = c.now.toISOString().slice(0, 10);
+  return c.creds.some((cr) => cr.trajectory_id === t.id && cr.status === 'confirmed' && (cr.expires_on == null || cr.expires_on >= today));
+};
 
-export async function loadMine(L: Logic, current: () => boolean = () => true) {
+// current: whether the loaded data may still be written, given the state when it lands.
+export async function loadMine(L: Logic, current: (s: AppState) => boolean = () => true) {
   const userId = L.subject.id;
   const [enrols, creds] = await Promise.all([loadEnrolments(userId), loadCredentials(userId)]);
-  if (current()) L.setState({ trjMine: { userId, enrols, creds } });
+  L.setState((s) => (current(s) ? { trjMine: { userId, enrols, creds } } : {}));
 }
 
+// Writes in flight, per key (one trajectory or one credential of one person): a second click waits for the first.
+const BUSY = new Set<string>();
 // One write: refused in View as, a refusal (returned as `error`) becomes a toast, success reloads the subject's data.
-export function act(c: Ctx, write: () => Promise<{ error: string | null }>, done: string, after?: () => void) {
-  return c.L.persist(async () => {
-    const { error } = await write();
-    if (error) throw new Error(error);
-    await loadMine(c.L);
-    after?.();
-  }, done);
+// The reload never replaces another person's data (the viewed person changed while the write was on its way).
+export async function act(c: Ctx, write: () => Promise<{ error: string | null }>, done: string, after?: () => void, key?: string) {
+  if (key && BUSY.has(key)) return;
+  if (key) BUSY.add(key);
+  const userId = c.me;
+  try {
+    await c.L.persist(async () => {
+      const { error } = await write();
+      if (error) throw new Error(error);
+      await loadMine(c.L, (s) => !s.trjMine || s.trjMine.userId === userId);
+      after?.();
+    }, done);
+  } finally { if (key) BUSY.delete(key); }
 }
 
 export function openTrajectory(L: Logic, id: string, origin: Screen) {

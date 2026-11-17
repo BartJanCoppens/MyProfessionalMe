@@ -43,6 +43,7 @@ export default function Wallet({ vm }: { vm: VM }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
               <StatusChip status={wc.st} label={wc.stLabel} />
               {/^https?:\/\//.test(wc.link) && <a href={wc.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: '#4c7a10' }}>Open certificate</a>}
+              {wc.remove && <LinkButton tone="muted" onClick={wc.remove.run}>{wc.remove.label}</LinkButton>}
             </div>
           </div>
         ))}

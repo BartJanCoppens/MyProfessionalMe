@@ -27,6 +27,8 @@ function examHint(c: Ctx, t: Trajectory): string {
   return best == null ? 'practice exam not taken yet' : best >= READY_PCT ? 'practice score ' + best + ' % · ready to book' : 'practice score ' + best + ' % · aim for ' + READY_PCT + ' % first';
 }
 
+// One write at a time per person and trajectory (start, leave and every step change the same enrolment).
+const busyKey = (c: Ctx, t: Trajectory) => c.me + '|' + t.id;
 const STATE_CHIP = { done: 'accepted', progress: 'in-progress', submitted: 'submitted', booked: 'in-progress', open: 'not-started' } as const;
 
 function stepAct(c: Ctx, t: Trajectory, st: TrjStep, p: StepProgress, enrolled: boolean, isNext: boolean): StepActVm | null {
@@ -37,7 +39,7 @@ function stepAct(c: Ctx, t: Trajectory, st: TrjStep, p: StepProgress, enrolled: 
   if (c.ro || !enrolled) return null;
   const key = c.me + '|' + t.id + '|' + st.id, d = c.L.state.stepDraft[key] ?? BLANK;
   const clear = () => c.L.setState((s) => { const next = { ...s.stepDraft }; delete next[key]; return { stepDraft: next }; });
-  const send = (state: 'submitted' | 'booked', proof: Partial<StepDraft>, done: string) => act(c, () => submitTrajectoryStep(t.id, st.id, state, proof), done, clear);
+  const send = (state: 'submitted' | 'booked', proof: Partial<StepDraft>, done: string) => act(c, () => submitTrajectoryStep(t.id, st.id, state, proof), done, clear, busyKey(c, t));
   const withProof = (kind: 'evidence' | 'exam', done: string) => () => {
     const proof = { link: d.link.trim(), ref: d.ref.trim(), note: d.note.trim() }, problem = stepProofProblem(kind, proof);
     return problem ? c.L.say(problem) : send('submitted', proof, done);
@@ -71,19 +73,22 @@ function stepVm(c: Ctx, t: Trajectory, i: number, p: StepProgress, enrolled: boo
   };
 }
 
-// Start, ask or leave; none of them for a viewed person.
+// Start, ask or leave; none of them for a viewed person. Leaving drops what was sent or booked, so it asks a second click.
 function buttons(c: Ctx, t: Trajectory): { primary: Btn | null; secondary: Btn | null } {
-  const row = c.enrols[t.id], e = enrolmentOf(c, t);
+  const row = c.enrols[t.id], e = enrolmentOf(c, t), key = busyKey(c, t);
   if (c.ro) return { primary: null, secondary: null };
-  const leave = (label: string, done: string): Btn => ({ label, run: () => act(c, () => withdrawTrajectory(t.id), done) });
+  const leave = (label: string, done: string): Btn => ({ label, run: () => act(c, () => withdrawTrajectory(t.id), done, () => c.L.setState({ trjLeave: null }), key) });
   if (!e) {
     if (t.status !== 'live') return { primary: null, secondary: null };
     const ask = t.enrol === 'approval';
     return { secondary: null, primary: { label: ask ? 'Ask ' + c.bossFirst + ' to approve' : 'Start this trajectory',
-      run: () => act(c, async () => { const r = await requestTrajectory(t.id); return { error: r.error }; }, ask ? 'Sent to ' + c.boss + ' for approval' : 'Started') } };
+      run: () => act(c, async () => { const r = await requestTrajectory(t.id); return { error: r.error }; }, ask ? 'Sent to ' + c.boss + ' for approval' : 'Started', undefined, key) } };
   }
-  const secondary = canWithdraw(t, row, c.person) ? (e.status === 'requested' ? leave('Withdraw request', 'Request withdrawn') : leave('Leave this trajectory', 'You left this trajectory')) : null;
-  return { primary: null, secondary };
+  if (!canWithdraw(t, row, c.person)) return { primary: null, secondary: null };
+  if (e.status === 'requested') return { primary: null, secondary: leave('Withdraw request', 'Request withdrawn') };
+  const armed = c.L.state.trjLeave === key;
+  return { primary: null, secondary: armed ? leave('Click again to leave · what you sent or booked is dropped', 'You left this trajectory')
+    : { label: 'Leave this trajectory', run: () => c.L.setState({ trjLeave: key }) } };
 }
 
 function callout(c: Ctx, t: Trajectory, pg: ReturnType<typeof trajectoryProgress>, status: string | undefined, start: number, binds: boolean): string {
