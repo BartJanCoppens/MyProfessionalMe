@@ -8,10 +8,10 @@ import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { noItems, validItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
-import { studioById, visibleSteps } from './logic/studios';
+import { studioById, studioFormats, visibleSteps } from './logic/studios';
 import type { StudioDef } from './logic/studios';
 import { STUDIOS } from './studioData';
-import { fit, reachable, studioFormats } from './studioRules';
+import { fit, reachable } from './studioRules';
 import { BUILD_RUNNERS } from './studioRunners';
 import { stepVals } from './studioStepVals';
 

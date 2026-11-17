@@ -1,6 +1,8 @@
 // Flash cards and practice exams made in Create & share: items from passages, CSV and AI, and the content they publish as.
 import { describe, expect, it } from 'vitest';
 import { TYPE_NAMES } from './contribution';
+import { studioFormats } from './studios';
+import { STUDIOS } from '../studioData';
 import { parseFormatContent } from '../lib/contentStore';
 import { cardsFromPassages, itemRows, itemsCheck, itemsFromSaved, noItems, aiAssisted, parseCsv, parseDraftItems } from './items';
 import type { ExamQuestion } from '../types';
@@ -137,13 +139,29 @@ describe('hardening', () => {
 });
 
 const migrations = import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const files = Object.keys(migrations).sort();
+// The match of re in the latest migration that has one (the timestamped names sort in order).
+function latest(re: RegExp): RegExpExecArray {
+  for (const f of files.slice().reverse()) { const m = re.exec(migrations[f]); if (m) return m; }
+  throw new Error('no migration matches ' + re.source);
+}
+const quoted = (list: string) => Array.from(list.matchAll(/'([^']*)'/g), (x) => x[1]);
+const NEW_FORMATS = ['Avatar', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise'];
+
 describe('format lists', () => {
-  it('the creation-rule and contribution checks in SQL list every format Create & share offers', () => {
-    const sql = Object.entries(migrations).find(([file]) => file.endsWith('_flash_and_exam_contributions.sql'))![1];
-    const lists = sql.match(/array\[[^\]]*\]/g) || [];
-    expect(lists).toHaveLength(2);
-    lists.forEach((l) => TYPE_NAMES.forEach((name) => expect(l).toContain("'" + name + "'")));
-    expect(sql.match(/check \(type in \([^)]*\)\)/)![0]).toBe("check (type in (" + TYPE_NAMES.map((n) => "'" + n + "'").join(', ') + "))");
-    expect(TYPE_NAMES).toEqual(expect.arrayContaining(['Flash cards', 'Practice exam']));
+  it('the latest creation-rule, review-requirement and contribution checks in SQL list exactly the contribution formats', () => {
+    expect(quoted(latest(/add constraint creator_rules_formats_check\s+check \(formats <@ array\[([^\]]*)\]\)/)[1])).toEqual(TYPE_NAMES);
+    expect(quoted(latest(/add constraint review_policies_formats_check\s+check \(formats <@ array\[([^\]]*)\]\)/)[1])).toEqual(TYPE_NAMES);
+    expect(quoted(latest(/add constraint contributions_type_check\s+check \(type in \(([^)]*)\)\)/)[1])).toEqual(TYPE_NAMES);
+  });
+  it('hold the formats every studio makes, flash cards and practice exams among them', () => {
+    expect(TYPE_NAMES).toEqual(expect.arrayContaining(['Flash cards', 'Practice exam', ...NEW_FORMATS]));
+    STUDIOS.forEach((d) => studioFormats(d).forEach((f) => expect(TYPE_NAMES).toContain(f)));
+    expect(TYPE_NAMES).not.toContain('Avatar scenario');
+  });
+  it('private.studio_min_items lists what each studio makes and its minimum, as STUDIOS does', () => {
+    const body = latest(/create (?:or replace )?function private\.studio_min_items\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
+    const rows = Array.from(body.matchAll(/\('([a-z]+)', '([^']+)', (\d+)\)/g), (m) => [m[1], m[2], +m[3]]);
+    expect(rows).toEqual(STUDIOS.flatMap((d) => studioFormats(d).map((f) => [d.id, f, d.min])));
   });
 });

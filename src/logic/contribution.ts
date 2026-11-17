@@ -1,6 +1,8 @@
 // Create & share: creation rules, content checks, the rubric, review policies and the stages a contribution goes through.
 // Pure functions over the rows of supabase/migrations/*_create_and_share.sql; the database repeats every rule that protects data.
 import { AUD_INFO, AUDS, BLS, CLIENT_WORDS, DOMAINS, NEW_TYPES, REVIEW_STAGES, RUBRIC } from '../data';
+import { STUDIOS } from '../studioData';
+import { studioFormats } from './studios';
 
 export type Policy = { peers: number; expert: boolean; quality: boolean };
 export type ContributionStatus = 'draft' | 'review' | 'changes' | 'published';
@@ -10,6 +12,7 @@ export type Contribution = {
   id: string; author_id: string; author_name: string; business_line: string | null; audience: string | null;
   type: string; title: string; domain: string; level: number; audience_stage: string; takeaway: string; outline: string; sources: string[];
   ai_assisted: boolean; bundle_ids: string[]; items: unknown[] | null; status: ContributionStatus; step: number; learning_id: string | null;
+  studio: string | null; // the studio it was made in (STUDIOS id), null from the upload form; a studio one is checked before it is submitted
   created_at: string; updated_at: string; submitted_at: string | null; published_at: string | null;
 };
 export type Review = {
@@ -29,9 +32,11 @@ export type Attrs = { line: string | null; format: string; domain: string; audie
 // every review requirement, and how many colleagues could peer-review them.
 export type CreateData = { contributions: Contribution[]; reviews: Review[]; rules: Rule[]; policies: PolicyRow[]; peers: number };
 
-// The design's fifth type, "Avatar scenario", waits for the avatar studio (Q16). A contribution's type is its learning format.
-export const CREATE_TYPES = NEW_TYPES.filter((t) => t[0] !== 'Avatar scenario');
-export const TYPE_NAMES = CREATE_TYPES.map((t) => t[0]);
+// A contribution's type is its learning format. The upload form offers the design's types except Avatar, which is made
+// in its studio; every contribution format (creation rules, review requirements, the database's lists) adds what the
+// studios make (src/logic/items.test.ts checks the SQL lists).
+export const CREATE_TYPES = NEW_TYPES.filter((t) => t[0] !== 'Avatar');
+export const TYPE_NAMES = Array.from(new Set(NEW_TYPES.map((t) => t[0]).concat(STUDIOS.flatMap(studioFormats))));
 export const DEFAULT_POLICY: Policy = { peers: 2, expert: true, quality: true };
 export const TITLE_MAX = 60;
 export const TAKE_MAX = 200;

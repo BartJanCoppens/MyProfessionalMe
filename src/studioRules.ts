@@ -1,11 +1,8 @@
 // Which of a studio's formats the person's creation rules reach, and what the draft must change to fit one.
 // Moved out of studioVals.ts (v4 Task 13) and applied to every studio's `format` and `alsoFormats`.
 import type { NewDraft } from './types';
-import type { StudioDef } from './logic/studios';
 import { mayCreate } from './logic/contribution';
 import type { RuleParts } from './logic/contribution';
-
-export const studioFormats = (def: StudioDef) => [def.format, ...(def.alsoFormats ?? [])];
 
 // The draft's line, audience and domain for a format: unchanged when a rule already allows the combination, else those
 // of the first rule that allows the format (the picker-less studio could never fix a mismatch itself).

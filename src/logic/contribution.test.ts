@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { NEW_TYPES, REVIEW_STAGES, RUBRIC } from '../data';
 import {
-  CREATE_TYPES, DEFAULT_POLICY, PART_VALUES, allowedValues, attrsLabel, blockedTerm, checksPass, contentChecks, daysWaiting, emptyParts, fmtDate, isEmptyRule, mayCreate,
+  CREATE_TYPES, TYPE_NAMES, DEFAULT_POLICY, PART_VALUES, allowedValues, attrsLabel, blockedTerm, checksPass, contentChecks, daysWaiting, emptyParts, fmtDate, isEmptyRule, mayCreate,
   policyFor, policyLabel, reviewBadge, rubricComplete, ruleMatches, ruleProblem, ruleSentence, stageAt, stagesFor, stagesOf, togglePart, withinLines,
 } from './contribution';
 import type { Attrs, Contribution, CreateData, PolicyRow, Review, RuleParts } from './contribution';
@@ -171,12 +171,17 @@ describe('the review badge', () => {
 });
 
 describe('types', () => {
-  it('leave out the avatar scenario until the avatar studio exists', () => {
+  it('call the avatar format Avatar, as the library does, and leave it out of the upload form: it is made in its studio', () => {
     expect(NEW_TYPES).toHaveLength(7);
-    expect(CREATE_TYPES.map((t) => t[0])).not.toContain('Avatar scenario');
+    expect(NEW_TYPES.map((t) => t[0])).toContain('Avatar');
+    expect(CREATE_TYPES.map((t) => t[0])).not.toContain('Avatar');
   });
-  it('offer flash cards and practice exams', () => {
+  it('the upload form offers what it offered before the studios', () => {
     expect(CREATE_TYPES.map((t) => t[0])).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam']);
+  });
+  it('contribution formats, and so creation rules, add the formats the studios make', () => {
+    expect(TYPE_NAMES).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Avatar', 'Flash cards', 'Practice exam', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise']);
+    expect(PART_VALUES.formats).toEqual(TYPE_NAMES);
   });
 });
 

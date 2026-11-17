@@ -1539,6 +1539,101 @@ insert into results (check_name, expected, actual) select 'FX the published lear
 with u as (update public.contributions set items = '[["changed","after publishing"]]' where title = 'T fx cards' returning 1)
   insert into results (check_name, expected, actual) select 'FX items cannot change after publishing', '0 rows', count(*)||' rows' from u;
 reset role;
+-- ---------- Studios: formats and the automatic check before "Send for review" (ST) ----------
+-- e1 may only create Podcasts, e2 flash cards and exams (both from FX), e3 Games. Flash and exam need no review (FX).
+-- A contribution made in a studio (studio not null) is submitted only after check_contribution passed on its current
+-- items, title and format; the upload form (studio null) is unchanged.
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e3','t.gamemaker@test.local');
+update public.profiles set business_line='Consulting' where id = '00000000-0000-0000-0000-0000000000e3';
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000e3','{Consulting}','{Game}');
+insert into results (check_name, expected, actual) select 'ST studio_draft use is seeded, text and off', 'text/false', kind||'/'||enabled from public.ai_uses where key = 'studio_draft';
+with i as (insert into public.creator_rules (user_id, formats) values ('00000000-0000-0000-0000-0000000000e3', '{Avatar,Game,Slides,"Animated flow","Interactive explainer","Job aid","Case exercise"}') returning 1)
+  insert into results (check_name, expected, actual) select 'ST creation rules take every studio format', '1 rows', count(*)||' rows' from i;
+with i as (insert into public.review_policies (formats, peers, expert, quality) values ('{Avatar,Game,Slides,"Animated flow","Interactive explainer","Job aid","Case exercise"}', 1, true, true) returning 1)
+  insert into results (check_name, expected, actual) select 'ST review requirements take every studio format', '1 rows', count(*)||' rows' from i;
+delete from public.creator_rules where user_id = '00000000-0000-0000-0000-0000000000e3' and lines = '{}';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e1","role":"authenticated"}';
+do $$ begin
+  begin insert into public.contributions (business_line, type, title, domain, takeaway) values ('Consulting','Game','T st podcaster game','pers','x');
+    insert into results (check_name, expected, actual) values ('ST a Podcast-only rule cannot create a Game', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST a Podcast-only rule cannot create a Game', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e3","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio) values ('Consulting','Game','T st game','pers','Find the flaw.','game') returning 1)
+  insert into results (check_name, expected, actual) select 'ST a Game rule creates a Game in the Game Studio', '1 rows', count(*)||' rows' from i;
+insert into results (check_name, expected, actual) select 'ST a studio format without an item shape yet fails the check', 'Add the items first',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T st game')), '|');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e2","role":"authenticated"}';
+insert into public.contributions (business_line, type, title, domain, takeaway, items, studio) values
+ ('Consulting','Flash cards','T st deck','pers','Lead with the answer.','[["Standard rate?","25 %"],["SME rate?","20 %"],["Pillar Two rate?","15 %"],["Advance payments?","Four"]]','flash'),
+ ('Consulting','Flash cards','T st short','pers','Lead with the answer.','[["Standard rate?","25 %"],["What did Delcroix pay?","Too much"]]','flash'),
+ ('Consulting','Flash cards','T st wrong studio','pers','Lead with the answer.','[["a","b"],["c","d"],["e","f"],["g","h"]]','reel'),
+ ('Consulting','Flash cards','T st plain','pers','Lead with the answer.','[["Standard rate?","25 %"]]',null);
+insert into results (check_name, expected, actual) select 'ST the studio is stored, nothing is checked yet', 'flash/null', studio||'/'||coalesce(check_passed_at::text, 'null') from public.contributions where title = 'T st deck';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T st deck'));
+    insert into results (check_name, expected, actual) values ('ST a studio submit without a passed check', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST a studio submit without a passed check', 'blocked: P0001', 'blocked: '||sqlstate); end;
+  begin update public.contributions set check_fingerprint = 'x', check_passed_at = now() where title = 'T st deck';
+    insert into results (check_name, expected, actual) values ('ST the author writes a passed check directly', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST the author writes a passed check directly', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update public.contributions set studio = null where title = 'T st deck';
+    insert into results (check_name, expected, actual) values ('ST the author drops the studio to skip the check', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST the author drops the studio to skip the check', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'ST a failing check returns every reason', 'Add at least 4 items|“Delcroix” looks like a client name · anonymise it',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T st short')), '|');
+insert into results (check_name, expected, actual) select 'ST a studio that does not make the format fails the check', 'This studio does not make Flash cards',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T st wrong studio')), '|');
+insert into results (check_name, expected, actual) select 'ST a clean deck passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T st deck'))::text;
+insert into results (check_name, expected, actual) select 'ST a pass stores its time and a fingerprint', 'true/32', (check_passed_at is not null)::text||'/'||char_length(check_fingerprint) from public.contributions where title = 'T st deck';
+update public.contributions set items = '[["Standard rate?","25 %"],["SME rate?","20 %"],["Pillar Two rate?","15 %"],["Advance payments?","Four instalments"]]' where title = 'T st deck';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T st deck'));
+    insert into results (check_name, expected, actual) values ('ST items changed after the check', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST items changed after the check', 'blocked: P0001', 'blocked: '||sqlstate); end;
+end $$;
+update public.contributions set title = 'T st deck renamed' where title = 'T st deck';
+insert into results (check_name, expected, actual) select 'ST checked again after the edits', '{}', public.check_contribution((select id from public.contributions where title = 'T st deck renamed'))::text;
+update public.contributions set title = 'T st deck' where title = 'T st deck renamed';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T st deck'));
+    insert into results (check_name, expected, actual) values ('ST the title changed after the check', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST the title changed after the check', 'blocked: P0001', 'blocked: '||sqlstate); end;
+end $$;
+-- a failure after a pass clears it
+update public.contributions set items = '[["Standard rate?","25 %"]]' where title = 'T st deck';
+insert into results (check_name, expected, actual) select 'ST a failed check after a pass says why', 'Add at least 4 items',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T st deck')), '|');
+insert into results (check_name, expected, actual) select 'ST a failed check after a pass clears the pass', 'null/null',
+  coalesce(check_passed_at::text, 'null')||'/'||coalesce(check_fingerprint, 'null') from public.contributions where title = 'T st deck';
+update public.contributions set items = '[["Standard rate?","25 %"],["SME rate?","20 %"],["Pillar Two rate?","15 %"],["Advance payments?","Four instalments"]]' where title = 'T st deck';
+insert into results (check_name, expected, actual) select 'ST re-checked, the studio deck is sent', '{}/published',
+  public.check_contribution((select id from public.contributions where title = 'T st deck'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T st deck'));
+insert into results (check_name, expected, actual) select 'ST a plain upload is sent without a check', 'published', public.submit_contribution((select id from public.contributions where title = 'T st plain'));
+do $$ begin
+  begin perform public.check_contribution((select id from public.contributions where title = 'T st deck'));
+    insert into results (check_name, expected, actual) values ('ST checking a published contribution', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST checking a published contribution', 'blocked: P0001', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e1","role":"authenticated"}';
+do $$ begin
+  begin perform public.check_contribution((select id from public.contributions where title = 'T st short'));
+    insert into results (check_name, expected, actual) values ('ST someone else checks a contribution', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST someone else checks a contribution', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin perform public.check_contribution('00000000-0000-0000-0000-000000000000');
+    insert into results (check_name, expected, actual) values ('ST checking a contribution that does not exist', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST checking a contribution that does not exist', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+do $$ begin
+  begin perform public.check_contribution((select '00000000-0000-0000-0000-000000000000'::uuid));
+    insert into results (check_name, expected, actual) values ('ST anon checks a contribution', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST anon checks a contribution', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
 -- ---------- design v4 follow-ups: industry and technology membership (AM) ----------
 -- audience_members: the counsellor, the person's Domain Admins, General and System Admins set a person's ind:/tec: audiences;
 -- never the person. A mandatory map on such an audience binds its members at the map's stage.

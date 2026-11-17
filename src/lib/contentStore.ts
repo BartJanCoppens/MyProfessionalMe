@@ -30,9 +30,15 @@ export function parseFormatContent(raw: unknown): FormatContent | null {
     case 'stretch': return isText(c.brief) && isTexts(c.checks) ? c as FormatContent : null;
     case 'webinar': return [c.mon, c.day, c.time, c.when, c.speakers].every(isText) && isTexts(c.agenda) ? c as FormatContent : null;
     case 'aid': return isTexts(c.items) ? c as FormatContent : null;
+    case 'explainer': return [c.style, c.depth, c.end].every(isText) && listOf(c.steps, (s) => labelled(s) && (s.svg === undefined || isText(s.svg)))
+      && (c.check === undefined || (Array.isArray(c.check) && c.check.length === 3 && c.check.every(examQuestionOk))) ? c as FormatContent : null;
+    case 'motion': return listOf(c.stages, labelled) && isText(c.svg) && isText(c.alt) && isCount(c.seconds) ? c as FormatContent : null;
     default: return null;
   }
 }
+// A non-empty list whose every entry passes ok; a step or stage is { label, text }.
+const listOf = (v: unknown, ok: (x: any) => boolean) => Array.isArray(v) && v.length > 0 && v.every((x) => !!x && typeof x === 'object' && ok(x));
+const labelled = (x: any) => isText(x.label) && isText(x.text);
 const examQuestionOk = (q: any) => !!q && [q.t, q.q, q.why].every(isText) && isTexts(q.o) && Number.isInteger(q.a) && q.a >= 0 && q.a < q.o.length;
 function teach(prompt: string, crit: unknown[]): FormatContent | null {
   const out: [string, RegExp | null][] = [];

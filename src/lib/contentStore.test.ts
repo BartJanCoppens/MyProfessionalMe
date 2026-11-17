@@ -80,3 +80,29 @@ describe('parseFormatContent', () => {
     expect(meta.content).toEqual(content);
   });
 });
+
+// Studios plan Phase 2 shapes (Tasks 2.2 and 2.3), read here so that a published explainer or animated flow reads back.
+describe('studio content kinds', () => {
+  const q = { t: 'Peppol', q: 'Who checks the format?', o: ['The supplier', 'The access point', 'The customer'], a: 1, why: 'The access point validates it.' };
+  const explainer = { kind: 'explainer', style: 'Step-through', depth: 'Overview', steps: [{ label: 'Supplier', text: 'Creates the invoice.' }, { label: 'Access point', text: 'Checks it.', svg: '<svg/>' }], end: 'A summary card' };
+  const motion = { kind: 'motion', stages: [{ label: 'Order', text: 'The customer orders.' }], svg: '<svg/>', alt: 'Order, then delivery, then cash.', seconds: 30 };
+  it('reads an interactive explainer, with or without its three-question check', () => {
+    expect(parseFormatContent(explainer)).toEqual(explainer);
+    expect(parseFormatContent({ ...explainer, check: [q, q, q] })).not.toBeNull();
+  });
+  it('refuses an explainer without steps, with a malformed step or with a check that is not three questions', () => {
+    expect(parseFormatContent({ ...explainer, steps: [] })).toBeNull();
+    expect(parseFormatContent({ ...explainer, steps: [{ label: 'Supplier' }] })).toBeNull();
+    expect(parseFormatContent({ ...explainer, steps: [{ label: 'Supplier', text: 'x', svg: 3 }] })).toBeNull();
+    expect(parseFormatContent({ ...explainer, check: [q, q] })).toBeNull();
+    expect(parseFormatContent({ ...explainer, check: [q, q, { ...q, a: 5 }] })).toBeNull();
+    expect(parseFormatContent({ ...explainer, end: undefined })).toBeNull();
+  });
+  it('reads an animated flow and refuses one without stages, drawing, text alternative or length', () => {
+    expect(parseFormatContent(motion)).toEqual(motion);
+    expect(parseFormatContent({ ...motion, stages: [] })).toBeNull();
+    expect(parseFormatContent({ ...motion, svg: null })).toBeNull();
+    expect(parseFormatContent({ ...motion, alt: undefined })).toBeNull();
+    expect(parseFormatContent({ ...motion, seconds: '30' })).toBeNull();
+  });
+});

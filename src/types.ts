@@ -75,7 +75,10 @@ export type TeachContent = { kind: 'teach'; prompt: string; crit: [string, RegEx
 export type StretchContent = { kind: 'stretch'; brief: string; checks: string[] };
 export type WebinarContent = { kind: 'webinar'; mon: string; day: string; time: string; when: string; speakers: string; agenda: string[] };
 export type AidContent = { kind: 'aid'; items: string[] };
-export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent;
+// Studio content (studios plan Tasks 2.2 and 2.3): a clickable step-through with an optional three-question check, and an animated flow.
+export type ExplainerContent = { kind: 'explainer'; style: string; depth: string; steps: { label: string; text: string; svg?: string }[]; check?: ExamQuestion[]; end: string };
+export type MotionContent = { kind: 'motion'; stages: { label: string; text: string }[]; svg: string; alt: string; seconds: number };
+export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent;
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null };
 export type View = 'constellation' | 'radar' | 'road';
 export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | { type: 'cert' } | null;

@@ -26,7 +26,8 @@ export async function loadCreate(userId: string): Promise<CreateData> {
   };
 }
 
-export type DraftFields = Pick<Contribution, 'business_line' | 'audience' | 'type' | 'title' | 'domain' | 'level' | 'audience_stage' | 'takeaway' | 'outline' | 'sources' | 'ai_assisted' | 'bundle_ids' | 'items'>;
+export type DraftFields = Pick<Contribution, 'business_line' | 'audience' | 'type' | 'title' | 'domain' | 'level' | 'audience_stage' | 'takeaway' | 'outline' | 'sources' | 'ai_assisted' | 'bundle_ids' | 'items'>
+  & { studio?: string }; // insert only: the database never lets the studio change
 
 // Creates a draft, or edits one (or one with changes requested). Returns its id.
 export async function saveDraft(fields: DraftFields, id?: string | null): Promise<string> {
@@ -52,6 +53,15 @@ export async function submitContribution(id: string): Promise<string> {
   const { data, error } = await supabase.rpc('submit_contribution', { p_id: id });
   fail(error);
   return String(data);
+}
+
+// The automatic check (check_contribution) on the saved contribution: passed, or the reasons it failed. A pass is stored
+// with a fingerprint of the items, title and format; a studio contribution is only submitted while that still matches.
+export async function checkContribution(id: string): Promise<{ passed: boolean; reasons: string[] }> {
+  const { data, error } = await supabase.rpc('check_contribution', { p_id: id });
+  fail(error);
+  if (!Array.isArray(data)) return { passed: false, reasons: ['The check gave no answer · try again'] };
+  return { passed: !data.length, reasons: data.map(String) };
 }
 
 // Returns the contribution's status after the decision: 'review', 'changes' or 'published'.
