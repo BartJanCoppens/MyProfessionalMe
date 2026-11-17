@@ -5,6 +5,7 @@
 // The key is only ever put in a request header to ElevenLabs; errors are scrubbed of it before they leave.
 import { scrub } from '../_shared/aiGuard.ts';
 import { CUE_MARK, NEXT_MARK, spoken } from '../_shared/narrationText.ts';
+import type { Mark } from '../_shared/narrationText.ts';
 
 export const VOICE_USE = 'studio_voice';
 export const ELEVENLABS = 'https://api.elevenlabs.io';
@@ -21,7 +22,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // EU AI Act Art. 50 marking, as Taxatar's: on every answer the voice made.
 export const AI_HEADER = { 'X-AI-Generated': 'true' } as const;
 
-export type Mark = { kind: 'next' | 'cue'; at: number };
+export type { Mark };
 export type Speak = { contributionId: string; voiceId: string; text: string };
 export type VoiceTarget = { key: string; baseUrl: string | null; model: string };
 type Read<T> = { ok: true } & T | { ok: false; error: string };

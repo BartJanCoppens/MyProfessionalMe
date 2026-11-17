@@ -4,9 +4,10 @@ import { supabase } from './supabase';
 import type { AiAdmin, AiConnection, AiForm, AiUsage, AiUse } from '../logic/ai';
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
-// The function's own error message (e.g. "This AI use is not live …") rather than "non-2xx status code".
-async function invokeAi<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('ai', { body });
+// Calls an AI edge function (`ai`, `voice`). Throws the function's own error message (e.g. "This AI use is not live …")
+// rather than "non-2xx status code".
+export async function invokeFunction<T>(name: 'ai' | 'voice', body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
     let message = (error as { message: string }).message;
     try { const ctx = (error as { context?: Response }).context; if (ctx) message = (await ctx.json()).error || message; } catch { /* keep message */ }
@@ -62,11 +63,11 @@ export async function updateUse(key: string, patch: Partial<Pick<AiUse, 'connect
   if (!(data as unknown[] | null)?.length) throw new Error('Only a System Admin can change AI uses');
 }
 
-export const testConnection = (id: string) => invokeAi<{ ok: boolean; model?: string; error?: string }>({ action: 'test', connection_id: id });
+export const testConnection = (id: string) => invokeFunction<{ ok: boolean; model?: string; error?: string }>('ai', { action: 'test', connection_id: id });
 
 export type AiRequest = { system?: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens?: number };
 export async function askAi(use: string, req: AiRequest): Promise<string> {
-  const data = await invokeAi<{ text?: string }>({ use, ...req });
+  const data = await invokeFunction<{ text?: string }>('ai', { use, ...req });
   if (!data || typeof data.text !== 'string') throw new Error('The AI function returned no text');
   return data.text;
 }
