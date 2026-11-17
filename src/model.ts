@@ -22,6 +22,8 @@ import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
 import { currentPos, podSave, podView, reelView, startPos, step } from './logic/media';
 import { completionOf, completionText, completionTodo, lastActivity, lastActivityLabel, openChanges } from './logic/record';
 import { logHour, recordVals, submit } from './recordVals';
+import { fmtCover } from './fmtCover';
+import { fmtVals } from './fmtVals';
 import { completionVals, loadAttendance, showsAttendance } from './completionVals';
 import { aiVals } from './aiVals';
 import { canComplete, complete } from './lib/ai';
@@ -66,7 +68,7 @@ export function initState(cfg: Config): AppState {
     chat: [],
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwKbQ: '', nwAiBusy: false,
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
-    evDraft: null, decideNote: {}, queue: null, queueError: null, fbDraft: null, quiz: null, att: null,
+    evDraft: null, decideNote: {}, queue: null, queueError: null, fbDraft: null, quiz: null, fmt: null, att: null,
     aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {},
   };
 }
@@ -234,7 +236,7 @@ export class Logic {
       open: () => this.openDetail(id, (['map', 'projects', 'profile'] as Screen[]).includes(this.state.screen) ? this.state.screen : 'library'),
     };
   }
-  items() { return LEARN.map((r, i) => { const it = this.item(r); return { ...it, ...cover(r, i, it.state, it.pct) }; }); }
+  items() { return LEARN.map((r, i) => { const it = this.item(r); return { ...it, ...cover(r, i, it.state, it.pct), ...fmtCover(this, it) }; }); }
   openDetail(id: string, origin?: Screen) {
     this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0);
     // Admins see who attended a classroom (the signed-in admin's roster, whoever is being viewed).
@@ -494,7 +496,7 @@ export class Logic {
       .filter((x): x is { bl: string; stage: string; ob: string } => !!x);
     if (!paths.length) paths = [{ bl: 'No path', stage: 'open to everyone', ob: '' }];
     const det = {
-      ...d0, ...this.mediaVals(d0),
+      ...d0, ...this.mediaVals(d0), ...fmtVals(this, d0),
       outcomes: OUTCOMES[d0.dom].map((t) => ({ t })),
       levelSub: LEVELS[d0.lvl - 1] + ' · L' + d0.lvl + ' in ' + d0.domLabel + '. You are at L' + myLvl + '; ' + this.nextStage() + ' expects L' + TARGET[d0.di] + '.',
       ladder: LEVELS.map((lab, i) => {

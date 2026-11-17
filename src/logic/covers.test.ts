@@ -7,8 +7,8 @@ const row = (id: string) => LEARN_BY[id];
 describe('cover', () => {
   it('picks the illustration from the format', () => {
     const kinds = Object.fromEntries(LEARN.map((r, i) => [r[4], cover(r, i, 'not-started', 0).kind]));
-    expect(kinds).toMatchObject({ Avatar: 'avatar', Classroom: 'class', 'E-learning': 'elearn', Book: 'book', Game: 'game' });
-    for (const k of Object.values(kinds)) expect(['pod', 'reel', 'avatar', 'game', 'book', 'class', 'elearn', 'mentor', 'web', 'cert']).toContain(k);
+    expect(kinds).toMatchObject({ Avatar: 'avatar', Classroom: 'class', 'E-learning': 'elearn', Book: 'book', Game: 'game', 'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid' });
+    for (const k of Object.values(kinds)) expect(['pod', 'reel', 'avatar', 'game', 'book', 'class', 'elearn', 'mentor', 'web', 'cert', 'flash', 'exam', 'case', 'teach', 'stretch', 'webinar', 'aid']).toContain(k);
   });
   it('ticks a learning that is done or awaiting acceptance', () => {
     expect(cover(row('L1'), 0, 'accepted', 100).cvDone).toBe(true);

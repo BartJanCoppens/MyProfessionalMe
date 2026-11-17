@@ -124,6 +124,8 @@ export type AppState = {
   // one person (key subject|learning), so View as never shows another person's draft.
   fbDraft: { key: string; rating: number | null; text: string } | null;
   quiz: { key: string; picks: Record<number, number>; checked: boolean } | null;
+  // v4 formats: what is being done on one learning of one person (key subject|learning): the flash deck, the exam round, the explanation.
+  fmt: FmtDraft | null;
   // Classroom attendance (admins): the signed-in admin's roster for one learning, ticks not saved yet and the search.
   att: { learningId: string; rows: RosterRow[] | null; error: string | null; picks: Record<string, boolean>; q: string; busy: boolean } | null;
   // AI: the uses the app may call now (everyone), and per use whether the last attempt was answered by AI or fell back.
@@ -160,3 +162,13 @@ export type DetailOf = {
   aid: { ticks: number[] };                  // indexes of the ticked items
 };
 export type LearningDetail = Partial<DetailOf[keyof DetailOf]>;
+
+// A teach-back check: which criteria are met, short feedback and a follow-up question (empty when scripted). by: who checked it.
+export type TeachResult = { score: number; hits: boolean[]; feedback: string; follow: string; by: 'keyword' | 'ai' };
+// Session state of the v4 formats for one learning (null fields: not started, read from the saved detail).
+export type FmtDraft = {
+  key: string;
+  flip: boolean; queue: number[] | null; at: number; again: number; good: number; due: Record<string, string> | null;
+  qAt: number; pick: number | null; checked: boolean; picks: Record<number, number>;
+  text: string | null; busy: boolean; res: TeachResult | null;
+};

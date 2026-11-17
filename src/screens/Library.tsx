@@ -3,6 +3,7 @@ import { Avatar, Banner, Button, Card, Checkbox, Eyebrow, Field, FilterChip, Hov
 import type { VM } from '../model';
 import { AvatarBadge } from './Map';
 import { CoverArt } from './Cover';
+import { FormatPanels } from './FormatPanels';
 
 export function LibraryScreen({ vm }: { vm: VM }) {
   return (
@@ -107,6 +108,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
             </Banner>
           )}
           <Card title="Why this is on your path"><p style={{ margin: 0, textWrap: 'pretty', maxWidth: 640 }}>{det.why}</p></Card>
+          <FormatPanels vm={vm} />
           {vm.rec.showEvidence && <EvidenceCard rec={vm.rec} />}
           {vm.rec.hasHistory && <RecordCard rec={vm.rec} />}
           {det.pod && <PodcastPlayer pod={det.pod} />}

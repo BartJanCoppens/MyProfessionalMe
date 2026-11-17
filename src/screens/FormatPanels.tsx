@@ -1,0 +1,126 @@
+// The detail page's panels for the study formats of design v4: flash cards, practice exam, teach-back. The work formats
+// (case, stretch, webinar, job aid) are in FormatWork.tsx. They read from VM only (fmtVals.ts, fmtStudy.ts).
+import type { CSSProperties } from 'react';
+import { Button, Card, LinkButton, ProgressRing, Tag, Textarea } from '../ds';
+import type { VM } from '../model';
+import { WorkPanels } from './FormatWork';
+
+type Det = VM['det'];
+const caps: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
+const col: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
+const ViewOnly = ({ note }: { note: string }) => <div style={{ fontSize: 12.5, color: '#5a6058' }}>{note}</div>;
+
+function FlashPanel({ fl }: { fl: NonNullable<Det['fl']> }) {
+  return (
+    <Card title="Study the deck" subtitle={fl.sub}>
+      <div style={col}>
+        {fl.ro && <ViewOnly note={fl.note} />}
+        {fl.active && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#5a6058' }}><span>{fl.pos}</span><span>{fl.side}</span></div>
+            <button type="button" onClick={fl.flip} aria-label="Flip the card" style={{ appearance: 'none', font: 'inherit', cursor: 'pointer', minHeight: 150, borderRadius: 8, border: '1px solid ' + fl.bd, background: fl.bg, color: '#1a1d18', padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', fontSize: 18, fontWeight: 600, lineHeight: 1.35, textWrap: 'balance', animation: 'pmFadeUp .25s ease-out' }}>{fl.face}</button>
+            {fl.showRate && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Button variant="secondary" size="sm" onClick={fl.again}>Again · 10 min</Button>
+                <Button variant="secondary" size="sm" onClick={fl.good}>Good · 3 days</Button>
+                <Button size="sm" onClick={fl.easy}>Easy · 8 days</Button>
+              </div>
+            )}
+            {fl.showFlip && <div style={{ fontSize: 12, color: '#5a6058' }}>Say the answer out loud, then flip the card and rate how well you knew it.</div>}
+          </>
+        )}
+        {fl.finished && (
+          <div style={{ border: '1px solid #c9e39a', background: '#f6f9ef', borderRadius: 6, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontWeight: 600 }}>Done for today</div>
+            <div style={{ fontSize: 12.5, color: '#3d423b' }}>{fl.summary}</div>
+            <div><LinkButton onClick={fl.restart}>Study the deck again</LinkButton></div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function ExamPanel({ ex }: { ex: NonNullable<Det['ex']> }) {
+  return (
+    <Card title="Practice exam" subtitle={ex.sub}>
+      <div style={col}>
+        {ex.ro && <ViewOnly note={ex.note} />}
+        {ex.active && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 12, color: '#5a6058' }}><span>{ex.pos}</span><Tag tone="muted">{ex.topic}</Tag></div>
+            <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.35, textWrap: 'pretty' }}>{ex.q}</div>
+            <div role="radiogroup" aria-label="Answer options" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {ex.opts.map((o) => (
+                <button key={o.label} type="button" role="radio" aria-checked={o.on} onClick={o.pick} style={{ appearance: 'none', textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 12px', borderRadius: 6, border: '1px solid ' + o.bd, background: o.bg, width: '100%' }}>
+                  <span aria-hidden="true" style={{ width: 20, height: 20, borderRadius: '50%', flex: 'none', border: '1.5px solid ' + o.markBd, background: o.markBg, color: o.markFg, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{o.mark}</span>
+                  <span style={{ textWrap: 'pretty' }}>{o.label}</span>
+                </button>
+              ))}
+            </div>
+            {ex.hasFb && <div style={{ borderLeft: '3px solid ' + ex.fbColor, padding: '6px 10px', fontSize: 12.5, color: '#3d423b', textWrap: 'pretty' }}><span style={{ fontWeight: 600, color: ex.fbColor }}>{ex.fbHead} </span>{ex.why}</div>}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Button size="sm" onClick={ex.main} disabled={ex.mainOff}>{ex.mainLabel}</Button><span style={{ fontSize: 12, color: '#5a6058' }}>{ex.hint}</span></div>
+          </>
+        )}
+        {ex.finished && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <ProgressRing value={ex.frac} size={64} />
+              <div style={{ minWidth: 0 }}><div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.2 }}>{ex.scoreLabel}</div><div style={{ fontSize: 12.5, color: ex.verdictColor, fontWeight: 600 }}>{ex.verdict}</div></div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={caps}>By topic</div>
+              {ex.topics.map((t) => (
+                <div key={t.label} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 40px', gap: 10, alignItems: 'center', fontSize: 12.5 }}>
+                  <span>{t.label}</span>
+                  <span style={{ display: 'block', height: 6, borderRadius: 999, background: '#eef0ec', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: t.w, background: t.c }} /></span>
+                  <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{t.v}</span>
+                </div>
+              ))}
+            </div>
+            <div><LinkButton onClick={ex.restart}>Try another round</LinkButton></div>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function TeachPanel({ tb }: { tb: NonNullable<Det['tb']> }) {
+  return (
+    <Card title="Explain it in your own words" subtitle={tb.sub}>
+      <div style={col}>
+        <div style={{ borderLeft: '3px solid #1a1d18', padding: '4px 12px', fontWeight: 600, textWrap: 'pretty' }}>{tb.prompt}</div>
+        {tb.ro ? <ViewOnly note={tb.note} /> : (
+          <>
+            <Textarea value={tb.text} onChange={tb.setText} rows={6} placeholder="Write as if you are talking to the client. No notes, no copy-paste." aria-label="Your explanation" />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}><Button onClick={tb.send} disabled={tb.busy}>{tb.sendLabel}</Button><span style={{ fontSize: 12, color: '#5a6058' }}>{tb.count}</span></div>
+          </>
+        )}
+        {tb.hasRes && (
+          <div style={{ border: '1px solid #e1e5dc', borderRadius: 6, background: '#fafbf8', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, animation: 'pmFadeUp .3s ease-out' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}><span style={{ fontWeight: 600 }}>{tb.scoreLabel}</span><span style={{ fontSize: 12, color: '#5a6058' }}>{tb.by}</span></div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {tb.crit.map((k) => <span key={k.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '3px 9px', borderRadius: 999, border: '1px solid ' + k.bd, background: k.bg, color: k.fg }}><span aria-hidden="true">{k.mark}</span>{k.label}</span>)}
+            </div>
+            {tb.feedback && <div style={{ fontSize: 12.5, color: '#3d423b', textWrap: 'pretty' }}>{tb.feedback}</div>}
+            {tb.follow && <div style={{ fontSize: 12.5, textWrap: 'pretty' }}><span style={{ fontWeight: 600 }}>Follow-up question · </span>{tb.follow}</div>}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// Nothing renders for a learning without content.
+export function FormatPanels({ vm }: { vm: VM }) {
+  const det = vm.det;
+  return (
+    <>
+      {det.fl && <FlashPanel fl={det.fl} />}
+      {det.ex && <ExamPanel ex={det.ex} />}
+      {det.tb && <TeachPanel tb={det.tb} />}
+      <WorkPanels det={det} />
+    </>
+  );
+}

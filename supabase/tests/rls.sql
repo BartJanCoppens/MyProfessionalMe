@@ -811,6 +811,7 @@ select public.ai_set_key(current_setting('test.ai1')::uuid, 'sk-test-first-1111'
 select public.ai_set_key(current_setting('test.ai1')::uuid, 'sk-test-second-abcd');
 select public.ai_set_key(current_setting('test.ai2')::uuid, 'el-test-key-9999');
 insert into results (check_name, expected, actual) select 'AI SA sees only the key hint', 'abcd', key_hint from public.ai_connections where id = current_setting('test.ai1')::uuid;
+insert into results (check_name, expected, actual) select 'AI teach_back use is seeded, text and off', 'text/false', kind||'/'||enabled from public.ai_uses where key = 'teach_back';
 with u as (update public.ai_uses set connection_id = current_setting('test.ai1')::uuid where key = 'profile_chat' returning 1) insert into results (check_name, expected, actual) select 'AI SA sets a use''s connection', '1 rows', count(*)||' rows' from u;
 with u as (update public.ai_uses set connection_id = current_setting('test.ai2')::uuid, model = 'voice-1' where key = 'avatar_voice' returning 1) insert into results (check_name, expected, actual) select 'AI SA sets a voice connection on a voice use', '1 rows', count(*)||' rows' from u;
 insert into results (check_name, expected, actual) select 'AI configured text use is live', 'true', ('profile_chat' = any(public.ai_live_uses()))::text;

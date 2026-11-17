@@ -6,7 +6,13 @@ const play: CSSProperties = { width: 38, height: 38, borderRadius: '50%', backgr
 const phone: CSSProperties = { width: 32, height: 56, borderRadius: 5, background: '#2b2f29', border: '1px solid rgba(255,255,255,.14)' };
 const blinkDot: CSSProperties = { width: 5, height: 5, borderRadius: '50%', background: '#fff', animation: 'pmBlink 1.2s infinite' };
 
-// The illustrated top of a library card, one drawing per format (design v3).
+const Meta = ({ cv, gap = 2, pad = 0 }: { cv: Cover; gap?: number; pad?: number }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap, paddingBottom: pad }}><span style={{ fontSize: 12, fontWeight: 600 }}>{cv.cvMeta}</span><span style={{ fontSize: 11, color: cv.cvSub }}>{cv.cvMeta2}</span></div>
+);
+const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 14, marginTop: 14 };
+const dots = [0, 0.2, 0.4];
+
+// The illustrated top of a library card, one drawing per format (design v3, v4).
 export function CoverArt({ cv, title, avInit }: { cv: Cover; title: string; avInit: string }) {
   return (
     <div style={{ position: 'relative', height: 108, flex: 'none', background: cv.cvBg, color: cv.cvFg, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid ' + cv.cvLine }}>
@@ -98,6 +104,71 @@ export function CoverArt({ cv, title, avInit }: { cv: Cover; title: string; avIn
             <span style={{ height: 3, width: '85%', borderRadius: 2, background: '#d5dacf', animation: 'pmBlink 2.4s .3s infinite' }} />
             <span style={{ height: 3, width: '65%', borderRadius: 2, background: '#86BC25', animation: 'pmBlink 2.4s .6s infinite' }} />
           </div>
+        </div>
+      )}
+      {cv.kind === 'flash' && (
+        <div style={{ ...row, gap: 16 }}>
+          <div style={{ position: 'relative', width: 74, height: 52, perspective: 300 }}>
+            <div style={{ position: 'absolute', inset: 0, transform: 'translate(8px,-6px) rotate(4deg)', background: '#d5dacf', borderRadius: 5 }} />
+            <div style={{ position: 'absolute', inset: 0, transform: 'translate(4px,-3px) rotate(2deg)', background: '#e9ece5', borderRadius: 5, border: '1px solid #d5dacf' }} />
+            <div style={{ position: 'absolute', inset: 0, background: '#fff', border: '1px solid #1a1d18', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#1a1d18', animation: 'pmFlip 5s ease-in-out infinite', animationDelay: cv.cvDelay }}>?</div>
+          </div>
+          <Meta cv={cv} />
+        </div>
+      )}
+      {cv.kind === 'exam' && (
+        <div style={{ ...row, gap: 16 }}>
+          <div style={{ position: 'relative', width: 52, height: 52, borderRadius: '50%', border: '3px solid rgba(255,255,255,.18)' }}>
+            <div style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: '3px solid transparent', borderTopColor: '#86BC25', borderRightColor: '#86BC25', animation: 'pmSpin 6s linear infinite' }} />
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600 }}>{cv.cvMeta}</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 84 }}>
+            {cv.exBars.map((xb, k) => <span key={k} style={{ display: 'block', height: 4, borderRadius: 2, background: 'rgba(255,255,255,.14)', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: xb.w, background: xb.c }} /></span>)}
+            <span style={{ fontSize: 11, color: cv.cvSub }}>{cv.cvMeta2}</span>
+          </div>
+        </div>
+      )}
+      {cv.kind === 'case' && (
+        <div style={{ ...row, alignItems: 'flex-end' }}>
+          <div style={{ position: 'relative', width: 70, height: 56 }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, width: 30, height: 10, borderRadius: '3px 3px 0 0', background: '#c9a24a' }} />
+            <div style={{ position: 'absolute', left: 0, top: 8, right: 0, bottom: 0, borderRadius: '0 4px 4px 4px', background: '#e0b85a', boxShadow: 'inset 0 -14px 0 rgba(0,0,0,.06)' }} />
+            <div style={{ position: 'absolute', right: -6, bottom: 6, padding: '1px 5px', border: '1.5px solid #1a1d18', borderRadius: 3, fontSize: 7.5, fontWeight: 700, letterSpacing: '.04em', background: '#fff', transform: 'rotate(-8deg)' }}>DELIVERABLE</div>
+          </div>
+          <Meta cv={cv} pad={4} />
+        </div>
+      )}
+      {cv.kind === 'teach' && (
+        <div style={row}>
+          <div style={{ padding: '10px 14px', borderRadius: '14px 14px 14px 3px', background: '#1a1d18', color: '#fff', display: 'flex', gap: 4, alignItems: 'center' }}>
+            {dots.map((d) => <span key={d} style={{ width: 6, height: 6, borderRadius: '50%', background: '#86BC25', animation: 'pmBlink 1.2s ' + d + 's infinite' }} />)}
+          </div>
+          <Meta cv={cv} />
+        </div>
+      )}
+      {cv.kind === 'stretch' && (
+        <div style={{ ...row, alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 52 }}>
+            {[['#d5dacf', 16], ['#b9bfb5', 28], ['#1a1d18', 40], ['#86BC25', 52]].map(([bg, h], k) => <span key={k} style={{ width: 14, height: h, borderRadius: 2, background: bg, animation: k === 3 ? 'pmBob 2.4s ease-in-out infinite' : undefined }} />)}
+          </div>
+          <Meta cv={cv} pad={2} />
+        </div>
+      )}
+      {cv.kind === 'webinar' && (
+        <div style={row}>
+          <div style={{ width: 70, height: 46, borderRadius: 5, border: '1px solid rgba(255,255,255,.25)', background: 'rgba(255,255,255,.06)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ position: 'absolute', left: 5, top: 5, display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0 5px', borderRadius: 999, background: '#d14537', color: '#fff', fontSize: 7.5, fontWeight: 700 }}><span style={{ width: 4, height: 4, borderRadius: '50%', background: '#fff', animation: 'pmBlink 1.4s infinite' }} />LIVE</span>
+            <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#c9cec5' }} />
+          </div>
+          <Meta cv={cv} />
+        </div>
+      )}
+      {cv.kind === 'aid' && (
+        <div style={row}>
+          <div style={{ width: 56, height: 70, borderRadius: 3, background: '#fff', border: '1px solid #d5dacf', padding: '8px 7px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {cv.aidRows.map((ar, k) => <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 2, border: '1px solid #1a1d18', background: ar.bg, flex: 'none' }} /><span style={{ height: 2, flex: 1, background: '#d5dacf' }} /></span>)}
+          </div>
+          <Meta cv={cv} />
         </div>
       )}
       {cv.kind === 'cert' && (
