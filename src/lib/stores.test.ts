@@ -132,7 +132,7 @@ describe('saving bundles', () => {
 describe('learner data', () => {
   it('loads progress, ambitions, interests and avatar preferences', async () => {
     db.answer((c) => ({
-      learner_learnings: { data: [{ learning_id: 'L1', state: 'accepted', pct: 100, chosen: false, submitted_at: '2026-10-30T09:00:00Z', updated_at: '2026-10-30T09:00:00Z', evidence_note: null, evidence_link: 'https://x.example/c.pdf', evidence_ref: null }] },
+      learner_learnings: { data: [{ learning_id: 'L1', state: 'accepted', pct: 100, chosen: false, submitted_at: '2026-10-30T09:00:00Z', updated_at: '2026-10-30T09:00:00Z', evidence_note: null, evidence_link: 'https://x.example/c.pdf', evidence_ref: null, detail: { ticks: [0, 2] } }] },
       learning_decisions: { data: [{ learning_id: 'L1', verdict: 'accepted', comment: null, decided_by: 'c1', decided_by_name: 'Sam Coach', decided_at: '2026-10-31T10:00:00Z', evidence: { link: 'https://x.example/c.pdf' } }] },
       ambitions: { data: [{ id: 5, text: 'Lead', horizon: null, domains: null, source: null }] },
       interests: { data: [{ label: 'Data', domain: 'tec' }] },
@@ -143,7 +143,7 @@ describe('learner data', () => {
       personality_tests: { data: [{ id: 9, name: 'Four Colours', provider: 'Insights', taken: 'Sep 2026', headline: 'Fiery red first', unit: '%', bars: [['Red', 48, '#c0392b']], reading: 'Direct.', sugg: [['L10', 'Listen.']] }] },
     } as Record<string, object>)[c.table]);
     expect(await loadLearner('u1')).toEqual({
-      progress: { L1: { state: 'accepted', pct: 100, chosen: false, submittedAt: '2026-10-30T09:00:00Z', updatedAt: '2026-10-30T09:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' }, rating: null } },
+      progress: { L1: { state: 'accepted', pct: 100, chosen: false, submittedAt: '2026-10-30T09:00:00Z', updatedAt: '2026-10-30T09:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' }, rating: null, detail: { ticks: [0, 2] } } },
       ambitions: [{ id: '5', text: 'Lead', horizon: '', doms: [], from: '' }],
       interests: [{ label: 'Data', dom: 'tec' }], prefs: { initials: '', color: '' },
       decisions: [{ learningId: 'L1', verdict: 'accepted', comment: '', by: 'c1', byName: 'Sam Coach', at: '2026-10-31T10:00:00Z', evidence: { note: '', link: 'https://x.example/c.pdf', ref: '' }, rating: null }],
@@ -171,6 +171,10 @@ describe('learner data', () => {
   it('sends the classroom feedback rating with save_learning only when given', async () => {
     await saveProgress('u1', 'L10', { state: 'accepted', pct: 100, note: 'I will open every workshop with the issue tree.', rating: 4 });
     expect(db.calls[0].steps[0][1][0]).toEqual({ p_learning_id: 'L10', p_state: 'accepted', p_pct: 100, p_chosen: null, p_note: 'I will open every workshop with the issue tree.', p_rating: 4 });
+  });
+  it('sends the per-format detail with save_learning only when given', async () => {
+    await saveProgress('u1', 'L61', { detail: { best: 80 } });
+    expect(db.calls[0].steps[0][1][0]).toEqual({ p_learning_id: 'L61', p_state: null, p_pct: null, p_chosen: null, p_detail: { best: 80 } });
   });
   it('adds and removes ambitions and interests', async () => {
     db.answer(() => ({ data: { id: 12 } }));

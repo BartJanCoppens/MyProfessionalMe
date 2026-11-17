@@ -2,7 +2,7 @@
 // reads the latest migration that defines each function and compares its format lists and thresholds with the TS rule
 // tables, so the two cannot drift apart.
 import { describe, expect, it } from 'vitest';
-import { CERTIFICATE_FORMATS, COMPLETION, FEEDBACK_MIN, REFLECTION_FORMATS, REFLECTION_MIN, SELF_COMPLETE } from './record';
+import { CERTIFICATE_FORMATS, COMPLETION, FEEDBACK_MIN, LINK_FORMATS, REFLECTION_FORMATS, REFLECTION_MIN, SELF_COMPLETE } from './record';
 
 // Every migration, as text, keyed by path (the timestamped names sort in order).
 const migrations = import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
@@ -47,10 +47,16 @@ describe('completion and evidence rules: TypeScript and the database agree', () 
     const rule = latest('private.evidence_rule').body;
     const cert = /when p_format = '([^']*)' then 'certificate'/.exec(rule);
     expect(cert ? [cert[1]] : listAfter(rule.split("'certificate'")[0], /p_format/)).toEqual(sorted(CERTIFICATE_FORMATS));
-    expect(listAfter(rule.split("'certificate'")[1], /p_format/)).toEqual(sorted(REFLECTION_FORMATS));
+    expect(listAfter(rule.split("'link'")[0].split("'certificate'")[1], /p_format/)).toEqual(sorted(LINK_FORMATS));
+    expect(listAfter(rule.split("'link'")[1], /p_format/)).toEqual(sorted(REFLECTION_FORMATS));
     expect(latest('private.evidence_ok').body).toMatch(new RegExp('>= ' + REFLECTION_MIN + '\\b'));
   });
+  it('a link-only format needs a link in private.evidence_ok(), and every Webinar-style list matches Classroom', () => {
+    expect(latest('private.evidence_ok').body).toMatch(/when 'link' then p_link is not null/);
+    expect(latest('public.register_attendance').body).toMatch(/format in \('Classroom', 'Webinar'\)/);
+    expect(latest('private.guard_learning_update').body).toMatch(/format in \('Classroom', 'Webinar'\)/);
+  });
   it('no format both completes itself and needs evidence for acceptance', () => {
-    expect(SELF_COMPLETE.filter((f) => CERTIFICATE_FORMATS.includes(f) || REFLECTION_FORMATS.includes(f))).toEqual([]);
+    expect(SELF_COMPLETE.filter((f) => CERTIFICATE_FORMATS.includes(f) || LINK_FORMATS.includes(f) || REFLECTION_FORMATS.includes(f))).toEqual([]);
   });
 });

@@ -146,3 +146,27 @@ describe('completion per learning type (owner, 2 Nov 2026)', () => {
     expect(decisionLine({ ...base, verdict: 'self_completed', by: 'u1', byName: 'Robin Test', rating: 4 }, 'u1', 'u1').label).toBe('Completed by you with feedback · rated 4 of 5 · counts without acceptance');
   });
 });
+
+describe('completion and evidence for the seven new formats (D3)', () => {
+  it('completes by the owner\'s rules', () => {
+    expect(['Flash cards', 'Job aid', 'Practice exam', 'Teach-back'].map(completionOf)).toEqual(['mark', 'mark', 'mark', 'mark']);
+    expect(completionOf('Webinar')).toBe('feedback');
+    expect(completionOf('Case exercise')).toBe('acceptance');
+    expect(completionOf('Stretch assignment')).toBe('acceptance');
+    expect(selfCompletes('Webinar')).toBe(true);
+  });
+  it('asks a link of a case exercise and a reflection of a stretch assignment', () => {
+    expect(evidenceRule('Case exercise')).toBe('link');
+    expect(evidenceNeed('Case exercise', NO_EVIDENCE)).toBe('a link to your deliverable');
+    expect(evidenceNeed('Case exercise', ev({ note: long }))).toBe('a link to your deliverable');
+    expect(evidenceNeed('Case exercise', ev({ link: 'https://sharepoint.example/case.pdf' }))).toBeNull();
+    expect(evidenceProblem('Case exercise', ev({ link: 'not a link' }))).toBe('The link must be a web address starting with https://');
+    expect(evidenceRule('Stretch assignment')).toBe('reflection');
+    expect(evidenceNeed('Stretch assignment', ev({ note: 'x'.repeat(139) }))).toBe('a reflection of at least 140 characters');
+    expect(evidenceNeed('Stretch assignment', ev({ note: long }))).toBeNull();
+    expect(['Flash cards', 'Job aid', 'Practice exam', 'Teach-back', 'Webinar'].map(evidenceRule)).toEqual(['none', 'none', 'none', 'none', 'none']);
+  });
+  it('words the case exercise rule', () => {
+    expect(ruleText('Case exercise', 'Sam Coach')).toMatch(/link/);
+  });
+});

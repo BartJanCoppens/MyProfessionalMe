@@ -126,7 +126,7 @@ export function loadAttendance(L: Logic, learningId: string) {
 }
 
 // The attendance card shows on a published classroom learning for anyone who is an admin (whoever is being viewed).
-export const showsAttendance = (L: Logic, id: string) => L.isAdmin() && LEARN_BY[id]?.[4] === 'Classroom' && (LEARN_META[id]?.status || 'published') === 'published';
+export const showsAttendance = (L: Logic, id: string) => L.isAdmin() && ['Classroom', 'Webinar'].includes(LEARN_BY[id]?.[4]) && (LEARN_META[id]?.status || 'published') === 'published';
 
 async function saveAttendance(L: Logic, it: Item) {
   const a = L.state.att; if (!a || a.learningId !== it.id || !a.rows) return;

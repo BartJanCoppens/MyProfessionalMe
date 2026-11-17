@@ -3,15 +3,16 @@
 import { fmtDate } from './contribution';
 
 // What a format needs before it may be submitted. Mirrors private.evidence_rule(); change both together.
-export type EvidenceRule = 'none' | 'reflection' | 'certificate';
+export type EvidenceRule = 'none' | 'reflection' | 'certificate' | 'link';
 export const REFLECTION_MIN = 140;
 export const COMMENT_MIN = 10;
 export const COMMENT_MAX = 500;
 export const CERTIFICATE_FORMATS = ['Certification'];
-export const REFLECTION_FORMATS = ['Book', 'Website', 'Mentoring', 'Coaching', 'Game', 'Micro-guide', 'Case write-up'];
+export const LINK_FORMATS = ['Case exercise'];
+export const REFLECTION_FORMATS = ['Book', 'Website', 'Mentoring', 'Coaching', 'Game', 'Micro-guide', 'Case write-up', 'Stretch assignment'];
 
 export function evidenceRule(format: string): EvidenceRule {
-  return CERTIFICATE_FORMATS.includes(format) ? 'certificate' : REFLECTION_FORMATS.includes(format) ? 'reflection' : 'none';
+  return CERTIFICATE_FORMATS.includes(format) ? 'certificate' : LINK_FORMATS.includes(format) ? 'link' : REFLECTION_FORMATS.includes(format) ? 'reflection' : 'none';
 }
 
 // How a format completes (owner's rules, 2 Nov 2026). Every format listed here completes itself, without a counsellor
@@ -21,7 +22,10 @@ export function evidenceRule(format: string): EvidenceRule {
 //   media: a podcast at 80% listened, a reel on a right answer · mark: the learner marks it completed
 //   feedback: the learner's feedback, or the faculty registers attendance · quiz: three right answers after the practice session
 export type Completion = 'acceptance' | 'media' | 'mark' | 'feedback' | 'quiz';
-export const COMPLETION: Record<string, Exclude<Completion, 'acceptance'>> = { Podcast: 'media', Reel: 'media', 'E-learning': 'mark', Classroom: 'feedback', Avatar: 'quiz' };
+export const COMPLETION: Record<string, Exclude<Completion, 'acceptance'>> = {
+  Podcast: 'media', Reel: 'media', 'E-learning': 'mark', Classroom: 'feedback', Avatar: 'quiz',
+  'Flash cards': 'mark', 'Job aid': 'mark', 'Practice exam': 'mark', 'Teach-back': 'mark', Webinar: 'feedback',
+};
 export const SELF_COMPLETE = Object.keys(COMPLETION);
 export const completionOf = (format: string): Completion => COMPLETION[format] || 'acceptance';
 export const selfCompletes = (format: string) => completionOf(format) !== 'acceptance';
@@ -81,6 +85,7 @@ export function fieldProblem(e: Evidence): string | null {
 export function evidenceNeed(format: string, e: Evidence): string | null {
   const rule = evidenceRule(format);
   if (rule === 'certificate' && !e.link.trim() && !e.ref.trim()) return 'a link to your certificate or its number';
+  if (rule === 'link' && !e.link.trim()) return 'a link to your deliverable';
   if (rule === 'reflection' && e.note.trim().length < REFLECTION_MIN) return 'a reflection of at least ' + REFLECTION_MIN + ' characters';
   return null;
 }
@@ -93,7 +98,8 @@ export function evidenceProblem(format: string, e: Evidence): string | null {
 // What the learner reads on the detail, per rule.
 export function ruleText(format: string, accepter: string): string {
   const rule = evidenceRule(format);
-  return rule === 'certificate' ? 'A ' + format.toLowerCase() + ' counts once ' + accepter + ' sees the certificate: add a link to it, or its certificate number.'
+  return rule === 'link' ? 'Add a link to your deliverable (a document or folder on SharePoint or OneDrive). ' + accepter[0].toUpperCase() + accepter.slice(1) + ' reads it before accepting.'
+    : rule === 'certificate' ? 'A ' + format.toLowerCase() + ' counts once ' + accepter + ' sees the certificate: add a link to it, or its certificate number.'
     : rule === 'reflection' ? 'Write what you took from this ' + format.toLowerCase() + ' (at least ' + REFLECTION_MIN + ' characters). ' + accepter[0].toUpperCase() + accepter.slice(1) + ' reads it before accepting.'
       : 'No evidence needed: ' + accepter + ' confirms it. You may add a note or a link, for example to an attendance record.';
 }

@@ -5,7 +5,7 @@
 import { supabase } from './supabase';
 import type { LearnState, Progress } from '../logic/learner';
 import type { Decision, Verdict } from '../logic/record';
-import type { Ambition, Interest, Project, Test } from '../types';
+import type { Ambition, Interest, LearningDetail, Project, Test } from '../types';
 
 // decisions: the acceptance record (F2), every decision on this person's learnings.
 // projects: engagements and their evaluations (read like the formal track); tests: personality results (the person only).
@@ -16,7 +16,7 @@ const fail = (error: { message: string } | null) => { if (error) throw new Error
 
 export async function loadLearner(userId: string): Promise<LearnerData> {
   const [l, a, i, p, d, pe, pt] = await Promise.all([
-    supabase.from('learner_learnings').select('learning_id, state, pct, chosen, submitted_at, updated_at, evidence_note, evidence_link, evidence_ref, evidence_rating').eq('user_id', userId),
+    supabase.from('learner_learnings').select('learning_id, state, pct, chosen, submitted_at, updated_at, evidence_note, evidence_link, evidence_ref, evidence_rating, detail').eq('user_id', userId),
     supabase.from('ambitions').select('id, text, horizon, domains, source').eq('user_id', userId).order('created_at'),
     supabase.from('interests').select('label, domain').eq('user_id', userId).order('created_at'),
     supabase.from('learner_prefs').select('avatar_initials, avatar_color').eq('user_id', userId).maybeSingle(),
@@ -28,7 +28,7 @@ export async function loadLearner(userId: string): Promise<LearnerData> {
   const progress: Progress = {};
   (l.data || []).forEach((r) => {
     progress[r.learning_id] = { state: r.state as LearnState, pct: r.pct, chosen: r.chosen, submittedAt: r.submitted_at ?? null, updatedAt: r.updated_at ?? null,
-      evidence: { note: r.evidence_note || '', link: r.evidence_link || '', ref: r.evidence_ref || '' }, rating: r.evidence_rating ?? null };
+      evidence: { note: r.evidence_note || '', link: r.evidence_link || '', ref: r.evidence_ref || '' }, rating: r.evidence_rating ?? null, detail: r.detail ?? {} };
   });
   return {
     progress,
@@ -50,11 +50,11 @@ export async function loadLearner(userId: string): Promise<LearnerData> {
 // Atomic insert-or-update of your own progress row (save_learning); only the given fields change. Evidence fields are
 // sent only when given ('' clears one); the database checks the format's evidence rule when the state is submitted, and a
 // classroom's feedback (note and rating) when the learner completes it.
-export async function saveProgress(_userId: string, learningId: string, patch: Partial<{ state: LearnState; pct: number; chosen: boolean; note: string; link: string; ref: string; rating: number }>) {
+export async function saveProgress(_userId: string, learningId: string, patch: Partial<{ state: LearnState; pct: number; chosen: boolean; note: string; link: string; ref: string; rating: number; detail: LearningDetail }>) {
   fail((await supabase.rpc('save_learning', {
     p_learning_id: learningId, p_state: patch.state ?? null, p_pct: patch.pct ?? null, p_chosen: patch.chosen ?? null,
     ...(patch.note !== undefined && { p_note: patch.note }), ...(patch.link !== undefined && { p_link: patch.link }), ...(patch.ref !== undefined && { p_ref: patch.ref }),
-    ...(patch.rating !== undefined && { p_rating: patch.rating }),
+    ...(patch.rating !== undefined && { p_rating: patch.rating }), ...(patch.detail !== undefined && { p_detail: patch.detail }),
   })).error);
 }
 

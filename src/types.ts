@@ -148,3 +148,15 @@ export type Bundle = {
   tags: string[]; sugg: [string, number][]; models: RagModel[]; sources: BundleSource[]; chunks: [number, string][]; concepts: Concept[];
   line?: string | null; // owning business line; null = firm-wide (General and System Admins edit it)
 };
+
+// Per-format progress kept in learner_learnings.detail (a JSON object; save_learning's p_detail, the owner only).
+export type DetailOf = {
+  flash: { due: Record<string, string> };   // card id -> ISO date it is next due
+  exam: { best: number };                    // best score, in percent
+  case: Record<string, never>;
+  teach: { text: string; score?: number; ai?: boolean };
+  stretch: { checks: number[] };             // indexes of the ticked checkpoints
+  webinar: { registered: boolean };
+  aid: { ticks: number[] };                  // indexes of the ticked items
+};
+export type LearningDetail = Partial<DetailOf[keyof DetailOf]>;

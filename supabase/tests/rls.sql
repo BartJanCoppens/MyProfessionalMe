@@ -1060,6 +1060,51 @@ do $$ begin
   begin perform count(*) from public.personality_tests; insert into results (check_name, expected, actual) values ('PT anon reads personality results', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('PT anon reads personality results', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
+-- ---------- design v4: completion and evidence of the new formats ----------
+-- L68 is a Job aid, L64 a Case exercise, L66 a Stretch assignment, L67 a Webinar. c1 and c2 are the learners above.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select public.save_learning('L68', p_state => 'in-progress', p_pct => 50::smallint);
+select public.save_learning('L68', p_state => 'accepted', p_pct => 100::smallint, p_detail => '{"ticks":[0,1,2]}'::jsonb);
+insert into results (check_name, expected, actual) select 'FC learner self-accepts a published job aid', 'accepted', coalesce(max(state), 'none') from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id='L68';
+insert into results (check_name, expected, actual) select 'FC detail is saved with the progress row by its owner', '{"ticks": [0, 1, 2]}', coalesce(max(detail::text), 'none') from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id='L68';
+do $$ begin
+  begin perform public.save_learning('L64', p_state => 'accepted', p_pct => 100::smallint);
+    insert into results (check_name, expected, actual) values ('FC learner self-accepts a case exercise', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FC learner self-accepts a case exercise', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.save_learning('L66', p_state => 'accepted', p_pct => 100::smallint);
+    insert into results (check_name, expected, actual) values ('FC learner self-accepts a stretch assignment', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FC learner self-accepts a stretch assignment', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.save_learning('L64', p_state => 'submitted', p_pct => 100::smallint);
+    insert into results (check_name, expected, actual) values ('FC case exercise submitted without a link', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FC case exercise submitted without a link', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.save_learning('L66', p_state => 'submitted', p_pct => 100::smallint, p_note => 'Too short.');
+    insert into results (check_name, expected, actual) values ('FC stretch assignment submitted with a short reflection', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FC stretch assignment submitted with a short reflection', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.save_learning('L67', p_state => 'accepted', p_pct => 100::smallint);
+    insert into results (check_name, expected, actual) values ('FC webinar completed without feedback', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FC webinar completed without feedback', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.save_learning('L68', p_detail => '[1]'::jsonb);
+    insert into results (check_name, expected, actual) values ('FC detail must be an object', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FC detail must be an object', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+select public.save_learning('L64', p_state => 'submitted', p_pct => 100::smallint, p_link => 'https://sharepoint.example/case/day-one.pdf');
+select public.save_learning('L66', p_state => 'submitted', p_pct => 100::smallint, p_note => rpad('What I stretched: I ran the steering committee, prepared the options and let the sponsor decide.', 150, ' Next.'));
+insert into results (check_name, expected, actual) select 'FC case exercise with a link and stretch with a reflection go to the counsellor', 'submitted submitted', string_agg(state, ' ' order by learning_id) from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id in ('L64', 'L66');
+select public.save_learning('L67', p_state => 'accepted', p_pct => 100::smallint, p_note => rpad('I will apply the top-up tax test to every group structure I review from now on.', 90, ' Next.'), p_rating => 5::smallint);
+insert into results (check_name, expected, actual) select 'FC webinar completes with feedback', 'accepted 5', coalesce(max(state)||' '||max(evidence_rating), 'none') from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id='L67';
+-- nobody else writes the detail of c1's row (RLS update is owner-only)
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+update public.learner_learnings set detail = '{"ticks":[9]}' where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id='L68';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+update public.learner_learnings set detail = '{"ticks":[9]}' where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id='L68';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+update public.learner_learnings set detail = '{"ticks":[9]}' where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id='L68';
+-- the faculty registers a webinar attendee, as for a classroom
+select public.register_attendance('L67', array['00000000-0000-0000-0000-0000000000c2'::uuid]);
+reset role;
+insert into results (check_name, expected, actual) select 'FC nobody else changes detail on someone else''s row', '{"ticks": [0, 1, 2]}', coalesce(max(detail::text), 'none') from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id='L68';
+insert into results (check_name, expected, actual) select 'FC the faculty registers webinar attendance', 'accepted attended', coalesce(max(l.state), 'none')||' '||coalesce(max(d.verdict), 'none') from public.learner_learnings l left join public.learning_decisions d on d.user_id=l.user_id and d.learning_id=l.learning_id where l.user_id='00000000-0000-0000-0000-0000000000c2' and l.learning_id='L67';
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
