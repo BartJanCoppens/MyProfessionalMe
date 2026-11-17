@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { TYPE_NAMES } from './contribution';
 import { parseFormatContent } from '../lib/contentStore';
-import { cardsFromPassages, itemRows, itemsCheck, itemsFromSaved, noItems, parseCsv, parseDraftItems } from './items';
+import { cardsFromPassages, itemRows, itemsCheck, itemsFromSaved, noItems, aiAssisted, parseCsv, parseDraftItems } from './items';
 import type { ExamQuestion } from '../types';
 
 const q = (n: number): ExamQuestion => ({ t: 'Rates', q: 'Question ' + n + '?', o: ['A', 'B', 'C', 'D'], a: 1, why: 'Because B.' });
@@ -94,6 +94,45 @@ describe('the checklist line', () => {
     expect(itemsCheck('Flash cards', d('csv', 3)).text).toBe('3 cards imported from a CSV · check each one');
     expect(itemsCheck('Flash cards', d('', 0))).toEqual({ ok: false, text: 'Generate with AI or import a CSV' });
     expect(itemsCheck('Practice exam', { ...noItems(), how: 'ai', list: [q(1), q(2)] }).text).toBe('2 questions drafted from the bundle · check each one');
+  });
+});
+
+describe('hardening', () => {
+  const long = (n: number) => 'x'.repeat(n);
+  it('caps texts: front, question, option and topic at 300, back and why at 600', () => {
+    expect(parseDraftItems('Flash cards', JSON.stringify({ cards: [{ front: long(300), back: long(600) }] }))).not.toBeNull();
+    expect(parseDraftItems('Flash cards', JSON.stringify({ cards: [{ front: long(301), back: 'b' }] }))).toBeNull();
+    expect(parseDraftItems('Flash cards', JSON.stringify({ cards: [{ front: 'f', back: long(601) }] }))).toBeNull();
+    const qn = (o: object) => JSON.stringify({ questions: [{ t: 'T', q: 'Q', o: ['a', 'b', 'c', 'd'], a: 0, why: 'W', ...o }] });
+    expect(parseDraftItems('Practice exam', qn({ o: ['a', 'b', 'c', long(301)] }))).toBeNull();
+    expect(parseDraftItems('Practice exam', qn({ why: long(601) }))).toBeNull();
+    expect(parseDraftItems('Practice exam', qn({ t: long(301) }))).toBeNull();
+  });
+  it('reports CSV lines over the cap by line number', () => {
+    const r = parseCsv('Flash cards', 'a,b\n' + long(301) + ',b\nc,' + long(601));
+    expect(r.list).toEqual([['a', 'b']]);
+    expect(r.problems.map((p) => p.slice(0, 7))).toEqual(['Line 2:', 'Line 3:']);
+  });
+  it('accepts a quote after leading spaces, strips a BOM before the header and caps the problem list', () => {
+    expect(parseCsv('Flash cards', '\uFEFFfront,back\n  "a, b",c').list).toEqual([['a, b', 'c']]);
+    const r = parseCsv('Flash cards', Array(15).fill('bad').join('\n'));
+    expect(r.problems).toHaveLength(11);
+    expect(r.problems[10]).toBe('and 5 more');
+  });
+  it('rebuilds exam questions with only the known keys, trimmed', () => {
+    const out = parseDraftItems('Practice exam', '{"questions":[{"t":" T ","q":"Q","o":["a","b","c","d"],"a":0,"why":"W","extra":1}]}');
+    expect(out).toEqual([{ t: 'T', q: 'Q', o: ['a', 'b', 'c', 'd'], a: 0, why: 'W' }]);
+  });
+  it('skips malformed rows instead of throwing', () => {
+    expect(itemRows('Practice exam', [['card', 'in an exam'] as never, q(1)])).toHaveLength(1);
+    expect(itemRows('Flash cards', [q(1) as never, ['F', 'B']])).toEqual([{ front: 'F', back: 'B' }]);
+  });
+  it('derives AI assistance from the outline flag or AI-drafted items', () => {
+    const d = (how: 'ai' | 'scripted' | 'csv' | 'manual' | 'saved' | '') => ({ ...noItems(), how });
+    expect(aiAssisted({ ai: false, type: 'Flash cards', items: d('ai') })).toBe(true);
+    expect(aiAssisted({ ai: false, type: 'Flash cards', items: d('scripted') })).toBe(false);
+    expect(aiAssisted({ ai: true, type: 'Flash cards', items: d('scripted') })).toBe(true);
+    expect(aiAssisted({ ai: false, type: 'Reel', items: d('ai') })).toBe(false);
   });
 });
 

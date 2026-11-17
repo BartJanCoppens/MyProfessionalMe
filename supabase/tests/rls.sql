@@ -1429,6 +1429,7 @@ insert into public.contributions (business_line, type, title, domain, takeaway, 
  ('Consulting','Flash cards','T fx client','pers','Lead with the answer.','[["What did Delcroix pay?","Too much"]]'),
  ('Consulting','Practice exam','T fx exam','pers','Read the stem twice.','[{"t":"Rates","q":"Standard rate?","o":["20 %","25 %","29 %","34 %"],"a":1,"why":"Since 2020."}]'),
  ('Consulting','Practice exam','T fx exam bad answer','pers','Read the stem twice.','[{"t":"Rates","q":"Standard rate?","o":["20 %","25 %","29 %","34 %"],"a":4,"why":"Since 2020."}]'),
+ ('Consulting','Flash cards','T fx long front','pers','Lead with the answer.', jsonb_build_array(jsonb_build_array(repeat('x', 301), 'b'))),
  ('Consulting','Practice exam','T fx exam three options','pers','Read the stem twice.','[{"t":"Rates","q":"Standard rate?","o":["20 %","25 %","29 %"],"a":1,"why":"Since 2020."}]');
 do $$ begin
   begin insert into public.contributions (business_line, type, title, domain, takeaway, items) values ('Consulting','Flash cards','T fx too many','pers','x', (select jsonb_agg(jsonb_build_array('f'||g, 'b')) from generate_series(1, 41) g));
@@ -1446,6 +1447,9 @@ do $$ begin
   begin perform public.submit_contribution((select id from public.contributions where title = 'T fx exam bad answer'));
     insert into results (check_name, expected, actual) values ('FX an exam answer outside 0 to 3', 'blocked: P0001', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('FX an exam answer outside 0 to 3', 'blocked: P0001', 'blocked: '||sqlstate); end;
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T fx long front'));
+    insert into results (check_name, expected, actual) values ('FX a card front over 300 characters', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('FX a card front over 300 characters', 'blocked: P0001', 'blocked: '||sqlstate); end;
   begin perform public.submit_contribution((select id from public.contributions where title = 'T fx exam three options'));
     insert into results (check_name, expected, actual) values ('FX an exam question with three options', 'blocked: P0001', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('FX an exam question with three options', 'blocked: P0001', 'blocked: '||sqlstate); end;

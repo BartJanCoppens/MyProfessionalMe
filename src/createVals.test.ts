@@ -473,8 +473,11 @@ describe('Flash cards and practice exams', () => {
     const h = open({}, { live: true });
     await h.c().itemsPanel!.draft();
     expect(h.state.nw.items).toMatchObject({ how: 'ai', list: [['Standard rate?', '25 %'], ['SME rate?', '20 %']] });
-    expect(h.state.nw.ai).toBe(true);
+    expect(h.state.nw.ai).toBe(false);
     expect(h.c().itemsPanel!.note).toMatch(/^AI-assisted draft/);
+    h.c().nwDraft();
+    await flush(10);
+    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ ai_assisted: true }), null);
     expect(JSON.stringify(complete.mock.calls[0])).toContain('Corporate tax basics');
   });
   it('falls back to the scripted cards, never labelled AI, when the answer is malformed', async () => {
@@ -532,6 +535,37 @@ describe('Flash cards and practice exams', () => {
     e.c().cs!.main();
     expect(e.lastToast()).toBe('Add the cards first · edit it first');
     expect(store.submitContribution).not.toHaveBeenCalled();
+  });
+  const items = (how: 'ai' | 'scripted') => ({ ...deck(2), how });
+  it('keeps AI cards AI-assisted when the outline is then drafted by script', async () => {
+    const h = open({ items: items('ai') });
+    await h.c().nwDraftAi();
+    expect(h.state.nw.ai).toBe(false);
+    h.c().nwDraft(); await flush(10);
+    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ ai_assisted: true }), null);
+  });
+  it('is not AI-assisted once the AI cards are redrafted by script', async () => {
+    const h = open({ items: items('ai') });
+    await h.c().itemsPanel!.draft();
+    expect(h.state.nw.items!.how).toBe('scripted');
+    h.c().nwDraft(); await flush(10);
+    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ ai_assisted: false }), null);
+  });
+  it('drops an AI answer that arrives after the format changed, and keeps the picker shut meanwhile', async () => {
+    let answer: (s: string) => void = () => {};
+    stubWindow({ claude: { complete: vi.fn(() => new Promise<string>((r) => { answer = r; })) } });
+    const h = open({}, { live: true });
+    const pending = h.c().itemsPanel!.draft();
+    await flush(2);
+    expect(h.state.nwAiBusy).toBe(true);
+    h.c().newTypes.find((t) => t.label === 'Practice exam')!.pick();
+    expect(h.state.nw.type).toBe('Flash cards');
+    expect(h.lastToast()).toBe('Wait for the draft to finish');
+    h.L().setState({ nw: { ...h.state.nw, type: 'Practice exam' } });
+    answer('{"cards":[{"front":"F","back":"B"}]}');
+    await pending;
+    expect(h.state.nw.items?.list ?? []).toEqual([]);
+    expect(() => h.vm()).not.toThrow();
   });
   it('shows reviewers the items they are judging', () => {
     const d = data({ contributions: [contribution({ id: 'r1', author_id: 'u5', author_name: 'Kim Author', type: 'Flash cards', items: [['F', 'B'], ['F2', 'B2']], status: 'review', step: 1 })], reviews: [review({ contribution_id: 'r1', reviewer_id: 'u1' })] });

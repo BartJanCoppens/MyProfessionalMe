@@ -8,7 +8,7 @@ import type { AppState, Bundle, NewDraft } from './types';
 import { retrieve } from './logic/okf';
 import { addFirst, itemsPanel, viewItems } from './createItems';
 import type { SetNw } from './createItems';
-import { hasItems, itemsCheck, itemsFromSaved, itemsText, noItems } from './logic/items';
+import { aiAssisted, hasItems, itemsCheck, itemsFromSaved, itemsText, noItems } from './logic/items';
 import type { Hit } from './logic/okf';
 import {
   CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
@@ -53,12 +53,12 @@ function submittedEdit(s: AppState) {
 }
 const fieldsOf = (nw: NewDraft, bundles: string[]): DraftFields => {
   return { business_line: nw.line || null, audience: nw.aud || null, type: nw.type, title: nw.title.trim().slice(0, 120), domain: nw.dom, level: +nw.lvl, audience_stage: nw.stage,
-    takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: nw.ai, bundle_ids: bundles,
+    takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: aiAssisted(nw), bundle_ids: bundles,
     items: hasItems(nw.type) ? nw.items?.list ?? [] : null };
 };
 const draftOf = (c: Contribution): NewDraft => ({ line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
-  outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
-  items: hasItems(c.type) ? { ...noItems(), list: itemsFromSaved(c.type, c.items), how: 'saved' } : noItems() });
+  outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !hasItems(c.type), aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
+  items: hasItems(c.type) ? { ...noItems(), list: itemsFromSaved(c.type, c.items), how: c.ai_assisted ? 'ai' : 'saved' } : noItems() });
 
 // Bundles a creator may draw on: indexed, open to creators, Tax & Legal ones for that line only.
 export function usableBundles(bundles: Bundle[], line: string | null) {
@@ -322,7 +322,7 @@ function createScreen(L: Logic) {
     newTypes: CREATE_TYPES.map((x) => {
       const on = nw.type === x[0], fixed = !on && (locked || !allowed.formats.includes(x[0]));
       return { label: x[0], desc: x[1], bg: on ? '#1a1d18' : '#fff', fg: on ? '#fff' : fixed ? '#b3b8ae' : '#1a1d18', bd: on ? '#1a1d18' : '#d5dacf',
-        pick: () => (fixed ? L.say(locked ? 'The format stays as submitted' : 'Not in your creation rules') : setNw((cur) => (cur.type === x[0] ? {} : { type: x[0], items: noItems() }))) };
+        pick: () => (s.nwAiBusy ? L.say('Wait for the draft to finish') : fixed ? L.say(locked ? 'The format stays as submitted' : 'Not in your creation rules') : setNw((cur) => (cur.type === x[0] ? {} : { type: x[0], items: noItems() }))) };
     }),
     domainOptions: (locked ? [nw.dom] : allowed.domains).map((k) => ({ value: k, label: domainName(k) })),
     levelOptions: LEVELS.map((l, i) => ({ value: String(i + 1), label: 'L' + (i + 1) + ' · ' + l })), stageOptions: STAGES.map((x) => ({ value: x, label: x })),

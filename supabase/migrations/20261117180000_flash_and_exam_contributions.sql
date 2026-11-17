@@ -16,13 +16,15 @@ alter table public.contributions drop constraint contributions_type_check;
 alter table public.contributions add constraint contributions_type_check
   check (type in ('Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam'));
 
-alter table public.contributions
-  add column items jsonb check (items is null or (jsonb_typeof(items) = 'array' and jsonb_array_length(items) <= 40));
+alter table public.contributions add column items jsonb;
+alter table public.contributions add constraint contributions_items_check
+  check (items is null or (type in ('Flash cards', 'Practice exam') and jsonb_typeof(items) = 'array' and jsonb_array_length(items) <= 40));
 grant insert (items) on public.contributions to authenticated;
 grant update (items) on public.contributions to authenticated;
 
 -- Whether items have the shape of the format: 1 to 40 cards of two texts, or 1 to 30 questions with four options and
--- an answer 0 to 3. Mirrored by src/logic/items.ts.
+-- an answer 0 to 3; fronts, questions, options and topics up to 300 characters, backs and explanations up to 600.
+-- Mirrored by src/logic/items.ts.
 create function private.items_ok(p_type text, p_items jsonb)
 returns boolean
 language sql
@@ -35,14 +37,15 @@ as $$
       select 1 from jsonb_array_elements(p_items) e
       where jsonb_typeof(e) <> 'array' or jsonb_array_length(e) <> 2
          or jsonb_typeof(e -> 0) is distinct from 'string' or jsonb_typeof(e -> 1) is distinct from 'string'
-         or btrim(e ->> 0) = '' or btrim(e ->> 1) = '')
+         or btrim(e ->> 0) = '' or btrim(e ->> 1) = '' or char_length(e ->> 0) > 300 or char_length(e ->> 1) > 600)
     when p_type = 'Practice exam' then jsonb_array_length(p_items) between 1 and 30 and not exists (
       select 1 from jsonb_array_elements(p_items) e
       where jsonb_typeof(e) <> 'object'
          or jsonb_typeof(e -> 't') is distinct from 'string' or jsonb_typeof(e -> 'q') is distinct from 'string' or jsonb_typeof(e -> 'why') is distinct from 'string'
          or btrim(e ->> 't') = '' or btrim(e ->> 'q') = '' or btrim(e ->> 'why') = ''
+         or char_length(e ->> 't') > 300 or char_length(e ->> 'q') > 300 or char_length(e ->> 'why') > 600
          or jsonb_typeof(e -> 'o') is distinct from 'array' or jsonb_array_length(e -> 'o') <> 4
-         or exists (select 1 from jsonb_array_elements(e -> 'o') o where jsonb_typeof(o) <> 'string' or btrim(o #>> '{}') = '')
+         or exists (select 1 from jsonb_array_elements(e -> 'o') o where jsonb_typeof(o) <> 'string' or btrim(o #>> '{}') = '' or char_length(o #>> '{}') > 300)
          or jsonb_typeof(e -> 'a') is distinct from 'number' or (e ->> 'a') not in ('0', '1', '2', '3'))
     else false
   end;
