@@ -10,7 +10,7 @@ import { noItems, validItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
 import { studioContent } from './logic/studioContent';
 import { studioById, studioFormats, tooFew, visibleSteps } from './logic/studios';
-import type { StudioDef, StudioItem } from './logic/studios';
+import type { StudioDef, StudioEntry } from './logic/studios';
 import { STUDIOS } from './studioData';
 import { changeFormat, reachable } from './studioRules';
 import { BUILD_RUNNERS } from './studioRunners';
@@ -87,7 +87,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
     // Any other studio previews the content publishing makes of its rows (studioContent), once they are valid.
-    content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioItem[], nw.shape ?? {}),
+    content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioEntry[], nw.shape ?? {}),
     // Send for review opens once the automatic check (check_contribution) passed on the draft on screen.
     send: { checks: src.checks, blocked: src.blocked || problems.length > 0 || !passed, problems: [...problems, ...reasons],
       route: src.route, routeEmpty: !src.route.length, policyNote: src.policyNote, routeWarn: src.routeWarn,

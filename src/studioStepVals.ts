@@ -1,15 +1,17 @@
 // The Shape, Draft and Produce steps of a generic studio, as view-model: questions and produce rows as chip choices and the
 // studio's rows as label/text(/text2). Answers live on the draft: `nw.shape`, `nw.produce`, `nw.cast`, `nw.build` and, for the
-// rows, `nw.items` (the one item store, with its `how` provenance, like every format).
+// rows, `nw.items` (the one item store, with its `how` provenance, like every format). The Explainer's check questions
+// follow its rows in `nw.items`; they are shown as a block and removed as a whole.
 import type { Logic } from './model';
-import type { Bundle, NewDraft } from './types';
+import type { Bundle, ExamQuestion, NewDraft } from './types';
 import type { SetNw } from './createItems';
 import { draftItems, studioQuery, studioSpec } from './studioDraft';
-import { noItems } from './logic/items';
-import type { StudioRow } from './logic/items';
+import { itemRows, noItems } from './logic/items';
+import type { Item } from './logic/items';
 import { startBuild } from './logic/studioBuild';
-import { itemsValid } from './logic/studios';
-import type { StudioDef, StudioItem } from './logic/studios';
+import { AI_ONLY, studioProblems } from './logic/studioContent';
+import { questionsOf, stepsOf } from './logic/studios';
+import type { StudioDef, StudioEntry, StudioItem } from './logic/studios';
 import { STOCK_LOOKS, STOCK_VOICES } from './studioData';
 import type { Chip } from './screens/ChipGroup';
 
@@ -18,8 +20,8 @@ type Field = 'shape' | 'produce' | 'cast';
 // A group of chips for one question: choosing stores the answer under the question (or row label) on the draft. A
 // question that only steers the AI draft says so (honest UI).
 const STEERS = 'Steers the AI draft';
-const choices = (nw: NewDraft, setNw: SetNw, field: Field, key: string, options: string[], steersAi = false): { key: string; hint: string; chips: Chip[] } => ({
-  key, hint: steersAi ? STEERS : '', chips: options.map((o) => ({ key: o, label: o, on: nw[field]?.[key] === o, pick: () => setNw((cur) => ({ [field]: { ...cur[field], [key]: o } })) })),
+const choices = (nw: NewDraft, setNw: SetNw, field: Field, key: string, options: string[], steersAi = false, note = ''): { key: string; hint: string; chips: Chip[] } => ({
+  key, hint: steersAi ? STEERS : note, chips: options.map((o) => ({ key: o, label: o, on: nw[field]?.[key] === o, pick: () => setNw((cur) => ({ [field]: { ...cur[field], [key]: o } })) })),
 });
 
 // Which stock looks and voices a studio casts (no media yet: the picks are role labels and voice names).
@@ -29,20 +31,27 @@ function castPickers(def: StudioDef) {
     : def.cast === 'voices' ? [{ key: 'Host voice', options: STOCK_VOICES }, { key: 'Guest voice', options: STOCK_VOICES }] : [];
 }
 
+// A question's options, without the ones only Draft with AI delivers while it cannot run (and why they are gone).
+function offered(L: Logic, q: string, options: string[]) {
+  const only = AI_ONLY[q], cut = !!only && !L.aiCan('studio_draft');
+  return { options: cut ? options.filter((o) => !only.options.includes(o)) : options, note: cut ? only.why : '' };
+}
+
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
-  const list = (nw.items?.list ?? []) as StudioItem[], text2 = def.items.some((i) => i.length === 3);
-  // Editing keeps the items' provenance; a hand-made list says 'manual'.
-  const change = (f: (rows: StudioItem[]) => StudioItem[]) => setNw((cur) => { const it = cur.items ?? noItems();
-    return { items: { ...it, list: f(it.list as StudioItem[]) as StudioRow[], how: it.how || 'manual', problems: [] } }; });
+  const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list);
+  // Editing the rows keeps the items' provenance and any check after them; a hand-made list says 'manual'.
+  const change = (f: (rows: StudioItem[], check: ExamQuestion[]) => StudioEntry[]) => setNw((cur) => { const it = cur.items ?? noItems(), all = it.list as StudioEntry[];
+    return { items: { ...it, list: f(stepsOf(all), questionsOf(all)) as Item[], how: it.how || 'manual', problems: [] } }; });
   return {
-    shape: def.qs.map(([q, options, steers]) => choices(nw, setNw, 'shape', q, options, steers)),
+    shape: def.qs.map(([q, options, steers]) => { const o = offered(L, q, options); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers)),
     cast: castPickers(def).map((p) => choices(nw, setNw, 'cast', p.key, p.options)),
-    rows: list.map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
-      edit: (f: 0 | 1 | 2, v: string) => change((rows) => rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x))),
-      remove: () => change((rows) => rows.filter((_, i) => i !== k)) })),
-    hasText2: text2, problems: itemsValid(def, list),
-    add: () => change((rows) => [...rows, (text2 ? ['', '', ''] : ['', '']) as StudioItem]),
+    rows: stepsOf(list).map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
+      edit: (f: 0 | 1 | 2, v: string) => change((rows, q) => [...rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x)), ...q]),
+      remove: () => change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]) })),
+    check: check.length ? { head: 'Check · ' + check.length + ' questions · with the right answer', rows: itemRows('Practice exam', check), remove: () => change((rows) => rows) } : null,
+    hasText2: text2, problems: studioProblems(def, list, nw.shape ?? {}),
+    add: () => change((rows, q) => [...rows, (text2 ? ['', '', ''] : ['', '']) as StudioItem, ...q]),
     // "Draft with AI" (the one pipeline in studioDraft.ts). Flash keeps its own draft button in the item panel and does not use this.
     aiDraft: { label: L.state.nwAiBusy ? 'Drafting' : 'Draft with AI', busy: L.state.nwAiBusy,
       run: () => draftItems(L, nw, bundles, setNw, studioQuery(nw), studioSpec(def, nw)) },

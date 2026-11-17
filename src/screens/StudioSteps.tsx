@@ -1,7 +1,7 @@
 // The step bodies a generic studio adds to the spine: Shape it (questions), Draft (item rows) and Produce (choices,
 // stock look and voice, build). They only read from the view-model (studioVals.ts, studioStepVals.ts) and use the shared
 // ChipGroup and ItemRows. In View as the choices show as plain text and every action is gone.
-import { Button, Input } from '../ds';
+import { Button, Input, LinkButton } from '../ds';
 import type { VM } from '../model';
 import ChipGroup from './ChipGroup';
 import { ItemRows, Problems } from './CreateShared';
@@ -27,6 +27,12 @@ export function DraftRows({ st }: { st: ST }) {
             ...(st.hasText2 ? [<Input key="t2" value={r.text2} onChange={(e) => r.edit(2, e.target.value)} aria-label={'Text 2 of item ' + (k + 1)} />] : [])],
           remove: r.remove, removeTitle: 'Remove item ' + (k + 1) }))} />
       {!st.readOnly && <div><Button size="sm" variant="secondary" onClick={st.add}>Add item</Button></div>}
+      {st.check && (
+        <>
+          <ItemRows head={st.check.head} note={st.itemsLabel} rows={st.check.rows.map((r) => ({ cells: [r.front, r.back] }))} />
+          {!st.readOnly && <div><LinkButton tone="muted" onClick={st.check.remove}>Remove the check</LinkButton></div>}
+        </>
+      )}
     </div>
   );
 }

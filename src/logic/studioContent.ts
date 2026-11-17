@@ -2,8 +2,8 @@
 // (parseFormatContent). The database builds the same when it publishes (private.aid_content, private.case_content,
 // private.explainer_content); the studio's preview uses this so the creator tries exactly what learners will get. Pure.
 import type { FormatContent } from '../types';
-import { questionsOf, stepsOf } from './studios';
-import type { StudioEntry, StudioItem } from './studios';
+import { itemsValid, questionsOf, stepsOf } from './studios';
+import type { StudioDef, StudioEntry, StudioItem } from './studios';
 
 // The Case Studio's question whose Yes makes a case count as trajectory evidence (stored as `evidence` on the content).
 export const EVIDENCE_QUESTION = 'Can it count as trajectory evidence?';
@@ -31,6 +31,13 @@ export function explainerProblems(items: StudioEntry[], shape: Record<string, st
   const has = questionsOf(items).length > 0, wants = explainerEnd(shape) === END_CHECK;
   return wants && !has ? [NEEDS_CHECK] : !wants && has ? [UNUSED_CHECK] : [];
 }
+// What a studio's Draft step still needs: the item rules, and for the Explainer the ending and check agreeing.
+export const studioProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>) =>
+  [...itemsValid(def, items), ...(def.format === 'Interactive explainer' ? explainerProblems(items, shape) : [])];
+// Answers only Draft with AI can deliver (question to answers): offered only while it can run, with the reason otherwise.
+export const AI_ONLY: Record<string, { options: string[]; why: string }> = {
+  [END_QUESTION]: { options: [END_CHECK], why: 'A three-question check is written by Draft with AI, which is not switched on' },
+};
 
 const texts = (items: StudioItem[], label: string) => items.filter((i) => i[0] === label).map((i) => i[1].trim());
 const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, string>) => FormatContent> = {

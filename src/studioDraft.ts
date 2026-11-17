@@ -47,7 +47,7 @@ export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setN
 
 // The spec of a generic studio (use studio_draft); Game has no scripted rows.
 export const studioSpec = (def: StudioDef, nw: NewDraft) => (passages: string[]): DraftSpec => ({
-  use: 'studio_draft', request: studioRequest(def, nw, passages), parse: (raw) => parseStudioItems(def, raw), scripted: scriptedItems(def, nw, passages),
+  use: 'studio_draft', request: studioRequest(def, nw, passages), parse: (raw) => parseStudioItems(def, raw, nw.shape), scripted: scriptedItems(def, nw, passages),
   noScript: 'Draft with AI or write the items yourself', failed: 'AI did not return usable items · try again or write them yourself',
   aiNote: 'AI-assisted draft · grounded on the picked bundles · check every item' });
 export const studioQuery = (nw: NewDraft) => nw.title + ' ' + nw.take + ' ' + domainName(nw.dom);
