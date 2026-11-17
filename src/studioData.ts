@@ -5,7 +5,7 @@ export const STUDIO_STEPS = ['Idea & sources', 'Shape it', 'Draft', 'Produce', '
 export const STOCK_LOOKS: { role: string; color: string }[] = [{ role: 'HR director · 50s', color: '#8a5a8c' }, { role: 'CFO · 40s', color: '#2f7fc1' }, { role: 'Consultant · 30s', color: '#4c7a10' }, { role: 'Engineer · 50s', color: '#b5762a' }];
 export const STOCK_VOICES = ['Warm · Flemish English', 'Neutral · British English', 'Brisk · Belgian French', 'Calm · Dutch'];
 export const STUDIOS: StudioDef[] = [
- { id: 'avatar', name: 'Avatar Studio', out: 'Avatar scenario', format: 'Avatar', available: false, compact: false, glyph: 'AV', time: 'about 20 min', dom: 'prof', lvl: 3, min: 6, cast: 'look', pv: 'avatar',
+ { id: 'avatar', name: 'Avatar Studio', out: 'Avatar', format: 'Avatar', available: false, compact: false, glyph: 'AV', time: 'about 20 min', dom: 'prof', lvl: 3, min: 6, cast: 'look', pv: 'avatar',
    tag: 'A talking AI character people practise a hard conversation with',
    idea: 'A sceptical HR director questions the business case for a new HR system', title: 'Selling an HR system to a sceptical HR director',
    qs: [['Who does the learner talk to?', ['A client executive', 'A colleague or junior', 'A regulator or auditor', 'A supplier']], ['What makes it hard?', ['Pushes back on cost', 'Emotional', 'Holds back information', 'Short of time']], ['How is it scored?', ['AI scores, counsellor confirms', 'Self-assessment', 'Practice only']], ['How long is a run?', ['5 minutes', '10 minutes', '15 minutes']]],

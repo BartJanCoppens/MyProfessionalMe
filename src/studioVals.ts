@@ -8,10 +8,10 @@ import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { noItems, validItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
-import { studioById, studioFormats, visibleSteps } from './logic/studios';
+import { studioById, studioFormats, tooFew, visibleSteps } from './logic/studios';
 import type { StudioDef } from './logic/studios';
 import { STUDIOS } from './studioData';
-import { fit, reachable } from './studioRules';
+import { changeFormat, reachable } from './studioRules';
 import { BUILD_RUNNERS } from './studioRunners';
 import { stepVals } from './studioStepVals';
 
@@ -43,7 +43,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
   const set = (p: Partial<StudioState>) => L.setState((s) => ({ studio: { ...s.studio, ...p } }));
   const items = validItems(nw.type, nw.items?.list ?? []);
   const parts = stepVals(L, def, nw, setNw, src.bundles);
-  const pick = (f: string) => (L.state.nwAiBusy ? L.say('Wait for the draft to finish') : setNw((cur) => (cur.type === f ? {} : { type: f, items: noItems(), ...fit(src.rules, cur, f) })));
+  const pick = (f: string) => (L.state.nwAiBusy ? L.say('Wait for the draft to finish') : setNw((cur) => changeFormat(cur, f, src.rules)));
   // Why a studio cannot be opened, once per card; '' when it can.
   const reason = (d: StudioDef) => (!d.available ? 'Coming in a later release' : formatsOf(d).length ? '' : 'Not in your creation rules');
   const open = (d: StudioDef, note: string) => {
@@ -52,12 +52,12 @@ export function studioVals(L: Logic, src: StudioSrc) {
     if (note) { L.say(note); return; }
     const fs = formatsOf(d);
     const f = fs.includes(nw.type) ? nw.type : fs[0];
-    setNw((cur) => ({ ...(cur.type === f ? {} : { type: f, items: noItems() }), ...fit(src.rules, cur, f), ...(d.compact ? {} : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() }) }));
+    setNw((cur) => ({ ...changeFormat(cur, f, src.rules), ...(d.compact ? {} : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() }) }));
     set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined });
   };
   // What the Draft step still needs: a generic studio's item schema; Flash's cards or questions have their own shape, so only
   // the studio's minimum, worded as in the design ("Draft at least 4 items in step 2").
-  const problems = !flash ? parts.problems : items.length < def.min ? ['Draft at least ' + def.min + ' items in step ' + (steps.indexOf('Draft') + 1)] : [];
+  const problems = !flash ? parts.problems : tooFew(def, items.length) ? ['Draft at least ' + def.min + ' items in step ' + (steps.indexOf('Draft') + 1)] : [];
   // Server reasons the checks above already show (a client name) are not listed twice.
   const reasons = (src.checkReasons ?? []).filter((r) => !src.checks.some((c) => c.text === r));
   const next = () => {

@@ -18,6 +18,7 @@ import {
   attrsOfDraft, blankDraft, checkKey, decide, deleteDraft, draftOf, effective, first, myLine, revKey, runCheck, saveForm, submitSaved, submittedEdit, writePolicy,
 } from './createSave';
 import { bundleFinder, draftAi, usableBundles } from './createGrounding';
+import { changeFormat } from './studioRules';
 import { HUB, studioVals } from './studioVals';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
@@ -129,7 +130,7 @@ function createScreen(L: Logic) {
     newTypes: CREATE_TYPES.map((x) => {
       const on = nw.type === x[0], fixed = !on && (locked || !allowed.formats.includes(x[0]));
       return { label: x[0], desc: x[1], bg: on ? '#1a1d18' : '#fff', fg: on ? '#fff' : fixed ? '#b3b8ae' : '#1a1d18', bd: on ? '#1a1d18' : '#d5dacf',
-        pick: () => (s.nwAiBusy ? L.say('Wait for the draft to finish') : fixed ? L.say(locked ? 'The format stays as submitted' : 'Not in your creation rules') : setNw((cur) => (cur.type === x[0] ? {} : { type: x[0], items: noItems() }))) };
+        pick: () => (s.nwAiBusy ? L.say('Wait for the draft to finish') : fixed ? L.say(locked ? 'The format stays as submitted' : 'Not in your creation rules') : setNw((cur) => changeFormat(cur, x[0]))) };
     }),
     domainOptions: (locked ? [nw.dom] : allowed.domains).map((k) => ({ value: k, label: domainName(k) })),
     levelOptions: LEVELS.map((l, i) => ({ value: String(i + 1), label: 'L' + (i + 1) + ' · ' + l })), stageOptions: STAGES.map((x) => ({ value: x, label: x })),

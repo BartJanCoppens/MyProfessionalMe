@@ -49,19 +49,21 @@ function podcast(items: StudioItem[]): string[] {
 const game = (items: StudioItem[]) => [...(items[0]?.[0] === 'Concept' && labelled(items, 'Concept').length === 1 ? [] : ['Start with exactly one Concept']),
   ...(items.filter((i) => /^Round \d+$/.test(i[0])).length >= 2 ? [] : ['Add at least 2 Round items'])];
 const caseExercise = (items: StudioItem[]) => [...need(items, 'Brief'), ...need(items, 'Deliverable'), ...need(items, 'Criterion')];
-const flash = (items: StudioItem[]) => items.filter((i) => i[0] !== 'Card' || blank(i[2])).map((i) => i[0] + ': a card needs a front and a back');
 
 // One schema per studio on top of what every studio needs: a label and text on each row, and at least def.min rows.
-const SCHEMAS: Record<string, ItemSchema> = { avatar, reel: onScreen, slides: () => [], podcast, game, motion: () => [], explainer: () => [], aid: () => [], flash, case: caseExercise };
+const SCHEMAS: Record<string, ItemSchema> = { avatar, reel: onScreen, slides: () => [], podcast, game, motion: () => [], explainer: () => [], aid: () => [], case: caseExercise };
 
 // The most rows a studio's items hold (the design's example counts, with room to grow; reel and motion stay inside 90 s,
 // podcast inside 30 min at four minutes a chapter, slides inside 15 min).
 export const ROWS_MAX: Record<string, number> = { avatar: 12, reel: 8, podcast: 8, game: 10, slides: 15, motion: 8, explainer: 10, aid: 20, case: 12 };
 
+// The one minimum: fewer rows than the studio needs. Flash card & Exam Studio's items have their own shape and only this rule.
+export const tooFew = (def: StudioDef, count: number) => count < def.min;
+
 // The problems with a studio's items, in words; empty means valid (the shape of the contribution path's problem lists).
 export function itemsValid(def: StudioDef, items: StudioItem[]): string[] {
   const blanks = items.filter((i) => blank(i[0]) || blank(i[1])).map((i) => (i[0] || 'An item') + ': text is empty');
-  const few = items.length < def.min ? ['Add at least ' + def.min + ' items'] : [];
+  const few = tooFew(def, items.length) ? ['Add at least ' + def.min + ' items'] : [];
   const many = ROWS_MAX[def.id] && items.length > ROWS_MAX[def.id] ? ['Add at most ' + ROWS_MAX[def.id] + ' items'] : [];
   return [...few, ...many, ...blanks, ...(SCHEMAS[def.id] ?? (() => []))(items)];
 }
