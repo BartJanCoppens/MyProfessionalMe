@@ -140,6 +140,8 @@ export function trajectoryAdminVals(L: Logic) {
     setStatus: (v: string) => edit((x) => ({ ...x, status: v === 'live' ? 'live' : v === 'retired' ? 'retired' : 'draft' })),
     setName: setField('name'), setCred: setField('credential'), setRenew: setField('renewal'), setCost: setField('cost'), setIssuer: setField('issuer'),
     setMonths: (e: Change) => edit((x) => ({ ...x, months: Number(e.target.value) })), setValid: (e: Change) => edit((x) => ({ ...x, valid_months: Number(e.target.value) || null })),
+    line: t.business_line ?? '', setLine: (e: Change) => edit((x) => ({ ...x, business_line: e.target.value || null })),
+    lineOptions: withCurrent(L.editableLines().map((l) => opt(l, l || 'Firm-wide')), t.business_line ?? '', t.business_line ?? 'Firm-wide'),
     setEnrol: (e: Change) => edit((x) => ({ ...x, enrol: ENROL.find((o) => o[0] === e.target.value)?.[0] ?? x.enrol })),
     issuerOptions: withCurrent(base.trjIssuerOptions, t.issuer), monthOptions: withCurrent(base.trjMonthOptions, String(t.months), t.months + ' months'),
     validOptions: withCurrent(base.trjValidOptions, String(t.valid_months ?? 0), t.valid_months + ' months'),

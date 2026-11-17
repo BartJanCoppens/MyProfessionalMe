@@ -32,6 +32,14 @@ beforeEach(() => { vi.clearAllMocks(); window.scrollTo = vi.fn() as unknown as t
 afterEach(cleanup);
 
 describe('the trajectory editor', () => {
+  it('changes the business line from the select and saves it', () => {
+    show([trajectory()]);
+    const select = screen.getByLabelText('Business line') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Firm-wide', 'Consulting', 'Audit', 'Tax & Legal']);
+    fireEvent.change(select, { target: { value: 'Consulting' } });
+    expect(current.trjs[0].business_line).toBe('Consulting');
+    expect(store.saveTrajectorySoon).toHaveBeenCalled();
+  });
   it('opens from the tab and shows the list and the editor', () => {
     show([trajectory()], { mapMode: 'learn' });
     fireEvent.click(screen.getByRole('button', { name: /Certification trajectories · 1/ }));

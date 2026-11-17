@@ -274,3 +274,40 @@ describe('the coverage grid', () => {
     expect(h.vm().covRows.find((r) => r.key === 'Audit')!.cells.find((c) => c.stage === 'Manager')!.trjN).toBe('0');
   });
 });
+
+describe('business line', () => {
+  const labels = (h: ReturnType<typeof setup>) => h.vm().tj!.lineOptions.map((o) => o.label);
+  it('offers Firm-wide and every line to a System or General Admin', () => {
+    expect(labels(setup([T('T1')]))).toEqual(['Firm-wide', 'Consulting', 'Audit', 'Tax & Legal']);
+    expect(labels(setup([T('T1')], generalAdmin()))).toEqual(['Firm-wide', 'Consulting', 'Audit', 'Tax & Legal']);
+  });
+  it('offers a Domain Admin only the lines they administer', () => {
+    const h = setup([T('T1', { business_line: 'Audit' })], domainAdmin(['Audit', 'Consulting']));
+    expect(labels(h)).toEqual(['Consulting', 'Audit']);
+    expect(h.vm().tj!.line).toBe('Audit');
+  });
+  it('shows null as Firm-wide and saves a change through saveTrajectorySoon', () => {
+    const h = setup([T('T1')]);
+    expect(h.vm().tj!.line).toBe('');
+    h.vm().tj!.setLine(ev('Audit'));
+    expect(h.state.trjs[0].business_line).toBe('Audit');
+    expect(store.saveTrajectorySoon).toHaveBeenCalled();
+    h.vm().tj!.setLine(ev(''));
+    expect(h.state.trjs[0].business_line).toBeNull();
+  });
+  it('blocks a change the database would refuse', () => {
+    const h = setup([T('T1', { business_line: 'Audit' })], domainAdmin(['Audit']));
+    h.vm().tj!.setLine(ev('Consulting'));
+    expect(h.state.trjs[0].business_line).toBe('Audit');
+    expect(h.lastToast()).toMatch(/^Not changed/);
+    expect(store.saveTrajectorySoon).not.toHaveBeenCalled();
+  });
+  it('lets a Domain Admin with two lines create on the first and switch to the second', async () => {
+    vi.mocked(store.createTrajectory).mockImplementation(async (d) => ({ ...d, id: 'T9', published_at: null }));
+    const h = setup([], domainAdmin(['Consulting', 'Audit']));
+    h.vm().trjNew(); await flush();
+    expect(h.state.trjs[0].business_line).toBe('Consulting');
+    h.vm().tj!.setLine(ev('Audit'));
+    expect(h.state.trjs[0].business_line).toBe('Audit');
+  });
+});
