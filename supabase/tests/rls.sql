@@ -2306,6 +2306,109 @@ do $$ begin
     insert into results (check_name, expected, actual) values ('ME anon uploads nothing', 'blocked: 42501', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('ME anon uploads nothing', 'blocked: 42501', 'blocked: '||sqlstate); end;
 end $$;
+-- ---------- Voice adapter (VO) ----------
+-- stock_voices: System and General Admins add, rename and deactivate; every signed-in person reads the active ones;
+-- nobody deletes one, and its provider voice id stays as added. studio_voice: kind voice, off by default, live only on an
+-- ElevenLabs connection with a key. ai_count_call keeps a daily character limit per use as well as the call limit.
+-- public.can_write_media: the media write rule, which the voice function asks before it calls ElevenLabs.
+reset role;
+insert into results (check_name, expected, actual) select 'VO studio_voice is seeded: voice, off, 30000 characters a day', 'voice/false/30000',
+  kind||'/'||enabled||'/'||daily_chars from public.ai_uses where key = 'studio_voice';
+insert into results (check_name, expected, actual) select 'VO text uses keep no character limit', '0', count(*)::text from public.ai_uses where kind = 'text' and daily_chars is not null;
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e8','t.voicega@test.local'), ('00000000-0000-0000-0000-0000000000e9','t.voicemember@test.local');
+insert into public.user_roles (user_id, role) values ('00000000-0000-0000-0000-0000000000e8','general_admin');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e8","role":"authenticated"}';
+with i as (insert into public.stock_voices (name, voice_id, language, accent) values ('Narrator · warm, 40s', 'tVoiceWarm01', 'en', 'British') returning 1)
+  insert into results (check_name, expected, actual) select 'VO a General Admin adds a stock voice', '1 rows', count(*)||' rows' from i;
+insert into public.stock_voices (name, voice_id, language, accent) values ('Interviewer · calm, 30s', 'tVoiceCalm02', 'nl', 'Flemish');
+with u as (update public.stock_voices set active = false, name = 'Interviewer · calm' where voice_id = 'tVoiceCalm02' returning 1)
+  insert into results (check_name, expected, actual) select 'VO a General Admin renames and deactivates a voice', '1 rows', count(*)||' rows' from u;
+do $$ begin
+  begin insert into public.stock_voices (name, voice_id, language) values ('Bad id', 'x y', 'en');
+    insert into results (check_name, expected, actual) values ('VO a voice id is letters, digits, - and _ (at most 64)', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO a voice id is letters, digits, - and _ (at most 64)', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin insert into public.stock_voices (name, voice_id, language) values ('Twice', 'tVoiceWarm01', 'en');
+    insert into results (check_name, expected, actual) values ('VO a voice id is on the list once', 'blocked: 23505', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO a voice id is on the list once', 'blocked: 23505', 'blocked: '||sqlstate); end;
+  begin update public.stock_voices set voice_id = 'tVoiceOther9' where voice_id = 'tVoiceWarm01';
+    insert into results (check_name, expected, actual) values ('VO the provider voice id stays as added', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO the provider voice id stays as added', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin delete from public.stock_voices where voice_id = 'tVoiceCalm02';
+    insert into results (check_name, expected, actual) values ('VO nobody deletes a voice (deactivate instead)', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO nobody deletes a voice (deactivate instead)', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+with i as (insert into public.stock_voices (name, voice_id, language) values ('Coach · bright, 20s', 'tVoiceBright3', 'fr') returning 1)
+  insert into results (check_name, expected, actual) select 'VO a System Admin adds a stock voice', '1 rows', count(*)||' rows' from i;
+insert into results (check_name, expected, actual) select 'VO admins read inactive voices too', '3', count(*)::text from public.stock_voices where voice_id like 'tVoice%';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e9","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'VO a member reads the active voices only', '2', count(*)::text from public.stock_voices where voice_id like 'tVoice%';
+with u as (update public.stock_voices set active = false where voice_id = 'tVoiceWarm01' returning 1)
+  insert into results (check_name, expected, actual) select 'VO a member deactivates no voice', '0 rows', count(*)||' rows' from u;
+do $$ begin
+  begin insert into public.stock_voices (name, voice_id, language) values ('Mine', 'tVoiceMine04', 'en');
+    insert into results (check_name, expected, actual) values ('VO a member adds no voice', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO a member adds no voice', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+do $$ begin
+  begin insert into public.stock_voices (name, voice_id, language) values ('Line voice', 'tVoiceLine05', 'en');
+    insert into results (check_name, expected, actual) values ('VO a Domain Admin adds no voice', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO a Domain Admin adds no voice', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+with u as (update public.stock_voices set name = 'Renamed' where voice_id = 'tVoiceWarm01' returning 1)
+  insert into results (check_name, expected, actual) select 'VO a Domain Admin renames no voice', '0 rows', count(*)||' rows' from u;
+reset role;
+set local role anon;
+set local request.jwt.claims = '';
+do $$ begin
+  begin perform count(*) from public.stock_voices;
+    insert into results (check_name, expected, actual) values ('VO anon reads no voices', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO anon reads no voices', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin perform public.can_write_media('00000000-0000-0000-0000-0000000000f2/'||current_setting('test.me_o')||'/voice-a.mp3');
+    insert into results (check_name, expected, actual) values ('VO anon asks no media rule', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO anon asks no media rule', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- live: studio_voice on the ElevenLabs connection with a key (test.ai2) and no model; never on an 'other' connection
+reset role; set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'VO studio_voice is not live while off', 'false', ('studio_voice' = any(public.ai_live_uses()))::text;
+with u as (update public.ai_uses set connection_id = current_setting('test.ai2')::uuid, enabled = true where key = 'studio_voice' returning 1)
+  insert into results (check_name, expected, actual) select 'VO a System Admin gives studio_voice the ElevenLabs connection', '1 rows', count(*)||' rows' from u;
+insert into results (check_name, expected, actual) select 'VO studio_voice is live on ElevenLabs with a key, no model needed', 'true', ('studio_voice' = any(public.ai_live_uses()))::text;
+with i as (insert into public.ai_connections (name, provider) values ('T Other voices', 'other') returning id)
+  select set_config('test.ai3', (select id::text from i), true);
+select public.ai_set_key(current_setting('test.ai3')::uuid, 'other-test-key-77');
+update public.ai_uses set connection_id = current_setting('test.ai3')::uuid where key = 'studio_voice';
+insert into results (check_name, expected, actual) select 'VO only an ElevenLabs connection makes studio_voice live', 'false', ('studio_voice' = any(public.ai_live_uses()))::text;
+update public.ai_uses set connection_id = current_setting('test.ai2')::uuid where key = 'studio_voice';
+with u as (update public.ai_uses set daily_chars = 5000 where key = 'studio_voice' returning 1)
+  insert into results (check_name, expected, actual) select 'VO a System Admin sets the character limit', '1 rows', count(*)||' rows' from u;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e8","role":"authenticated"}';
+with u as (update public.ai_uses set daily_chars = 900000 where key = 'studio_voice' returning 1)
+  insert into results (check_name, expected, actual) select 'VO a General Admin sets no character limit', '0 rows', count(*)||' rows' from u;
+-- the function (service role) counts characters as well as calls
+reset role;
+insert into results (check_name, expected, actual) select 'VO the function counts a voice call', '1', public.ai_count_call('00000000-0000-0000-0000-0000000000e9', 'studio_voice', 4000)::text;
+do $$ begin
+  begin perform public.ai_count_call('00000000-0000-0000-0000-0000000000e9', 'studio_voice', 1500);
+    insert into results (check_name, expected, actual) values ('VO refused beyond the daily characters', 'blocked: Daily AI limit reached', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO refused beyond the daily characters', 'blocked: Daily AI limit reached', 'blocked: '||sqlerrm); end;
+  begin perform public.ai_count_call('00000000-0000-0000-0000-0000000000e8', 'studio_voice', 5001);
+    insert into results (check_name, expected, actual) values ('VO a first call over the characters is refused too', 'blocked: Daily AI limit reached', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('VO a first call over the characters is refused too', 'blocked: Daily AI limit reached', 'blocked: '||sqlerrm); end;
+end $$;
+insert into results (check_name, expected, actual) select 'VO a refused call counts nothing', '1/4000', calls||'/'||input_chars from public.ai_usage where user_id = '00000000-0000-0000-0000-0000000000e9' and use_key = 'studio_voice';
+insert into results (check_name, expected, actual) select 'VO the call still fits up to the limit', '2', public.ai_count_call('00000000-0000-0000-0000-0000000000e9', 'studio_voice', 1000)::text;
+-- the media write rule, asked by the caller: their own editable contribution only
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'VO the author may write to their own draft''s folder', 'true', public.can_write_media('00000000-0000-0000-0000-0000000000f2/'||current_setting('test.me_o')||'/voice-a.mp3')::text;
+insert into results (check_name, expected, actual) select 'VO not to another person''s contribution', 'false', public.can_write_media('00000000-0000-0000-0000-0000000000f2/'||current_setting('test.me_c')||'/voice-a.mp3')::text;
+insert into results (check_name, expected, actual) select 'VO not to a contribution that does not exist', 'false', public.can_write_media('00000000-0000-0000-0000-0000000000f2/00000000-0000-0000-0000-00000000dead/voice-a.mp3')::text;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'VO not to their own contribution once published', 'false', public.can_write_media('00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/voice-a.mp3')::text;
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
