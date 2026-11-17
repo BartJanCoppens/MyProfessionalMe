@@ -1,251 +1,31 @@
 // Create & share view-model (design v3, F12), split out of Logic.renderVals() like kbVals. It shows the signed-in
 // person's own work: their contributions, the reviews assigned to them and, for admins, the review requirements.
-// Every write goes through contributionStore, refuses in View as (L.readOnly()) and reloads afterwards.
+// The writes live in createSave.ts, the bundles and "Draft with AI" in createGrounding.ts.
 import type { ChangeEvent } from 'react';
 import { LEARN_BY, LEVELS, REVIEW_STAGES, REVIEW_WHO, RUBRIC, STAGES } from './data';
 import type { Logic } from './model';
-import type { AppState, Bundle, NewDraft } from './types';
-import { retrieve } from './logic/okf';
-import { addFirst, itemsPanel, viewItems } from './createItems';
+import type { AppState } from './types';
+import { itemsPanel, viewItems } from './createItems';
 import type { SetNw } from './createItems';
-import { aiAssisted, hasItems, itemsCheck, itemsFromSaved, itemsText, noItems } from './logic/items';
-import type { Hit } from './logic/okf';
+import { hasItems, itemsCheck, itemsFromSaved, itemsText, noItems } from './logic/items';
 import {
-  CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
+  CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, ROLE_OF_STEP, TAKE_MAX, TYPE_NAMES, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
   emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
 } from './logic/contribution';
-import type { Attrs, Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
-import { checkContribution, decideReview, loadCreate, removeDraft, removePolicy, saveDraft, savePolicy, submitContribution } from './lib/contributionStore';
-import type { DraftFields } from './lib/contributionStore';
-import { canComplete } from './lib/ai';
-import { HUB, studioOf, studioVals } from './studioVals';
-import type { AiRequest } from './lib/ai';
+import type { Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
+import { removePolicy, savePolicy } from './lib/contributionStore';
+import {
+  attrsOfDraft, blankDraft, checkKey, decide, deleteDraft, draftOf, effective, first, myLine, revKey, runCheck, saveForm, submitSaved, submittedEdit, writePolicy,
+} from './createSave';
+import { bundleFinder, draftAi, usableBundles } from './createGrounding';
+import { HUB, studioVals } from './studioVals';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
 const ST: Record<string, [string, string, string]> = { published: ['accepted', 'Published', 'check'], review: ['submitted', 'In review', 'dot'], changes: ['clarification', 'Changes requested', 'dot'], draft: ['not-started', 'Draft', 'dot'] };
 const RV: Record<string, [string, string, string]> = { approved: ['accepted', 'Approved', 'check'], changes: ['clarification', 'Changes requested', 'dot'], pending: ['in-progress', 'Reviewing', 'dot'], waiting: ['not-started', 'Waiting', 'dot'] };
 const EMPTY: CreateData = { contributions: [], reviews: [], rules: [], policies: [], peers: 0 };
-const first = (name: string) => name.split(/\s+/)[0] || name;
 const ini = (name: string) => name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
-const revKey = (r: Review) => r.contribution_id + '|' + r.step + '|' + r.slot;
 const dot = (c: Check) => ({ text: c.text, dot: c.ok ? '#86BC25' : '#e0a100', fg: c.ok ? '#3d423b' : '#7a5000' });
-const names = (list: string[]) => (list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0] || '');
-const without = <T,>(o: Record<string, T>, k: string) => { const n = { ...o }; delete n[k]; return n; };
-
-// A fresh form that one of the person's rules allows: the first rule's first values, the person's own line when the
-// rule leaves lines open.
-export function blankDraft(rules: RuleParts[] | null, myLine: string | null): NewDraft {
-  const r = rules && rules[0];
-  const line = !r ? myLine || '' : r.lines.length ? (myLine && r.lines.includes(myLine) ? myLine : r.lines[0]) : myLine || 'Consulting';
-  return { line, aud: r?.audiences[0] || '', type: r?.formats[0] || 'Reel', title: '', dom: r?.domains[0] || 'prof', lvl: '2', stage: 'Senior consultant', take: '',
-    outline: [], sources: [], ai: false, aiNote: '', items: noItems() };
-}
-const attrsOfDraft = (nw: NewDraft): Attrs => ({ line: nw.line || null, format: nw.type, domain: nw.dom, audience: nw.aud || null });
-// The form as it applies. Once submitted, line, format, domain and audience stay as they were (the database refuses a change).
-function effective(s: AppState): NewDraft {
-  const ed = submittedEdit(s);
-  return ed ? { ...s.nw, line: ed.business_line || '', aud: ed.audience || '', type: ed.type, dom: ed.domain } : s.nw;
-}
-// The person's own line, for the default and the bundles they may use (none while viewing someone else).
-const myLine = (L: Logic) => (L.subject.readOnly ? null : L.subject.businessLine);
-function submittedEdit(s: AppState) {
-  const ed = s.editing ? s.create?.contributions.find((c) => c.id === s.editing) : null;
-  return ed && ed.status !== 'draft' ? ed : null;
-}
-const fieldsOf = (nw: NewDraft, bundles: string[]): DraftFields => {
-  return { business_line: nw.line || null, audience: nw.aud || null, type: nw.type, title: nw.title.trim().slice(0, 120), domain: nw.dom, level: +nw.lvl, audience_stage: nw.stage,
-    takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: aiAssisted(nw), bundle_ids: bundles,
-    items: hasItems(nw.type) ? nw.items?.list ?? [] : null };
-};
-// The row to save: a new draft made in a studio says which (only on insert; the database keeps it).
-const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles) : { ...fieldsOf(nw, bundles), studio });
-const draftOf = (c: Contribution): NewDraft => ({ line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
-  outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !hasItems(c.type), aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
-  items: hasItems(c.type) ? { ...noItems(), list: itemsFromSaved(c.type, c.items), how: c.ai_assisted ? 'ai' : 'saved' } : noItems() });
-
-// Bundles a creator may draw on: indexed, open to creators, Tax & Legal ones for that line only.
-export function usableBundles(bundles: Bundle[], line: string | null) {
-  return bundles.filter((b) => b.status !== 'draft' && b.access !== 'admins' && (b.access !== 'tl' || line === 'Tax & Legal'));
-}
-
-const STOP = new Set(['with', 'that', 'your', 'from', 'this', 'what', 'when', 'into', 'about', 'their', 'than', 'more', 'less', 'make']);
-const words = (t: string) => t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4 && !STOP.has(w));
-const haystack = (b: Bundle) => [b.name, b.desc, b.owner, ...b.tags].join(' ').toLowerCase();
-// A few bundles out of possibly hundreds. A search keeps those matching every word typed, most used first. Without one:
-// those that fit the piece (a title word counts double a domain word; the author's line breaks ties), else the most used.
-export function findBundles(bundles: Bundle[], query: string, piece: { title: string; dom: string; line: string }, limit = 5) {
-  const q = query.trim().toLowerCase();
-  const byUse = (a: Bundle, b: Bundle) => b.usedBy - a.usedBy;
-  if (q) {
-    const hits = bundles.filter((b) => q.split(/\s+/).every((w) => haystack(b).includes(w))).sort(byUse);
-    return { mode: 'search' as const, rows: hits.slice(0, limit), total: hits.length };
-  }
-  const tw = words(piece.title), dw = words(domainName(piece.dom));
-  const fit = bundles.map((b) => { const h = haystack(b); return { b, n: 2 * tw.filter((w) => h.includes(w)).length + dw.filter((w) => h.includes(w)).length }; })
-    .filter((x) => x.n > 0)
-    .sort((x, y) => y.n - x.n || +(y.b.line === piece.line) - +(x.b.line === piece.line) || byUse(x.b, y.b));
-  if (fit.length) return { mode: 'suggest' as const, rows: fit.slice(0, limit).map((x) => x.b), total: fit.length };
-  return { mode: 'popular' as const, rows: bundles.slice().sort(byUse).slice(0, limit), total: bundles.length };
-}
-
-// The grounding picker: the picked bundles as chips, a search box and at most five rows to add from.
-function bundleFinder(L: Logic, nw: NewDraft, line: string | null) {
-  const s = L.state, usable = usableBundles(s.bundles, line);
-  const meta = (b: Bundle) => b.access === 'tl' ? 'Tax & Legal' : b.sources.filter((r) => r[5] !== 'client' && r[5] !== 'licensed').reduce((a, r) => a + r[3], 0) + ' passages';
-  const f = findBundles(usable.filter((b) => !s.nwKb.includes(b.id)), s.nwKbQ, { title: nw.title, dom: nw.dom, line: nw.line });
-  const n = (k: number, one: string, many: string) => k + ' ' + (k === 1 ? one : many);
-  return {
-    nwKbCount: n(usable.length, 'bundle', 'bundles'), nwKbQuery: s.nwKbQ, nwKbSetQuery: (e: Input) => L.setState({ nwKbQ: e.target.value }),
-    nwKbPicked: usable.filter((b) => s.nwKb.includes(b.id)).map((b) => ({ id: b.id, label: b.name, meta: meta(b),
-      remove: () => L.setState((st) => ({ nwKb: st.nwKb.filter((k) => k !== b.id) })) })),
-    nwKbFound: f.rows.map((b) => ({ id: b.id, label: b.name, meta: meta(b) + ' · ' + b.owner, desc: b.desc,
-      add: () => L.setState((st) => ({ nwKb: st.nwKb.includes(b.id) ? st.nwKb : st.nwKb.concat([b.id]), nwKbQ: '' })) })),
-    nwKbFoundTitle: f.mode === 'search' ? n(f.total, 'match', 'matches') + ' for “' + s.nwKbQ.trim() + '”' : f.mode === 'suggest' ? 'Suggested for this piece' : 'Most used by creators',
-    nwKbMore: f.total > f.rows.length ? (f.total - f.rows.length) + ' more · narrow the search' : '',
-    nwKbEmpty: !usable.length ? 'No knowledge bundles are open to creators yet.' : f.mode === 'search' && !f.total ? 'No bundle matches “' + s.nwKbQ.trim() + '”' : '',
-  };
-}
-
-// "Draft with AI": an outline and a takeaway from the retrieved passages, by AI when the use is live (ask is null
-// otherwise), else the design's scripted outline, labelled as scripted. ai says which it was; only an AI draft is
-// saved as AI-assisted.
-export type AskAi = <T>(req: AiRequest, parse: (text: string) => T | null) => Promise<T | null>;
-export async function draftFromPassages(nw: NewDraft, hits: Hit[], ask: AskAi | null): Promise<{ takeaway: string; outline: string[]; note: string; ai: boolean }> {
-  const scripted = { takeaway: hits[0].text.slice(0, 170) + ' [1]', outline: hits.map((h, k) => h.text.split('. ')[0].slice(0, 88) + ' [' + (k + 1) + ']'), ai: false };
-  if (!ask) return { ...scripted, note: 'Scripted outline from the passages · no AI connection for this use' };
-  const res = await ask({ messages: [{ role: 'user', content: 'You help a consultant draft a ' + nw.type + ' for colleagues titled "' + (nw.title || 'untitled') + '". Use ONLY these passages:\n'
-    + hits.map((h, k) => '[' + (k + 1) + '] ' + h.text).join('\n') + '\nReply ONLY with JSON {"takeaway": one sentence under 180 characters with citation like [1], "outline": [3 short steps, each under 90 characters, with citations]}. Plain English, no emoji.' }], max_tokens: 400 },
-  (raw) => {
-    const m = String(raw).match(/\{[\s\S]*\}/), r = m ? JSON.parse(m[0]) : null;
-    return r && r.takeaway ? { takeaway: String(r.takeaway).slice(0, TAKE_MAX), outline: (Array.isArray(r.outline) ? r.outline : []).slice(0, 4).map(String) } : null;
-  });
-  if (res) return { ...res, note: 'AI-assisted draft · grounded on keyword-ranked passages · edit it in your own words', ai: true };
-  return { ...scripted, note: 'AI outline unavailable · scripted outline from the passages' };
-}
-
-// ---------- writes ----------
-
-const busy = (L: Logic) => L.readOnly() || L.state.createBusy;
-async function reloaded(L: Logic) { return loadCreate(L.access.userId); }
-function failed(L: Logic, err: unknown, patch: Partial<AppState> = {}) {
-  L.setState({ createBusy: false, ...patch }); L.say((err as Error).message); L.reloadCreate();
-}
-function doneText(status: string, d: CreateData, id: string, again: boolean) {
-  const c = d.contributions.find((x) => x.id === id);
-  if (status === 'published') return 'Published · “' + (c?.title || '') + '” is in the library now';
-  if (status === 'draft') return 'Saved as draft · only you can see it';
-  const who = d.reviews.filter((r) => r.contribution_id === id && r.verdict === 'pending').map((r) => r.reviewer_name);
-  return (again ? 'Resubmitted · ' + names(who) + ' review' + (who.length > 1 ? '' : 's') + ' the new version' : 'Submitted · ' + names(who) + ' review' + (who.length > 1 ? '' : 's') + ' it first');
-}
-async function afterPublish(L: Logic, status: string) { if (status === 'published') await L.reloadContent(); }
-// A studio contribution passes the automatic check on what was saved, then is submitted (the database refuses it otherwise).
-async function submitChecked(id: string, studio: string | null | undefined) {
-  const r = studio ? await checkContribution(id) : null;
-  if (r && !r.passed) throw new Error(r.reasons[0]);
-  return submitContribution(id);
-}
-
-// Save the New form as a draft, or save and submit it. A draft that saved before a refused submit is edited next time, never duplicated.
-async function saveForm(L: Logic, submit: boolean) {
-  if (busy(L)) return;
-  const s = L.state, nw = effective(s);
-  const rules = s.create?.rules || [];
-  if (!rules.length) { L.say('Ask an admin for creation rights first'); return; }
-  if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
-  if (submit && hasItems(nw.type) && !nw.items?.list.length) { L.say(addFirst(nw.type, 'generate them with AI or import a CSV')); return; }
-  if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) }))) { L.say('Clear the open checks first'); return; }
-  const ed = s.editing ? s.create?.contributions.find((c) => c.id === s.editing) : null, again = ed?.status === 'changes', studio = studioOf(s);
-  let id = s.editing ?? (studio ? s.studio.check?.id : null) ?? null;
-  L.setState({ createBusy: true });
-  try {
-    id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
-    const status = submit ? await submitChecked(id, studio ?? ed?.studio) : 'draft', d = await reloaded(L), saved = id;
-    L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: saved, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], nwKbQ: '', revChecks: st.revChecks, studio: HUB }));
-    L.say(doneText(status, d, saved, again));
-    await afterPublish(L, status);
-  } catch (err) { failed(L, err, { editing: id }); }
-}
-
-async function submitSaved(L: Logic, c: Contribution) {
-  if (busy(L)) return;
-  const items = itemsFromSaved(c.type, c.items);
-  if (hasItems(c.type) && !items.length) { L.say(addFirst(c.type, 'edit it first')); return; }
-  const bad = contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(items) }).find((x) => !x.ok);
-  if (bad) { L.say(bad.text + ' · edit it first'); return; }
-  if (!mayCreate(L.state.create?.rules || [], attrsOf(c))) { L.say('Not allowed by your creation rules · ask an admin'); return; }
-  L.setState({ createBusy: true });
-  try {
-    const status = await submitChecked(c.id, c.studio), d = await reloaded(L);
-    L.setState({ create: d, createError: null, createBusy: false, contribSel: c.id });
-    L.say(doneText(status, d, c.id, c.status === 'changes'));
-    await afterPublish(L, status);
-  } catch (err) { failed(L, err); }
-}
-
-// Check & send in a studio: save the draft (the same row on every check), then run the automatic check on it. The result
-// counts while the draft on screen is what was checked (key).
-async function runCheck(L: Logic) {
-  const s = L.state, nw = effective(s), studio = studioOf(s);
-  if (busy(L) || !studio) return;
-  if (!mayCreate(s.create?.rules || [], attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
-  const key = JSON.stringify(fieldsOf(nw, s.nwKb));
-  let id = s.studio.check?.id ?? null;
-  L.setState({ createBusy: true });
-  try {
-    id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
-    const r = await checkContribution(id), d = await reloaded(L), saved = id;
-    L.setState((st) => ({ create: d, createError: null, createBusy: false, studio: { ...st.studio, check: { id: saved, key, reasons: r.reasons } } }));
-    L.say(r.passed ? 'Automatic check passed · send it for review' : 'Saved as draft · fix what the check found');
-  } catch (err) { failed(L, err, id ? { studio: { ...L.state.studio, check: { id, key: '', reasons: [] } } } : {}); }
-}
-
-async function deleteDraft(L: Logic, c: Contribution) {
-  if (busy(L)) return;
-  L.setState({ createBusy: true });
-  try {
-    await removeDraft(c.id); const d = await reloaded(L);
-    L.setState({ create: d, createBusy: false, contribSel: null });
-    L.say('Draft deleted');
-  } catch (err) { failed(L, err); }
-}
-
-async function decide(L: Logic, c: Contribution, r: Review, verdict: 'approved' | 'changes') {
-  const key = revKey(r), chk = RUBRIC.map((_, k) => !!(L.state.revChecks[key] || [])[k]), com = (L.state.revComment[key] || '').trim();
-  if (verdict === 'approved' && !rubricComplete(chk)) { L.say('Tick all four criteria to approve, or request changes'); return; }
-  if (verdict === 'changes' && !com) { L.say('Add a comment so ' + first(c.author_name) + ' knows what to change'); return; }
-  if (busy(L)) return;
-  L.setState({ createBusy: true });
-  try {
-    const status = await decideReview(c.id, verdict, chk, com), d = await reloaded(L);
-    L.setState((st) => ({ create: d, createBusy: false, revChecks: without(st.revChecks, key), revComment: without(st.revComment, key) }));
-    L.say(verdict === 'changes' ? 'Changes requested · ' + first(c.author_name) + ' sees your comment in Create & share'
-      : status === 'published' ? 'Approved and published · “' + c.title + '” is in the library now' : 'Approved · ' + first(c.author_name) + ' sees it in Create & share');
-    await afterPublish(L, status);
-  } catch (err) { failed(L, err); }
-}
-
-async function writePolicy(L: Logic, write: () => Promise<void>, done: string) {
-  if (busy(L)) return;
-  L.setState({ createBusy: true });
-  try { await write(); const d = await reloaded(L); L.setState({ create: d, createBusy: false }); L.say(done); } catch (err) { failed(L, err); }
-}
-
-async function draftAi(L: Logic) {
-  const s = L.state;
-  if (s.nwAiBusy || L.readOnly()) return;
-  const nw = effective(s), line = L.subject.readOnly ? null : L.subject.businessLine;
-  const bundles = usableBundles(s.bundles, line).filter((b) => s.nwKb.includes(b.id));
-  if (!bundles.length) { L.say('Pick at least one knowledge bundle'); return; }
-  let hits = retrieve(bundles, nw.title + ' ' + domainName(nw.dom)).slice(0, 3);
-  if (!hits.length) hits = bundles.flatMap((b) => {
-    const ch = b.chunks.find((c) => { const src = b.sources[c[0]]; return src && src[5] !== 'client' && src[5] !== 'licensed'; });
-    return ch ? [{ text: ch[1], src: b.sources[ch[0]][0] + ' · ' + b.name, score: 0 }] : [];
-  }).slice(0, 3);
-  if (!hits.length) { L.say('These bundles have no passages a creator may use'); return; }
-  L.setState({ nwAiBusy: true });
-  const out = await draftFromPassages(nw, hits, canComplete('draft_outline', L.aiOpts()) ? (req, parse) => L.viaAi('draft_outline', req, parse) : null);
-  L.setState((st) => ({ nwAiBusy: false, nw: { ...effective(st), take: out.takeaway, outline: out.outline, sources: hits.map((h) => h.src), ai: out.ai, aiNote: out.note } }));
-}
 
 // ---------- view-model ----------
 
@@ -328,7 +108,7 @@ function createScreen(L: Logic) {
   const vm = {
     loading: !s.create && !s.createError, error: s.createError, retry: () => L.reloadCreate(), busy: s.createBusy,
     readOnly: L.subject.readOnly, readOnlyNote: 'Create & share shows your own work, not ' + L.subject.name + '’s. Go back to yourself to create, submit or review.',
-    lead: 'Make a reel, podcast, guide, case write-up, flash card deck or practice exam for your colleagues. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
+    lead: 'Make something for your colleagues: ' + TYPE_NAMES.slice(0, -1).join(', ') + ' or ' + TYPE_NAMES[TYPE_NAMES.length - 1] + '. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
     canCreate, noGrantText: 'You have no creation rights yet. Ask an admin for creation rights: a Domain Admin or General Admin gives you rules such as “Consulting or Tax & Legal · Podcast”.',
     myRules: d.rules.map((r) => ruleSentence(r)),
     goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [], nwKbQ: '', studio: HUB }) : L.say('Ask an admin for creation rights first')),
@@ -379,7 +159,7 @@ function createScreen(L: Logic) {
       + ' A requirement applies to every contribution it matches (same parts as creation rules); a contribution is routed by the strictest one when it is submitted, and with no review at all it is published on submit, after the content checks.',
   };
   // The Studios hub arranges what the form already computed (studioVals.ts); an edit always shows the form.
-  const chk = s.studio.check, checkReasons = chk && chk.key === JSON.stringify(fieldsOf(nw, s.nwKb)) ? chk.reasons : null;
+  const chk = s.studio.check, checkReasons = chk && chk.key === checkKey(nw, s.nwKb) ? chk.reasons : null;
   const studio = studioVals(L, { nw, setNw, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
     routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, checkReasons, runCheck: () => runCheck(L) });
   return { ...vm, studio, newView: s.editing ? 'form' as const : s.studio.view };

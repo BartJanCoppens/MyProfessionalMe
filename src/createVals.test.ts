@@ -3,9 +3,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from 'react';
 import * as store from './lib/contributionStore';
-import { draftFromPassages } from './createVals';
-import type { AskAi } from './createVals';
-import { emptyParts } from './logic/contribution';
+import { draftFromPassages } from './createGrounding';
+import type { AskAi } from './createGrounding';
+import { TYPE_NAMES, emptyParts } from './logic/contribution';
 import type { CreateData, PolicyRow, Rule, RuleParts } from './logic/contribution';
 import { contribution, review } from './test/contributions';
 import { domainAdmin, flush, harness, member, person, stubWindow, systemAdmin } from './test/harness';
@@ -47,6 +47,10 @@ describe('navigation', () => {
   it('keeps the badge on the signed-in person while viewing someone else', () => {
     const d = data({ contributions: [contribution({ id: 'x1', author_id: 'u5', status: 'review', step: 1 })], reviews: [review({ contribution_id: 'x1', reviewer_id: 'u1' })] });
     expect(cs({ data: d, readOnly: true }).vm().reviewBadge).toBe(1);
+  });
+  it('lists every contribution format in the lead, from the format list', () => {
+    expect(cs().c().lead).toMatch(/^Make something for your colleagues: Reel, Podcast, .*, Job aid or Case exercise\. /);
+    TYPE_NAMES.forEach((f) => expect(cs().c().lead).toContain(f));
   });
   it('shows loading until the data arrives, then an error with a retry', () => {
     const h = cs({ state: { create: null } });
