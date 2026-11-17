@@ -8,6 +8,9 @@ import type { Contribution } from './logic/contribution';
 import { domainName } from './logic/contribution';
 import { ITEM_MAX, cardsFromPassages, countText, marked, hasItems, itemRows, itemsFromSaved, noItems, parseCsv, parseDraftItems, validItems } from './logic/items';
 import type { Item } from './logic/items';
+import { caseHours, studioContent } from './logic/studioContent';
+import { itemsValid, studioById } from './logic/studios';
+import type { StudioEntry } from './logic/studios';
 import { draftItems } from './studioDraft';
 import type { DraftSpec, SetNw } from './studioDraft';
 
@@ -53,12 +56,14 @@ export function itemsPanel(L: Logic, nw: NewDraft, bundles: Bundle[], setNw: Set
   };
 }
 
-// What a saved contribution shows its author and its reviewers: how many items, each of them, and a studio's "Shape it"
-// answers (question and answer).
-export function viewItems(c: Contribution, suffix: string) {
-  const list = itemsFromSaved(c.type, c.items), answers = Object.entries(c.shape ?? {});
+// What a saved contribution shows its author and its reviewers: how many items, each of them, a studio's "Shape it"
+// answers (question and answer) and, once its rows are complete, its content in the learner's panel (still: motion off).
+export function viewItems(c: Contribution, suffix: string, still: boolean) {
+  const list = itemsFromSaved(c.type, c.items), answers = Object.entries(c.shape ?? {}), def = c.studio ? studioById(c.studio) : null;
+  const content = def && !itemsValid(def, list as StudioEntry[]).length ? studioContent(c.type, list as StudioEntry[], c.shape ?? {}) : null;
   return { itemsHead: list.length ? countText(c.type, list.length) + suffix : '', itemRows: itemRows(c.type, list),
-    answersHead: answers.length ? 'Studio answers' : '', answerRows: answers.map(([q, a]) => ({ front: q, back: a })) };
+    answersHead: answers.length ? 'Studio answers' : '', answerRows: answers.map(([q, a]) => ({ front: q, back: a })),
+    asLearner: content && { key: c.id, content, hours: caseHours(c.shape ?? {}), still } };
 }
 // The refusal when a card or exam has no items yet; `then` says where to get them.
 export const addFirst = (type: string, then: string) => 'Add the ' + noun(type) + ' first · ' + then;

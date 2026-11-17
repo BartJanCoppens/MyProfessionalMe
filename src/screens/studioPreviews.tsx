@@ -1,6 +1,7 @@
 // The preview step's registry: one preview per studio kind (StudioDef.pv). Flash plays its cards or questions; a studio
 // whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow) shows that format's own
-// learner panel over studioContent. A preview is a play-test: never saved, never counted as progress.
+// learner panel over studioContent. A preview is a play-test: never saved, never counted as progress. The same panels
+// show a saved studio contribution to its author and its reviewers (SavedContent).
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { explainerView } from '../fmtExplainer';
@@ -10,10 +11,11 @@ import { NEW_ROUND } from '../fmtRound';
 import { aidView, casePreview } from '../fmtVals';
 import { caseHours } from '../logic/studioContent';
 import type { VM } from '../model';
-import type { AidContent, ExplainerContent, MotionContent } from '../types';
+import type { AidContent, ExplainerContent, FormatContent, MotionContent } from '../types';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
 import ExplainerPanel from './ExplainerPanel';
 import { AidPanel, CasePanel } from './FormatWork';
+import { label } from './labelStyle';
 import StudioPlayTest from './StudioPlayTest';
 
 type CS = NonNullable<VM['create']>;
@@ -36,6 +38,22 @@ function ExplainerTry({ content }: { content: ExplainerContent }) {
 const FlowTry = ({ content, still }: { content: MotionContent; still: boolean }) =>
   <AnimatedFlowPanel fl={flowView(content, { ro: false, still, done: false, onEnd: () => {}, onRead: () => {} })} />;
 
+// A studio piece's content and what its learner panel needs: the case's hours and whether motion is off.
+export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean };
+
+// The format's own learner panel over the content, as a play-test: its state lives here only.
+function LearnerPanel({ t }: { t: LearnerTry }) {
+  const { content } = t;
+  return (
+    <>
+      {content.kind === 'aid' && <AidTry content={content} />}
+      {content.kind === 'case' && <CasePanel ce={casePreview(content, t.hours)} />}
+      {content.kind === 'explainer' && <ExplainerTry content={content} />}
+      {content.kind === 'motion' && <FlowTry content={content} still={t.still} />}
+    </>
+  );
+}
+
 // The content as the learner's panel shows it, or what is still missing.
 function Learner({ c }: { c: CS }) {
   const content = c.studio.content;
@@ -43,10 +61,19 @@ function Learner({ c }: { c: CS }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={note}>A play-test, as learners will see it: nothing is saved or counted.</div>
-      {content.kind === 'aid' && <AidTry content={content} />}
-      {content.kind === 'case' && <CasePanel ce={casePreview(content, caseHours(c.nw.shape ?? {}))} />}
-      {content.kind === 'explainer' && <ExplainerTry content={content} />}
-      {content.kind === 'motion' && <FlowTry content={content} still={c.studio.still} />}
+      <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still }} />
+    </div>
+  );
+}
+
+// A saved studio contribution's content in My contributions and Review for peers: the same panel, read only.
+export function SavedContent({ t }: { t: LearnerTry | null }) {
+  if (!t) return null;
+  return (
+    <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={label}>As learners will see it</div>
+      <div style={note}>Try it: nothing is saved or counted.</div>
+      <LearnerPanel key={t.key} t={t} />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { label } from './labelStyle';
 import { BundlePicker, SubmitSide } from './CreateParts';
 import { ItemList, ItemPanel } from './CreateItems';
 import { Hub, Studio } from './Studios';
+import { SavedContent } from './studioPreviews';
 import RuleChips from './RuleChips';
 
 type CS = NonNullable<VM['create']>;
@@ -94,6 +95,7 @@ function Mine({ c }: { c: CS }) {
           <Outline outline={cs.outline} sources={cs.sources} aiTag={cs.aiTag} />
           <ItemList head={cs.itemsHead} rows={cs.itemRows} />
           <ItemList head={cs.answersHead} rows={cs.answerRows} />
+          <SavedContent t={cs.asLearner} />
           {cs.hasRevs && (
             <div style={{ padding: '4px 20px 8px', borderBottom: '1px solid #eef0ea' }}>
               {cs.revs.map((rv) => (
@@ -152,6 +154,7 @@ function ReviewTab({ c }: { c: CS }) {
           <Outline outline={rs.outline} sources={rs.sources} aiTag={rs.aiTag} />
           <ItemList head={rs.itemsHead} rows={rs.itemRows} />
           <ItemList head={rs.answersHead} rows={rs.answerRows} />
+          <SavedContent t={rs.asLearner} />
           <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={label}>Automatic checks</div>
             {rs.checks.map((ck) => <div key={ck.text} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: ck.dot, flex: 'none' }} /><span style={{ color: ck.fg }}>{ck.text}</span></div>)}
