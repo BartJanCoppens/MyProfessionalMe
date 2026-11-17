@@ -1,5 +1,8 @@
 // Copied from Horizon's src/sanitizeSvg.ts (the owner's own project; studios plan rule S7: copy, never import across
 // repos). Every SVG a learner panel draws goes through it: the Explainer's step drawings now, Motion's flows next.
+// Hardened here after a security review (Task 2.2), so it differs from Horizon's: the attribute names id, href, begin and
+// end are written in lower case and compared in lower case everywhere, every id is prefixed, and a reference (#id href,
+// url(#id), SMIL begin/end) to an id the drawing does not define is dropped, so it can never reach the rest of the page.
 /**
  * Allowlist sanitiser for model-generated SVG. Keeps static shapes, text, gradients, filters and SMIL animation;
  * drops scripts, styles, foreign content, event handlers and every link that leaves the document.
@@ -20,6 +23,8 @@ const FORBIDDEN_TARGETS = /^(href|xlink:href|style|class|on\w*)$/i;
 const ID_TOKEN = '__hzid__';
 
 const LINK_ATTRS = new Set(['href', 'xlink:href']);
+/** Attributes written under their lower-case name, so no other spelling can slip past the checks in `namespace`. */
+const CANONICAL = new Set(['id', 'begin', 'end']);
 
 /** CSS that can load something without a plain `url(`: image functions, and escapes that spell `url(` in disguise. */
 const LOADS = /\\|image-set\s*\(|(^|[^\w-])image\s*\(|cross-fade\s*\(|element\s*\(/i;
@@ -48,7 +53,7 @@ function walk(src: Element, out: Document, ids: Set<string>): Element | null {
     if (LOADS.test(v)) continue;
     if (/url\(/i.test(v) && !/^url\(\s*['"]?#[\w-]+['"]?\s*\)$/i.test(v.trim())) continue;
     if (low === 'id') ids.add(v);
-    el.setAttribute(n, v);
+    el.setAttribute(CANONICAL.has(low) ? low : n, v);
   }
   for (const child of [...src.childNodes]) {
     if (child.nodeType === Node.TEXT_NODE) el.appendChild(out.createTextNode(child.textContent || ''));
@@ -60,24 +65,26 @@ function walk(src: Element, out: Document, ids: Set<string>): Element | null {
 /**
  * Namespaces every id and every reference to it: href="#id", url(#id) in attributes and styles, and SMIL timing
  * like "id.end+0.2s". Works on attributes only, so text that mentions "#id" and colours like "#ace" stay as they are.
+ * A reference to an id the drawing does not define is dropped: the href or the timing entry goes, url() becomes none.
  */
 function namespace(root: Element, ids: Set<string>) {
-  if (!ids.size) return;
   const to = (id: string) => `${ID_TOKEN}-${id}`;
   for (const el of root.querySelectorAll('*')) {
     for (const a of [...el.attributes]) {
-      const v = a.value;
-      let w: string;
-      if (a.name === 'id') w = ids.has(v) ? to(v) : v;
-      else if (a.name === 'href') w = v.startsWith('#') && ids.has(v.slice(1)) ? '#' + to(v.slice(1)) : v;
-      else if (a.name === 'begin' || a.name === 'end') w = v.split(';').map(part => {
-        // A timing entry like " c+d.end+0.2s" refers to the longest id it starts with, followed by a dot.
+      const name = a.name.toLowerCase(), v = a.value;
+      let w: string | null;
+      if (name === 'id') w = to(v);
+      else if (name === 'href') w = v.startsWith('#') && ids.has(v.slice(1)) ? '#' + to(v.slice(1)) : null;
+      else if (name === 'begin' || name === 'end') w = v.split(';').flatMap(part => {
+        // A timing entry like " c+d.end+0.2s" refers to the longest id it starts with, followed by a dot; one that starts
+        // like a name and has a dot but names no id of the drawing refers outside it.
         const lead = part.match(/^\s*/)![0], rest = part.slice(lead.length);
         const id = [...ids].filter(i => rest.startsWith(i + '.')).sort((x, y) => y.length - x.length)[0];
-        return id ? lead + to(id) + rest.slice(id.length) : part;
-      }).join(';');
-      else w = v.replace(/(url\(\s*['"]?#)([\w-]+)(?=['"]?\s*\))/g, (m, pre, id) => ids.has(id) ? pre + to(id) : m);
-      if (w !== v) el.setAttribute(a.name, w);
+        return id ? [lead + to(id) + rest.slice(id.length)] : /^[^\d\s+.-][^]*\./.test(rest) ? [] : [part];
+      }).join(';') || null;
+      else w = v.replace(/url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/gi, (m, _q, id) => ids.has(id) ? m.replace('#' + id, '#' + to(id)) : 'none');
+      if (w === null) el.removeAttribute(a.name);
+      else if (w !== v) el.setAttribute(a.name, w);
     }
   }
 }

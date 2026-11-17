@@ -359,9 +359,10 @@ describe('sanitizeSvg: id namespacing', () => {
     expect(out).toContain('end="3s"');
   });
 
-  it('only rewrites SMIL references to ids that exist, and only at a token start', () => {
+  // Hardened here (Task 2.2): a reference to an id the drawing does not define is dropped instead of kept as it was.
+  it('only rewrites SMIL references to ids that exist, at a token start, and drops the others', () => {
     const out = sanitizeSvg(svg('<rect id="x"/><animate attributeName="x" begin="xx.end; ax.end; x.end"/>'));
-    expect(out).toContain('begin="xx.end; ax.end; __hzid__-x.end"');
+    expect(out).toContain('begin=" __hzid__-x.end"');
   });
 
   it('handles ids containing regex metacharacters', () => {
@@ -397,5 +398,38 @@ describe('sanitizeSvg: id namespacing', () => {
   it('a hex colour equal to an id ("#ace" with id="ace") is rewritten and broken', () => {
     const out = sanitizeSvg(svg('<rect id="ace" fill="#ace"/>'));
     expect(render(out).querySelector('rect')!.getAttribute('fill')).toBe('#ace');
+  });
+});
+
+// Hardened in this copy after a security review (Task 2.2); Horizon's original keeps these.
+describe('sanitizeSvg: no reach outside the drawing', () => {
+  it('writes an uppercase ID or HREF under its lower-case name, prefixed like any other', () => {
+    const host = render(sanitizeSvg(svg('<path ID="p" d="M0 0"/><use HREF="#p"/><rect ID="lonely"/>')));
+    expect([...host.querySelectorAll('[id]')].map((e) => e.getAttribute('id'))).toEqual(['__hzid__-p', '__hzid__-lonely']);
+    expect(host.querySelector('use')!.getAttribute('href')).toBe('#__hzid__-p');
+    host.remove();
+  });
+  it('prefixes every id, also one nothing refers to', () => {
+    expect(sanitizeSvg(svg('<rect id="app-root"/>'))).toContain('id="__hzid__-app-root"');
+  });
+  it('drops an href to an id the drawing does not define', () => {
+    const out = sanitizeSvg(svg('<use href="#outside"/><use xlink:href="#outside"/><use HREF="#outside"/>'));
+    expect(out).not.toContain('outside');
+    expect(render(out).querySelector('[href]')).toBeNull();
+  });
+  it('turns url() to an id the drawing does not define into none, in attributes and in style', () => {
+    const out = sanitizeSvg(svg('<defs><linearGradient id="g"/></defs><rect fill="url(#outside)" stroke="url(#g)" style="clip-path: url(#outside); fill: url(#g)"/>'));
+    expect(out).not.toContain('outside');
+    expect(out).toContain('fill="none"');
+    expect(out).toContain('stroke="url(#__hzid__-g)"');
+    expect(out).toMatch(/clip-path: none/);
+    expect(out).toMatch(/fill: url\(#__hzid__-g\)/);
+  });
+  it('drops a SMIL begin or end that waits on an element outside the drawing, keeping the rest', () => {
+    const out = sanitizeSvg(svg('<rect id="a"><animate attributeName="x" begin="outside.click" end="outside.end; 2s"/><set attributeName="y" BEGIN="outside.click; a.click" to="1"/></rect>'));
+    expect(out).not.toContain('outside');
+    expect(out).not.toMatch(/ begin="outside/);
+    expect(out).toContain('end=" 2s"');
+    expect(out).toContain('begin=" __hzid__-a.click"');
   });
 });
