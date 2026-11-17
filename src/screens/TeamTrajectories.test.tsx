@@ -34,6 +34,12 @@ describe('the Certifications tab', () => {
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
   });
+  it('renders an unsafe link as text and says when certifications did not load', () => {
+    open([{ ...kim({ s1: { state: 'submitted', link: 'javascript:alert(1)' } }) }, { ...kim(), id: 'm2', name: 'Lee Other', trj: undefined }]);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText('javascript:alert(1)')).toBeTruthy();
+    expect(screen.getByText('Certifications did not load for Lee Other.')).toBeTruthy();
+  });
   it('approves and reloads that person', async () => {
     const { refresh } = open([kim({ s1: { state: 'submitted', note: 'x' } })]);
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));

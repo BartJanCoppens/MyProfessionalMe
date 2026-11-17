@@ -155,6 +155,15 @@ describe('useTeam', () => {
     expect(result.current.error).toBeNull();
     expect(has(db.on('profiles')[0], 'eq', 'counsellor_id', 'c1')).toBe(true);
   });
+  it('keeps the team when one person\'s trajectories fail to load', async () => {
+    db.answer(() => ({ data: [{ id: 'm1', email: 'm1@example.com', full_name: null, business_line: 'Audit', career_stage: null }] }));
+    vi.mocked(learner.loadLearner).mockResolvedValue(emptyData());
+    vi.mocked(trajectories.loadEnrolments).mockRejectedValueOnce(new Error('denied'));
+    const { result } = renderHook(() => useTeam('c1'));
+    await waitFor(() => expect(result.current.members).toHaveLength(1));
+    expect(result.current.members![0].trj).toBeUndefined();
+    expect(result.current.error).toBeNull();
+  });
   it('reloads one person\'s trajectories after a decision', async () => {
     db.answer(() => ({ data: [{ id: 'm1', email: 'm1@example.com', full_name: null, business_line: 'Audit', career_stage: null }] }));
     vi.mocked(learner.loadLearner).mockResolvedValue(emptyData());

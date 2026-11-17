@@ -12,8 +12,9 @@ const loadTrj = async (id: string) => { const [enrols, creds] = await Promise.al
 async function fetchTeam(counsellorId: string): Promise<{ id: string; members: Member[] }> {
   const { data, error } = await supabase.from('profiles').select('id, email, full_name, business_line, career_stage').eq('counsellor_id', counsellorId).order('full_name');
   if (error) throw new Error(error.message);
+  // A failed trajectory load leaves trj unset for that person; the roster and levels still work.
   const members = await Promise.all((data || []).map(async (p) => ({
-    id: p.id, name: p.full_name || p.email, stage: p.career_stage, businessLine: p.business_line, data: await loadLearner(p.id), trj: await loadTrj(p.id),
+    id: p.id, name: p.full_name || p.email, stage: p.career_stage, businessLine: p.business_line, data: await loadLearner(p.id), trj: await loadTrj(p.id).catch(() => undefined),
   })));
   return { id: counsellorId, members };
 }

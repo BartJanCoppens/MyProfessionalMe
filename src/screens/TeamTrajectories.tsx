@@ -11,6 +11,7 @@ const head = { padding: '10px 12px' } as const;
 export default function TeamTrajectories({ v }: { v: Vals }) {
   return (
     <>
+      {v.notLoaded.length > 0 && <div style={{ ...box, padding: '12px 18px', color: '#5a6058' }}>{v.notLoaded.map((n) => 'Certifications did not load for ' + n + '.').join(' ')}</div>}
       <div style={{ ...box, overflow: 'hidden' }}>
         <div style={{ padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#fafbf8' }}>
           <div style={{ fontWeight: 600 }}>Waiting for you · {v.approvalCount}</div>
@@ -25,15 +26,15 @@ export default function TeamTrajectories({ v }: { v: Vals }) {
               {a.proof && (
                 <div style={{ marginTop: 6, fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {a.proof.note && <div style={{ whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{a.proof.note}</div>}
-                  {a.proof.link && <a href={a.proof.link} target="_blank" rel="noopener noreferrer" style={{ color: '#2f6fa8', overflowWrap: 'anywhere' }}>{a.proof.link}</a>}
+                  {a.proof.link && (/^https?:\/\//.test(a.proof.link) ? <a href={a.proof.link} target="_blank" rel="noopener noreferrer" style={{ color: '#2f6fa8', overflowWrap: 'anywhere' }}>{a.proof.link}</a> : <div style={{ overflowWrap: 'anywhere' }}>{a.proof.link}</div>)}
                   {a.proof.ref && <div style={{ color: '#5a6058' }}>Certificate number · {a.proof.ref}</div>}
                   {!a.proof.note && !a.proof.link && !a.proof.ref && <div style={{ color: '#5a6058' }}>No proof attached</div>}
                 </div>
               )}
             </div>
-            {a.approve && a.talk && (
+            {a.approve && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <Button size="sm" variant="secondary" onClick={a.talk}>Talk first</Button>
+                {a.talk && <Button size="sm" variant="secondary" onClick={a.talk}>Talk first</Button>}
                 <Button size="sm" onClick={a.approve}>{a.approveLabel}</Button>
               </div>
             )}

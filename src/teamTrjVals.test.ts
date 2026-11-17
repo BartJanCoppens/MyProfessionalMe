@@ -6,7 +6,7 @@ import { blankTrajectory } from './logic/trajectoryEdit';
 import { personTrajectories, teamTrjVals } from './teamTrjVals';
 import { emptyData, flush, harness, person, stubWindow, withProgress } from './test/harness';
 
-vi.mock('./lib/trajectoryStore', async (orig) => ({ ...(await orig<object>()), decideTrajectory: vi.fn() }));
+vi.mock('./lib/trajectoryStore', async (orig) => ({ ...(await orig<object>()), decideTrajectory: vi.fn(), confirmCredential: vi.fn() }));
 const m = vi.mocked(store);
 const step = (over: Partial<TrjStep> & Pick<TrjStep, 'id' | 'k'>): TrjStep => ({ win: 6, req: true, pre: null, ...over });
 const trj = (id: string, over: Partial<Trajectory> = {}): Trajectory => ({ ...blankTrajectory('Audit'), id, name: 'Trajectory ' + id, issuer: 'ITAA', status: 'live', enrol: 'open', ...over });
@@ -20,7 +20,7 @@ const setup = (members: Member[], trjs: Trajectory[], subject = person()) => {
   return { h, v: teamTrjVals(h.L(), members, reload) };
 };
 
-beforeEach(() => { vi.clearAllMocks(); stubWindow(); m.decideTrajectory.mockResolvedValue({ result: 'done', error: null }); });
+beforeEach(() => { vi.clearAllMocks(); m.confirmCredential.mockResolvedValue({ error: null }); stubWindow(); m.decideTrajectory.mockResolvedValue({ result: 'done', error: null }); });
 
 describe('Waiting for you', () => {
   const t = trj('T1', { enrol: 'approval', steps: [step({ id: 's1', k: 'evidence', title: 'Portfolio' }), step({ id: 's2', k: 'check', title: 'Manager sign-off', pre: 's1' })] });
@@ -75,6 +75,40 @@ describe('Waiting for you', () => {
   });
 });
 
+describe('waiting credentials', () => {
+  const t = trj('T1');
+  const waiting = cred({ id: 'c7', status: 'waiting', trajectory_id: null, name: 'Cloud practitioner', issuer: 'Microsoft', link: 'https://example.com/c', ref: 'AB-12' });
+  it('lists a waiting credential with Confirm only, and confirms it', async () => {
+    const { h, v } = setup([kim({}, [waiting, cred({ id: 'c8' })])], [t]);
+    expect(v.approvals).toHaveLength(1);
+    expect(v.approvals[0]).toMatchObject({ kind: 'Credential', text: 'Cloud practitioner · Microsoft', approveLabel: 'Confirm', talk: null, proof: { link: 'https://example.com/c', note: '', ref: 'AB-12' } });
+    v.approvals[0].approve!(); await flush();
+    expect(m.confirmCredential).toHaveBeenCalledWith('c7');
+    expect(reload).toHaveBeenCalledWith('m1');
+    expect(h.toasts().at(-1)).toBe('Confirmed · Kim\'s credential is in their wallet');
+  });
+  it('sends one decision on a double click', async () => {
+    const { v } = setup([kim({}, [waiting])], [t]);
+    v.approvals[0].approve!(); v.approvals[0].approve!(); await flush();
+    expect(m.confirmCredential).toHaveBeenCalledTimes(1);
+  });
+  it('keeps the success truthful when the reload fails', async () => {
+    reload.mockRejectedValueOnce(new Error('offline'));
+    const { h, v } = setup([kim({}, [waiting])], [t]);
+    v.approvals[0].approve!(); await flush();
+    expect(h.toasts().at(-1)).toBe('Saved; refresh to see the latest');
+  });
+  it('lists people whose certifications did not load', () => {
+    const { v } = setup([{ ...kim({}), trj: undefined }], [t]);
+    expect(v.notLoaded).toEqual(['Kim Learner']);
+  });
+  it('counts an expired credential as not earned', () => {
+    const tt = trj('T1', { steps: [step({ id: 's1', k: 'evidence', title: 'P' })] });
+    const { v } = setup([kim({ T1: enrolled() }, [cred({ expires_on: '2020-01-01' })])], [tt]);
+    expect(v.teamTrj[0].stLabel).toBe('On track');
+  });
+});
+
 describe('the progress table', () => {
   const t = trj('T1', { steps: [step({ id: 's1', k: 'learn', lid: 'L1' }), step({ id: 's2', k: 'evidence', title: 'Portfolio', pre: 's1' }), step({ id: 's3', k: 'check', title: 'Sign-off', req: false })] });
   it('shows required-step progress, the next step and an on-track status', () => {
@@ -107,6 +141,10 @@ describe('the person zoom line', () => {
     const rows = personTrajectories([t], ['Audit'], 'Consultant');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatch(/^Tax adviser via Audit · mandatory · \d+(\.\d)? h this year of \d+(\.\d)? h over 9 months$/);
+  });
+  it('says retired for a retired trajectory', () => {
+    const t = trj('T1', { status: 'retired', steps, maps: [['Audit', 'Consultant', 'mandatory']] });
+    expect(personTrajectories([t], ['Audit'], 'Consultant')[0]).toContain(' · mandatory · retired · ');
   });
   it('says suggested for a non-business-line audience, draft for a draft, and ignores other stages', () => {
     const t = trj('T1', { name: 'Tax adviser', status: 'draft', steps, maps: [['amb:expert', 'Consultant', 'advised'], ['Audit', 'Manager', 'mandatory']] });
