@@ -16,6 +16,8 @@ export default function StudioBuild({ steps, onChange, runner, readOnly }: { ste
   const start = () => go(() => runBuild(steps, runner, onChange));
   const retry = (k: number) => go(() => retryStep(steps, k, runner, onChange));
   const started = steps.some((s) => s.status !== 'todo');
+  // After a retried step, the steps still to do run on (runBuild skips the done ones).
+  const more = steps.some((s) => s.status === 'todo') && !steps.some((s) => s.status === 'failed' || s.status === 'running');
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ fontWeight: 500 }}>Build</div>
@@ -27,7 +29,7 @@ export default function StudioBuild({ steps, onChange, runner, readOnly }: { ste
           {s.status === 'failed' && !readOnly && <Button size="sm" variant="secondary" onClick={() => retry(k)} disabled={busy}>Retry</Button>}
         </div>
       ))}
-      {!readOnly && !started && <div><Button size="sm" onClick={start} disabled={busy}>Start building</Button></div>}
+      {!readOnly && more && <div><Button size="sm" onClick={start} disabled={busy}>{started ? 'Continue building' : 'Start building'}</Button></div>}
     </div>
   );
 }

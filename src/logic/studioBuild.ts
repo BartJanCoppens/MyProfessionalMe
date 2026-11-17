@@ -8,6 +8,11 @@ type OnChange = (steps: BuildStepState[]) => void;
 
 export const startBuild = (names: string[]): BuildStepState[] => names.map((name) => ({ name, status: 'todo' }));
 
+// The steps as the draft's own output shows them: the first `built` are done (so a reloaded draft shows its build), and a
+// step that says done beyond them is to do again (its output was dropped, e.g. the rows it was built from changed).
+export const fitBuilt = (steps: BuildStepState[], built: number): BuildStepState[] => steps.map((s, k): BuildStepState =>
+  (k < built ? { name: s.name, status: 'done' } : s.status === 'done' ? { name: s.name, status: 'todo' } : s));
+
 const replace = (steps: BuildStepState[], index: number, next: BuildStepState) => steps.map((s, k) => (k === index ? next : s));
 
 async function runStep(steps: BuildStepState[], index: number, runner: BuildRunner, onChange: OnChange): Promise<BuildStepState[]> {

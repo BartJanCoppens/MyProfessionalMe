@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The generic studio spine: the hub over all ten studios, the step bodies, build retry and View as (Task 1.2).
 // Podcast is marked available here (by overriding the data in this file only) to reach the generic path.
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as store from '../lib/contributionStore';
 import { studioById } from '../logic/studios';
 import type { StudioRow } from '../logic/items';
@@ -158,6 +158,18 @@ describe('build steps', () => {
     await screen.findAllByText('Done');
     expect(calls).toEqual([1]);
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+  it('continues with the steps still to do after a retried step, and runs only those', async () => {
+    const three = [...names, 'Mixing'], calls: number[] = []; let fail = true;
+    const runner = async (_n: string, i: number) => { calls.push(i); if (i === 1 && fail) throw new Error('Voice service unavailable'); };
+    render(<Held runner={runner} initial={await runBuild(startBuild(three), runner, () => {})} />);
+    expect(screen.queryByRole('button', { name: /building/ })).toBeNull();
+    calls.length = 0; fail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue building' }));
+    await waitFor(() => expect(screen.getAllByText('Done')).toHaveLength(3));
+    expect(calls).toEqual([1, 2]);
+    expect(screen.queryByRole('button', { name: /building/ })).toBeNull();
   });
   it('is honest when no builder exists for the studio', () => {
     render(<Held runner={undefined} initial={startBuild(names)} />);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { retryStep, runBuild, startBuild } from './studioBuild';
+import { fitBuilt, retryStep, runBuild, startBuild } from './studioBuild';
 import type { BuildRunner } from './studioBuild';
 
 const NAMES = ['Writing the script', 'Voicing host and guest', 'Mixing and chapter marks'];
@@ -55,5 +55,13 @@ describe('studio build steps', () => {
     const twice = await retryStep(once, 0, async () => { throw new Error('second'); }, () => {});
     expect(statuses(twice)).toEqual(['failed', 'todo', 'todo']);
     expect(twice[0].error).toBe('second');
+  });
+
+  it('shows as done the steps whose output the draft holds (after a reload too), and as to do a step whose output was dropped', () => {
+    expect(statuses(fitBuilt(startBuild(NAMES), 2))).toEqual(['done', 'done', 'todo']);
+    const done = NAMES.map((name) => ({ name, status: 'done' as const }));
+    expect(statuses(fitBuilt(done, 0))).toEqual(['todo', 'todo', 'todo']);
+    const failed = [{ name: NAMES[0], status: 'done' as const }, { name: NAMES[1], status: 'failed' as const, error: 'AI did not answer' }, { name: NAMES[2], status: 'todo' as const }];
+    expect(fitBuilt(failed, 1)).toEqual(failed);
   });
 });
