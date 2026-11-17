@@ -18,7 +18,8 @@
 
 -- ---------- outline checks ----------
 
--- maps: [[audience, stage, 'mandatory'|'advised'], ...]. Audiences as in curriculum_mappings; amb: and pro: only advise.
+-- maps: [[audience, stage, 'mandatory'|'advised'], ...]. Audiences as in curriculum_mappings. Only a business-line
+-- audience can be mandatory: amb: and pro: only advise, and ind:/tec: membership is not stored (docs/decisions.md).
 create function private.trajectory_maps_ok(maps jsonb)
 returns boolean
 language sql
@@ -33,7 +34,7 @@ as $$
       and ((m ->> 0) in ('Consulting', 'Audit', 'Tax & Legal') or (m ->> 0) ~ '^(ind|tec|amb|pro):[a-z]+$')
       and (m ->> 1) = any (enum_range(null::public.career_stage)::text[])
       and (m ->> 2) in ('mandatory', 'advised')
-      and ((m ->> 2) = 'advised' or (m ->> 0) !~ '^(amb|pro):'),
+      and ((m ->> 2) = 'advised' or (m ->> 0) in ('Consulting', 'Audit', 'Tax & Legal')),
       false)
   ) end;
 $$;
@@ -83,7 +84,7 @@ as $$
 $$;
 
 -- Inside a mandatory audience: a mandatory map whose audience is the person's business line at their career stage.
--- Only business-line audiences resolve: the schema records no membership of ind:/tec: audiences, nor when a person
+-- Only business-line audiences can be mandatory (trajectory_maps_ok); the schema does not record when a person
 -- reached their stage.
 create function private.in_mandatory_audience(p_user uuid, maps jsonb)
 returns boolean
@@ -119,11 +120,11 @@ as $$
 $$;
 
 revoke execute on function private.trajectory_maps_ok(jsonb), private.trajectory_steps_ok(jsonb), private.trajectory_has_mandatory(jsonb),
-  private.can_write_trajectory(public.business_line, text, jsonb), private.in_mandatory_audience(uuid, jsonb),
-  private.month_of(timestamptz), private.current_month() from public, anon;
+  private.can_write_trajectory(public.business_line, text, jsonb), private.month_of(timestamptz), private.current_month() from public, anon;
 grant execute on function private.trajectory_maps_ok(jsonb), private.trajectory_steps_ok(jsonb), private.trajectory_has_mandatory(jsonb),
-  private.can_write_trajectory(public.business_line, text, jsonb), private.in_mandatory_audience(uuid, jsonb),
-  private.month_of(timestamptz), private.current_month() to authenticated;
+  private.can_write_trajectory(public.business_line, text, jsonb), private.month_of(timestamptz), private.current_month() to authenticated;
+-- called only from the security definer functions below
+revoke execute on function private.in_mandatory_audience(uuid, jsonb) from public, anon, authenticated;
 
 -- ---------- tables ----------
 
@@ -280,19 +281,21 @@ as $$
 declare
   uid uuid := (select auth.uid());
   t public.trajectories;
+  r public.trajectory_enrolments;
 begin
+  -- lock the row first, so a sign-off committing meanwhile is seen before deleting
+  select * into r from public.trajectory_enrolments where user_id = uid and trajectory_id = p_trajectory for update;
+  if not found then
+    raise exception 'You are not on this trajectory' using errcode = 'P0002';
+  end if;
   select * into t from public.trajectories where id = p_trajectory;
   if t.enrol = 'auto' and private.in_mandatory_audience(uid, t.maps) then
     raise exception 'Everyone in its audience follows this trajectory' using errcode = '42501';
   end if;
-  if exists (select 1 from public.trajectory_enrolments e, jsonb_each(e.steps) s
-             where e.user_id = uid and e.trajectory_id = p_trajectory and s.value ->> 'state' = 'done') then
+  if exists (select 1 from jsonb_each(r.steps) s where s.value ->> 'state' = 'done') then
     raise exception 'A step is already signed off; ask your counsellor' using errcode = '42501';
   end if;
   delete from public.trajectory_enrolments where user_id = uid and trajectory_id = p_trajectory;
-  if not found then
-    raise exception 'You are not on this trajectory' using errcode = 'P0002';
-  end if;
 end;
 $$;
 

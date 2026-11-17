@@ -1180,6 +1180,15 @@ do $$ begin
   begin update public.trajectories set maps = '[["Marketing","Manager","advised"]]' where id = 'TX3';
     insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["tec:data","Manager","mandatory"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR a tec: audience is mandatory', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a tec: audience is mandatory', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["ind:energy","Manager","mandatory"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR an ind: audience is mandatory', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR an ind: audience is mandatory', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin perform private.in_mandatory_audience('00000000-0000-0000-0000-0000000000a7', '[]'::jsonb);
+    insert into results (check_name, expected, actual) values ('TR a signed-in user calls the audience helper', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a signed-in user calls the audience helper', 'blocked: 42501', 'blocked: '||sqlstate); end;
 end $$;
 with u as (update public.trajectories set status = 'live' where id = 'TX1' returning published_at) insert into results (check_name, expected, actual) select 'TR General Admin publishes a mandatory trajectory', '1 rows true', count(*)||' rows '||coalesce(bool_and(published_at is not null), false) from u;
 -- Consulting Domain Admin a1 can no longer touch the live mandatory one
@@ -1366,7 +1375,7 @@ insert into results (check_name, expected, actual) select 'TR seed learnings all
   lateral (select s ->> 'lid' as lid union all select jsonb_array_elements_text(coalesce(s -> 'opts', '[]'))) l
   where t.id in ('T1', 'T2', 'T3') and l.lid is not null and not exists (select 1 from public.learnings where id = l.lid);
 insert into results (check_name, expected, actual) select 'TR seed maps', 'T1 Tax & Legal/Consultant/mandatory, T2 tec:data/Consultant/advised, T3 amb:sust/Senior consultant/advised', string_agg(id||' '||(maps -> 0 ->> 0)||'/'||(maps -> 0 ->> 1)||'/'||(maps -> 0 ->> 2), ', ' order by id) from public.trajectories where id in ('T1', 'T2', 'T3');
--- a second acceptance of the same exam adds no second credential while the first is valid; after expiry it renews
+-- a second acceptance of the same exam adds no second credential while the first is valid; after expiry the guard allows one (the step is reset by hand: there is no re-take path yet)
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
 do $$ begin
@@ -1388,8 +1397,8 @@ reset role;
 update public.credentials set expires_on = current_date - 1 where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
-insert into results (check_name, expected, actual) select 'TR an expired credential is renewed through the exam', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
-insert into results (check_name, expected, actual) select 'TR the renewal adds a credential', '2', count(*)::text from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
+insert into results (check_name, expected, actual) select 'TR after expiry the guard allows another credential', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
+insert into results (check_name, expected, actual) select 'TR after expiry a second credential is added', '2', count(*)::text from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
