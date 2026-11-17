@@ -28,6 +28,7 @@ export const db = {
   client: {
     from: (table: string) => query(table),
     rpc: (name: string, args?: unknown) => query('rpc:' + name).args(args),
+    storage: { from: (bucket: string) => query('storage:' + bucket) }, // e.g. storage.from('media').upload(path, file, opts)
     functions: { invoke: vi.fn(async (_name: string, _opts?: unknown): Promise<{ data: unknown; error: unknown }> => ({ data: { ok: true }, error: null })) },
     auth: {
       getSession: vi.fn(async () => ({ data: { session: null as unknown } })),

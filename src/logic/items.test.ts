@@ -6,6 +6,7 @@ import { STUDIOS } from '../studioData';
 import { parseFormatContent } from '../lib/contentStore';
 import { cardsFromPassages, itemRows, itemsCheck, itemsFromSaved, noItems, aiAssisted, parseCsv, parseDraftItems } from './items';
 import type { ExamQuestion } from '../types';
+import { latestMatch } from '../test/migrations';
 
 const q = (n: number): ExamQuestion => ({ t: 'Rates', q: 'Question ' + n + '?', o: ['A', 'B', 'C', 'D'], a: 1, why: 'Because B.' });
 
@@ -138,24 +139,17 @@ describe('hardening', () => {
   });
 });
 
-const migrations = import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
-const files = Object.keys(migrations).sort();
-// The match of re in the latest migration that has one (the timestamped names sort in order).
-function latest(re: RegExp): RegExpExecArray {
-  for (const f of files.slice().reverse()) { const m = re.exec(migrations[f]); if (m) return m; }
-  throw new Error('no migration matches ' + re.source);
-}
 const quoted = (list: string) => Array.from(list.matchAll(/'([^']*)'/g), (x) => x[1]);
 const NEW_FORMATS = ['Avatar', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise'];
 
 describe('format lists', () => {
   it('the latest creation-rule, review-requirement and contribution checks in SQL list exactly the contribution formats', () => {
-    expect(quoted(latest(/add constraint creator_rules_formats_check\s+check \(formats <@ array\[([^\]]*)\]\)/)[1])).toEqual(TYPE_NAMES);
-    expect(quoted(latest(/add constraint review_policies_formats_check\s+check \(formats <@ array\[([^\]]*)\]\)/)[1])).toEqual(TYPE_NAMES);
-    expect(quoted(latest(/add constraint contributions_type_check\s+check \(type in \(([^)]*)\)\)/)[1])).toEqual(TYPE_NAMES);
+    expect(quoted(latestMatch(/add constraint creator_rules_formats_check\s+check \(formats <@ array\[([^\]]*)\]\)/)[1])).toEqual(TYPE_NAMES);
+    expect(quoted(latestMatch(/add constraint review_policies_formats_check\s+check \(formats <@ array\[([^\]]*)\]\)/)[1])).toEqual(TYPE_NAMES);
+    expect(quoted(latestMatch(/add constraint contributions_type_check\s+check \(type in \(([^)]*)\)\)/)[1])).toEqual(TYPE_NAMES);
   });
   it('only the upload form\'s formats may go without a studio (contributions_upload_formats equals CREATE_TYPES)', () => {
-    expect(quoted(latest(/add constraint contributions_upload_formats check \(studio is not null or type in \(([^)]*)\)\)/)[1])).toEqual(CREATE_TYPES.map((t) => t[0]));
+    expect(quoted(latestMatch(/add constraint contributions_upload_formats check \(studio is not null or type in \(([^)]*)\)\)/)[1])).toEqual(CREATE_TYPES.map((t) => t[0]));
   });
   it('hold the formats every studio makes, flash cards and practice exams among them', () => {
     expect(TYPE_NAMES).toEqual(expect.arrayContaining(['Flash cards', 'Practice exam', ...NEW_FORMATS]));
@@ -163,7 +157,7 @@ describe('format lists', () => {
     expect(TYPE_NAMES).not.toContain('Avatar scenario');
   });
   it('private.studio_min_items lists what each studio makes and its minimum, as STUDIOS does', () => {
-    const body = latest(/create (?:or replace )?function private\.studio_min_items\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
+    const body = latestMatch(/create (?:or replace )?function private\.studio_min_items\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
     const rows = Array.from(body.matchAll(/\('([a-z]+)', '([^']+)', (\d+)\)/g), (m) => [m[1], m[2], +m[3]]);
     expect(rows).toEqual(STUDIOS.flatMap((d) => studioFormats(d).map((f) => [d.id, f, d.min])));
   });

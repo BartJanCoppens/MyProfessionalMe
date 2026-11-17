@@ -1,5 +1,5 @@
 // Runs every migration and supabase/tests/rls.sql on PGlite (Postgres 17 in Node), with a stand-in for Supabase's
-// auth schema, roles and Vault (plain text, same function names), so the RLS checks can be tried without the live project and without Docker:
+// auth schema, roles, Vault (plain text, same function names) and Storage (tables only), so the RLS checks can be tried without the live project and without Docker:
 //   npm i --no-save @electric-sql/pglite@0.3.15 && node scripts/rls-pglite.mjs . [real]
 // 'real' adds accounts in every line and a second General Admin, as in the live project (routing picks at random).
 // Before the creation-rules migration (20261102080340) it inserts v0.6.0 data in the old topic model (one grant for
@@ -33,6 +33,21 @@ create function vault.create_secret(new_secret text, new_name text default null,
 create function vault.update_secret(secret_id uuid, new_secret text default null, new_name text default null, new_description text default null) returns void language sql as $$
   update vault.secrets set secret = coalesce(new_secret, secret), name = coalesce(new_name, name), description = coalesce(new_description, description), updated_at = now() where id = secret_id $$;
 revoke all on schema vault from public; revoke execute on all functions in schema vault from public;
+-- Supabase Storage stand-in: the bucket and object columns the migrations and checks use, RLS on objects, the client
+-- grants Supabase gives, and its guard against deleting rows directly (the Storage API sets storage.allow_delete_query).
+create schema storage;
+create table storage.buckets (id text primary key, name text not null, owner uuid, public boolean default false, file_size_limit bigint, allowed_mime_types text[],
+  created_at timestamptz default now(), updated_at timestamptz default now());
+create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text references storage.buckets (id), name text, owner uuid, metadata jsonb,
+  created_at timestamptz default now(), updated_at timestamptz default now(), unique (bucket_id, name));
+alter table storage.objects enable row level security;
+grant usage on schema storage to anon, authenticated, service_role;
+grant select, insert, update, delete on storage.buckets, storage.objects to anon, authenticated, service_role;
+create function storage.protect_delete() returns trigger language plpgsql as $$ begin
+  if coalesce(current_setting('storage.allow_delete_query', true), 'false') <> 'true' then
+    raise exception 'Direct deletion from storage tables is not allowed. Use the Storage API instead.' using errcode = '42501'; end if;
+  return null; end $$;
+create trigger protect_objects_delete before delete on storage.objects for each statement execute function storage.protect_delete();
 `);
 const dir = join(root, 'supabase/migrations');
 let seeded = false;
