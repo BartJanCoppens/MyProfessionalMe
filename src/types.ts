@@ -130,6 +130,8 @@ export type AppState = {
   evDraft: { key: string; note: string; link: string; ref: string } | null;
   // Decisions (F2, F3): the comment being written per submission (key person|learning).
   decideNote: Record<string, string>;
+  // Certifications tab: the "talk first" comment being written per waiting row (key person|trajectory|step or start); a key is the open field.
+  trjTalk: Record<string, string>;
   // Approvals (F3): what waits for the signed-in person (not the viewed one), from waiting_submissions().
   queue: QueueRow[] | null; queueError: string | null;
   // Completion per type (v0.7.2): the classroom feedback being written and the avatar quiz's picks, for one learning of

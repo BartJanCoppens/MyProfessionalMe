@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Credential, Enrolment, Trajectory } from './trajectory';
+import type { Credential, Enrolment, Trajectory, TrjDecision } from './trajectory';
 import { blankTrajectory } from './trajectoryEdit';
-import { canWithdraw, credentialLook, dayLabel, effectiveEnrolment, stepAction } from './trajectoryLearner';
+import { canWithdraw, credentialLook, dayLabel, effectiveEnrolment, stepAction, talkNote } from './trajectoryLearner';
 
 const trj = (over: Partial<Trajectory> = {}): Trajectory => ({ ...blankTrajectory('Audit'), id: 'T1', status: 'live', published_at: '2026-09-10T08:00:00Z', ...over });
 const person = { line: 'Audit', stage: 'Consultant', audiences: [] as string[] };
@@ -74,3 +74,32 @@ describe('credentialLook', () => {
   });
 });
 it('dayLabel', () => expect(dayLabel('2026-02-03')).toBe('3 Feb 2026'));
+
+describe('talkNote: the latest "talk first" comment the learner sees', () => {
+  const talk = (over: Partial<TrjDecision> = {}): TrjDecision => ({ trajectoryId: 'T1', stepId: 's1', decision: 'talk', comment: 'Add the client file, please.', byName: 'Casey Boss', at: '2026-11-10T09:00:00Z', ...over });
+  it('shows the counsellor\'s first name and the comment on a step sent back', () => {
+    expect(talkNote([talk()], 'T1', 's1', row())).toBe('Casey: Add the client file, please.');
+  });
+  it('says "Your counsellor" when the name is not known', () => {
+    expect(talkNote([talk({ byName: '' })], 'T1', 's1', row())).toBe('Your counsellor: Add the client file, please.');
+  });
+  it('hides it once the step is sent again or signed off, and when a newer decision replaced it', () => {
+    expect(talkNote([talk()], 'T1', 's1', row({ steps: { s1: { state: 'submitted' } } }))).toBe('');
+    expect(talkNote([talk()], 'T1', 's1', row({ steps: { s1: { state: 'done' } } }))).toBe('');
+    expect(talkNote([talk(), talk({ decision: 'approve', comment: '', at: '2026-11-12T09:00:00Z' })], 'T1', 's1', row())).toBe('');
+  });
+  it('shows the newest talk, and only for its own trajectory and step', () => {
+    const older = talk({ comment: 'The first comment, now old.', at: '2026-11-01T09:00:00Z' });
+    expect(talkNote([older, talk()], 'T1', 's1', row())).toBe('Casey: Add the client file, please.');
+    expect(talkNote([talk()], 'T1', 's2', row())).toBe('');
+    expect(talkNote([talk()], 'T2', 's1', row())).toBe('');
+    expect(talkNote([talk()], 'T1', null, row({ status: 'requested' }))).toBe('');
+  });
+  it('on the start request: shows it while the request waits and was made before the talk', () => {
+    const start = talk({ stepId: null, comment: 'Let us plan the study leave.' });
+    expect(talkNote([start], 'T1', null, row({ status: 'requested', asked_at: '2026-11-01T09:00:00Z' }))).toBe('Casey: Let us plan the study leave.');
+    expect(talkNote([start], 'T1', null, row({ status: 'requested', asked_at: '2026-11-15T09:00:00Z' }))).toBe('');
+    expect(talkNote([start], 'T1', null, row({ status: 'enrolled' }))).toBe('');
+    expect(talkNote([start], 'T1', null, null)).toBe('');
+  });
+});

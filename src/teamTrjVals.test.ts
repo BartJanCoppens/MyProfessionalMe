@@ -42,23 +42,69 @@ describe('Waiting for you', () => {
   it('approves a start request, then reloads that person', async () => {
     const { h, v } = setup([kim({ T1: enrolled({}, 'requested') })], [t]);
     v.approvals[0].approve!(); await flush();
-    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', null, 'approve', 'Kim');
+    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', null, 'approve', null, 'Kim');
     expect(reload).toHaveBeenCalledWith('m1');
     expect(h.toasts().at(-1)).toBe('Approved · Kim Learner is enrolled');
   });
   it('signs off a step', async () => {
     const { v } = setup([kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })], [t]);
     v.approvals[0].approve!(); await flush();
-    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'approve', 'Kim');
+    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'approve', null, 'Kim');
   });
-  it('talk first words the toast for a start request and for a step', async () => {
-    const a = setup([kim({ T1: enrolled({}, 'requested') })], [t]);
-    a.v.approvals[0].talk!(); await flush();
-    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', null, 'talk', 'Kim');
-    expect(a.h.toasts().at(-1)).toBe('Kept as a request; talk it through in your next 1:1');
-    const b = setup([kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })], [t]);
-    b.v.approvals[0].talk!(); await flush();
-    expect(b.h.toasts().at(-1)).toBe('Sent back to Kim to talk it through');
+  it('talk first opens a comment field and sends nothing yet', () => {
+    const { h, v } = setup([kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })], [t]);
+    expect(v.approvals[0].talkForm).toBeNull();
+    v.approvals[0].talk!();
+    const f = teamTrjVals(h.L(), [kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })], reload).approvals[0].talkForm!;
+    expect(f).toMatchObject({ text: '', count: '0 / 500', ok: false, sendLabel: 'Send back', max: 500 });
+    expect(m.decideTrajectory).not.toHaveBeenCalled();
+  });
+  it('stays disabled under 10 characters (trimmed) and counts like the Approvals comment', async () => {
+    const members = [kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })];
+    const { h, v } = setup(members, [t]);
+    v.approvals[0].talk!();
+    const form = () => teamTrjVals(h.L(), members, reload).approvals[0].talkForm!;
+    form().set('   123456789   ');
+    expect(form()).toMatchObject({ count: '9 / 500', ok: false });
+    await form().send(); await flush();
+    expect(m.decideTrajectory).not.toHaveBeenCalled();
+    form().set('1234567890');
+    expect(form()).toMatchObject({ count: '10 / 500', ok: true });
+  });
+  it('sends a step back with the comment, words the toast truthfully and closes the field', async () => {
+    const members = [kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })];
+    const { h, v } = setup(members, [t]);
+    v.approvals[0].talk!();
+    teamTrjVals(h.L(), members, reload).approvals[0].talkForm!.set('  Add the client file, please.  ');
+    await teamTrjVals(h.L(), members, reload).approvals[0].talkForm!.send(); await flush();
+    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'talk', 'Add the client file, please.', 'Kim');
+    expect(reload).toHaveBeenCalledWith('m1');
+    expect(h.toasts().at(-1)).toBe('Sent back to Kim with your comment');
+    expect(teamTrjVals(h.L(), members, reload).approvals[0].talkForm).toBeNull();
+  });
+  it('keeps a start request with the comment, and Cancel closes the field without sending', async () => {
+    const members = [kim({ T1: enrolled({}, 'requested') })];
+    const { h, v } = setup(members, [t]);
+    v.approvals[0].talk!();
+    const form = () => teamTrjVals(h.L(), members, reload).approvals[0].talkForm;
+    expect(form()!.sendLabel).toBe('Keep as request');
+    form()!.set('Let us plan the study leave.');
+    await form()!.send(); await flush();
+    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', null, 'talk', 'Let us plan the study leave.', 'Kim');
+    expect(h.toasts().at(-1)).toBe('Kept as a request · Kim sees your comment');
+    v.approvals[0].talk!();
+    form()!.cancel();
+    expect(form()).toBeNull();
+  });
+  it('keeps the field and the text when the database refuses', async () => {
+    m.decideTrajectory.mockResolvedValue({ result: null, error: 'This step is not waiting for a decision' });
+    const members = [kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })];
+    const { h, v } = setup(members, [t]);
+    v.approvals[0].talk!();
+    teamTrjVals(h.L(), members, reload).approvals[0].talkForm!.set('Add the client file, please.');
+    await teamTrjVals(h.L(), members, reload).approvals[0].talkForm!.send(); await flush();
+    expect(h.toasts().at(-1)).toBe('This step is not waiting for a decision');
+    expect(teamTrjVals(h.L(), members, reload).approvals[0].talkForm!.text).toBe('Add the client file, please.');
   });
   it('shows a refusal as a toast and does not reload', async () => {
     m.decideTrajectory.mockResolvedValue({ result: null, error: 'Not allowed · ask an admin' });
@@ -72,6 +118,7 @@ describe('Waiting for you', () => {
     expect(v.canDecide).toBe(false);
     expect(v.approvals[0].approve).toBeNull();
     expect(v.approvals[0].talk).toBeNull();
+    expect(v.approvals[0].talkForm).toBeNull();
   });
 });
 

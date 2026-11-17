@@ -4,6 +4,7 @@
 import { AUD_INFO, LEARN, LEARN_BY } from './data';
 import { confirmCredential, decideTrajectory } from './lib/trajectoryStore';
 import type { Member } from './logic/team';
+import { COMMENT_MAX, COMMENT_MIN } from './logic/record';
 import { canBeMandatory, mapAtStage, totals, trajectoryProgress } from './logic/trajectory';
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjStep } from './logic/trajectory';
 import { effectiveEnrolment } from './logic/trajectoryLearner';
@@ -63,20 +64,39 @@ function waitingFor(member: Member, trjs: Trajectory[]): Waiting[] {
   });
 }
 
+// "Talk first" opens a comment field on the row (AppState trjTalk); the comment goes with the decision and the learner sees it.
+function talkForm(L: Logic, key: string, send: (comment: string) => Promise<void>, step: boolean) {
+  if (!(key in L.state.trjTalk)) return null;
+  const text = L.state.trjTalk[key], n = text.trim().length, ok = n >= COMMENT_MIN && n <= COMMENT_MAX;
+  const close = () => L.setState((s) => { const next = { ...s.trjTalk }; delete next[key]; return { trjTalk: next }; });
+  return {
+    text, count: n + ' / ' + COMMENT_MAX, ok, max: COMMENT_MAX, sendLabel: step ? 'Send back' : 'Keep as request', cancel: close,
+    set: (v: string) => L.setState((s) => ({ trjTalk: { ...s.trjTalk, [key]: v } })),
+    send: async () => { if (ok) await send(text.trim()); },
+  };
+}
+
 function approvalRow(L: Logic, w: Waiting, canDecide: boolean, reload: (id: string) => Promise<void>) {
   const { member, t, step, entry } = w, first = member.name.split(' ')[0];
   const key = member.id + '|' + t.id + '|' + (step?.id ?? 'start');
-  const decide = (decision: 'approve' | 'talk', done: string) => decideRow(L, key, member.id, reload, () => decideTrajectory(member.id, t.id, step?.id ?? null, decision, first), done);
+  const approve = (done: string) => decideRow(L, key, member.id, reload, () => decideTrajectory(member.id, t.id, step?.id ?? null, 'approve', null, first), done);
   const signOff = step?.k === 'check' || step?.k === 'exam';
-  const talkDone = step ? 'Sent back to ' + first + ' to talk it through' : 'Kept as a request; talk it through in your next 1:1';
+  const talkDone = step ? 'Sent back to ' + first + ' with your comment' : 'Kept as a request · ' + first + ' sees your comment';
+  // the field closes only after the decision is saved; a refusal keeps it and the text
+  const sendTalk = async (comment: string) => {
+    let saved = false;
+    await decideRow(L, key, member.id, reload, async () => { const r = await decideTrajectory(member.id, t.id, step?.id ?? null, 'talk', comment, first); saved = !r.error; return r; }, talkDone)();
+    if (saved) L.setState((s) => { const next = { ...s.trjTalk }; delete next[key]; return { trjTalk: next }; });
+  };
   return {
     key, userId: member.id, initials: initialsOf(member.name), name: member.name, trj: t.name,
     kind: step ? KIND_LABEL[step.k] : 'Start request',
     text: step ? stepTitle(step, titleOf) || KIND_LABEL[step.k] : 'Asks to start this trajectory.',
     proof: entry ? { link: entry.link ?? '', note: entry.note ?? '', ref: entry.ref ?? '' } : null,
     approveLabel: signOff ? 'Sign off' : 'Approve',
-    approve: canDecide ? decide('approve', step ? 'Signed off · ' + first : 'Approved · ' + member.name + ' is enrolled') : null,
-    talk: canDecide ? decide('talk', talkDone) : null,
+    approve: canDecide ? approve(step ? 'Signed off · ' + first : 'Approved · ' + member.name + ' is enrolled') : null,
+    talk: canDecide ? () => L.setState((s) => ({ trjTalk: { ...s.trjTalk, [key]: s.trjTalk[key] ?? '' } })) : null,
+    talkForm: canDecide ? talkForm(L, key, sendTalk, !!step) : null,
   };
 }
 
@@ -84,7 +104,7 @@ function credentialRow(L: Logic, member: Member, c: Credential, canDecide: boole
   const key = member.id + '|cred|' + c.id, first = member.name.split(' ')[0];
   return {
     key, userId: member.id, initials: initialsOf(member.name), name: member.name, trj: c.issuer, kind: 'Credential', text: c.name + ' · ' + c.issuer,
-    proof: { link: c.link, note: '', ref: c.ref }, approveLabel: 'Confirm',
+    proof: { link: c.link, note: '', ref: c.ref }, approveLabel: 'Confirm', talkForm: null,
     approve: canDecide ? decideRow(L, key, member.id, reload, () => confirmCredential(c.id), 'Confirmed · ' + first + '\'s credential is in their wallet') : null,
     talk: null,
   };

@@ -2,8 +2,8 @@
 // Actions render only when the subject is the signed-in person; View as shows the viewed person's progress and nothing to click.
 import { AUD_INFO } from './data';
 import { canBeMandatory, monthLabel, relevantMap, stepHours, stepProofProblem, totals, trajectoryProgress } from './logic/trajectory';
-import type { StepProgress, Trajectory, TrjStep } from './logic/trajectory';
-import { canWithdraw, stepAction } from './logic/trajectoryLearner';
+import type { Enrolment, StepProgress, Trajectory, TrjStep } from './logic/trajectory';
+import { canWithdraw, stepAction, talkNote } from './logic/trajectoryLearner';
 import { STEP_KINDS, enrolLabel, fmtHours, stepTitle, validLabel } from './logic/trajectoryView';
 import { requestTrajectory, submitTrajectoryStep, withdrawTrajectory } from './lib/trajectoryStore';
 import type { StepDraft } from './types';
@@ -55,7 +55,7 @@ function stepAct(c: Ctx, t: Trajectory, st: TrjStep, p: StepProgress, enrolled: 
   };
 }
 
-function stepVm(c: Ctx, t: Trajectory, i: number, p: StepProgress, enrolled: boolean, next: number, start: number) {
+function stepVm(c: Ctx, t: Trajectory, i: number, p: StepProgress, enrolled: boolean, next: number, start: number, e: Enrolment | null) {
   const st = t.steps[i], [kind, tone] = STEP_KINDS[st.k], it = st.lid ? c.byId[st.lid] : undefined, h = stepHours(st, c.byId), isNext = enrolled && i === next;
   const chip: [string, string] = p.missing ? ['na', 'No longer in the library'] : p.locked ? ['na', 'Locked']
     : p.state === 'submitted' ? ['submitted', 'With ' + c.boss] : p.state === 'booked' ? ['in-progress', 'Booked']
@@ -70,6 +70,8 @@ function stepVm(c: Ctx, t: Trajectory, i: number, p: StepProgress, enrolled: boo
     lockText: p.locked ? 'Unlocks when step ' + (t.steps.findIndex((x) => x.id === st.pre) + 1) + ' is done.' : '',
     opts: st.k === 'elect' ? (st.opts || []).filter((id) => c.byId[id]).map((id) => ({ title: c.byId[id].title, sub: c.byId[id].format + ' · ' + c.byId[id].hoursLabel + ' · ' + c.byId[id].stateLabel, open: () => c.L.openDetail(id, 'trajectory') })) : [],
     act: stepAct(c, t, st, p, enrolled, isNext),
+    // the counsellor's "talk first" comment on this step, until it is sent again (read-only, also in View as)
+    talk: talkNote(c.decisions, t.id, st.id, e),
   };
 }
 
@@ -118,11 +120,11 @@ export function trajectoryPage(c: Ctx, t: Trajectory) {
     st: enrolled ? (pg.complete ? 'accepted' : 'in-progress') : e ? 'submitted' : 'not-started',
     stLabel: enrolled ? (pg.complete ? 'All steps done' : 'Enrolled since ' + monthLabel(start)) : e ? 'Waiting for approval' : 'Not started',
     stepsSub: enrolled ? 'Done steps turn green. Locked steps open once their prerequisite is done. Dashed circles are optional.' : 'This is the path you would follow. Dates assume you start this month.',
-    steps: t.steps.map((_, i) => stepVm(c, t, i, pg.steps[i], enrolled, pg.next, start)),
+    steps: t.steps.map((_, i) => stepVm(c, t, i, pg.steps[i], enrolled, pg.next, start, e)),
     credBg: credentialEarned(c, t) ? '#e0a100' : '#fdf3dc', credFg: credentialEarned(c, t) ? '#fff' : '#7a5000',
     credMeta: t.issuer + ' · expected ' + monthLabel(start + t.months) + ' · ' + (validity ? 'valid ' + (t.valid_months === 12 ? '1 year' : validity) + (t.renewal ? ', then ' + t.renewal.charAt(0).toLowerCase() + t.renewal.slice(1) : '') : 'does not expire'),
     frac: pg.reqDone / Math.max(1, pg.reqN), progLabel: pg.reqDone + ' of ' + pg.reqN, progSub: 'required steps done',
-    callout: callout(c, t, pg, e?.status, start, binds), ...buttons(c, t),
+    callout: callout(c, t, pg, e?.status, start, binds), talk: talkNote(c.decisions, t.id, null, e), ...buttons(c, t),
     kv: [{ k: 'Credential', v: t.credential || '—' }, { k: 'Issued by', v: t.issuer }, { k: 'Study time', v: fmtHours(tot.tot) + ' over ' + t.months + ' months' },
       { k: 'This year', v: fmtHours(tot.perYear[0]) + ' of your ' + YEARLY_HOURS + ' h' }, { k: 'CPD units', v: tot.cpd ? String(tot.cpd) : 'None' },
       { k: 'Valid for', v: validity ? (t.valid_months === 12 ? '1 year' : validity) : 'Does not expire' }, { k: 'Renewal', v: t.renewal || '—' }, { k: 'Cost', v: t.cost || '—' }, { k: 'How to start', v: enrolLabel(t.enrol) }],

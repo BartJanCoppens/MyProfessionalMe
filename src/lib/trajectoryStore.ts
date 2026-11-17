@@ -1,14 +1,15 @@
 // Certification trajectories, enrolments and credentials, in Supabase. Rows are parsed at the boundary: a trajectory
 // with malformed steps or maps is dropped with a console warning, never thrown. Learners write enrolments only through
 // the RPCs below (request, withdraw, submit); the counsellor decides through decide_trajectory and confirm_credential.
-import type { Credential, Enrolment, StepEntry, Trajectory, TrjMap, TrjStep } from '../logic/trajectory';
+import type { Credential, Enrolment, StepEntry, Trajectory, TrjDecision, TrjMap, TrjStep } from '../logic/trajectory';
 import { inOrder } from './contentStore';
 import { supabase } from './supabase';
 
 export type TrajectoryDraft = Omit<Trajectory, 'id' | 'published_at'>;
 export type ExternalCredential = { name: string; issuer: string; earned_on: string; expires_on: string | null; link: string; ref: string };
 type TrajectoryRow = Omit<Trajectory, 'steps' | 'maps'> & { steps: unknown; maps: unknown };
-type EnrolmentRow = { trajectory_id: string; status: Enrolment['status']; start_month: number; steps: unknown };
+type EnrolmentRow = { trajectory_id: string; status: Enrolment['status']; start_month: number; steps: unknown; asked_at: string | null };
+type DecisionRow = { trajectory_id: string; step_id: string | null; decision: TrjDecision['decision']; comment: string | null; decided_by_name: string | null; decided_at: string };
 type CredentialRow = Omit<Credential, 'link' | 'ref'> & { link: string | null; ref: string | null };
 type Failure = { message: string; code?: string };
 
@@ -30,7 +31,7 @@ export function parseTrajectory(r: TrajectoryRow): Trajectory | null {
 function parseEnrolment(r: EnrolmentRow): Enrolment {
   const ok = isObject(r.steps) && Object.values(r.steps).every(entryOk);
   if (!ok) console.warn(`Enrolment on ${r.trajectory_id} has malformed steps; shown with none`);
-  return { status: r.status, start_month: r.start_month, steps: ok ? r.steps as Record<string, StepEntry> : {} };
+  return { status: r.status, start_month: r.start_month, steps: ok ? r.steps as Record<string, StepEntry> : {}, asked_at: r.asked_at ?? null };
 }
 
 // Postgres errors to what a person can read. The RPCs raise their own 42501 messages ("A step is already signed off"),
@@ -54,9 +55,19 @@ export async function loadTrajectories(): Promise<Trajectory[]> {
 }
 
 export async function loadEnrolments(userId: string): Promise<Record<string, Enrolment>> {
-  const { data, error } = await supabase.from('trajectory_enrolments').select('trajectory_id, status, start_month, steps').eq('user_id', userId);
+  const { data, error } = await supabase.from('trajectory_enrolments').select('trajectory_id, status, start_month, steps, asked_at').eq('user_id', userId);
   fail(error);
   return Object.fromEntries(((data || []) as EnrolmentRow[]).map((r) => [r.trajectory_id, parseEnrolment(r)]));
+}
+
+// The person's trajectory decisions (approve and talk first), newest first.
+export async function loadDecisions(userId: string): Promise<TrjDecision[]> {
+  const { data, error } = await supabase.from('trajectory_decisions')
+    .select('trajectory_id, step_id, decision, comment, decided_by_name, decided_at').eq('user_id', userId).order('decided_at', { ascending: false });
+  fail(error);
+  return ((data || []) as DecisionRow[]).map((r) => ({
+    trajectoryId: r.trajectory_id, stepId: r.step_id, decision: r.decision, comment: r.comment ?? '', byName: r.decided_by_name ?? '', at: r.decided_at,
+  }));
 }
 
 export async function loadCredentials(userId: string): Promise<Credential[]> {
@@ -124,10 +135,11 @@ export async function submitTrajectoryStep(trajectoryId: string, stepId: string,
   return { state: error ? null : data as 'submitted' | 'booked', error: failure(error) };
 }
 
-// Counsellor or managing admin. step null: the start request. Result: 'enrolled', 'done' or 'talk'. who: the person's
+// Counsellor or managing admin. step null: the start request. Result: 'enrolled', 'done' or 'talk'. comment: needed for
+// 'talk' (COMMENT_MIN to COMMENT_MAX characters, checked by the database), optional for 'approve'. who: the person's
 // first name, for the message when they already hold a valid credential from this trajectory.
-export async function decideTrajectory(userId: string, trajectoryId: string, stepId: string | null, decision: 'approve' | 'talk', who = 'This person'): Promise<{ result: string | null; error: string | null }> {
-  const { data, error } = await supabase.rpc('decide_trajectory', { p_user: userId, p_trajectory: trajectoryId, p_step: stepId, p_decision: decision });
+export async function decideTrajectory(userId: string, trajectoryId: string, stepId: string | null, decision: 'approve' | 'talk', comment: string | null = null, who = 'This person'): Promise<{ result: string | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('decide_trajectory', { p_user: userId, p_trajectory: trajectoryId, p_step: stepId, p_decision: decision, p_comment: comment });
   return { result: error || data == null ? null : String(data), error: failure(error, who + ' already holds a valid credential from this trajectory.') };
 }
 export async function confirmCredential(credentialId: string): Promise<{ error: string | null }> {

@@ -10,6 +10,8 @@ const box = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6 }
 const head = { padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#fafbf8' } as const;
 const small = { fontSize: 12, color: '#5a6058' } as const;
 const Label = ({ children }: { children: ReactNode }) => <span style={{ fontSize: 11.5, fontWeight: 600, color: '#5a6058' }}>{children}</span>;
+// The counsellor's "talk first" comment: a quiet note, read-only.
+const TalkNote = ({ text }: { text: string }) => <div style={{ background: '#fafbf8', border: '1px solid #eef0ea', borderRadius: 6, padding: '8px 10px', fontSize: 12.5, color: '#3d423b', whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{text}</div>;
 
 export function LibraryTrajectories({ vm }: { vm: VM }) {
   if (!vm.hasLibTrj) return null;
@@ -75,6 +77,7 @@ function Step({ vs }: { vs: StepVm }) {
             ))}
           </div>
         )}
+        {vs.talk && <TalkNote text={vs.talk} />}
         {vs.act && <StepAction a={vs.act} />}
         {vs.lockText && <div style={small}>{vs.lockText}</div>}
       </div>
@@ -120,6 +123,7 @@ export default function TrajectoryScreen({ vm }: { vm: VM }) {
               <div><div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.2 }}>{tv.progLabel}</div><div style={small}>{tv.progSub}</div></div>
             </div>
             <div style={{ fontSize: 12.5, color: '#3d423b', textWrap: 'pretty' }}>{tv.callout}</div>
+            {tv.talk && <TalkNote text={tv.talk} />}
             {tv.primary && <Button fullWidth onClick={tv.primary.run}>{tv.primary.label}</Button>}
             {tv.secondary && <div><LinkButton tone="muted" onClick={tv.secondary.run}>{tv.secondary.label}</LinkButton></div>}
           </div>

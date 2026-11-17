@@ -99,11 +99,11 @@ describe('what membership changes', () => {
   });
   it('the person zoom names the mandatory map, not an advised one for the business line listed first', () => {
     const both: Trajectory = { ...data, maps: [['Consulting', 'Consultant', 'advised'], ['tec:data', 'Consultant', 'mandatory']] };
-    const h = harness({ state: { trjs: [both], trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'] } } });
+    const h = harness({ state: { trjs: [both], trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'], decisions: [] } } });
     expect(h.vm().pz.trjRows[0]).toMatch(/^Data engineer via Data & Azure · mandatory · /);
   });
   it('the person zoom lists trajectories mapped to the subject\'s memberships', () => {
-    const h = harness({ state: { trjs: [data], trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'] } } });
+    const h = harness({ state: { trjs: [data], trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'], decisions: [] } } });
     expect(h.vm().pz.trjRows[0]).toMatch(/^Data engineer via Data & Azure · mandatory · /);
   });
 });

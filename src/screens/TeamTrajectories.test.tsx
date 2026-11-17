@@ -18,8 +18,8 @@ const kim = (steps = {}): Member => ({ id: 'm1', name: 'Kim Learner', stage: 'Co
 beforeEach(() => { vi.clearAllMocks(); stubWindow(); vi.mocked(store.decideTrajectory).mockResolvedValue({ result: 'done', error: null }); });
 afterEach(cleanup);
 
-const open = (members: Member[], subject?: Subject) => {
-  const h = harness({ subject, state: { screen: 'team', teamTab: 'trj', trjs: [t] } });
+const open = (members: Member[], subject?: Subject, talk: Record<string, string> = {}) => {
+  const h = harness({ subject, state: { screen: 'team', teamTab: 'trj', trjs: [t], trjTalk: talk } });
   const refresh = vi.fn(async () => {});
   render(<TeamScreen vm={h.vm()} members={members} onRefresh={refresh} onOpen={vi.fn()} />);
   return { h, refresh };
@@ -44,7 +44,29 @@ describe('the Certifications tab', () => {
     const { refresh } = open([kim({ s1: { state: 'submitted', note: 'x' } })]);
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     await flush();
-    expect(store.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'approve', 'Kim');
+    expect(store.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'approve', null, 'Kim');
+    expect(refresh).toHaveBeenCalledWith('m1');
+  });
+  it('"Talk first" opens a comment field for that row', () => {
+    const { h } = open([kim({ s1: { state: 'submitted', note: 'x' } })]);
+    fireEvent.click(screen.getByRole('button', { name: 'Talk first' }));
+    expect(h.state.trjTalk).toEqual({ 'm1|T1|s1': '' });
+    expect(store.decideTrajectory).not.toHaveBeenCalled();
+  });
+  it('the open field counts characters and keeps "Send back" disabled under 10', () => {
+    open([kim({ s1: { state: 'submitted', note: 'x' } })], undefined, { 'm1|T1|s1': '123456789' });
+    expect(screen.getByRole('textbox', { name: 'What to talk about with Kim Learner' })).toBeTruthy();
+    expect(screen.getByText('9 / 500')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Send back' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Talk first' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
+  });
+  it('sends the step back with the comment', async () => {
+    const { refresh } = open([kim({ s1: { state: 'submitted', note: 'x' } })], undefined, { 'm1|T1|s1': 'Add the client file, please.' });
+    fireEvent.click(screen.getByRole('button', { name: 'Send back' }));
+    await flush();
+    expect(store.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'talk', 'Add the client file, please.', 'Kim');
     expect(refresh).toHaveBeenCalledWith('m1');
   });
   it('lists the person in the progress table', () => {

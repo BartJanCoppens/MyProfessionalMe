@@ -1,18 +1,18 @@
-// What the learner's trajectory view-models share: the subject's enrolments, credentials and industry and technology
-// memberships, who the counsellor is, and
+// What the learner's trajectory view-models share: the subject's enrolments, credentials, industry and technology
+// memberships and the counsellor's decisions, who the counsellor is, and
 // the one way an action writes (through Logic.persist, so View as refuses it) and reloads the subject's data.
 import { loadAudiences } from './lib/membershipStore';
-import { loadCredentials, loadEnrolments } from './lib/trajectoryStore';
+import { loadCredentials, loadDecisions, loadEnrolments } from './lib/trajectoryStore';
 import { audienceKeys } from './logic/membership';
 import { effectiveEnrolment } from './logic/trajectoryLearner';
 import type { TrjMine } from './logic/trajectoryLearner';
-import type { Credential, Enrolment, Trajectory } from './logic/trajectory';
+import type { Credential, Enrolment, Trajectory, TrjDecision } from './logic/trajectory';
 import type { Item, Logic } from './model';
 import type { AppState, Screen } from './types';
 
 export type Ctx = {
   L: Logic; byId: Record<string, Item>; me: string; ro: boolean; now: Date; boss: string; bossFirst: string;
-  person: { line: string | null; stage: string | null; audiences: string[] }; enrols: Record<string, Enrolment>; creds: Credential[];
+  person: { line: string | null; stage: string | null; audiences: string[] }; enrols: Record<string, Enrolment>; creds: Credential[]; decisions: TrjDecision[];
 };
 
 // Data loaded for another person (the viewed person changed meanwhile) is never shown.
@@ -22,7 +22,7 @@ export function context(L: Logic, byId: Record<string, Item>): Ctx {
   const mine = mineOf(L);
   return {
     L, byId, me: L.subject.id, ro: L.subject.readOnly, now: new Date(), boss: L.counsellorFull(), bossFirst: L.counsellorFirst(),
-    person: { line: L.subject.businessLine, stage: L.subject.stage, audiences: mine?.audiences ?? [] }, enrols: mine?.enrols ?? {}, creds: mine?.creds ?? [],
+    person: { line: L.subject.businessLine, stage: L.subject.stage, audiences: mine?.audiences ?? [] }, enrols: mine?.enrols ?? {}, creds: mine?.creds ?? [], decisions: mine?.decisions ?? [],
   };
 }
 
@@ -45,8 +45,8 @@ export const credentialEarned = (c: Ctx, t: Trajectory) => {
 // current: whether the loaded data may still be written, given the state when it lands.
 export async function loadMine(L: Logic, current: (s: AppState) => boolean = () => true) {
   const userId = L.subject.id;
-  const [enrols, creds, audiences] = await Promise.all([loadEnrolments(userId), loadCredentials(userId), loadAudiences(userId)]);
-  L.setState((s) => (current(s) ? { trjMine: { userId, enrols, creds, audiences } } : {}));
+  const [enrols, creds, audiences, decisions] = await Promise.all([loadEnrolments(userId), loadCredentials(userId), loadAudiences(userId), loadDecisions(userId)]);
+  L.setState((s) => (current(s) ? { trjMine: { userId, enrols, creds, audiences, decisions } } : {}));
 }
 
 // Writes in flight, per key (one trajectory or one credential of one person): a second click waits for the first.

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initState, Logic } from '../model';
 import * as store from '../lib/trajectoryStore';
 import type { Subject } from '../lib/useSubject';
-import type { Credential, Enrolment, Trajectory } from '../logic/trajectory';
+import type { Credential, Enrolment, Trajectory, TrjDecision } from '../logic/trajectory';
 import { blankTrajectory } from '../logic/trajectoryEdit';
 import { cfg, person } from '../test/harness';
 import type { AppState } from '../types';
@@ -16,11 +16,11 @@ import Wallet from './Wallet';
 
 vi.mock('../lib/trajectoryStore', async (orig) => ({
   ...(await orig<object>()),
-  requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(),
+  requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(), loadDecisions: vi.fn(),
 }));
 const m = vi.mocked(store);
 const boss = { id: 'c1', name: 'Casey Boss' };
-let enrols: Record<string, Enrolment> = {}, creds: Credential[] = [];
+let enrols: Record<string, Enrolment> = {}, creds: Credential[] = [], decisions: TrjDecision[] = [];
 const START = 2026 * 12 + 9;
 
 function Live({ state, subject }: { state: Partial<AppState>; subject: Subject }) {
@@ -35,15 +35,16 @@ const trj = (over: Partial<Trajectory> = {}): Trajectory => ({
   steps: [{ id: 'a', k: 'evidence', title: 'Describe your practice', win: 3, req: true, pre: null }, { id: 'b', k: 'exam', title: 'Final exam', hours: 2, win: 12, req: true, pre: 'a' }], ...over,
 });
 const show = (trjs: Trajectory[], subject: Subject = person({ counsellor: boss }), state: Partial<AppState> = {}) =>
-  render(<Live subject={subject} state={{ trjs, trjMine: { userId: subject.id, enrols, creds, audiences: [] }, ...state }} />);
+  render(<Live subject={subject} state={{ trjs, trjMine: { userId: subject.id, enrols, creds, audiences: [], decisions }, ...state }} />);
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
 const clicked = async (name: string | RegExp) => { await act(async () => { click(name); }); };
 const gone = (name: string | RegExp) => expect(screen.queryByRole('button', { name })).toBeNull();
 
 beforeEach(() => {
-  vi.clearAllMocks(); window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; enrols = {}; creds = [];
+  vi.clearAllMocks(); window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; enrols = {}; creds = []; decisions = [];
   m.loadEnrolments.mockImplementation(async () => ({ ...enrols }));
   m.loadCredentials.mockImplementation(async () => creds.slice());
+  m.loadDecisions.mockImplementation(async () => decisions.slice());
   m.requestTrajectory.mockImplementation(async (id) => { const status = id === 'T1' ? 'requested' as const : 'enrolled' as const; enrols[id] = { status, start_month: START, steps: {} }; return { status, error: null }; });
   m.withdrawTrajectory.mockImplementation(async (id) => { delete enrols[id]; return { error: null }; });
   m.submitTrajectoryStep.mockImplementation(async (id, step, state) => { enrols[id].steps[step] = { state }; return { state, error: null }; });
@@ -132,6 +133,12 @@ describe('View as', () => {
     expect(screen.getByText('Certified adviser', { selector: 'div' })).toBeTruthy();
     ['Send for review', 'Book the exam', 'Leave this trajectory', 'Start this trajectory', '+ Add an external credential', /Ask .* to approve/, 'Request sign-off'].forEach(gone);
     expect(screen.getByText(/^Enrolled since/)).toBeTruthy();
+  });
+  it('shows the counsellor\'s talk-first comment on the step it concerns', () => {
+    enrols.T1 = { status: 'enrolled', start_month: START, steps: {} };
+    decisions = [{ trajectoryId: 'T1', stepId: 'a', decision: 'talk', comment: 'Add the client file, please.', byName: 'Casey Boss', at: '2026-11-10T09:00:00Z' }];
+    show([trj()], viewing(), { screen: 'trajectory', trjView: 'T1' });
+    expect(screen.getByText('Casey: Add the client file, please.')).toBeTruthy();
   });
   it('offers no start on a trajectory the viewed person has not begun', () => {
     show([trj()], viewing(), { screen: 'trajectory', trjView: 'T1' });

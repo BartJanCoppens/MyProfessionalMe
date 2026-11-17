@@ -1,6 +1,6 @@
 // Counsellor view, tab "Certifications": what waits for the counsellor (start requests, evidence and sign-offs) and
 // every counsellee's progress on their trajectories. Reads from the view-model (teamTrjVals.ts).
-import { Avatar, Button, StatusChip, Tag } from '../ds';
+import { Avatar, Button, StatusChip, Tag, Textarea } from '../ds';
 import type { teamTrjVals } from '../teamTrjVals';
 
 type Vals = ReturnType<typeof teamTrjVals>;
@@ -33,9 +33,23 @@ export default function TeamTrajectories({ v }: { v: Vals }) {
               )}
             </div>
             {a.approve && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {a.talk && <Button size="sm" variant="secondary" onClick={a.talk}>Talk first</Button>}
-                <Button size="sm" onClick={a.approve}>{a.approveLabel}</Button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch', flex: a.talkForm ? '0 1 300px' : 'none', minWidth: a.talkForm ? 240 : 0 }}>
+                {a.talkForm && (
+                  <>
+                    <Textarea minHeight={64} value={a.talkForm.text} onChange={(e) => a.talkForm!.set(e.target.value)} maxLength={a.talkForm.max}
+                      placeholder="What to talk about (at least 10 characters)" aria-label={'What to talk about with ' + a.name} />
+                    <div style={{ fontSize: 11.5, color: '#8b918a', textAlign: 'right' }}>{a.talkForm.count}</div>
+                  </>
+                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  {a.talkForm ? (
+                    <>
+                      <Button size="sm" variant="secondary" onClick={a.talkForm.cancel}>Cancel</Button>
+                      <Button size="sm" variant="secondary" disabled={!a.talkForm.ok} onClick={a.talkForm.send}>{a.talkForm.sendLabel}</Button>
+                    </>
+                  ) : a.talk && <Button size="sm" variant="secondary" onClick={a.talk}>Talk first</Button>}
+                  <Button size="sm" onClick={a.approve}>{a.approveLabel}</Button>
+                </div>
               </div>
             )}
           </div>

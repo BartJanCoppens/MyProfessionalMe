@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LEARN_META } from './data';
 import { parseFormatContent } from './lib/contentStore';
 import * as store from './lib/trajectoryStore';
-import type { Credential, Enrolment, Trajectory, TrjStep } from './logic/trajectory';
+import type { Credential, Enrolment, Trajectory, TrjDecision, TrjStep } from './logic/trajectory';
 import { blankTrajectory } from './logic/trajectoryEdit';
 import { deferred, flush, harness, person, stubWindow, withProgress } from './test/harness';
 import type { AppState } from './types';
 
 vi.mock('./lib/trajectoryStore', async (orig) => ({
   ...(await orig<object>()),
-  requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), removeCredential: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(),
+  requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), removeCredential: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(), loadDecisions: vi.fn(),
 }));
 vi.mock('./lib/membershipStore', () => ({ loadAudiences: vi.fn(async () => []) }));
 const m = vi.mocked(store);
@@ -18,7 +18,7 @@ const step = (over: Partial<TrjStep> & Pick<TrjStep, 'id' | 'k'>): TrjStep => ({
 const trj = (id: string, over: Partial<Trajectory> = {}): Trajectory => ({ ...blankTrajectory('Audit'), id, name: 'Trajectory ' + id, status: 'live', enrol: 'open', published_at: '2026-09-10T08:00:00Z', ...over });
 const START = 2026 * 12 + 9;
 const enrolled = (steps: Enrolment['steps'] = {}): Enrolment => ({ status: 'enrolled', start_month: START, steps });
-const mine = (enrols: Record<string, Enrolment>, creds: Credential[] = []): Partial<AppState> => ({ trjMine: { userId: 'u1', enrols, creds, audiences: [] } });
+const mine = (enrols: Record<string, Enrolment>, creds: Credential[] = [], decisions: TrjDecision[] = []): Partial<AppState> => ({ trjMine: { userId: 'u1', enrols, creds, audiences: [], decisions } });
 const cred = (over: Partial<Credential> = {}): Credential => ({ id: 'c1', user_id: 'u1', name: 'Certified adviser', issuer: 'ITAA', earned_on: '2026-01-05', expires_on: null, link: '', ref: '', trajectory_id: null, status: 'confirmed', ...over });
 const ok = { error: null };
 
@@ -31,6 +31,7 @@ beforeEach(() => {
   m.removeCredential.mockResolvedValue(ok);
   m.loadEnrolments.mockResolvedValue({});
   m.loadCredentials.mockResolvedValue([]);
+  m.loadDecisions.mockResolvedValue([]);
 });
 const page = (t: Trajectory, state: Partial<AppState> = {}, subject = person({ counsellor: boss })) =>
   harness({ subject, state: { screen: 'trajectory', trjView: t.id, trjOrigin: 'library', trjs: [t], ...state } });
@@ -103,7 +104,7 @@ describe('starting and asking', () => {
     m.loadEnrolments.mockReturnValue(d.promise);
     const h = page(trj('T1'), mine({}));
     h.vm().tv!.primary!.run(); await flush();
-    h.L().setState({ trjMine: { userId: 'p2', enrols: {}, creds: [], audiences: [] } });
+    h.L().setState({ trjMine: { userId: 'p2', enrols: {}, creds: [], audiences: [], decisions: [] } });
     d.resolve({ T1: enrolled() }); await flush(8);
     expect(h.state.trjMine?.userId).toBe('p2');
   });
@@ -113,6 +114,32 @@ describe('starting and asking', () => {
     await h.vm().tv!.primary!.run(); await flush();
     expect(h.lastToast()).toBe('This trajectory is not open');
     expect(m.loadEnrolments).not.toHaveBeenCalled();
+  });
+});
+
+describe('talk-first comments', () => {
+  const t = trj('T1', { enrol: 'approval', steps: [step({ id: 'a', k: 'evidence', title: 'Evidence' })] });
+  const said = (over: Partial<TrjDecision> = {}): TrjDecision => ({ trajectoryId: 'T1', stepId: 'a', decision: 'talk', comment: 'Add the client file, please.', byName: 'Casey Boss', at: '2026-11-10T09:00:00Z', ...over });
+  it('show on the step they concern until the step is sent again', () => {
+    expect(page(t, mine({ T1: enrolled() }, [], [said()])).vm().tv!.steps[0].talk).toBe('Casey: Add the client file, please.');
+    expect(page(t, mine({ T1: enrolled({ a: { state: 'submitted', note: 'x' } }) }, [], [said()])).vm().tv!.steps[0].talk).toBe('');
+  });
+  it('show on a start request that still waits', () => {
+    const start = said({ stepId: null, comment: 'Let us plan the study leave.' });
+    const v = page(t, mine({ T1: { ...enrolled(), status: 'requested', asked_at: '2026-11-01T09:00:00Z' } }, [], [start])).vm().tv!;
+    expect(v.talk).toBe('Casey: Let us plan the study leave.');
+    expect(page(t, mine({ T1: enrolled() }, [], [start])).vm().tv!.talk).toBe('');
+  });
+  it('show in View as too, read-only', () => {
+    const v = page(t, mine({ T1: enrolled() }, [], [said()]), person({ readOnly: true, counsellor: boss })).vm().tv!;
+    expect(v.steps[0].talk).toBe('Casey: Add the client file, please.');
+  });
+  it('load with the subject\'s data', async () => {
+    m.loadDecisions.mockResolvedValue([said()]);
+    const h = page(trj('T1'), mine({}));
+    await h.vm().tv!.primary!.run(); await flush();
+    expect(m.loadDecisions).toHaveBeenCalledWith('u1');
+    expect(h.state.trjMine?.decisions).toEqual([said()]);
   });
 });
 
@@ -240,7 +267,7 @@ describe('View as is read-only', () => {
     expect(h.vm().credForm).toBeNull();
   });
   it('ignores data loaded for someone else', () => {
-    const h = page(t, { trjMine: { userId: 'someone-else', enrols: { T1: enrolled() }, creds: [cred()], audiences: [] } });
+    const h = page(t, { trjMine: { userId: 'someone-else', enrols: { T1: enrolled() }, creds: [cred()], audiences: [], decisions: [] } });
     expect(h.vm().wallet).toEqual([]);
     expect(h.vm().tv!.stLabel).toBe('Not started');
   });
@@ -365,7 +392,7 @@ describe('the practice exam', () => {
 
 describe('industry and technology membership', () => {
   const data = trj('T9', { enrol: 'auto', maps: [['tec:data', 'Consultant', 'mandatory']] });
-  const member = { trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'] } };
+  const member = { trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'], decisions: [] } };
   it('a mandatory tec: map enrols a member at its stage, labelled mandatory, with no way out', () => {
     const v = page(data, member).vm();
     expect(v.tv!.obLabel).toBe('Mandatory');

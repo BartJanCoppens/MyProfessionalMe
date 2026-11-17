@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, has, op } from '../test/fakeSupabase';
 import {
-  addExternalCredential, confirmCredential, createTrajectory, decideTrajectory, loadCredentials, loadEnrolments, loadTrajectories,
+  addExternalCredential, confirmCredential, createTrajectory, decideTrajectory, loadCredentials, loadDecisions, loadEnrolments, loadTrajectories,
   removeCredential, requestTrajectory, saveTrajectoryNow, saveTrajectorySoon, submitTrajectoryStep, withdrawTrajectory,
 } from './trajectoryStore';
 
@@ -47,14 +47,32 @@ describe('loadTrajectories', () => {
 
 describe('loadEnrolments', () => {
   it('keys the person\'s enrolments by trajectory', async () => {
-    db.answer(() => ({ data: [{ trajectory_id: 'T1', status: 'enrolled', start_month: 24321, steps: { s6: { state: 'submitted', note: 'n' } } }] }));
-    expect(await loadEnrolments('u1')).toEqual({ T1: { status: 'enrolled', start_month: 24321, steps: { s6: { state: 'submitted', note: 'n' } } } });
+    db.answer(() => ({ data: [{ trajectory_id: 'T1', status: 'enrolled', start_month: 24321, steps: { s6: { state: 'submitted', note: 'n' } }, asked_at: '2026-11-01T09:00:00Z' }] }));
+    expect(await loadEnrolments('u1')).toEqual({ T1: { status: 'enrolled', start_month: 24321, steps: { s6: { state: 'submitted', note: 'n' } }, asked_at: '2026-11-01T09:00:00Z' } });
     expect(has(db.calls[0], 'eq', 'user_id', 'u1')).toBe(true);
   });
   it('keeps the row with no steps when its steps are malformed, and warns', async () => {
     db.answer(() => ({ data: [{ trajectory_id: 'T1', status: 'enrolled', start_month: 1, steps: { s6: { state: 'finished' } } }, { trajectory_id: 'T2', status: 'requested', start_month: 2, steps: [] }] }));
-    expect(await loadEnrolments('u1')).toEqual({ T1: { status: 'enrolled', start_month: 1, steps: {} }, T2: { status: 'requested', start_month: 2, steps: {} } });
+    expect(await loadEnrolments('u1')).toEqual({ T1: { status: 'enrolled', start_month: 1, steps: {}, asked_at: null }, T2: { status: 'requested', start_month: 2, steps: {}, asked_at: null } });
     expect(warn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('loadDecisions', () => {
+  it('returns the person\'s decisions newest first, with the decider\'s name kept', async () => {
+    db.answer(() => ({ data: [{ trajectory_id: 'T1', step_id: null, decision: 'talk', comment: 'Let us plan the study leave.', decided_by_name: 'Casey Boss', decided_at: '2026-11-10T09:00:00Z' },
+      { trajectory_id: 'T1', step_id: 's6', decision: 'approve', comment: null, decided_by_name: '', decided_at: '2026-11-09T09:00:00Z' }] }));
+    expect(await loadDecisions('u1')).toEqual([
+      { trajectoryId: 'T1', stepId: null, decision: 'talk', comment: 'Let us plan the study leave.', byName: 'Casey Boss', at: '2026-11-10T09:00:00Z' },
+      { trajectoryId: 'T1', stepId: 's6', decision: 'approve', comment: '', byName: '', at: '2026-11-09T09:00:00Z' },
+    ]);
+    expect(db.calls[0].table).toBe('trajectory_decisions');
+    expect(has(db.calls[0], 'eq', 'user_id', 'u1')).toBe(true);
+    expect(has(db.calls[0], 'order', 'decided_at', { ascending: false })).toBe(true);
+  });
+  it('throws the database error', async () => {
+    failWith('boom');
+    await expect(loadDecisions('u1')).rejects.toThrow('boom');
   });
 });
 
@@ -151,9 +169,9 @@ describe('RPC wrappers', () => {
   it('decides on a start request (no step) and on a step', async () => {
     db.answer(() => ({ data: 'enrolled' }));
     expect(await decideTrajectory('u1', 'T2', null, 'approve')).toEqual({ result: 'enrolled', error: null });
-    expect(db.calls[0].steps[0][1][0]).toEqual({ p_user: 'u1', p_trajectory: 'T2', p_step: null, p_decision: 'approve' });
-    await decideTrajectory('u1', 'T2', 's7', 'talk');
-    expect(db.calls[1].steps[0][1][0]).toMatchObject({ p_step: 's7', p_decision: 'talk' });
+    expect(db.calls[0].steps[0][1][0]).toEqual({ p_user: 'u1', p_trajectory: 'T2', p_step: null, p_decision: 'approve', p_comment: null });
+    await decideTrajectory('u1', 'T2', 's7', 'talk', 'Add the client file, please.');
+    expect(db.calls[1].steps[0][1][0]).toMatchObject({ p_step: 's7', p_decision: 'talk', p_comment: 'Add the client file, please.' });
   });
   it('confirms a credential', async () => {
     expect(await confirmCredential('c1')).toEqual({ error: null });
@@ -161,7 +179,7 @@ describe('RPC wrappers', () => {
   });
   it('maps errors to user-facing messages and never throws', async () => {
     failWith('This person already holds this credential', '23505');
-    expect(await decideTrajectory('u1', 'T1', 's9', 'approve', 'Kim')).toEqual({ result: null, error: 'Kim already holds a valid credential from this trajectory.' });
+    expect(await decideTrajectory('u1', 'T1', 's9', 'approve', null, 'Kim')).toEqual({ result: null, error: 'Kim already holds a valid credential from this trajectory.' });
     expect(await decideTrajectory('u1', 'T1', 's9', 'approve')).toEqual({ result: null, error: 'This person already holds a valid credential from this trajectory.' });
     failWith('new row violates row-level security policy', '42501');
     expect(await confirmCredential('c1')).toEqual({ error: 'Not allowed · ask an admin' });
