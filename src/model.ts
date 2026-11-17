@@ -36,6 +36,7 @@ import { aiVals } from './aiVals';
 import { canComplete, complete } from './lib/ai';
 import type { AiRequest } from './lib/ai';
 import type { AiUseKey } from './logic/ai';
+import { jsonObject } from './logic/json';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
 export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'adminKb', 'users', 'adminAi'];
@@ -46,8 +47,6 @@ export function allowedScreen(screen: Screen, access: Access): Screen {
   const admin = access.isSystem || !!access.isGeneral || access.domains.length > 0;
   return (SYSTEM_SCREENS.includes(screen) && !access.isSystem) || (ADMIN_SCREENS.includes(screen) && !admin) ? 'map' : screen;
 }
-// The JSON object in a model's reply, or null.
-const jsonIn = <T>(text: string): T | null => { const m = text.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) as T : null; };
 const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!;
 
 type Evidence = { id: string; text: string; src: string };
@@ -767,7 +766,7 @@ export class Logic {
     const chat: ChatMsg[] = this.myChat().concat([{ role: 'user', text }]);
     this.setState({ chat, chatFor: this.subject.id, chatInput: '', chatBusy: true, proposal: null });
     let res = await this.viaAi('profile_chat', { system: this.sysPrompt(), messages: chat.map((m) => ({ role: m.role, content: m.text })), max_tokens: 600 }, (t) => {
-      const r = jsonIn<ChatReply>(t); return r && r.reply ? r : null;
+      const r = jsonObject(t) as ChatReply | null; return r && r.reply ? r : null;
     });
     if (!res) res = this.scripted(text);
     const reply = res.reply;
@@ -842,7 +841,7 @@ export class Logic {
     if (this.state.readBusy) return; this.setState({ readBusy: true });
     const lines = st.layers.map((l) => l.lens + ' (' + l.aud + '): ' + (l.titles.length ? l.titles.join(', ') : 'nothing')).join('\n');
     const res = await this.viaAi('learners_eye', { messages: [{ role: 'user', content: 'You are ' + P[2] + ', ' + P[3] + ' at a consulting, audit, tax and legal firm. This is the learning your firm has lined up for you this year, stacked from every audience you belong to:\n' + lines + '\nTotal ' + Math.round(st.tot) + ' h of an 80 h budget; mandatory ' + Math.round(st.mand) + ' h of a 40 h budget. Arrives twice: ' + (st.dups.map((d) => d.title).join(', ') || 'none') + '.\nReply ONLY with JSON {"text": your honest first-person reaction, 2 sentences, at most 45 words, plain, no emoji, no exclamation marks, "fix": one concrete change for the curriculum team, at most 25 words, naming the audience and the learning}.' }], max_tokens: 300 }, (t) => {
-      const r = jsonIn<Read>(t); return r && r.text ? r : null;
+      const r = jsonObject(t) as Read | null; return r && r.text ? r : null;
     });
     const read: Read = res ? { text: String(res.text), fix: String(res.fix || ''), ai: true } : { ...this.scriptedRead(P, st), ai: false };
     // functional update: this.state is stale after the await
@@ -870,7 +869,7 @@ export class Logic {
     const s = this.state;
     const sys = 'You are the curriculum copilot of a consulting, audit, tax and legal firm. Learnings are mapped to audiences at career stages. Audiences (key = name): ' + Object.keys(AUD_INFO).map((k) => k + ' = ' + AUD_INFO[k].name + ' (' + lensOf(k)[1] + ', ' + AUD_INFO[k].reach + ' people)').join('; ') + '. Stages: ' + STAGES.join(', ') + '. Ambition and Profile audiences can only be advised, never mandatory.\nLearnings: ' + LEARN.map((r) => r[0] + ' ' + r[1] + ' (' + r[2] + ', L' + r[3] + ', ' + r[6] + ' h)').join('; ') + '.\nCurrent mappings: ' + Object.keys(s.maps).filter((k) => AUD_INFO[k] && s.maps[k].length).map((k) => k + ': ' + s.maps[k].map((m) => m[0] + '@' + m[1] + '/' + m[2]).join(' ')).join(' | ') + '.\nYearly budget: 80 h total, 40 h mandatory.\nReply ONLY with JSON {"reply": string, at most 60 words, plain matter-of-fact English, no emoji, "ops": [{"op": "add"|"remove"|"setOb", "aud": key, "lid": id, "stage": stage, "ob": "mandatory"|"advised"}]}. Propose at most 5 ops and only when the request asks for a change.';
     let res = await this.viaAi('curriculum_copilot', { system: sys, messages: [{ role: 'user', content: text }], max_tokens: 700 }, (t) => {
-      const r = jsonIn<{ reply: string; ops?: Op[] }>(t); return r && r.reply ? r : null;
+      const r = jsonObject(t) as { reply: string; ops?: Op[] } | null; return r && r.reply ? r : null;
     });
     if (!res) res = this.scriptedCp(text);
     this.setState({ cpBusy: false, cpReply: res.reply, cpOpsP: this.validOps(res.ops) });

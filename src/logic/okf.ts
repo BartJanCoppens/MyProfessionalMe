@@ -5,14 +5,15 @@ import type { Bundle, BundleSource, RagModel } from '../types';
 export type Hit = { text: string; src: string; score: number; disp?: number };
 export type OkfFile = { path: string; type: string; front: string; body: string };
 
-const excluded = (src: BundleSource) => src[5] === 'client' || src[5] === 'licensed';
+// A source whose passages a creator or the retriever may use: never client-confidential or licensed ones.
+export const usablePassage = (src: BundleSource) => src[5] !== 'client' && src[5] !== 'licensed';
 
 // Keyword match over every passage; client-confidential and licensed sources are never read.
 export function retrieve(bundles: Bundle[], q: string): Hit[] {
   const words = q.toLowerCase().replace(/[^a-z0-9€% ]/g, ' ').split(/\s+/).filter((w) => w.length > 3);
   const hits: Hit[] = [];
   bundles.forEach((b) => b.chunks.forEach((c) => {
-    const src = b.sources[c[0]]; if (!src || excluded(src)) return; const tx = c[1].toLowerCase();
+    const src = b.sources[c[0]]; if (!src || !usablePassage(src)) return; const tx = c[1].toLowerCase();
     const sc = words.reduce((a, w) => a + (tx.includes(w) ? 1 : tx.includes(w.slice(0, 5)) ? 0.5 : 0), 0);
     if (sc > 0) hits.push({ text: c[1], src: src[0] + ' · ' + b.name, score: sc / Math.max(3, words.length) });
   }));
@@ -39,7 +40,7 @@ export function okfFiles(b: Bundle): OkfFile[] {
   b.concepts.forEach((c) => files.push({ path: 'concepts/' + c[0] + '.md', type: c[1], front: fm({ type: c[1], title: c[2], description: c[3], tags: c[6], resource: c[7].map((k) => b.sources[k] ? 'sources/' + srcSlug(b.sources[k]) + '.md' : '').filter(Boolean)[0] || '', timestamp: ts }),
     body: '# ' + c[2] + '\n\n' + c[4] + '\n' + (c[5].length ? '\n## Related\n' + c[5].map((l) => '- [' + l + '](' + l + '.md)').join('\n') + '\n' : '') + '\n## Citations\n' + (c[7].map((k) => b.sources[k] ? '- [' + b.sources[k][0] + '](../sources/' + srcSlug(b.sources[k]) + '.md)' : '').filter(Boolean).join('\n') || '- none') + '\n' }));
   b.sources.forEach((r) => {
-    const ex = excluded(r);
+    const ex = !usablePassage(r);
     files.push({ path: 'sources/' + srcSlug(r) + '.md', type: 'source', front: fm({ type: 'source', title: r[0], resource: RES[r[1]] + srcSlug(r), sensitivity: r[5], retrieval: ex ? 'excluded' : 'included', passages: ex ? 0 : r[3], size: r[2], timestamp: isoDate(r[4]) }),
       body: '# ' + r[0] + '\n\n' + KB_TYPES[r[1]] + ' source, ' + r[2] + '. ' + (ex ? 'Listed for provenance only. The retriever never reads it (' + (r[5] === 'client' ? 'client-confidential' : 'licence forbids reuse') + ').' : 'Indexed into ' + r[3] + ' passages.') + '\n' });
   });

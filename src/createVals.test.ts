@@ -410,6 +410,12 @@ describe('Draft with AI', () => {
     const out = await draftFromPassages(nw, [{ text: 'Groups above €750m are in scope.', src: 'Guide · B2', score: 1 }], ask);
     expect(out).toEqual({ takeaway: 'Check the €750m test first [1]', outline: ['Scope [1]', 'Rate [1]'], note: 'AI-assisted draft · grounded on keyword-ranked passages · edit it in your own words', ai: true });
   });
+  it('treats a reply with broken JSON as no answer, never a throw', async () => {
+    const ask: AskAi = async (_req, parse) => parse('Here: {"takeaway": oops}');
+    const out = await draftFromPassages(nw, [{ text: 'Groups above €750m are in scope.', src: 'Guide · B2', score: 1 }], ask);
+    expect(out.ai).toBe(false);
+    expect(out.note).toBe('AI outline unavailable · scripted outline from the passages');
+  });
   it('drafts with AI through Claude Design and saves it as AI-assisted', async () => {
     stubWindow({ claude: { complete: vi.fn(async () => '{"takeaway":"Price the change [1]","outline":["Scope [1]"]}') } });
     const h = cs({ state: { createTab: 'new', nw: { ...nw, title: 'One message per slide', dom: 'pers' }, nwKb: ['B1'] }, data: data(), live: true });

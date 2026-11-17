@@ -2,6 +2,7 @@
 // an AI answer and the lines Create & share shows about them. The database repeats the shape rules (private.items_ok).
 import type { ExamQuestion } from '../types';
 import type { Check } from './contribution';
+import { jsonObject } from './json';
 
 export type Card = [string, string];
 // A generic studio's row is [label, text] (a Card has that shape) or [label, text, text2].
@@ -96,8 +97,7 @@ export function parseCsv(type: string, raw: string): { list: Item[]; problems: s
 // The JSON an AI answer must hold: {"cards":[{front,back}]} or {"questions":[{t,q,o,a,why}]}, with a 0-based answer.
 // Anything malformed is null, never repaired.
 export function parseDraftItems(type: string, raw: string): Item[] | null {
-  let r: Record<string, unknown> | null = null;
-  try { const m = String(raw).match(/\{[\s\S]*\}/); r = m ? JSON.parse(m[0]) : null; } catch { return null; }
+  const r = jsonObject(raw) as Record<string, unknown> | null;
   const rows = r && (isFlash(type) ? r.cards : r.questions);
   if (!Array.isArray(rows) || !rows.length) return null;
   const items = isFlash(type) ? rows.map((c) => (c && typeof c.front === 'string' && typeof c.back === 'string' ? [c.front.trim(), c.back.trim()] : null)) : rows;

@@ -6,6 +6,7 @@ import { completedToast, detailOf, draftOf, first, patchDraft, saveDetail } from
 import { dueCards, examScore, examVerdict, nextReview, READY_PCT, teachCheck } from './logic/formats';
 import type { Item, Logic } from './model';
 import type { ExamContent, FlashContent, TeachContent, TeachResult } from './types';
+import { jsonObject } from './logic/json';
 
 const when = (d: Date, now: Date) => (d.toDateString() === now.toDateString() ? 'later today' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }));
 const viewOnly = (L: Logic, what: string) => 'Only ' + first(L.subject.name) + ' can ' + what + '.';
@@ -74,10 +75,9 @@ const request = (c: TeachContent, text: string) => ({ messages: [{ role: 'user' 
   + '. A criterion about plain language is met only with at most ' + MAX_WORDS + ' words; this answer has ' + wordCount(text) + ' words.\nReply ONLY with JSON {"met": [booleans in that order], "feedback": 2 sentences, at most 45 words, plain, no emoji, "follow": one probing follow-up question, at most 25 words}.' }], max_tokens: 300 });
 
 function fromAi(c: TeachContent, raw: string): TeachResult | null {
-  const m = raw.match(/\{[\s\S]*\}/); if (!m) return null;
-  const j = JSON.parse(m[0]);
-  if (!Array.isArray(j.met) || typeof j.feedback !== 'string' || !j.feedback) return null;
-  const hits = c.crit.map((_, k) => !!j.met[k]);
+  const j = jsonObject(raw) as { met?: unknown; feedback?: unknown; follow?: unknown } | null;
+  if (!j || !Array.isArray(j.met) || typeof j.feedback !== 'string' || !j.feedback) return null;
+  const met = j.met, hits = c.crit.map((_, k) => !!met[k]);
   return { hits, score: hits.filter(Boolean).length, feedback: j.feedback, follow: typeof j.follow === 'string' ? j.follow : '', by: 'ai' };
 }
 function byKeyword(c: TeachContent, text: string): TeachResult {

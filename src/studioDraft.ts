@@ -4,7 +4,8 @@
 import type { Logic } from './model';
 import type { Bundle, NewDraft } from './types';
 import { domainName } from './logic/contribution';
-import { retrieve } from './logic/okf';
+import { retrieve, usablePassage } from './logic/okf';
+import type { Hit } from './logic/okf';
 import type { DraftItems, Item } from './logic/items';
 import { scriptedItems, parseStudioItems, studioRequest } from './logic/studioItems';
 import type { StudioDef } from './logic/studios';
@@ -18,12 +19,14 @@ export type SetNw = (p: Partial<NewDraft> | ((cur: NewDraft) => Partial<NewDraft
 export type DraftSpec = { use: AiUseKey; request: AiRequest; parse: (raw: string) => Item[] | null; scripted: Item[] | null;
   noScript: string; failed: string; aiNote: string };
 
-// Passages a creator may use: the ones that match the piece, else every passage the bundles hold (never client or licensed ones).
-export function passagesOf(bundles: Bundle[], query: string, max = 8): string[] {
-  const hits = retrieve(bundles, query).map((h) => h.text);
-  const all = bundles.flatMap((b) => b.chunks.filter((c) => { const s = b.sources[c[0]]; return s && s[5] !== 'client' && s[5] !== 'licensed'; }).map((c) => c[1]));
+// Passages a creator may use, with where each came from: the ones that match the piece, else every passage the bundles hold
+// (never client or licensed ones).
+export function hitsOf(bundles: Bundle[], query: string, max = 8): Hit[] {
+  const hits = retrieve(bundles, query);
+  const all = bundles.flatMap((b) => b.chunks.filter((c) => { const s = b.sources[c[0]]; return s && usablePassage(s); }).map((c): Hit => ({ text: c[1], src: b.sources[c[0]][0] + ' · ' + b.name, score: 0 })));
   return (hits.length ? hits : all).slice(0, max);
 }
+export const passagesOf = (bundles: Bundle[], query: string, max = 8): string[] => hitsOf(bundles, query, max).map((h) => h.text);
 
 export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setNw: SetNw, query: string, spec: (passages: string[]) => DraftSpec) {
   if (L.state.nwAiBusy || L.readOnly()) return;

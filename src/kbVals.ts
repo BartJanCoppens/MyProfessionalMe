@@ -2,15 +2,14 @@
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { KB_ACCESS, KB_TYPES, RAG_OPTS, RAG_PRESETS, TOPIC_BY, TOPICS, isoDate, mkModels, ragOptLabel, slugify } from './data';
 import type { Logic } from './model';
-import { importBundle, okfFiles, rankHits, tarBytes } from './logic/okf';
+import { importBundle, okfFiles, rankHits, tarBytes, usablePassage } from './logic/okf';
 import { saveBundleNow, saveBundleSoon } from './lib/contentStore';
-import type { AppState, Bundle, BundleSource, RagModel } from './types';
+import type { AppState, Bundle, RagModel } from './types';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
 const ST: Record<string, [string, string, string]> = { indexed: ['accepted', 'Indexed', 'check'], reindex: ['in-progress', 'Re-indexing', 'dot'], stale: ['clarification', 'Stale source', 'dot'], draft: ['not-started', 'Draft', 'dot'] };
 const SENS: Record<string, [string, string]> = { public: ['Public', 'muted'], internal: ['Internal', 'muted'], client: ['Client confidential', 'orange'], licensed: ['Licensed · no reuse', 'blue'] };
-const excluded = (r: BundleSource) => r[5] === 'client' || r[5] === 'licensed';
-const passages = (x: Bundle) => x.sources.filter((r) => !excluded(r)).reduce((a, r) => a + r[3], 0);
+const passages = (x: Bundle) => x.sources.filter(usablePassage).reduce((a, r) => a + r[3], 0);
 const tpath = (k: string) => (TOPIC_BY[k] ? TOPIC_BY[k].groupLabel + ' · ' + TOPIC_BY[k].label : 'Unclassified');
 const inTopic = (x: Bundle, k: string) => k === 'all' || [x.topic].concat(x.topics2).some((tk) => tk === k || (TOPIC_BY[tk] && TOPIC_BY[tk].group === k));
 const opts = (k: string) => RAG_OPTS[k].map((o) => ({ value: o[0], label: o[1] }));
@@ -103,7 +102,7 @@ function kbScreen(L: Logic) {
     b.concepts.forEach((c) => { if (!c[7].some((k) => b.sources[k])) rows.push([false, 'concepts/' + c[0] + '.md has no citation']); });
     if (!b.tags.length) rows.push([false, 'index.md has no tags; creators will not find this bundle by tag']);
     if (b.status === 'stale') rows.push([false, 'Some sources are older than the ' + b.fresh + '-month freshness window']);
-    const ex = b.sources.filter(excluded).length; if (ex) rows.push([true, ex + ' source' + (ex > 1 ? 's' : '') + ' listed with retrieval: excluded']);
+    const ex = b.sources.filter((r) => !usablePassage(r)).length; if (ex) rows.push([true, ex + ' source' + (ex > 1 ? 's' : '') + ' listed with retrieval: excluded']);
     if (rows.every((r) => r[0])) rows.push([true, 'Conformant OKF v0.2 bundle']);
     L.setState({ kbValid: rows });
   };
@@ -152,7 +151,7 @@ function kbScreen(L: Logic) {
       toggleEdit: () => L.setState((st2) => ({ kbEdit: !st2.kbEdit })), setName: (e: Input) => up({ name: e.target.value }), setDesc: (e: Area) => up({ desc: e.target.value }),
       reindex: () => {
         up({ status: 'reindex' }); L.say('Re-indexing ' + b.name + ' (simulated) · creators keep using the last index until it finishes');
-        setTimeout(() => up((x) => ({ status: 'indexed', updated: '31 Oct 2026', sources: x.sources.map((r) => (excluded(r) ? r : [r[0], r[1], r[2], r[3], '31 Oct', r[5]])) })), 2200);
+        setTimeout(() => up((x) => ({ status: 'indexed', updated: '31 Oct 2026', sources: x.sources.map((r) => (!usablePassage(r) ? r : [r[0], r[1], r[2], r[3], '31 Oct', r[5]])) })), 2200);
       },
       facts: [{ k: 'Passages', v: passages(b).toLocaleString('en-GB') }, { k: 'Concepts', v: String(b.concepts.length) }, { k: 'Sources', v: String(b.sources.length) }, { k: 'RAG models', v: String(b.models.length) }, { k: 'Used by', v: b.usedBy + ' pieces' }],
       topic: b.topic, setTopic: (e: Sel) => up({ topic: e.target.value, topics2: b.topics2.filter((x) => x !== e.target.value) }),
@@ -164,7 +163,7 @@ function kbScreen(L: Logic) {
       concepts: b.concepts.length ? b.concepts.map((c) => ({ key: c[0], title: c[2], desc: c[3], type: c[1], open: () => L.setState({ kbTab: 'files', kbFile: 'concepts/' + c[0] + '.md' }) }))
         : [{ key: '-', title: 'No concepts yet', desc: 'Import OKF files or add sources and re-index', type: '', open: () => {} }],
       sources: b.sources.map((r, k) => {
-        const sn = SENS[r[5]], ex = excluded(r), old = b.status === 'stale' && r[4] === '3 Mar';
+        const sn = SENS[r[5]], ex = !usablePassage(r), old = b.status === 'stale' && r[4] === '3 Mar';
         return { key: k + r[0], name: r[0], type: KB_TYPES[r[1]], chunks: ex ? '—' : r[3] ? String(r[3]) : 'Not indexed', synced: r[4], sens: sn[0], tone: sn[1], op: ex ? 0.6 : 1,
           note: ex ? (r[5] === 'client' ? 'Excluded from retrieval · client data' : 'Retrieval blocked · licence forbids reuse') : old ? 'Older than ' + b.fresh + ' months · re-sync or replace' : r[2], noteFg: old ? '#9a3d0c' : '#8b918a',
           remove: () => up({ sources: b.sources.filter((_, j) => j !== k), chunks: b.chunks.filter((c) => c[0] !== k).map((c) => [c[0] > k ? c[0] - 1 : c[0], c[1]] as [number, string]),

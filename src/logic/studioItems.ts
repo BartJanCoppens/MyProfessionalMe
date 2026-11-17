@@ -3,6 +3,7 @@
 // passages. Pure; the one pipeline that runs them is src/studioDraft.ts.
 import type { AiRequest } from '../lib/ai';
 import type { NewDraft } from '../types';
+import { jsonObject } from './json';
 import { LONG_MAX, SHORT_MAX, firstSentence, leadWords, marked } from './items';
 import { ROWS_MAX, itemsValid } from './studios';
 import type { StudioDef, StudioItem } from './studios';
@@ -39,8 +40,7 @@ export function studioRequest(def: StudioDef, nw: NewDraft, passages: string[]):
 // {"items":[[label, text(, text2)]]}: every row the right width, every field text within its cap, the whole list valid
 // for the studio. Anything else is null, never repaired.
 export function parseStudioItems(def: StudioDef, raw: string): StudioItem[] | null {
-  let r: { items?: unknown } | null = null;
-  try { const m = String(raw).match(/\{[\s\S]*\}/); r = m ? JSON.parse(m[0]) : null; } catch { return null; }
+  const r = jsonObject(raw) as { items?: unknown } | null;
   const width = arity(def), rows = r?.items;
   if (!Array.isArray(rows) || !rows.length) return null;
   const field = (v: unknown, k: number) => typeof v === 'string' && v.trim() !== '' && v.length <= (k === 0 ? SHORT_MAX : LONG_MAX);
