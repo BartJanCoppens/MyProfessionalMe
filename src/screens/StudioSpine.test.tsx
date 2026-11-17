@@ -3,6 +3,8 @@
 // Podcast is marked available here (by overriding the data in this file only) to reach the generic path.
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import * as store from '../lib/contributionStore';
+import { studioById } from '../logic/studios';
+import type { StudioRow } from '../logic/items';
 import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initState, Logic } from '../model';
@@ -101,11 +103,16 @@ describe('the steps', () => {
 });
 
 describe('Check & send', () => {
+  it('keeps the check closed while the studio itself sees a problem', () => {
+    render(atStep(5));
+    expect((screen.getByRole('button', { name: 'Run the automatic check' }) as HTMLButtonElement).disabled).toBe(true);
+  });
   it('keeps Send for review closed until the automatic check passes, and lists what it found', async () => {
     vi.mocked(store.loadCreate).mockResolvedValue(data());
     vi.mocked(store.saveDraft).mockResolvedValue('p1');
     vi.mocked(store.checkContribution).mockResolvedValue({ passed: false, reasons: ['Add the items first'] });
-    render(atStep(5));
+    const rows = studioById('podcast')!.items.map((r) => [...r]) as StudioRow[];
+    render(<Live state={{ create: data(), createTab: 'new', nw: { ...nw, items: { list: rows, how: 'manual', problems: [], note: '' } }, studio: { view: 'studio', step: 5, id: 'podcast' } }} />);
     const send = screen.getByRole('button', { name: 'Send for review' }) as HTMLButtonElement;
     expect(send.disabled).toBe(true);
     expect(screen.getByText('Saves your draft and checks it on the server. Send for review opens when it passes.')).toBeTruthy();

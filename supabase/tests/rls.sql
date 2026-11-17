@@ -1559,7 +1559,14 @@ do $$ begin
     insert into results (check_name, expected, actual) values ('ST a Podcast-only rule cannot create a Game', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('ST a Podcast-only rule cannot create a Game', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway) values ('Consulting','Podcast','T st plain podcast','pers','Listen first.') returning 1)
+  insert into results (check_name, expected, actual) select 'ST a plain upload of an upload-form format is still created', '1 rows', count(*)||' rows' from i;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e3","role":"authenticated"}';
+do $$ begin
+  begin insert into public.contributions (business_line, type, title, domain, takeaway) values ('Consulting','Game','T st plain game','pers','Find the flaw.');
+    insert into results (check_name, expected, actual) values ('ST a Game without a studio (skipping the check)', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ST a Game without a studio (skipping the check)', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
 with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio) values ('Consulting','Game','T st game','pers','Find the flaw.','game') returning 1)
   insert into results (check_name, expected, actual) select 'ST a Game rule creates a Game in the Game Studio', '1 rows', count(*)||' rows' from i;
 insert into results (check_name, expected, actual) select 'ST a studio format without an item shape yet fails the check', 'Add the items first',

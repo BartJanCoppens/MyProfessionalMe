@@ -79,10 +79,15 @@ describe('Create & share screen', () => {
     fireEvent.change(screen.getByLabelText('CSV lines'), { target: { value: 'What is the rate?,25 %' } });
     fireEvent.click(screen.getByRole('button', { name: 'Import CSV' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next: Preview & test' }));
+    expect(screen.getByRole('status').textContent).toBe('Draft at least 4 items in step 2');
+    fireEvent.change(screen.getByLabelText('CSV lines'), { target: { value: 'What is the rate?,25 %\nSME rate?,20 %\nPillar Two rate?,15 %\nAdvance payments?,Four' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import CSV' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Preview & test' }));
     fireEvent.click(screen.getByRole('button', { name: 'Flip the card' }));
     expect(screen.getAllByText('25 %').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Next: Check & send' }));
-    expect(screen.getByRole('button', { name: 'Send for review' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Send for review' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Run the automatic check' })).toBeTruthy();
     expect(screen.getByText('Who will review it')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByLabelText('Flip the card')).toBeTruthy();

@@ -5,7 +5,7 @@
 --           formats, creation rules and review requirements (src/logic/contribution.ts TYPE_NAMES; items.test.ts checks
 --           the lists).
 -- studio    the studio a contribution was made in (src/studioData.ts STUDIOS ids), written once when the studio saves it;
---           null for the upload form, whose flow is unchanged.
+--           null for the upload form, whose flow is unchanged. Only the upload form's six formats may go without one.
 -- check     check_contribution(id): the author runs the automatic checks (creation rules, required fields, the items of
 --           the format and the studio's minimum, client names). A pass stores the fingerprint of the items, title and
 --           format with the time; a failure clears both and returns the reasons. submit_contribution refuses a studio
@@ -26,7 +26,10 @@ alter table public.contributions
   add column studio text constraint contributions_studio_check check (studio is null or studio ~ '^[a-z]{1,20}$'),
   add column check_fingerprint text,
   add column check_passed_at timestamptz,
-  add constraint contributions_check_pair check ((check_fingerprint is null) = (check_passed_at is null));
+  add constraint contributions_check_pair check ((check_fingerprint is null) = (check_passed_at is null)),
+  -- The formats the upload form offers (src/logic/contribution.ts CREATE_TYPES); every other format is made in a studio,
+  -- so it always passes the check gate.
+  add constraint contributions_upload_formats check (studio is not null or type in ('Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam'));
 -- Insert only: a studio contribution cannot drop its studio to skip the check. The check columns get no grant.
 grant insert (studio) on public.contributions to authenticated;
 

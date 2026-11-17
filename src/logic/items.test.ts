@@ -1,6 +1,6 @@
 // Flash cards and practice exams made in Create & share: items from passages, CSV and AI, and the content they publish as.
 import { describe, expect, it } from 'vitest';
-import { TYPE_NAMES } from './contribution';
+import { CREATE_TYPES, TYPE_NAMES } from './contribution';
 import { studioFormats } from './studios';
 import { STUDIOS } from '../studioData';
 import { parseFormatContent } from '../lib/contentStore';
@@ -153,6 +153,9 @@ describe('format lists', () => {
     expect(quoted(latest(/add constraint creator_rules_formats_check\s+check \(formats <@ array\[([^\]]*)\]\)/)[1])).toEqual(TYPE_NAMES);
     expect(quoted(latest(/add constraint review_policies_formats_check\s+check \(formats <@ array\[([^\]]*)\]\)/)[1])).toEqual(TYPE_NAMES);
     expect(quoted(latest(/add constraint contributions_type_check\s+check \(type in \(([^)]*)\)\)/)[1])).toEqual(TYPE_NAMES);
+  });
+  it('only the upload form\'s formats may go without a studio (contributions_upload_formats equals CREATE_TYPES)', () => {
+    expect(quoted(latest(/add constraint contributions_upload_formats check \(studio is not null or type in \(([^)]*)\)\)/)[1])).toEqual(CREATE_TYPES.map((t) => t[0]));
   });
   it('hold the formats every studio makes, flash cards and practice exams among them', () => {
     expect(TYPE_NAMES).toEqual(expect.arrayContaining(['Flash cards', 'Practice exam', ...NEW_FORMATS]));

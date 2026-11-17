@@ -55,11 +55,16 @@ export function studioVals(L: Logic, src: StudioSrc) {
     setNw((cur) => ({ ...(cur.type === f ? {} : { type: f, items: noItems() }), ...fit(src.rules, cur, f), ...(d.compact ? {} : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() }) }));
     set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined });
   };
+  // What the Draft step still needs: a generic studio's item schema; Flash's cards or questions have their own shape, so only
+  // the studio's minimum, worded as in the design ("Draft at least 4 items in step 2").
+  const problems = !flash ? parts.problems : items.length < def.min ? ['Draft at least ' + def.min + ' items in step ' + (steps.indexOf('Draft') + 1)] : [];
+  // Server reasons the checks above already show (a client name) are not listed twice.
+  const reasons = (src.checkReasons ?? []).filter((r) => !src.checks.some((c) => c.text === r));
   const next = () => {
     if (L.state.nwAiBusy) { L.say('Wait for the draft to finish'); return; }
     if (name === 'Idea & sources' && (!nw.title.trim() || !nw.take.trim())) { L.say('Add a title and the one takeaway first'); return; }
     if (name === 'Draft' && flash && !items.length) { L.say(addFirst(nw.type, 'draft them or import a CSV')); return; }
-    if (name === 'Draft' && !flash && parts.problems.length) { L.say(parts.problems[0]); return; }
+    if (name === 'Draft' && problems.length) { L.say(problems[0]); return; }
     set({ step: Math.min(steps.length - 1, step + 1) });
   };
   const exam = nw.type === 'Practice exam', passed = !!src.checkReasons && !src.checkReasons.length;
@@ -76,10 +81,11 @@ export function studioVals(L: Logic, src: StudioSrc) {
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
     // Send for review opens once the automatic check (check_contribution) passed on the draft on screen.
-    send: { checks: src.checks, blocked: src.blocked || (!flash && parts.problems.length > 0) || !passed, problems: [...(flash ? [] : parts.problems), ...(src.checkReasons ?? [])],
+    send: { checks: src.checks, blocked: src.blocked || problems.length > 0 || !passed, problems: [...problems, ...reasons],
       route: src.route, routeEmpty: !src.route.length, policyNote: src.policyNote, routeWarn: src.routeWarn,
       label: src.submitLabel === 'Submit for review' ? 'Send for review' : src.submitLabel, run: src.submit, saveDraft: src.saveDraft, busy: src.busy,
-      check: src.runCheck, checkLabel: 'Run the automatic check',
+      // The server is asked once the studio itself sees nothing left to fix.
+      check: () => (problems.length ? L.say(problems[0]) : src.runCheck()), checkBlocked: src.busy || problems.length > 0, checkLabel: 'Run the automatic check',
       checkNote: !src.checkReasons ? 'Saves your draft and checks it on the server. Send for review opens when it passes.' : passed ? 'The automatic check passed on this version.' : '' },
   };
 }

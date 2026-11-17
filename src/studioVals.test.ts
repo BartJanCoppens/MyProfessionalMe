@@ -117,7 +117,11 @@ describe('the steps', () => {
     h.st().next();
     expect(h.state.studio.step).toBe(1);
     expect(h.lastToast()).toBe('Add the cards first · draft them or import a CSV');
-    const g = open({ studio: { view: 'studio', step: 1 }, nw: { items: deck(2) } });
+    const few = open({ studio: { view: 'studio', step: 1 }, nw: { items: deck(2) } });
+    few.st().next();
+    expect(few.state.studio.step).toBe(1);
+    expect(few.lastToast()).toBe('Draft at least 4 items in step 2');
+    const g = open({ studio: { view: 'studio', step: 1 }, nw: { items: deck(4) } });
     g.st().next(); g.st().next();
     expect(g.state.studio.step).toBe(3);
     expect(g.st().hasNext).toBe(false);
@@ -179,6 +183,18 @@ describe('Check & send', () => {
     expect(bad.st().send.checks.map((x) => x.text).join(' ')).toMatch(/looks like a client name/);
     expect(bad.st().send.blocked).toBe(true);
   });
+  it('shows the studio\'s minimum before the server is asked', () => {
+    const h = at({ items: deck(2) });
+    expect(h.st().send.problems).toEqual(['Draft at least 4 items in step 2']);
+    expect(h.st().send.blocked).toBe(true);
+  });
+  it('reports a client name once: in the checks, not again among the server\'s reasons', async () => {
+    failing(['“Delcroix” looks like a client name · anonymise it']);
+    const h = at({ title: 'Delcroix rates' });
+    h.st().send.check(); await flush(10);
+    expect(h.st().send.checks.map((x) => x.text)).toContain('“Delcroix” looks like a client name · anonymise it');
+    expect(h.st().send.problems).toEqual([]);
+  });
   it('keeps Send for review closed until the automatic check has passed', () => {
     const h = at();
     expect(h.st().send.blocked).toBe(true);
@@ -196,11 +212,18 @@ describe('Check & send', () => {
     expect(h.state.studio.view).toBe('studio');
   });
   it('shows the reasons of a failed check with the shared problem list and keeps Send closed', async () => {
-    failing(['Add at least 4 items', '“Delcroix” looks like a client name · anonymise it']);
-    const h = at({ items: deck(2) });
+    failing(['This studio does not make Flash cards', '“Hoverna” looks like a client name · anonymise it']);
+    const h = at();
     h.st().send.check(); await flush(10);
-    expect(h.st().send.problems).toEqual(['Add at least 4 items', '“Delcroix” looks like a client name · anonymise it']);
+    expect(h.st().send.problems).toEqual(['This studio does not make Flash cards', '“Hoverna” looks like a client name · anonymise it']);
     expect(h.st().send.blocked).toBe(true);
+  });
+  it('does not ask the server while the studio itself still sees a problem', async () => {
+    const h = at({ items: deck(2) });
+    expect(h.st().send.checkBlocked).toBe(true);
+    h.st().send.check(); await flush(10);
+    expect(store.saveDraft).not.toHaveBeenCalled();
+    expect(h.lastToast()).toBe('Draft at least 4 items in step 2');
   });
   it('a second check updates the same draft, never a new one', async () => {
     const h = at();
