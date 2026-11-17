@@ -138,7 +138,7 @@ export async function saveBundle(b: Bundle) {
 // Bundle edits come in bursts (typing a name, adding tags). Each bundle saves one write at a time, in order;
 // a scheduled save reads the bundle as it is when the timer fires, so the last edit wins.
 const timers = new Map<string, number>(), chains = new Map<string, Promise<unknown>>();
-function inOrder(id: string, run: () => Promise<void>) {
+export function inOrder(id: string, run: () => Promise<void>) {
   const next = (chains.get(id) || Promise.resolve()).then(run, run);
   chains.set(id, next.catch(() => {}));
   return next;

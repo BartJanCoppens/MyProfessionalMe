@@ -2,6 +2,7 @@
 // with malformed steps or maps is dropped with a console warning, never thrown. Learners write enrolments only through
 // the RPCs below (request, withdraw, submit); the counsellor decides through decide_trajectory and confirm_credential.
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjMap, TrjStep } from '../logic/trajectory';
+import { inOrder } from './contentStore';
 import { supabase } from './supabase';
 
 export type TrajectoryDraft = Omit<Trajectory, 'id' | 'published_at'>;
@@ -88,13 +89,8 @@ export async function saveTrajectory(t: Trajectory) {
 }
 
 // Edits come in bursts. Each trajectory saves one write at a time, in order; a scheduled save reads the trajectory as it
-// is when the timer fires, so the last edit wins. (Same scheme as saveBundleSoon in contentStore.)
-const timers = new Map<string, number>(), chains = new Map<string, Promise<unknown>>();
-function inOrder(id: string, run: () => Promise<void>) {
-  const next = (chains.get(id) || Promise.resolve()).then(run, run);
-  chains.set(id, next.catch(() => {}));
-  return next;
-}
+// is when the timer fires, so the last edit wins. (Same scheme as saveBundleSoon; inOrder is shared, the timers are not.)
+const timers = new Map<string, number>();
 export function saveTrajectorySoon(id: string, latest: () => Trajectory | undefined, onError: (message: string) => void, wait = 600) {
   clearTimeout(timers.get(id));
   timers.set(id, window.setTimeout(() => { timers.delete(id); const t = latest(); if (t) inOrder(id, () => saveTrajectory(t)).catch((err) => onError((err as Error).message)); }, wait));
@@ -122,7 +118,7 @@ export async function submitTrajectoryStep(trajectoryId: string, stepId: string,
 // Counsellor or managing admin. step null: the start request. Result: 'enrolled', 'done' or 'talk'.
 export async function decideTrajectory(userId: string, trajectoryId: string, stepId: string | null, decision: 'approve' | 'talk'): Promise<{ result: string | null; error: string | null }> {
   const { data, error } = await supabase.rpc('decide_trajectory', { p_user: userId, p_trajectory: trajectoryId, p_step: stepId, p_decision: decision });
-  return { result: error ? null : String(data), error: failure(error) };
+  return { result: error || data == null ? null : String(data), error: failure(error) };
 }
 export async function confirmCredential(credentialId: string): Promise<{ error: string | null }> {
   const { error } = await supabase.rpc('confirm_credential', { p_id: credentialId });
