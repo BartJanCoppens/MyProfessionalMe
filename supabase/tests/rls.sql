@@ -1063,6 +1063,8 @@ do $$ begin
 end $$;
 -- ---------- design v4: completion and evidence of the new formats ----------
 -- L68 is a Job aid, L64 a Case exercise, L66 a Stretch assignment, L67 a Webinar. c1 and c2 are the learners above.
+reset role;
+insert into results (check_name, expected, actual) select 'FC the case says who reviews it, as the flow does', 'Reviewed by your counsellor.', content ->> 'reviewer' from public.learnings where id = 'L64';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select public.save_learning('L68', p_state => 'in-progress', p_pct => 50::smallint);
