@@ -31,11 +31,17 @@ const isQuestion = (v: unknown): v is ExamQuestion => {
 };
 const isItem = (type: string) => (isFlash(type) ? isCard : isQuestion);
 
+// The first sentence of a passage, and its first n words without a trailing punctuation mark; shared by the scripted drafts.
+export const firstSentence = (p: string) => p.trim().split(/(?<=[.!?])\s+/)[0];
+export const leadWords = (s: string, n: number) => s.split(/\s+/).slice(0, n).join(' ').replace(/[.,;:!?]+$/, '');
+// A creator's or passage's text inside a data block of an AI request; a marker inside it cannot close the block.
+export const marked = (t: string, max = 600) => '<<<' + t.replace(/[<>]{3,}/g, ' ').slice(0, max) + '>>>';
+
 // Scripted cards: each passage becomes one card, a short question about its opening words and the first sentence as the answer.
 export function cardsFromPassages(passages: string[]): Card[] {
   return passages.map((p) => p.trim()).filter(Boolean).slice(0, ITEM_MAX['Flash cards']).map((p) => {
-    const sentence = p.split(/(?<=[.!?])\s+/)[0].slice(0, 200), lead = sentence.split(/\s+/).slice(0, 6).join(' ').replace(/[.,;:!?]+$/, '');
-    return ['What do you need to know about “' + lead + '”?', sentence];
+    const sentence = firstSentence(p).slice(0, 200);
+    return ['What do you need to know about “' + leadWords(sentence, 6) + '”?', sentence];
   });
 }
 

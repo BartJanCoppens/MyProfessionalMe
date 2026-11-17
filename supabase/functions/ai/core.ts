@@ -18,7 +18,7 @@ export const LIMITS = {
   body: 100_000, // characters in the raw request
   chars: 60_000, // characters across system and messages
   messages: 40,
-  maxTokens: 1024, // what a caller may ask for
+  maxTokens: 2048, // what a caller may ask for
   defaultTokens: 600,
   timeoutMs: 30_000,
 };

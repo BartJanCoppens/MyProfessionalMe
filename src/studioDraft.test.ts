@@ -49,6 +49,15 @@ describe('the prompt', () => {
   });
 });
 
+describe('the request size', () => {
+  it('asks for room per studio, within what the ai function allows, and for concision', () => {
+    const max = (id: string) => studioRequest(def(id), nw(def(id).format), PASSAGES);
+    ['slides', 'aid', 'avatar'].forEach((id) => expect(max(id).max_tokens).toBe(2000));
+    expect(max('motion').max_tokens).toBe(1000);
+    IDS.forEach((id) => { expect(max(id).max_tokens!).toBeLessThanOrEqual(2048); expect(max(id).messages[0].content).toContain('about one short sentence per row, and stay within ' + ROWS_MAX[id] + ' rows'); });
+  });
+});
+
 describe('strict reading of the answer', () => {
   it.each(IDS)('%s: malformed answers are null, never repaired', (id) => {
     const d = def(id);

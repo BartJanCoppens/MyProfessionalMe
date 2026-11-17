@@ -15,6 +15,8 @@ describe('readAsk', () => {
   it('caps max_tokens', () => {
     const r = readAsk({ use: 'kb_answer', messages: [user('Q')], max_tokens: 99999 });
     expect(r.ok && r.ask.max_tokens).toBe(LIMITS.maxTokens);
+    expect(LIMITS.maxTokens).toBe(2048);
+    expect(readAsk({ use: 'studio_draft', messages: [user('Q')], max_tokens: 2000 })).toMatchObject({ ok: true, ask: { max_tokens: 2000 } });
   });
   it('refuses what is malformed or too large', () => {
     expect(readAsk(null)).toEqual({ ok: false, error: 'Name the AI use' });
