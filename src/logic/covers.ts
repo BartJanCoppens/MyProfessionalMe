@@ -6,7 +6,8 @@ import type { LearnState } from './learner';
 export type CoverKind = 'pod' | 'reel' | 'avatar' | 'game' | 'book' | 'class' | 'elearn' | 'mentor' | 'web' | 'cert' | 'flash' | 'exam' | 'case' | 'teach' | 'stretch' | 'webinar' | 'aid' | 'explainer' | 'flow';
 type Bar = { bg: string; anim: string };
 
-const KIND: Record<string, CoverKind> = { Podcast: 'pod', Reel: 'reel', Avatar: 'avatar', Game: 'game', Book: 'book', Classroom: 'class', 'E-learning': 'elearn', Mentoring: 'mentor', Website: 'web', Certification: 'cert',
+// The one map of formats to cover kinds: the cover drawing (Cover.tsx) and the v4 cover lines (fmtCover.ts) read it.
+export const COVER_KIND: Record<string, CoverKind> = { Podcast: 'pod', Reel: 'reel', Avatar: 'avatar', Game: 'game', Book: 'book', Classroom: 'class', 'E-learning': 'elearn', Mentoring: 'mentor', Website: 'web', Certification: 'cert',
   'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid', 'Interactive explainer': 'explainer', 'Animated flow': 'flow' };
 const DARK = ['Podcast', 'Reel', 'Avatar', 'Game', 'Certification', 'Practice exam', 'Webinar'];
 
@@ -21,7 +22,7 @@ export function cover(row: Learn, index: number, state: LearnState, pct0: number
   const [id, title, , lvl, format, source, hours] = row;
   let h = 0; for (const ch of id + title) h = (h * 31 + ch.charCodeAt(0)) % 9973;
   const rnd = (k: number) => ((h * (k + 7) * 2654435761) % 1000) / 1000;
-  const dark = DARK.includes(format), kind = KIND[format] || 'elearn';
+  const dark = DARK.includes(format), kind = COVER_KIND[format] || 'elearn';
   const done = state === 'accepted' || state === 'submitted', pct = done ? 100 : pct0 || 0;
   const mods = Math.max(3, Math.min(8, Math.round(hours))), fill = Math.round(pct / 100 * mods);
   const o = {

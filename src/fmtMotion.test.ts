@@ -25,7 +25,7 @@ const cover = (detail?: LearningDetail) => {
 
 describe('the library card', () => {
   it('draws the flow cover with its stages, length and maker, then that it was played or read', () => {
-    expect(cover()).toMatchObject({ kind: 'flow', cvMeta: '3 stages · 45 s', cvMeta2: 'Made with AI' });
+    expect(cover()).toMatchObject({ kind: 'flow', cvFlow: true, cvExplainer: false, cvMeta: '3 stages · 45 s', cvMeta2: 'Made with AI' });
     expect(cover().stepDots).toHaveLength(3);
     expect(cover({ played: true })).toMatchObject({ cvMeta2: 'Played to the end' });
     expect(cover({ read: true })).toMatchObject({ cvMeta2: 'Text version read' });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEARN, LEARN_BY, MEDIA } from '../data';
-import { cover, formatTiles, reelStrip } from './covers';
+import { COVER_KIND, cover, formatTiles, reelStrip } from './covers';
 
 const row = (id: string) => LEARN_BY[id];
 
@@ -9,6 +9,11 @@ describe('cover', () => {
     const kinds = Object.fromEntries(LEARN.map((r, i) => [r[4], cover(r, i, 'not-started', 0).kind]));
     expect(kinds).toMatchObject({ Avatar: 'avatar', Classroom: 'class', 'E-learning': 'elearn', Book: 'book', Game: 'game', 'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid' });
     for (const k of Object.values(kinds)) expect(['pod', 'reel', 'avatar', 'game', 'book', 'class', 'elearn', 'mentor', 'web', 'cert', 'flash', 'exam', 'case', 'teach', 'stretch', 'webinar', 'aid']).toContain(k);
+  });
+  it('has one map of formats to cover kinds, with the studio formats (fmtCover reads the same map)', () => {
+    expect(COVER_KIND).toMatchObject({ 'Job aid': 'aid', 'Interactive explainer': 'explainer', 'Animated flow': 'flow' });
+    const flow: typeof row = () => ['L9', 'Flow', 'corp', 1, 'Animated flow', 'Peer contribution', 0.025, 0, '', ''];
+    expect(cover(flow('L9'), 0, 'not-started', 0).kind).toBe('flow');
   });
   it('ticks a learning that is done or awaiting acceptance', () => {
     expect(cover(row('L1'), 0, 'accepted', 100).cvDone).toBe(true);

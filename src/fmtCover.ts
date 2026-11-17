@@ -1,12 +1,13 @@
 // The library cover lines of the v4 formats (cvMeta, cvMeta2 and the little bars), from the catalogue content and what
-// this person has saved. The flags follow the format, so a cover is drawn even before its content has loaded.
+// this person has saved. The flags follow the format (COVER_KIND, the cover drawing's map), so a cover is drawn even
+// before its content has loaded.
 import { LEARN_META } from './data';
 import { detailOf, handedIn } from './fmtShared';
+import { COVER_KIND } from './logic/covers';
 import { countLabel, dueCards } from './logic/formats';
 import { MADE_LABEL } from './logic/motionSvg';
 import type { Item, Logic } from './model';
 
-const KIND: Record<string, string> = { 'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid', 'Interactive explainer': 'explainer', 'Animated flow': 'motion' };
 type Lines = { cvMeta: string; cvMeta2: string; exBars: { w: string; c: string }[]; aidRows: { bg: string }[]; stepDots: { bg: string }[] };
 
 function lines(L: Logic, it: Item): Partial<Lines> {
@@ -46,9 +47,9 @@ function lines(L: Logic, it: Item): Partial<Lines> {
 }
 
 export function fmtCover(L: Logic, it: Item) {
-  const kind = KIND[it.format];
+  const kind = COVER_KIND[it.format];
   return {
-    cvFlash: kind === 'flash', cvExam: kind === 'exam', cvCase: kind === 'case', cvTeach: kind === 'teach', cvStretch: kind === 'stretch', cvWebinar: kind === 'webinar', cvAid: kind === 'aid', cvExplainer: kind === 'explainer',
-    ...(kind ? lines(L, it) : {}),
+    cvFlash: kind === 'flash', cvExam: kind === 'exam', cvCase: kind === 'case', cvTeach: kind === 'teach', cvStretch: kind === 'stretch', cvWebinar: kind === 'webinar', cvAid: kind === 'aid', cvExplainer: kind === 'explainer', cvFlow: kind === 'flow',
+    ...lines(L, it),
   };
 }
