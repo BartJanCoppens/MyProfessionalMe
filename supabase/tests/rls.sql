@@ -1667,5 +1667,136 @@ do $$ begin
   exception when others then insert into results (check_name, expected, actual) values ('AM anon reads memberships', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
 reset role;
+-- ---------- design v4 follow-ups: credential renewal by proof (RN) ----------
+-- d1 holds T3's credential (made to expire in 10 days here) and external ones: expiring in 30 and 31 days, expired 40
+-- days ago, without expiry, and one still waiting.
+update public.credentials set expires_on = current_date + 10 where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3' and expires_on > current_date;
+select set_config('test.rn_trj', (select id::text from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3' and expires_on = current_date + 10), true);
+insert into public.credentials (user_id, name, issuer, earned_on, expires_on, ref, status) values
+ ('00000000-0000-0000-0000-0000000000d1', 'T ext in 30 days', 'T issuer', '2024-01-01', current_date + 30, 'R-30', 'confirmed'),
+ ('00000000-0000-0000-0000-0000000000d1', 'T ext in 31 days', 'T issuer', '2024-01-01', current_date + 31, 'R-31', 'confirmed'),
+ ('00000000-0000-0000-0000-0000000000d1', 'T ext expired', 'T issuer', '2023-01-01', current_date - 40, 'R-EX', 'confirmed'),
+ ('00000000-0000-0000-0000-0000000000d1', 'T ext no expiry', 'T issuer', '2023-01-01', null, 'R-NO', 'confirmed'),
+ ('00000000-0000-0000-0000-0000000000d1', 'T ext waiting', 'T issuer', '2023-01-01', current_date + 5, 'R-W', 'waiting');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d2","role":"authenticated"}';
+do $$ begin
+  begin perform public.submit_renewal(current_setting('test.rn_trj')::uuid, p_ref => 'R-NEW');
+    insert into results (check_name, expected, actual) values ('RN renewing someone else''s credential', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN renewing someone else''s credential', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+do $$ begin
+  begin perform public.submit_renewal((select id from public.credentials where name = 'T ext waiting'), p_ref => 'R-NEW', p_expires => current_date + 365);
+    insert into results (check_name, expected, actual) values ('RN renewing a waiting credential', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN renewing a waiting credential', 'blocked: P0002', 'blocked: '||sqlstate); end;
+  begin perform public.submit_renewal((select id from public.credentials where name = 'T ext in 31 days'), p_ref => 'R-NEW', p_expires => current_date + 365);
+    insert into results (check_name, expected, actual) values ('RN renewing more than 30 days before expiry', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN renewing more than 30 days before expiry', 'blocked: P0002', 'blocked: '||sqlstate); end;
+  begin perform public.submit_renewal((select id from public.credentials where name = 'T ext no expiry'), p_ref => 'R-NEW', p_expires => current_date + 365);
+    insert into results (check_name, expected, actual) values ('RN renewing a credential that does not expire', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN renewing a credential that does not expire', 'blocked: P0002', 'blocked: '||sqlstate); end;
+  begin perform public.submit_renewal((select id from public.credentials where name = 'T ext in 30 days'), p_link => '  ', p_ref => ' ', p_expires => current_date + 365);
+    insert into results (check_name, expected, actual) values ('RN a renewal without a link or number', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN a renewal without a link or number', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin perform public.submit_renewal((select id from public.credentials where name = 'T ext in 30 days'), p_link => 'ftp://cert.example/x', p_expires => current_date + 365);
+    insert into results (check_name, expected, actual) values ('RN a renewal with a link that is not http(s)', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN a renewal with a link that is not http(s)', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin perform public.submit_renewal((select id from public.credentials where name = 'T ext in 30 days'), p_ref => repeat('9', 81), p_expires => current_date + 365);
+    insert into results (check_name, expected, actual) values ('RN a renewal with a certificate number over 80 characters', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN a renewal with a certificate number over 80 characters', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin perform public.submit_renewal(current_setting('test.rn_trj')::uuid, p_ref => 'R-NEW', p_expires => current_date + 365);
+    insert into results (check_name, expected, actual) values ('RN a trajectory credential takes no expiry date', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN a trajectory credential takes no expiry date', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin perform public.submit_renewal((select id from public.credentials where name = 'T ext in 30 days'), p_ref => 'R-NEW');
+    insert into results (check_name, expected, actual) values ('RN an external renewal without a new expiry date', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN an external renewal without a new expiry date', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin perform public.submit_renewal((select id from public.credentials where name = 'T ext in 30 days'), p_ref => 'R-NEW', p_expires => current_date);
+    insert into results (check_name, expected, actual) values ('RN an external renewal expiring today', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN an external renewal expiring today', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin insert into public.credentials (user_id, name, issuer, earned_on, ref, renewal_of) values ('00000000-0000-0000-0000-0000000000d1', 'T forged renewal', 'T issuer', current_date, 'R-F', current_setting('test.rn_trj')::uuid);
+    insert into results (check_name, expected, actual) values ('RN the learner writes renewal_of directly', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN the learner writes renewal_of directly', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update public.credentials set superseded_at = now() where id = current_setting('test.rn_trj')::uuid;
+    insert into results (check_name, expected, actual) values ('RN the learner stamps superseded_at directly', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN the learner stamps superseded_at directly', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'RN renewing 30 days before expiry is allowed', 'waiting', public.submit_renewal((select id from public.credentials where name = 'T ext in 30 days'), p_ref => 'R-30-NEW', p_expires => current_date + 365);
+insert into results (check_name, expected, actual) select 'RN renewing an expired credential is allowed', 'waiting', public.submit_renewal((select id from public.credentials where name = 'T ext expired'), p_link => ' https://cert.example/renewed ', p_expires => current_date + 400);
+insert into results (check_name, expected, actual) select 'RN renewing a trajectory credential is allowed', 'waiting', public.submit_renewal(current_setting('test.rn_trj')::uuid, p_ref => ' CSRD-456 ');
+insert into results (check_name, expected, actual) select 'RN the waiting renewal copies name, issuer and trajectory; expiry from the learner only for an external one',
+  'CSRD practitioner · internal academy|Internal academy|T3|waiting|CSRD-456|null|true',
+  string_agg(name||'|'||issuer||'|'||coalesce(trajectory_id, '-')||'|'||status||'|'||coalesce(ref, '-')||'|'||coalesce(expires_on::text, 'null')||'|'||(earned_on = current_date), ', ')
+  from public.credentials where renewal_of = current_setting('test.rn_trj')::uuid;
+insert into results (check_name, expected, actual) select 'RN the external renewal keeps the trimmed link and the new expiry', 'https://cert.example/renewed|true',
+  max(link)||'|'||(max(expires_on) = current_date + 400) from public.credentials where renewal_of = (select id from public.credentials where name = 'T ext expired' and renewal_of is null);
+do $$ begin
+  begin perform public.submit_renewal(current_setting('test.rn_trj')::uuid, p_ref => 'CSRD-789');
+    insert into results (check_name, expected, actual) values ('RN a second waiting renewal of the same credential', 'blocked: 23505', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN a second waiting renewal of the same credential', 'blocked: 23505', 'blocked: '||sqlstate); end;
+  begin perform public.confirm_credential((select id from public.credentials where renewal_of = current_setting('test.rn_trj')::uuid));
+    insert into results (check_name, expected, actual) values ('RN the learner confirms the own renewal', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN the learner confirms the own renewal', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- the owner withdraws a waiting renewal with the existing remove of a waiting row
+with d as (delete from public.credentials where ref = 'R-30-NEW' returning 1)
+  insert into results (check_name, expected, actual) select 'RN the learner removes the own waiting renewal', '1', count(*)::text from d;
+insert into results (check_name, expected, actual) select 'RN after removing it the credential can be renewed again', 'waiting', public.submit_renewal((select id from public.credentials where name = 'T ext in 30 days'), p_ref => 'R-30-AGAIN', p_expires => current_date + 365);
+-- someone else's counsellor confirms nothing; the counsellor confirms and the old row is superseded in the same step
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+do $$ begin
+  begin perform public.confirm_credential('00000000-0000-0000-0000-000000000000'::uuid);
+    insert into results (check_name, expected, actual) values ('RN confirming a credential that does not exist', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN confirming a credential that does not exist', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+select set_config('test.rn_new', (select id::text from public.credentials where renewal_of = current_setting('test.rn_trj')::uuid), true);
+insert into results (check_name, expected, actual) select 'RN the counsellor confirms the trajectory renewal', 'confirmed', public.confirm_credential(current_setting('test.rn_new')::uuid);
+insert into results (check_name, expected, actual) select 'RN the renewal is earned today and runs valid_months from today', 'confirmed|true|true|00000000-0000-0000-0000-0000000000a6',
+  status||'|'||(earned_on = current_date)||'|'||(expires_on = (current_date + interval '24 months')::date)||'|'||confirmed_by from public.credentials where id = current_setting('test.rn_new')::uuid;
+insert into results (check_name, expected, actual) select 'RN the old credential is superseded, the renewal is not', 'true|false',
+  (select (superseded_at is not null)::text from public.credentials where id = current_setting('test.rn_trj')::uuid)||'|'||(select (superseded_at is not null)::text from public.credentials where id = current_setting('test.rn_new')::uuid);
+insert into results (check_name, expected, actual) select 'RN the counsellor confirms the external renewal', 'confirmed', public.confirm_credential((select id from public.credentials where link = 'https://cert.example/renewed'));
+insert into results (check_name, expected, actual) select 'RN the external renewal keeps the learner''s expiry; the expired one is superseded', 'confirmed|true|true|true',
+  (select status||'|'||(earned_on = current_date)||'|'||(expires_on = current_date + 400) from public.credentials where link = 'https://cert.example/renewed')
+  ||'|'||(select (superseded_at is not null)::text from public.credentials where name = 'T ext expired' and renewal_of is null);
+do $$ begin
+  begin perform public.confirm_credential(current_setting('test.rn_new')::uuid);
+    insert into results (check_name, expected, actual) values ('RN confirming the same renewal twice', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN confirming the same renewal twice', 'blocked: P0002', 'blocked: '||sqlstate); end;
+end $$;
+-- a renewal of an already superseded credential (put in by hand: submit_renewal refuses it) is refused at confirm
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+do $$ begin
+  begin perform public.submit_renewal(current_setting('test.rn_trj')::uuid, p_ref => 'CSRD-789');
+    insert into results (check_name, expected, actual) values ('RN renewing a superseded credential', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN renewing a superseded credential', 'blocked: P0002', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
+insert into public.credentials (user_id, name, issuer, earned_on, ref, trajectory_id, renewal_of) values ('00000000-0000-0000-0000-0000000000d1', 'CSRD practitioner · internal academy', 'Internal academy', current_date, 'CSRD-DUP', 'T3', current_setting('test.rn_trj')::uuid);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+do $$ begin
+  begin perform public.confirm_credential((select id from public.credentials where ref = 'CSRD-DUP'));
+    insert into results (check_name, expected, actual) values ('RN confirming a renewal of a superseded credential', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN confirming a renewal of a superseded credential', 'blocked: P0002', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'RN confirm supersedes exactly once: one superseded T3 row, the hand-made renewal still waits', '1|waiting',
+  (select count(*) from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3' and superseded_at is not null)||'|'||(select status from public.credentials where ref = 'CSRD-DUP');
+-- the exam guard ignores a superseded row: with the renewal expired, the superseded (still unexpired) row does not block
+reset role;
+delete from public.credentials where ref = 'CSRD-DUP';
+update public.credentials set expires_on = current_date - 1 where id = current_setting('test.rn_new')::uuid;
+update public.trajectory_enrolments set steps = jsonb_set(steps, '{s6,state}', '"submitted"') where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'RN the exam guard ignores a superseded, unexpired credential', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+do $$ begin
+  begin perform public.submit_renewal(current_setting('test.rn_trj')::uuid, p_ref => 'X'); insert into results (check_name, expected, actual) values ('RN anon submits a renewal', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RN anon submits a renewal', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

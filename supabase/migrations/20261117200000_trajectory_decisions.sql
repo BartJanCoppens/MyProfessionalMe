@@ -87,9 +87,10 @@ begin
        or (r.steps -> p_step ->> 'state') is distinct from 'submitted' then
       raise exception 'This step is not waiting for a decision' using errcode = 'P0002';
     end if;
+    -- superseded_at is added in 20261117210000_credential_renewal.sql (pushed together): a renewed row is not held
     if p_decision = 'approve' and k = 'exam' and exists (
          select 1 from public.credentials where user_id = p_user and trajectory_id = t.id and status = 'confirmed'
-           and (expires_on is null or expires_on >= current_date)) then
+           and superseded_at is null and (expires_on is null or expires_on >= current_date)) then
       raise exception 'This person already holds this credential' using errcode = '23505';
     end if;
     if p_decision = 'talk' then
