@@ -2,7 +2,7 @@
 // reads the latest migration that defines each function and compares its format lists and thresholds with the TS rule
 // tables, so the two cannot drift apart.
 import { describe, expect, it } from 'vitest';
-import { CERTIFICATE_FORMATS, COMPLETION, FEEDBACK_MIN, LINK_FORMATS, REFLECTION_FORMATS, REFLECTION_MIN, SELF_COMPLETE } from './record';
+import { CERTIFICATE_FORMATS, COMMENT_MAX, COMMENT_MIN, COMPLETION, FEEDBACK_MIN, LINK_FORMATS, REFLECTION_FORMATS, REFLECTION_MIN, SELF_COMPLETE } from './record';
 
 // Every migration, as text, keyed by path (the timestamped names sort in order).
 const migrations = import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
@@ -58,5 +58,22 @@ describe('completion and evidence rules: TypeScript and the database agree', () 
   });
   it('no format both completes itself and needs evidence for acceptance', () => {
     expect(SELF_COMPLETE.filter((f) => CERTIFICATE_FORMATS.includes(f) || LINK_FORMATS.includes(f) || REFLECTION_FORMATS.includes(f))).toEqual([]);
+  });
+});
+
+// A decision's comment: decide_learning (request changes) and decide_trajectory (talk first) need COMMENT_MIN to
+// COMMENT_MAX characters, trimmed; the trajectory_decisions table holds the same bounds.
+describe('decision comments: TypeScript and the database agree', () => {
+  it.each(['public.decide_learning', 'public.decide_trajectory'])('%s trims the comment and checks COMMENT_MIN and COMMENT_MAX', (fn) => {
+    const { body } = latest(fn);
+    expect(body).toMatch(/nullif\(btrim\(coalesce\(p_comment, ''\)\), ''\)/);
+    expect(body).toMatch(new RegExp('char_length\\(coalesce\\(c, \'\'\\)\\) < ' + COMMENT_MIN + '\\b'));
+    expect(body).toMatch(new RegExp('char_length\\(coalesce\\(c, \'\'\\)\\) > ' + COMMENT_MAX + '\\b'));
+    expect(body).toContain('at least ' + COMMENT_MIN + ' characters');
+  });
+  it('trajectory_decisions holds the same bounds', () => {
+    const table = files.map((f) => migrations[f]).find((sql) => sql.includes('create table public.trajectory_decisions'));
+    expect(table).toBeDefined();
+    expect(table).toContain('comment is null or char_length(comment) between ' + COMMENT_MIN + ' and ' + COMMENT_MAX);
   });
 });

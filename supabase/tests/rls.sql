@@ -1291,9 +1291,27 @@ insert into results (check_name, expected, actual) select 'TR another line''s Do
 -- the counsellor a6: approves the start, signs off the check, accepts the exam (D5: the credential appears)
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'TR counsellor reads the enrolments', '3', count(*)::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1';
+-- talk first needs a comment of 10 to 500 characters (trimmed), as decide_learning's request for changes
+do $$ begin
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T2', null, 'talk');
+    insert into results (check_name, expected, actual) values ('TD talk on a start request without a comment', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TD talk on a start request without a comment', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T1', 's6', 'talk', '  123456789  ');
+    insert into results (check_name, expected, actual) values ('TD talk on a step with 9 characters', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TD talk on a step with 9 characters', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's5', 'approve', repeat('x', 501));
+    insert into results (check_name, expected, actual) values ('TD approve with a comment over 500 characters', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TD approve with a comment over 500 characters', 'blocked: 22023', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'TD decide_trajectory has one signature, with the comment', 'p_user uuid, p_trajectory text, p_step text, p_decision text, p_comment text DEFAULT NULL::text', string_agg(pg_get_function_arguments(p.oid), ' / ') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'decide_trajectory';
+insert into results (check_name, expected, actual) select 'TD nothing is logged for a refused decision', '0', count(*)::text from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1';
+insert into results (check_name, expected, actual) select 'TD talk on a start request with a comment leaves it requested', 'talk/requested', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T2', null, 'talk', 'Let us plan the study leave first.')||'/'||(select status from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T2');
 insert into results (check_name, expected, actual) select 'TR counsellor approves the start request', 'enrolled', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T2', null, 'approve');
 insert into results (check_name, expected, actual) select 'TR counsellor signs off the check step', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's5', 'approve');
-insert into results (check_name, expected, actual) select 'TR counsellor wants to talk about the evidence first', 'talk', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T1', 's6', 'talk');
+insert into results (check_name, expected, actual) select 'TR counsellor wants to talk about the evidence first', 'talk', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T1', 's6', 'talk', '  1234567890  ');
+insert into results (check_name, expected, actual) select 'TD each decision is logged with the counsellor''s name, a trimmed comment, null for approve', 'T1 s6 talk 1234567890 | T2 - approve null | T2 - talk Let us plan the study leave first. | T3 s5 approve null (T Counsellor)',
+  string_agg(trajectory_id||' '||coalesce(step_id, '-')||' '||decision||' '||coalesce(comment, 'null'), ' | ' order by trajectory_id, step_id nulls first, decision)||' ('||max(decided_by_name)||')'
+  from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1' and decided_by = '00000000-0000-0000-0000-0000000000a6';
 do $$ begin
   begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's4', 'approve');
     insert into results (check_name, expected, actual) values ('TR counsellor accepts a step never submitted', 'blocked', 'allowed');
@@ -1416,6 +1434,34 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'TR after expiry the guard allows another credential', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
 insert into results (check_name, expected, actual) select 'TR after expiry a second credential is added', '2', count(*)::text from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
+-- the decision log: read by the person and whoever reads their track; nobody writes it directly
+insert into results (check_name, expected, actual) select 'TD the counsellor reads the person''s decisions', '7', count(*)::text from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1';
+do $$ begin
+  begin delete from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1';
+    insert into results (check_name, expected, actual) values ('TD the counsellor deletes a decision', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TD the counsellor deletes a decision', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TD the learner reads the talk comments on their own trajectories', 'T1 s6 1234567890 | T2 - Let us plan the study leave first.',
+  string_agg(trajectory_id||' '||coalesce(step_id, '-')||' '||comment, ' | ' order by trajectory_id) from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1' and decision = 'talk';
+do $$ begin
+  begin insert into public.trajectory_decisions (user_id, trajectory_id, step_id, decision, comment) values ('00000000-0000-0000-0000-0000000000d1', 'T1', 's6', 'approve', 'Approved by myself, honestly.');
+    insert into results (check_name, expected, actual) values ('TD the learner writes a decision directly', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TD the learner writes a decision directly', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update public.trajectory_decisions set comment = 'Nothing to talk about here.' where user_id = '00000000-0000-0000-0000-0000000000d1';
+    insert into results (check_name, expected, actual) values ('TD the learner rewrites a comment', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TD the learner rewrites a comment', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TD another learner reads the person''s decisions', '0', count(*)::text from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TD someone else''s counsellor reads the person''s decisions', '0', count(*)::text from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1';
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+do $$ begin
+  begin perform count(*) from public.trajectory_decisions; insert into results (check_name, expected, actual) values ('TD anon reads decisions', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TD anon reads decisions', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
 reset role;
 -- ---------- Flash cards and practice exams (FX) ----------
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e1','t.podcaster@test.local'), ('00000000-0000-0000-0000-0000000000e2','t.deckmaker@test.local');
