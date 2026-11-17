@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseFormatContent } from '../lib/contentStore';
 import { STUDIOS } from '../studioData';
-import { CARD_FORMATS, ITEM_MAX, LONG_MAX, SHORT_MAX } from './items';
+import { ITEM_FORMATS, ITEM_MAX, LONG_MAX, SHORT_MAX } from './items';
 import { CASE_HOURS, CASE_REVIEWER, DEPTH_QUESTION, END_CHECK, END_NONE, END_QUESTION, END_SUMMARY, EVIDENCE_QUESTION, LENGTH_QUESTION, MOTION_LENGTH, NEEDS_CHECK, NEEDS_CHECK_AI, NEEDS_CHECK_NO_AI, UNUSED_CHECK,
   caseHours, countsAsEvidence, explainerProblems, studioContent } from './studioContent';
 import { CASE_LABELS, CHECK_SIZE, itemsValid, rowsMax, studioById } from './studios';
@@ -153,7 +153,7 @@ describe('the database repeats these rules', () => {
     expect(body('private.aid_content')).toContain("' · '");
   });
   it('private.carries_items is carriesItems, and every SQL site uses it', () => {
-    expect(quoted(/p_type in \(([^)]*)\) or p_studio is not null/.exec(body('private.carries_items'))![1])).toEqual(CARD_FORMATS);
+    expect(quoted(/p_type in \(([^)]*)\) or p_studio is not null/.exec(body('private.carries_items'))![1])).toEqual(ITEM_FORMATS);
     expect(body('private.publish_contribution')).toContain('private.carries_items(c.type, c.studio)');
     expect(body('private.contribution_problems')).toContain('private.carries_items(c.type, c.studio)');
     const last = files.slice().reverse().map((f) => /add constraint contributions_items_check\s+check \(([\s\S]*?)\);/.exec(migrations[f])).find(Boolean)!;

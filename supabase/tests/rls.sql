@@ -2410,5 +2410,68 @@ insert into results (check_name, expected, actual) select 'VO not to a contribut
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'VO not to their own contribution once published', 'false', public.can_write_media('00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/voice-a.mp3')::text;
 reset role;
+-- ---------- Horizon presentations (HZ) ----------
+-- 'Presentation' is an upload-form format: no studio, one item {kind, path, title, slides, seconds} (private.horizon_ok)
+-- naming the .horizon file in the contribution's own folder, which must be in Storage before the check and submit pass.
+reset role;
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000b7','t.horizonmaker@test.local'), ('00000000-0000-0000-0000-0000000000b8','t.horizonlearner@test.local');
+update public.profiles set business_line='Consulting' where id in ('00000000-0000-0000-0000-0000000000b7', '00000000-0000-0000-0000-0000000000b8');
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000b7','{Consulting}','{Presentation}');
+delete from public.review_policies; -- no review: published on submit
+insert into public.review_policies (formats, peers, expert, quality) values ('{Presentation}', 0, false, false);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b7","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway) values
+ ('Consulting','Presentation','T hz deck','prof','Walk the garden.'), ('Consulting','Presentation','T hz missing','prof','x'),
+ ('Consulting','Presentation','T hz elsewhere','prof','x'), ('Consulting','Presentation','T hz bad','prof','x') returning 1)
+  insert into results (check_name, expected, actual) select 'HZ a Presentation is an upload-form format (no studio)', '4 rows', count(*)||' rows' from i;
+select set_config('test.hz_c', (select id::text from public.contributions where title = 'T hz deck'), true);
+select set_config('test.hz_m', (select id::text from public.contributions where title = 'T hz missing'), true);
+select set_config('test.hz_e', (select id::text from public.contributions where title = 'T hz elsewhere'), true);
+select set_config('test.hz_p', '00000000-0000-0000-0000-0000000000b7/'||current_setting('test.hz_c')||'/presentation.horizon', true);
+select set_config('test.hz_i', jsonb_build_object('kind', 'horizon', 'path', current_setting('test.hz_p'), 'title', ' Garden tour ', 'slides', 3, 'seconds', 0)::text, true);
+insert into storage.objects (bucket_id, name) values ('media', current_setting('test.hz_p'));
+update public.contributions set items = jsonb_build_array(current_setting('test.hz_i')::jsonb) where title in ('T hz deck', 'T hz elsewhere');
+update public.contributions set items = jsonb_build_array(current_setting('test.hz_i')::jsonb || jsonb_build_object('path', '00000000-0000-0000-0000-0000000000b7/'||current_setting('test.hz_m')||'/presentation.horizon'))
+  where title = 'T hz missing';
+do $$ begin
+  begin update public.contributions set items = jsonb_build_array(current_setting('test.hz_i')::jsonb, current_setting('test.hz_i')::jsonb) where title = 'T hz bad';
+    insert into results (check_name, expected, actual) values ('HZ a Presentation holds one item', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('HZ a Presentation holds one item', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'HZ without its item the check asks for the file', 'Add the .horizon file first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T hz bad')), '|');
+do $$ declare r record; begin
+  for r in select * from (values ('kind', '{"kind":"motion"}'::jsonb), ('not .horizon', '{"path":"00000000-0000-0000-0000-0000000000b7/00000000-0000-0000-0000-000000000001/a.json"}'),
+    ('bad path', '{"path":"../a.horizon"}'), ('blank title', '{"title":"  "}'), ('no slides', '{"slides":0}'), ('slides as text', '{"slides":"3"}'),
+    ('negative seconds', '{"seconds":-1}'), ('extra key', '{"svg":"<svg/>"}')) as t(k, v) loop
+    update public.contributions set items = jsonb_build_array(current_setting('test.hz_i')::jsonb || r.v) where title = 'T hz bad';
+    insert into results (check_name, expected, actual) select 'HZ a malformed item ('||r.k||') fails the check', 'Add the .horizon file first',
+      array_to_string(public.check_contribution((select id from public.contributions where title = 'T hz bad')), '|');
+  end loop;
+end $$;
+insert into results (check_name, expected, actual) select 'HZ the check refuses a file that is not in Storage', 'The .horizon file is not there · add it again', array_to_string(public.check_contribution(current_setting('test.hz_m')::uuid), '|');
+insert into results (check_name, expected, actual) select 'HZ and a file in another contribution''s folder', 'The .horizon file is not there · add it again', array_to_string(public.check_contribution(current_setting('test.hz_e')::uuid), '|');
+do $$ begin
+  perform public.submit_contribution(current_setting('test.hz_m')::uuid);
+  insert into results (check_name, expected, actual) values ('HZ submit refuses a Presentation whose file is missing', 'blocked: The .horizon file is not there', 'allowed');
+exception when others then insert into results (check_name, expected, actual) values ('HZ submit refuses a Presentation whose file is missing', 'blocked: The .horizon file is not there', 'blocked: '||sqlerrm); end $$;
+insert into results (check_name, expected, actual) select 'HZ a Presentation with its file passes the check and is published', '{}/published',
+  public.check_contribution(current_setting('test.hz_c')::uuid)::text||'/'||public.submit_contribution(current_setting('test.hz_c')::uuid);
+insert into results (check_name, expected, actual) select 'HZ it becomes horizon content: path, title, slides, seconds', 'true',
+  (l.content = jsonb_build_object('kind', 'horizon', 'path', current_setting('test.hz_p'), 'title', 'Garden tour', 'slides', 3, 'seconds', 0))::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T hz deck';
+select set_config('test.hz_l', (select learning_id from public.contributions where id = current_setting('test.hz_c')::uuid), true);
+-- a learner reads the published file (its path is in the content) and completes it themselves ('media')
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b8","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'HZ a signed-in learner reads the published .horizon file', '1', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.hz_p');
+select public.save_learning(current_setting('test.hz_l'), p_state => 'accepted', p_pct => 100::smallint, p_detail => '{"last":true}');
+insert into results (check_name, expected, actual) select 'HZ a learner completes a Presentation without a counsellor', 'accepted', state
+  from public.learner_learnings where user_id = '00000000-0000-0000-0000-0000000000b8' and learning_id = current_setting('test.hz_l');
+do $$ begin
+  begin perform private.horizon_ok('{}'::jsonb);
+    insert into results (check_name, expected, actual) values ('HZ a signed-in user cannot call horizon_ok', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('HZ a signed-in user cannot call horizon_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

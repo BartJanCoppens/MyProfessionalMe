@@ -19,12 +19,13 @@ export function evidenceRule(format: string): EvidenceRule {
 // (private.is_self_complete); the rest go to the counsellor or an admin for acceptance. 'feedback' is
 // private.completion_rule(): the database refuses a learner's completion without it. record.sync.test.ts compares these
 // lists with the latest migration.
-//   media: a podcast at 80% listened, a reel on a right answer · mark: the learner marks it completed
+//   media: a podcast at 80% listened, a reel on a right answer, a presentation at its last slide · mark: the learner marks it completed
 //   feedback: the learner's feedback, or the faculty registers attendance · quiz: three right answers after the practice session
 export type Completion = 'acceptance' | 'media' | 'mark' | 'feedback' | 'quiz';
 export const COMPLETION: Record<string, Exclude<Completion, 'acceptance'>> = {
   Podcast: 'media', Reel: 'media', 'E-learning': 'mark', Classroom: 'feedback', Avatar: 'quiz',
   'Flash cards': 'mark', 'Job aid': 'mark', 'Practice exam': 'mark', 'Teach-back': 'mark', Webinar: 'feedback', 'Interactive explainer': 'mark', 'Animated flow': 'mark',
+  Presentation: 'media',
 };
 export const SELF_COMPLETE = Object.keys(COMPLETION);
 export const completionOf = (format: string): Completion => COMPLETION[format] || 'acceptance';
@@ -47,6 +48,11 @@ const PANEL_TODO: Record<string, string> = {
   'Animated flow': 'reach the end, or read the text version',
 };
 const panelTodo = (format: string, panel: boolean) => (panel ? PANEL_TODO[format] : undefined);
+// How a 'media' format completes, in a sentence and as a to-do; a reel's question is the rest.
+const MEDIA_DONE: Record<string, [string, string]> = {
+  Podcast: ['Listening to 80% completes it. It counts right away; no acceptance needed.', 'listen to it'],
+  Presentation: ['Playing it to the last slide completes it. It counts right away; no acceptance needed.', 'play it to the last slide'],
+};
 
 // What completes this format, in the learner's words (detail sidebar and help). accepter: the counsellor's full name.
 // panel: the learning has its format's content panel.
@@ -54,7 +60,7 @@ export function completionText(format: string, accepter: string, panel = false):
   const f = format.toLowerCase(), todo = panelTodo(format, panel);
   if (todo) return todo[0].toUpperCase() + todo.slice(1) + ' to complete it. It counts right away; no acceptance needed.';
   switch (completionOf(format)) {
-    case 'media': return format === 'Podcast' ? 'Listening to 80% completes it. It counts right away; no acceptance needed.' : 'A right answer to the question completes it. It counts right away; no acceptance needed.';
+    case 'media': return MEDIA_DONE[format]?.[0] ?? 'A right answer to the question completes it. It counts right away; no acceptance needed.';
     case 'mark': return 'Mark it as completed when you have finished the course. It counts right away; no acceptance needed.';
     case 'feedback': return 'It completes when the faculty registers your attendance, or when you give your feedback on the session. No acceptance needed.';
     case 'quiz': return 'After your practice session, three right answers in the evaluation quiz complete it. No acceptance needed.';
@@ -69,7 +75,7 @@ export function completionTodo(format: string, panel = false): string {
     case 'mark': return 'mark it as completed';
     case 'feedback': return 'give your feedback';
     case 'quiz': return 'take the evaluation quiz';
-    case 'media': return format === 'Podcast' ? 'listen to it' : 'answer the question';
+    case 'media': return MEDIA_DONE[format]?.[1] ?? 'answer the question';
     default: return '';
   }
 }

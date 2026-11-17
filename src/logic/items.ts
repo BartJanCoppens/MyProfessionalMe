@@ -4,6 +4,8 @@
 import type { ExamQuestion } from '../types';
 import type { Check } from './contribution';
 import { jsonObject } from './json';
+import { deckLine, isHorizonItem } from './horizonItem';
+import type { HorizonItem } from './horizonItem';
 import { isDrawing } from './motionSvg';
 import { madeLabel } from './provenance';
 import type { MotionDrawing } from './motionSvg';
@@ -11,8 +13,8 @@ import type { MotionDrawing } from './motionSvg';
 export type Card = [string, string];
 // A generic studio's row is [label, text] (a Card has that shape) or [label, text, text2].
 export type StudioRow = [string, string, string];
-// An Animated flow's items end with its drawing (motionSvg.ts).
-export type Item = Card | StudioRow | ExamQuestion | MotionDrawing;
+// An Animated flow's items end with its drawing (motionSvg.ts); a Presentation's one item is its file's summary (horizonItem.ts).
+export type Item = Card | StudioRow | ExamQuestion | MotionDrawing | HorizonItem;
 export type ItemSource = 'ai' | 'scripted' | 'csv' | 'manual' | 'saved' | '';
 // list: the items; how: where they came from ('ai' makes the contribution AI-assisted, see aiAssisted); note: the label shown with them;
 // problems: bad CSV lines to show.
@@ -22,14 +24,16 @@ export const noItems = (): DraftItems => ({ list: [], how: '', note: '', problem
 // The most items of each format: cards, exam questions and every studio's rows (the design's example counts with room to
 // grow; reel and motion stay inside 90 s, podcast inside 30 min at four minutes a chapter, slides inside 15 min).
 // Mirrored in private.item_max.
-export const ITEM_MAX: Record<string, number> = { 'Flash cards': 40, 'Practice exam': 30, Avatar: 12, Reel: 8, Podcast: 8, Game: 10, Slides: 15, 'Animated flow': 8,
+export const ITEM_MAX: Record<string, number> = { 'Flash cards': 40, 'Practice exam': 30, Presentation: 1, Avatar: 12, Reel: 8, Podcast: 8, Game: 10, Slides: 15, 'Animated flow': 8,
   'Interactive explainer': 10, 'Job aid': 20, 'Case exercise': 12 };
 // The formats whose items are cards or exam questions, always there (the upload form's item panel); any other format's
 // items are a studio's rows.
 export const CARD_FORMATS = ['Flash cards', 'Practice exam'];
 export const hasItems = (type: string) => CARD_FORMATS.includes(type);
-// Whether a contribution carries items: the card formats always, anything made in a studio (private.carries_items).
-export const carriesItems = (type: string, studio: string | null | undefined) => hasItems(type) || !!studio;
+// The formats that always carry items, from the upload form too: the card formats and a Presentation (its file's summary).
+export const ITEM_FORMATS = [...CARD_FORMATS, 'Presentation'];
+// Whether a contribution carries items: those formats always, anything made in a studio (private.carries_items).
+export const carriesItems = (type: string, studio: string | null | undefined) => ITEM_FORMATS.includes(type) || !!studio;
 const isFlash = (type: string) => type === 'Flash cards';
 export const noun = (type: string, n: number) => (isFlash(type) ? (n === 1 ? 'card' : 'cards') : type === 'Practice exam' ? (n === 1 ? 'question' : 'questions') : n === 1 ? 'item' : 'items');
 export const countText = (type: string, n: number) => n + ' ' + noun(type, n);
@@ -53,7 +57,7 @@ const isStepOrQuestion = (v: unknown): v is StudioRow | ExamQuestion => isRow(v)
 // An Animated flow's items are its stage rows and, after them, its drawing.
 const isStageOrDrawing = (v: unknown): v is StudioRow | MotionDrawing => isRow(v) || isDrawing(v);
 const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice exam' ? isQuestion : type === 'Interactive explainer' ? isStepOrQuestion
-  : type === 'Animated flow' ? isStageOrDrawing : isRow);
+  : type === 'Animated flow' ? isStageOrDrawing : type === 'Presentation' ? isHorizonItem : isRow);
 
 // The first sentence of a passage, and its first n words without a trailing punctuation mark; shared by the scripted drafts.
 export const firstSentence = (p: string) => p.trim().split(/(?<=[.!?])\s+/)[0];
@@ -144,14 +148,16 @@ export function itemsFromSaved(type: string, raw: unknown): Item[] {
 export const validItems = (type: string, list: Item[]): Item[] => list.filter(isItem(type));
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
   return validItems(type, list).map((x) => (Array.isArray(x) ? { front: x[0], back: x.slice(1).filter(Boolean).join(' · ') }
-    : isDrawing(x) ? { front: 'Animation · ' + madeLabel(x.made), back: x.alt } : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
+    : isDrawing(x) ? { front: 'Animation · ' + madeLabel(x.made), back: x.alt } : isHorizonItem(x) ? { front: 'Horizon presentation · ' + deckLine(x), back: x.title }
+      : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
 }
 // Saved as AI-assisted when the outline was drafted by AI or the items were, in any studio; scripted and manual items never are.
 // An Animated flow whose drawing AI animated is AI-assisted too.
 export const aiAssisted = (nw: { ai: boolean; items?: DraftItems }) => nw.ai || nw.items?.how === 'ai' || !!nw.items?.list.some((x) => isDrawing(x) && x.made === 'ai');
 // Every text of the items, for the client-name check.
 // A drawing's text alternative and markup are scanned too, as the database scans the items.
-export const itemsText = (list: Item[]): string[] => list.flatMap((x) => (Array.isArray(x) ? x : isDrawing(x) ? [x.alt, x.svg] : [x.t, x.q, ...(x.o || []), x.why]));
+// A Presentation's file is not in the items: its title is scanned here, its slides when it is read (src/horizon/readDeck.ts).
+export const itemsText = (list: Item[]): string[] => list.flatMap((x) => (Array.isArray(x) ? x : isDrawing(x) ? [x.alt, x.svg] : isHorizonItem(x) ? [x.title] : [x.t, x.q, ...(x.o || []), x.why]));
 
 export function itemsCheck(type: string, d: DraftItems): Check {
   const n = d.list.length, what = countText(type, n);

@@ -6,6 +6,7 @@ import type { TrjMine } from './logic/trajectoryLearner';
 import type { QueueRow } from './lib/recordStore';
 import type { RosterRow } from './lib/attendanceStore';
 import type { AiAdmin, AiForm, AiUseEdit, StockVoice, StockVoiceForm } from './logic/ai';
+import type { HorizonItem } from './logic/horizonItem';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
 export type Learn = [string, string, string, number, string, string, number, number, string, string];
 // learning id, stage, obligation
@@ -80,7 +81,9 @@ export type AidContent = { kind: 'aid'; items: string[] };
 export type ExplainerContent = { kind: 'explainer'; style: string; depth: string; steps: { label: string; text: string; svg?: string }[]; check?: ExamQuestion[]; end: string };
 // made: who animated the drawing ('ai' shows as Made with AI, 'scripted' as Scripted), see src/logic/motionSvg.ts.
 export type MotionContent = { kind: 'motion'; stages: { label: string; text: string }[]; svg: string; alt: string; seconds: number; made: 'ai' | 'scripted' };
-export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent;
+// A Horizon presentation (studios plan, Task 3.3): its .horizon file in the media bucket and the summary read from it.
+export type HorizonContent = HorizonItem;
+export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
 export type View = 'constellation' | 'radar' | 'road';

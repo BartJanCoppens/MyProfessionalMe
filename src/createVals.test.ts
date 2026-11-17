@@ -50,7 +50,7 @@ describe('navigation', () => {
     expect(cs({ data: d, readOnly: true }).vm().reviewBadge).toBe(1);
   });
   it('lists every contribution format in the lead, from the format list', () => {
-    expect(cs().c().lead).toMatch(/^Make something for your colleagues: Reel, Podcast, Micro-guide, Case write-up, Flash cards, Practice exam, Animated flow, Interactive explainer, Job aid or Case exercise\. /);
+    expect(cs().c().lead).toMatch(/^Make something for your colleagues: Reel, Podcast, Micro-guide, Case write-up, Flash cards, Practice exam, Presentation, Animated flow, Interactive explainer, Job aid or Case exercise\. /);
     MAKEABLE_FORMATS.forEach((f) => expect(cs().c().lead).toContain(f));
     ['Game', 'Slides', 'Avatar'].forEach((f) => expect(cs().c().lead).not.toContain(f));
   });
@@ -96,7 +96,7 @@ describe('the New tab', () => {
     expect(h.c().audOptions.map((o) => o.label).slice(0, 2)).toEqual(['None', 'Energy & utilities']);
     expect(h.c().audOptions).toHaveLength(8);
     expect(h.c().domainOptions).toHaveLength(9);
-    expect(h.c().newTypes.map((t) => [t.label, t.fg === '#b3b8ae'])).toEqual([['Reel', true], ['Podcast', false], ['Micro-guide', false], ['Case write-up', true], ['Flash cards', true], ['Practice exam', true]]);
+    expect(h.c().newTypes.map((t) => [t.label, t.fg === '#b3b8ae'])).toEqual([['Reel', true], ['Podcast', false], ['Micro-guide', false], ['Case write-up', true], ['Flash cards', true], ['Practice exam', true], ['Presentation', true]]);
     h.c().newTypes[0].pick();
     expect(h.lastToast()).toBe('Not in your creation rules');
     expect(h.c().nw.type).toBe('Podcast');

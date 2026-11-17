@@ -172,18 +172,18 @@ describe('the review badge', () => {
 
 describe('types', () => {
   it('call the avatar format Avatar, as the library does, and leave it out of the upload form: it is made in its studio', () => {
-    expect(NEW_TYPES).toHaveLength(7);
+    expect(NEW_TYPES).toHaveLength(8);
     expect(NEW_TYPES.map((t) => t[0])).toContain('Avatar');
     expect(CREATE_TYPES.map((t) => t[0])).not.toContain('Avatar');
   });
-  it('the upload form offers what it offered before the studios', () => {
-    expect(CREATE_TYPES.map((t) => t[0])).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam']);
+  it('the upload form offers what it offered before the studios, and Horizon presentations (Task 3.3)', () => {
+    expect(CREATE_TYPES.map((t) => t[0])).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam', 'Presentation']);
   });
   it('contribution formats, and so creation rules, add the formats the studios make', () => {
-    expect(TYPE_NAMES).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Avatar', 'Flash cards', 'Practice exam', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise']);
+    expect(TYPE_NAMES).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Avatar', 'Flash cards', 'Practice exam', 'Presentation', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise']);
   });
   it('creation rules offer only formats something can make today: the upload form and the studios that are available', () => {
-    expect(PART_VALUES.formats).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise']);
+    expect(PART_VALUES.formats).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam', 'Presentation', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise']);
     expect(MAKEABLE_FORMATS).toEqual(PART_VALUES.formats);
   });
 });

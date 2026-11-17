@@ -1,4 +1,5 @@
 import { AUDS, BLS } from '../data';
+import { isHorizonItem } from '../logic/horizonItem';
 import { isQuestion } from '../logic/items';
 import type { Bundle, FormatContent, Learn, LearnMeta, Mapping } from '../types';
 import { supabase } from './supabase';
@@ -34,6 +35,7 @@ export function parseFormatContent(raw: unknown): FormatContent | null {
     case 'aid': return isTexts(c.items) ? c as FormatContent : null;
     case 'explainer': return [c.style, c.depth, c.end].every(isText) && listOf(c.steps, (s) => labelled(s) && (s.svg === undefined || isText(s.svg)))
       && (c.check === undefined || (Array.isArray(c.check) && c.check.length === 3 && c.check.every(isQuestion))) ? c as FormatContent : null;
+    case 'horizon': return isHorizonItem(c) ? c : null;
     case 'motion': return listOf(c.stages, labelled) && isText(c.svg) && isText(c.alt) && isCount(c.seconds) && c.seconds > 0 && c.seconds <= 90 && (c.made === 'ai' || c.made === 'scripted') ? c as FormatContent : null;
     default: return null;
   }
