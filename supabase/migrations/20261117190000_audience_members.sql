@@ -2,8 +2,8 @@
 -- on such an audience can bind people (docs/decisions.md, "Industry and technology membership").
 --
 -- 1. public.audience_members: one row per person and ind:/tec: audience. The person's counsellor, the person's Domain
---    Admins, General and System Admins set and remove it; the person never sets their own (unless they administer
---    themselves, as private.can_manage_user allows a System Admin). Rows are set or removed, never updated. The audience
+--    Admins, General and System Admins set and remove it (private.can_accept); nobody sets or removes their own, admins
+--    included. Rows are set or removed, never updated. The audience
 --    catalogue lives in the app (AUDS in src/data.ts), as for curriculum_mappings: the database checks the format only.
 --    No history beyond set_by and set_at (a PoC shortcut).
 -- 2. private.trajectory_maps_ok: mandatory is allowed on business-line, ind: and tec: audiences; amb: and pro: only advise.
@@ -31,11 +31,11 @@ grant insert (user_id, audience) on public.audience_members to authenticated;
 -- The person, their counsellor, admins who manage them and General Admins (the formal track).
 create policy "audience_members: read" on public.audience_members for select to authenticated
   using (user_id = (select auth.uid()) or (select private.can_view_track(user_id)));
--- The counsellor, a managing admin or a General Admin (private.can_accept, never the person), or an admin of the person.
+-- The counsellor, a managing admin or a General Admin (private.can_accept); never the person, admins included.
 create policy "audience_members: counsellor or admin sets" on public.audience_members for insert to authenticated
-  with check ((select private.can_manage_user(user_id)) or (select private.can_accept(user_id)));
+  with check (user_id <> (select auth.uid()) and (select private.can_accept(user_id)));
 create policy "audience_members: counsellor or admin removes" on public.audience_members for delete to authenticated
-  using ((select private.can_manage_user(user_id)) or (select private.can_accept(user_id)));
+  using (user_id <> (select auth.uid()) and (select private.can_accept(user_id)));
 
 -- ---------- what can be mandatory ----------
 

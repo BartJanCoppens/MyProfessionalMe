@@ -1551,6 +1551,26 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","r
 with i as (insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','ind:health') returning 1)
   insert into results (check_name, expected, actual) select 'AM a General Admin sets one', '1 rows', count(*)||' rows' from i;
 insert into results (check_name, expected, actual) select 'AM a General Admin reads them', 'ind:energy ind:health tec:data', string_agg(audience, ' ' order by audience) from public.audience_members where user_id = '00000000-0000-0000-0000-0000000000d1';
+do $$ begin
+  begin insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000a7','tec:ai');
+    insert into results (check_name, expected, actual) values ('AM a General Admin sets their own', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM a General Admin sets their own', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- a Domain Admin of their own line (a1, Consulting) manages themselves, yet never sets their own membership
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+do $$ begin
+  begin insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000a1','tec:ai');
+    insert into results (check_name, expected, actual) values ('AM a Domain Admin sets their own', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM a Domain Admin sets their own', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- the System Admin neither
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+do $$ begin
+  begin insert into public.audience_members (user_id, audience) values (current_setting('test.sa')::uuid, 'tec:ai');
+    insert into results (check_name, expected, actual) values ('AM a System Admin sets their own', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM a System Admin sets their own', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
 -- a mandatory tec:data map binds members at its stage (a General Admin publishes it, D2)
 insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
   values ('TX4', 'T data mandatory', 'T issuer', 'T credential', 'auto', 6, 'live', null,
