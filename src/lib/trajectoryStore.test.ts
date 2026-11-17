@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, has, op } from '../test/fakeSupabase';
 import {
   addExternalCredential, confirmCredential, createTrajectory, decideTrajectory, loadCredentials, loadEnrolments, loadTrajectories,
-  requestTrajectory, saveTrajectoryNow, saveTrajectorySoon, submitTrajectoryStep, withdrawTrajectory,
+  removeCredential, requestTrajectory, saveTrajectoryNow, saveTrajectorySoon, submitTrajectoryStep, withdrawTrajectory,
 } from './trajectoryStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
@@ -76,6 +76,24 @@ describe('credentials', () => {
   });
 });
 
+describe('removing a waiting credential', () => {
+  it('deletes the row by id and reads back what was removed', async () => {
+    db.answer(() => ({ data: [{ id: 'c1' }] }));
+    expect(await removeCredential('c1')).toEqual({ error: null });
+    expect(op(db.calls[0])).toBe('delete');
+    expect(has(db.calls[0], 'eq', 'id', 'c1')).toBe(true);
+    expect(has(db.calls[0], 'select', 'id')).toBe(true);
+  });
+  it('says so when nothing was removed (confirmed meanwhile, or not the owner\'s)', async () => {
+    db.answer(() => ({ data: [] }));
+    expect(await removeCredential('c1')).toEqual({ error: 'Not removed · only your own credential still waiting for your counsellor can be removed' });
+  });
+  it('returns the database error', async () => {
+    failWith('boom');
+    expect(await removeCredential('c1')).toEqual({ error: 'boom' });
+  });
+});
+
 describe('saving trajectories', () => {
   const draft = { name: 'N', issuer: '', credential: 'C', enrol: 'open' as const, months: 6, valid_months: null, renewal: '', cost: '', status: 'draft' as const, business_line: null, steps: [], maps: [] };
   it('creates a trajectory and returns it with the server id', async () => {
@@ -143,7 +161,8 @@ describe('RPC wrappers', () => {
   });
   it('maps errors to user-facing messages and never throws', async () => {
     failWith('This person already holds this credential', '23505');
-    expect(await decideTrajectory('u1', 'T1', 's9', 'approve')).toEqual({ result: null, error: 'You already hold this credential.' });
+    expect(await decideTrajectory('u1', 'T1', 's9', 'approve', 'Kim')).toEqual({ result: null, error: 'Kim already holds a valid credential from this trajectory.' });
+    expect(await decideTrajectory('u1', 'T1', 's9', 'approve')).toEqual({ result: null, error: 'This person already holds a valid credential from this trajectory.' });
     failWith('new row violates row-level security policy', '42501');
     expect(await confirmCredential('c1')).toEqual({ error: 'Not allowed · ask an admin' });
     failWith('A step is already signed off; ask your counsellor', '42501');

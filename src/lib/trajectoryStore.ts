@@ -35,12 +35,14 @@ function parseEnrolment(r: EnrolmentRow): Enrolment {
 
 // Postgres errors to what a person can read. The RPCs raise their own 42501 messages ("A step is already signed off"),
 // which are kept; a row-level-security refusal has no such message, so it gets the app's usual wording.
-function userMessage(error: Failure): string {
-  if (error.code === '23505') return 'You already hold this credential.';
+// duplicate: what a 23505 (the credential is already held) means for the caller.
+const YOU_HOLD = 'You already hold this credential.';
+function userMessage(error: Failure, duplicate = YOU_HOLD): string {
+  if (error.code === '23505') return duplicate;
   if (error.code === '42501' && /row-level security|permission denied/.test(error.message)) return 'Not allowed · ask an admin';
   return error.message;
 }
-const failure = (error: Failure | null) => (error ? userMessage(error) : null);
+const failure = (error: Failure | null, duplicate?: string) => (error ? userMessage(error, duplicate) : null);
 const fail = (error: Failure | null) => { if (error) throw new Error(userMessage(error)); };
 const idNumber = (id: string) => Number(id.slice(1)) || 0;
 
@@ -70,6 +72,13 @@ export async function addExternalCredential(c: ExternalCredential): Promise<{ er
     name: c.name.trim(), issuer: c.issuer.trim(), earned_on: c.earned_on, expires_on: c.expires_on, link: c.link.trim() || null, ref: c.ref.trim() || null,
   });
   return { error: failure(error) };
+}
+
+// The owner removes their own credential while it waits for the counsellor (a confirmed one stays).
+export async function removeCredential(id: string): Promise<{ error: string | null }> {
+  const { data, error } = await supabase.from('credentials').delete().eq('id', id).select('id');
+  if (error) return { error: failure(error) };
+  return { error: (data as unknown[] | null)?.length ? null : 'Not removed · only your own credential still waiting for your counsellor can be removed' };
 }
 
 const refused = 'Not saved · you can only change trajectories of your own business line';
@@ -115,10 +124,11 @@ export async function submitTrajectoryStep(trajectoryId: string, stepId: string,
   return { state: error ? null : data as 'submitted' | 'booked', error: failure(error) };
 }
 
-// Counsellor or managing admin. step null: the start request. Result: 'enrolled', 'done' or 'talk'.
-export async function decideTrajectory(userId: string, trajectoryId: string, stepId: string | null, decision: 'approve' | 'talk'): Promise<{ result: string | null; error: string | null }> {
+// Counsellor or managing admin. step null: the start request. Result: 'enrolled', 'done' or 'talk'. who: the person's
+// first name, for the message when they already hold a valid credential from this trajectory.
+export async function decideTrajectory(userId: string, trajectoryId: string, stepId: string | null, decision: 'approve' | 'talk', who = 'This person'): Promise<{ result: string | null; error: string | null }> {
   const { data, error } = await supabase.rpc('decide_trajectory', { p_user: userId, p_trajectory: trajectoryId, p_step: stepId, p_decision: decision });
-  return { result: error || data == null ? null : String(data), error: failure(error) };
+  return { result: error || data == null ? null : String(data), error: failure(error, who + ' already holds a valid credential from this trajectory.') };
 }
 export async function confirmCredential(credentialId: string): Promise<{ error: string | null }> {
   const { error } = await supabase.rpc('confirm_credential', { p_id: credentialId });

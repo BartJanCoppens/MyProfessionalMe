@@ -42,19 +42,19 @@ describe('Waiting for you', () => {
   it('approves a start request, then reloads that person', async () => {
     const { h, v } = setup([kim({ T1: enrolled({}, 'requested') })], [t]);
     v.approvals[0].approve!(); await flush();
-    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', null, 'approve');
+    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', null, 'approve', 'Kim');
     expect(reload).toHaveBeenCalledWith('m1');
     expect(h.toasts().at(-1)).toBe('Approved · Kim Learner is enrolled');
   });
   it('signs off a step', async () => {
     const { v } = setup([kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })], [t]);
     v.approvals[0].approve!(); await flush();
-    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'approve');
+    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'approve', 'Kim');
   });
   it('talk first words the toast for a start request and for a step', async () => {
     const a = setup([kim({ T1: enrolled({}, 'requested') })], [t]);
     a.v.approvals[0].talk!(); await flush();
-    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', null, 'talk');
+    expect(m.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', null, 'talk', 'Kim');
     expect(a.h.toasts().at(-1)).toBe('Kept as a request; talk it through in your next 1:1');
     const b = setup([kim({ T1: enrolled({ s1: { state: 'submitted', note: 'x' } }) })], [t]);
     b.v.approvals[0].talk!(); await flush();

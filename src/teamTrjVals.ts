@@ -66,7 +66,7 @@ function waitingFor(member: Member, trjs: Trajectory[]): Waiting[] {
 function approvalRow(L: Logic, w: Waiting, canDecide: boolean, reload: (id: string) => Promise<void>) {
   const { member, t, step, entry } = w, first = member.name.split(' ')[0];
   const key = member.id + '|' + t.id + '|' + (step?.id ?? 'start');
-  const decide = (decision: 'approve' | 'talk', done: string) => decideRow(L, key, member.id, reload, () => decideTrajectory(member.id, t.id, step?.id ?? null, decision), done);
+  const decide = (decision: 'approve' | 'talk', done: string) => decideRow(L, key, member.id, reload, () => decideTrajectory(member.id, t.id, step?.id ?? null, decision, first), done);
   const signOff = step?.k === 'check' || step?.k === 'exam';
   const talkDone = step ? 'Sent back to ' + first + ' to talk it through' : 'Kept as a request; talk it through in your next 1:1';
   return {

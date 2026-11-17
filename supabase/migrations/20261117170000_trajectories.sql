@@ -14,7 +14,8 @@
 --    steps are done when their learning is accepted in learner_learnings; they are not stored here.
 -- 3. public.credentials: the wallet. Accepting a trajectory's exam adds a confirmed credential in the same transaction
 --    (D5). A learner adds an external credential as waiting, with a link or a certificate number; the counsellor or a
---    managing admin confirms it (confirm_credential). Credentials never count toward readiness.
+--    managing admin confirms it (confirm_credential); the owner may remove it while it waits. Credentials never count
+--    toward readiness.
 
 -- ---------- outline checks ----------
 
@@ -214,6 +215,7 @@ grant usage on sequence public.trajectories_seq to authenticated;
 grant select on public.trajectory_enrolments to authenticated;
 grant select on public.credentials to authenticated;
 grant insert (user_id, name, issuer, earned_on, expires_on, link, ref) on public.credentials to authenticated;
+grant delete on public.credentials to authenticated;
 
 -- Live ones for everyone; drafts and retired ones for the line's content editors and for whoever can read a row on it.
 create policy "trajectories: read" on public.trajectories for select to authenticated
@@ -238,6 +240,9 @@ create policy "credentials: read" on public.credentials for select to authentica
   using ((select private.can_view_track(user_id)));
 create policy "credentials: owner adds waiting" on public.credentials for insert to authenticated
   with check (user_id = (select auth.uid()) and status = 'waiting' and trajectory_id is null and confirmed_by is null);
+-- A credential added by mistake: the owner removes it while it waits; a confirmed one stays.
+create policy "credentials: owner removes waiting" on public.credentials for delete to authenticated
+  using (user_id = (select auth.uid()) and status = 'waiting');
 
 -- ---------- the learner ----------
 

@@ -44,7 +44,7 @@ describe('the Certifications tab', () => {
     const { refresh } = open([kim({ s1: { state: 'submitted', note: 'x' } })]);
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     await flush();
-    expect(store.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'approve');
+    expect(store.decideTrajectory).toHaveBeenCalledWith('m1', 'T1', 's1', 'approve', 'Kim');
     expect(refresh).toHaveBeenCalledWith('m1');
   });
   it('lists the person in the progress table', () => {

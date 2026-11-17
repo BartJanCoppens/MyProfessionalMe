@@ -1356,6 +1356,17 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","r
 insert into results (check_name, expected, actual) select 'TR General Admin reads the enrolments and credentials', '3/2', (select count(*) from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1')||'/'||(select count(*) from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'TR counsellor confirms the external credential', 'confirmed', public.confirm_credential(current_setting('test.cred')::uuid);
+-- the owner may remove a waiting credential of their own; not a confirmed one, and nobody else may remove it
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into public.credentials (user_id, name, issuer, earned_on, link) values ('00000000-0000-0000-0000-0000000000d1', 'T added by mistake', 'T issuer', '2025-06-01', 'https://cert.example/oops');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+with d as (delete from public.credentials where name = 'T added by mistake' returning 1)
+  insert into results (check_name, expected, actual) select 'TR counsellor removes someone else''s waiting credential', '0', count(*)::text from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+with d as (delete from public.credentials where id = current_setting('test.cred')::uuid returning 1)
+  insert into results (check_name, expected, actual) select 'TR learner removes a confirmed credential', '0', count(*)::text from d;
+with d as (delete from public.credentials where name = 'T added by mistake' returning 1)
+  insert into results (check_name, expected, actual) select 'TR learner removes the own waiting credential', '1', count(*)::text from d;
 set local role anon;
 select set_config('request.jwt.claims', '', true);
 do $$ begin
