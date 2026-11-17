@@ -17,8 +17,6 @@ export type Made = 'ai' | 'scripted' | 'layout';
 export type MotionDrawing = { svg: string; alt: string; made: Made; seconds: number };
 export type Stage = { label: string; text: string };
 const MADE: Made[] = ['ai', 'scripted', 'layout'];
-// Who made it, in words: AI-made output says so (studios rule), and so does scripted output.
-export const MADE_LABEL: Record<Made, string> = { ai: 'Made with AI', scripted: 'Scripted · boxes and arrows', layout: 'Not animated yet' };
 
 export const isDrawing = (v: unknown): v is MotionDrawing => {
   const x = v as Record<string, unknown> | null;

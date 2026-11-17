@@ -12,7 +12,8 @@ import type { SetNw } from './studioDraft';
 import { noItems } from './logic/items';
 import type { Item } from './logic/items';
 import { motionRequest } from './logic/motionPrompt';
-import { MADE_LABEL, drawingOf, motionLayout, readMotionSvg, textAlternative } from './logic/motionSvg';
+import { drawingOf, motionLayout, readMotionSvg, textAlternative } from './logic/motionSvg';
+import { madeLabel } from './logic/provenance';
 import type { MotionDrawing } from './logic/motionSvg';
 import type { BuildRunner } from './logic/studioBuild';
 import { motionProblems, motionSeconds } from './logic/studioContent';
@@ -76,7 +77,7 @@ export function motionProduce(L: Logic, nw: NewDraft, setNw: SetNw) {
   const list = listOf(nw), d = drawingOf(list), animated = !!d && d.made !== 'layout', from = builtFrom(nw);
   const failed = d?.made === 'layout' && nw.build?.[1]?.status === 'failed';
   return {
-    made: d ? MADE_LABEL[d.made] : '', note: L.aiCan(MOTION_USE) ? '' : NO_AI, problems: animated ? motionProblems(list, nw.shape ?? {}) : [],
+    made: d ? madeLabel(d.made) : '', note: L.aiCan(MOTION_USE) ? '' : NO_AI, problems: animated ? motionProblems(list, nw.shape ?? {}) : [],
     scripted: failed ? { label: SCRIPTED_INSTEAD, run: () => putDrawing(setNw, (x) => (x ? scriptedFlow(nw) : null), from) } : null,
     alt: animated ? { value: d.alt, set: (v: string) => putDrawing(setNw, (x) => (x ? { ...x, alt: v } : null)) } : null,
     restart: () => setNw((cur) => ({ items: { ...(cur.items ?? noItems()), list: stepsOf(listOf(cur)) as Item[] }, build: undefined })),

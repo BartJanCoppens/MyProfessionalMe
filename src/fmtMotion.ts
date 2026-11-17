@@ -4,7 +4,8 @@
 // learner completes it by playing it to the end or by reading the text version; with ?motion=off or reduced motion the
 // panel shows the last frame and the text version. The Motion Studio's preview runs the same view and saves nothing.
 import { completedToast, detailOf, saveDetail } from './fmtShared';
-import { MADE_LABEL, stageAt } from './logic/motionSvg';
+import { stageAt } from './logic/motionSvg';
+import { madeLabel } from './logic/provenance';
 import type { Item, Logic } from './model';
 import type { MotionContent } from './types';
 
@@ -19,7 +20,7 @@ export function flowView(c: MotionContent, o: FlowOpts) {
   const n = c.stages.length, open = !o.ro && !o.done;
   return {
     svg: c.svg, alt: c.alt, seconds: c.seconds, still: o.still,
-    sub: n + ' stages · ' + c.seconds + ' s · ' + MADE_LABEL[c.made],
+    sub: n + ' stages · ' + c.seconds + ' s · ' + madeLabel(c.made),
     caption: (t: number) => { const k = stageAt(n, c.seconds, t), s = c.stages[k]; return { pos: 'Stage ' + (k + 1) + ' of ' + n + ' · ' + s.label, text: s.text }; },
     stillNote: o.still ? 'Motion is off, so this shows the last frame. The text version tells the whole flow.' : '',
     onEnd: () => { if (open) o.onEnd(); },

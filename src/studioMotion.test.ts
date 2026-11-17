@@ -10,7 +10,8 @@ import { emptyParts } from './logic/contribution';
 import type { CreateData } from './logic/contribution';
 import { aiAssisted } from './logic/items';
 import { MOTION_SYSTEM } from './logic/motionPrompt';
-import { MADE_LABEL, SVG_MAX, motionLayout, textAlternative } from './logic/motionSvg';
+import { SVG_MAX, motionLayout, textAlternative } from './logic/motionSvg';
+import { madeLabel } from './logic/provenance';
 import type { MotionDrawing } from './logic/motionSvg';
 import { retryStep, runBuild } from './logic/studioBuild';
 import { ALT_NEEDED, BUILD_FIRST, LENGTH_CHANGED, MOTION_LENGTH } from './logic/studioContent';
@@ -85,7 +86,7 @@ describe('building an Animated flow with AI', () => {
     expect(req.system).toBe(MOTION_SYSTEM);
     expect(req.messages[0].content).toContain(motionLayout(STAGE_OBJ, 20, false));
     expect(h.drawing()).toEqual({ svg: AI_SVG, alt: textAlternative(STAGE_OBJ), made: 'ai', seconds: 20 });
-    expect(h.st().motion).toMatchObject({ made: MADE_LABEL.ai, note: '' });
+    expect(h.st().motion).toMatchObject({ made: madeLabel('ai'), note: '' });
     expect(h.st().content).toMatchObject({ kind: 'motion', svg: AI_SVG, seconds: 20, made: 'ai' });
     expect(aiAssisted(h.state.nw)).toBe(true);
     expect(h.st().send.problems).toEqual([]);
@@ -116,7 +117,7 @@ describe('building an Animated flow with AI', () => {
     h.st().motion!.scripted!.run();
     expect(h.drawing()).toEqual({ svg: motionLayout(STAGE_OBJ, 20, true), alt: textAlternative(STAGE_OBJ), made: 'scripted', seconds: 20 });
     expect(h.statuses()).toEqual(['done', 'done', 'done']);
-    expect(h.st().motion!.made).toBe(MADE_LABEL.scripted);
+    expect(h.st().motion!.made).toBe(madeLabel('scripted'));
     expect(h.st().motion!.scripted).toBeNull();
     expect(h.complete).toHaveBeenCalledTimes(1);
   });
@@ -134,7 +135,7 @@ describe('building without AI', () => {
     await h.build();
     expect(h.statuses()).toEqual(['done', 'done', 'done']);
     expect(h.drawing()).toEqual({ svg: motionLayout(STAGE_OBJ, 20, true), alt: textAlternative(STAGE_OBJ), made: 'scripted', seconds: 20 });
-    expect(h.st().motion!.made).toBe(MADE_LABEL.scripted);
+    expect(h.st().motion!.made).toBe(madeLabel('scripted'));
     expect(aiAssisted(h.state.nw)).toBe(false);
     expect(h.st().content).toMatchObject({ kind: 'motion', made: 'scripted' });
   });

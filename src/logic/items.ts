@@ -4,7 +4,8 @@
 import type { ExamQuestion } from '../types';
 import type { Check } from './contribution';
 import { jsonObject } from './json';
-import { MADE_LABEL, isDrawing } from './motionSvg';
+import { isDrawing } from './motionSvg';
+import { madeLabel } from './provenance';
 import type { MotionDrawing } from './motionSvg';
 
 export type Card = [string, string];
@@ -143,7 +144,7 @@ export function itemsFromSaved(type: string, raw: unknown): Item[] {
 export const validItems = (type: string, list: Item[]): Item[] => list.filter(isItem(type));
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
   return validItems(type, list).map((x) => (Array.isArray(x) ? { front: x[0], back: x.slice(1).filter(Boolean).join(' · ') }
-    : isDrawing(x) ? { front: 'Animation · ' + MADE_LABEL[x.made], back: x.alt } : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
+    : isDrawing(x) ? { front: 'Animation · ' + madeLabel(x.made), back: x.alt } : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
 }
 // Saved as AI-assisted when the outline was drafted by AI or the items were, in any studio; scripted and manual items never are.
 // An Animated flow whose drawing AI animated is AI-assisted too.

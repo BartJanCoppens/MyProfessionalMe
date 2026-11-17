@@ -5,7 +5,7 @@ import { LEARN_META } from './data';
 import { detailOf, handedIn } from './fmtShared';
 import { COVER_KIND } from './logic/covers';
 import { countLabel, dueCards } from './logic/formats';
-import { MADE_LABEL } from './logic/motionSvg';
+import { madeLabel } from './logic/provenance';
 import type { Item, Logic } from './model';
 
 type Lines = { cvMeta: string; cvMeta2: string; exBars: { w: string; c: string }[]; aidRows: { bg: string }[]; stepDots: { bg: string }[] };
@@ -39,7 +39,7 @@ function lines(L: Logic, it: Item): Partial<Lines> {
     }
     case 'motion': {
       const d = detailOf<'motion'>(L, it.id), seen = done || !!(d.played || d.read);
-      return { cvMeta: c.stages.length + ' stages · ' + c.seconds + ' s', cvMeta2: d.played ? 'Played to the end' : d.read ? 'Text version read' : MADE_LABEL[c.made],
+      return { cvMeta: c.stages.length + ' stages · ' + c.seconds + ' s', cvMeta2: d.played ? 'Played to the end' : d.read ? 'Text version read' : madeLabel(c.made),
         stepDots: c.stages.slice(0, 6).map((_, k) => ({ bg: seen || k === 0 ? '#86BC25' : '#fff' })) };
     }
     default: return {};

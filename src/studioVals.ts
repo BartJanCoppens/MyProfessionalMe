@@ -8,6 +8,7 @@ import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { noItems, validItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
+import { itemsLabel } from './logic/provenance';
 import { outputProblems, studioContent } from './logic/studioContent';
 import { studioById, studioFormats, tooFew, visibleSteps } from './logic/studios';
 import type { StudioDef, StudioEntry } from './logic/studios';
@@ -23,7 +24,6 @@ const HINTS: Record<string, string> = {
   Draft: 'Draft it from the bundles, or import a CSV. Edit anything.', Produce: 'Choose how it is made and who presents it. Stock looks and voices only.',
   'Preview & test': 'Try it as a learner would. Nothing here is saved or counted.', 'Check & send': 'Automatic checks, then the review route, then it goes to your reviewers.',
 };
-const LABELS: Record<string, string> = { ai: 'Made with AI', scripted: 'Scripted from the bundle', csv: 'Imported from a CSV' };
 const FLASH = 'flash';
 // The studio the draft is made in, also while a saved contribution is edited in its studio; null on the upload form.
 export const studioOf = (s: AppState) => (s.studio.view === 'studio' ? s.studio.id ?? FLASH : null);
@@ -88,7 +88,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     formats: formats.map((f) => ({ label: f, on: nw.type === f, pick: () => pick(f) })),
     ...parts, buildRunner: BUILDS[def.id]?.runner({ L, nw, setNw }),
     // Only "Made with AI" when the items are AI's; a scripted deck says so.
-    itemsLabel: LABELS[nw.items?.how ?? ''] ?? '',
+    itemsLabel: itemsLabel(nw.items?.how),
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
     // Any other studio previews the content publishing makes of its rows (studioContent), once they are valid.
