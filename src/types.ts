@@ -190,6 +190,7 @@ export type DetailOf = {
   stretch: { checks: number[] };             // indexes of the ticked checkpoints
   webinar: { registered: boolean };
   aid: { ticks: number[] };                  // indexes of the ticked items
+  explainer: { last: boolean; best?: number }; // the last step seen; the check's best score, in percent
 };
 export type LearningDetail = Partial<DetailOf[keyof DetailOf]>;
 
@@ -201,6 +202,7 @@ export type FmtDraft = {
   flip: boolean; queue: number[] | null; at: number; again: number; good: number; due: Record<string, string> | null;
   qAt: number; pick: number | null; checked: boolean; picks: Record<number, number>;
   text: string | null; busy: boolean; res: TeachResult | null;
+  seen: boolean; // the explainer's last step was reached in this session (its completion is saved once)
 };
 
 // `id` is the open studio (Flash card & Exam Studio when absent); `step` indexes visibleSteps of that studio.

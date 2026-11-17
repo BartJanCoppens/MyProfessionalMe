@@ -15,7 +15,7 @@ export function contentOf<K extends FormatContent['kind']>(id: string, kind: K):
 export const detailOf = <K extends keyof DetailOf>(L: Logic, id: string) => (L.subject.data.progress[id]?.detail ?? {}) as Partial<DetailOf[K]>;
 
 const draftKey = (L: Logic, id: string) => L.subject.id + '|' + id;
-const blank = (key: string): FmtDraft => ({ key, flip: false, queue: null, at: 0, again: 0, good: 0, due: null, qAt: 0, pick: null, checked: false, picks: {}, text: null, busy: false, res: null });
+const blank = (key: string): FmtDraft => ({ key, flip: false, queue: null, at: 0, again: 0, good: 0, due: null, qAt: 0, pick: null, checked: false, picks: {}, text: null, busy: false, res: null, seen: false });
 export const draftOf = (L: Logic, id: string) => (L.state.fmt && L.state.fmt.key === draftKey(L, id) ? L.state.fmt : blank(draftKey(L, id)));
 export function patchDraft(L: Logic, id: string, p: Partial<FmtDraft>) {
   const key = draftKey(L, id);

@@ -5,8 +5,8 @@ import { detailOf, handedIn } from './fmtShared';
 import { countLabel, dueCards } from './logic/formats';
 import type { Item, Logic } from './model';
 
-const KIND: Record<string, string> = { 'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid' };
-type Lines = { cvMeta: string; cvMeta2: string; exBars: { w: string; c: string }[]; aidRows: { bg: string }[] };
+const KIND: Record<string, string> = { 'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid', 'Interactive explainer': 'explainer' };
+type Lines = { cvMeta: string; cvMeta2: string; exBars: { w: string; c: string }[]; aidRows: { bg: string }[]; stepDots: { bg: string }[] };
 
 function lines(L: Logic, it: Item): Partial<Lines> {
   const c = LEARN_META[it.id]?.content, done = it.state === 'accepted';
@@ -30,6 +30,11 @@ function lines(L: Logic, it: Item): Partial<Lines> {
       const lit = Math.round((detailOf<'aid'>(L, it.id).ticks ?? []).length / c.items.length * 5);
       return { cvMeta: c.items.length + '-point checklist', cvMeta2: 'One page · PDF', aidRows: [0, 1, 2, 3, 4].map((k) => ({ bg: k < lit ? '#86BC25' : '#fff' })) };
     }
+    case 'explainer': {
+      const seen = !!detailOf<'explainer'>(L, it.id).last;
+      return { cvMeta: c.steps.length + ' steps', cvMeta2: seen ? 'Seen to the end' : c.check ? 'Ends with a check' : 'Click through',
+        stepDots: c.steps.slice(0, 6).map((_, k) => ({ bg: seen || k === 0 ? '#86BC25' : '#fff' })) };
+    }
     default: return {};
   }
 }
@@ -37,7 +42,7 @@ function lines(L: Logic, it: Item): Partial<Lines> {
 export function fmtCover(L: Logic, it: Item) {
   const kind = KIND[it.format];
   return {
-    cvFlash: kind === 'flash', cvExam: kind === 'exam', cvCase: kind === 'case', cvTeach: kind === 'teach', cvStretch: kind === 'stretch', cvWebinar: kind === 'webinar', cvAid: kind === 'aid',
+    cvFlash: kind === 'flash', cvExam: kind === 'exam', cvCase: kind === 'case', cvTeach: kind === 'teach', cvStretch: kind === 'stretch', cvWebinar: kind === 'webinar', cvAid: kind === 'aid', cvExplainer: kind === 'explainer',
     ...(kind ? lines(L, it) : {}),
   };
 }
