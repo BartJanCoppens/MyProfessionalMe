@@ -62,7 +62,17 @@ export type ReelMedia = { kind: 'reel'; by: string; len: string; dur: number; ca
 export type Media = PodMedia | ReelMedia;
 // owner: whose app playback started in; the clock stops when the viewed person changes
 export type MediaState = { playing: string | null; owner?: string | null; pos: Record<string, number>; speed: string };
-export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft' };
+// Interactive content of the v4 formats. Teach-back patterns are stored as strings and compiled when read.
+export type FlashContent = { kind: 'flash'; total: number; due: number; next: string; cards: [string, string][] };
+export type ExamQuestion = { t: string; q: string; o: string[]; a: number; why: string };
+export type ExamContent = { kind: 'exam'; bank: number; real: string; qs: ExamQuestion[] };
+export type CaseContent = { kind: 'case'; brief: string; deliv: string[]; rubric: string[]; reviewer: string };
+export type TeachContent = { kind: 'teach'; prompt: string; crit: [string, RegExp | null][] };
+export type StretchContent = { kind: 'stretch'; brief: string; checks: string[] };
+export type WebinarContent = { kind: 'webinar'; mon: string; day: string; time: string; when: string; speakers: string; agenda: string[] };
+export type AidContent = { kind: 'aid'; items: string[] };
+export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent;
+export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null };
 export type View = 'constellation' | 'radar' | 'road';
 export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | null;
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BUNDLES0 } from '../data';
 
 vi.mock('./supabase', () => ({ supabase: {} }));
-const { bundleFrom, bundleRow, mappingChanges, mapsFrom, mergeMaps, toLearn } = await import('./contentStore');
+const { bundleFrom, bundleRow, mappingChanges, mapsFrom, mergeMaps, parseFormatContent, toLearn } = await import('./contentStore');
 
 describe('content rows', () => {
   it('turns a learning row into a catalogue entry and its meta', () => {
@@ -42,5 +42,41 @@ describe('mergeMaps', () => {
     expect(r.maps.Consulting).toEqual([['L1', 'Manager', 'mandatory']]);
     expect(r.maps.Audit).toEqual([['L3', 'Analyst', 'advised']]);
     expect(Object.keys(r.pending).sort()).toEqual(['Audit|L3', 'Consulting|L1', 'Consulting|L2']);
+  });
+});
+
+describe('parseFormatContent', () => {
+  const q = { t: 'Store', q: 'Which format?', o: ['CSV', 'Delta'], a: 1, why: 'Delta.' };
+  it('returns an exam', () => {
+    const raw = { kind: 'exam', bank: 60, real: 'About 100 minutes.', qs: [q] };
+    expect(parseFormatContent(raw)).toEqual(raw);
+  });
+  it('returns null for an unknown kind, junk, or a missing value', () => {
+    expect(parseFormatContent({ kind: 'bogus' })).toBeNull();
+    expect(parseFormatContent('x')).toBeNull();
+    expect(parseFormatContent(null)).toBeNull();
+  });
+  it('returns null for an exam answer outside its options', () => {
+    expect(parseFormatContent({ kind: 'exam', bank: 1, real: '', qs: [{ ...q, a: 2 }] })).toBeNull();
+  });
+  it('returns null for a flash card that is not a pair', () => {
+    expect(parseFormatContent({ kind: 'flash', total: 1, due: 1, next: 'Thu', cards: [['only one']] })).toBeNull();
+    const ok = { kind: 'flash', total: 1, due: 1, next: 'Thu', cards: [['Q', 'A']] };
+    expect(parseFormatContent(ok)).toEqual(ok);
+  });
+  it('compiles teach-back patterns case-insensitively and keeps null criteria', () => {
+    const c = parseFormatContent({ kind: 'teach', prompt: 'p', crit: [['Impact', 'impact|people'], ['Plain language', null]] });
+    expect(c?.kind).toBe('teach');
+    if (c?.kind !== 'teach') return;
+    expect(c.crit[0][1]?.test('PEOPLE matter')).toBe(true);
+    expect(c.crit[1]).toEqual(['Plain language', null]);
+  });
+  it('returns null for an invalid teach-back pattern', () => {
+    expect(parseFormatContent({ kind: 'teach', prompt: 'p', crit: [['Bad', '(']] })).toBeNull();
+  });
+  it('reads content from a learning row', () => {
+    const content = { kind: 'aid', items: ['a'] };
+    const [, meta] = toLearn({ id: 'L68', title: 'T', domain: 'prof', level: 2, format: 'Job aid', source: 'S', hours: 1, cpd: 0, due: '', why: '', business_line: null, status: 'published', content });
+    expect(meta.content).toEqual(content);
   });
 });

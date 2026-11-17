@@ -21,7 +21,7 @@ describe('evidence rule per format (Q7, F2-a)', () => {
   });
   it('covers every format in the catalogue', () => {
     const formats = Array.from(new Set(LEARN.map((r) => r[4])));
-    expect(formats.filter((f) => !['Certification', 'Book', 'Website', 'Mentoring', 'Coaching', 'Game', 'Classroom', 'E-learning', 'Avatar', 'Podcast', 'Reel'].includes(f))).toEqual([]);
+    expect(formats.filter((f) => !['Certification', 'Book', 'Website', 'Mentoring', 'Coaching', 'Game', 'Classroom', 'E-learning', 'Avatar', 'Podcast', 'Reel', 'Flash cards', 'Practice exam', 'Case exercise', 'Teach-back', 'Stretch assignment', 'Webinar', 'Job aid'].includes(f))).toEqual([]);
   });
   it('accepts a certificate link or number', () => {
     expect(evidenceProblem('Certification', ev())).toBe('Add a link to your certificate or its number to submit');

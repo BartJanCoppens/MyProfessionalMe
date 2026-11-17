@@ -58,8 +58,16 @@ export const LEARN: Learn[] = [
  ['L45','One slide, one message','pers',1,'Reel','Peer contribution',0.017,0,'',''],
  ['L46','Pivot tables you actually need','tec',1,'Reel','Peer contribution',0.021,0,'',''],
  ['L47','Scope creep: spot it in the SOW','prof',2,'Reel','Peer contribution',0.022,0,'',''],
- ['L48','Grid tariffs explained','ind',2,'Podcast','Internal academy',0.6,0,'','']
-];
+ ['L48','Grid tariffs explained','ind',2,'Podcast','Internal academy',0.6,0,'',''],
+ ['L60','ITAA flash cards: corporate tax essentials','reg',2,'Flash cards','Tax & Legal academy',1.5,0,'','Six-minute daily reviews that keep rates and deadlines fresh before the ITAA exam.'],
+ ['L61','DP-700 practice exam','tec',3,'Practice exam','Microsoft Learn',2,0,'','Exam-style questions on ingesting, storing, transforming, securing and monitoring data in Microsoft Fabric.'],
+ ['L62','ITAA mock exam: corporate income tax','reg',3,'Practice exam','Tax & Legal academy',3,2,'',''],
+ ['L63','Fabric data engineering flash cards','tec',2,'Flash cards','Peer contribution',1,0,'','A deck a peer made while preparing DP-700, checked by two peers and a data expert.'],
+ ['L64','Case: day-one operating model for a carve-out','tech',3,'Case exercise','Internal academy',6,0,'',''],
+ ['L65','Teach-back: double materiality','reg',3,'Teach-back','AI tutor · CSRD bundle',0.5,0,'',''],
+ ['L66','Stretch: prepare the steering committee','lead',3,'Stretch assignment','With your counsellor',10,0,'','Lead the preparation of one steering committee on your current engagement, with your counsellor as sponsor.'],
+ ['L67','Webinar: Pillar Two, one year of filings','reg',3,'Webinar','Tax & Legal academy',1,1,'',''],
+ ['L68','Job aid: proposal pricing checklist','prof',2,'Job aid','Internal academy',0.25,0,'','']];
 export const MAPS0: Record<string, Mapping[]> = {
  'Consulting':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L20','Analyst','advised'],['L31','Analyst','advised'],['L10','Consultant','mandatory'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','advised'],['L13','Consultant','advised'],['L1','Senior consultant','mandatory'],['L2','Senior consultant','advised'],['L8','Senior consultant','advised'],['L11','Senior consultant','advised'],['L19','Senior consultant','advised'],['L23','Senior consultant','advised'],['L4','Manager','mandatory'],['L12','Manager','mandatory'],['L27','Manager','mandatory'],['L18','Manager','advised'],['L28','Manager','advised'],['L3','Senior manager','advised']],
  'Audit':[['L7','Analyst','mandatory'],['L16','Analyst','mandatory'],['L17','Analyst','mandatory'],['L31','Analyst','mandatory'],['L20','Analyst','advised'],['L10','Consultant','mandatory'],['L24','Consultant','mandatory'],['L30','Consultant','mandatory'],['L5','Consultant','mandatory'],['L13','Consultant','advised'],['L2','Senior consultant','mandatory'],['L23','Senior consultant','mandatory'],['L1','Senior consultant','advised'],['L8','Senior consultant','advised'],['L11','Senior consultant','advised'],['L19','Senior consultant','advised'],['L12','Manager','mandatory'],['L18','Manager','mandatory'],['L27','Manager','mandatory'],['L4','Manager','advised'],['L28','Manager','advised'],['L6','Senior manager','advised']],

@@ -51,8 +51,8 @@ describe('the constellation', () => {
     const h = harness({ subject: person({ data: withProgress({ L1: 'accepted' }) }) });
     h.vm().cHubs[0].onClick();
     const vm = h.vm();
-    expect(vm.hubDock).toMatchObject({ label: 'Job technical skills', sub: 'You are at Advanced · L3. Senior consultant in Consulting expects L4 · 1 of 4 completed' });
-    expect(vm.hubDock!.items).toHaveLength(4);
+    expect(vm.hubDock).toMatchObject({ label: 'Job technical skills', sub: 'You are at Advanced · L3. Senior consultant in Consulting expects L4 · 1 of 5 completed' });
+    expect(vm.hubDock!.items).toHaveLength(5);
     expect(vm.cHubs[0]).toMatchObject({ stroke: '#1a1d18', sw: 2 });
   });
   it('clears the selection', () => {
@@ -198,8 +198,8 @@ describe('domain zoom', () => {
     expect(zm.rings.map((r) => r.label)).toEqual(['L5', 'L4 · target', 'L3 · now', 'L2', 'L1']);
     expect(zm.rings[1].dash).toBe('4 3');
     expect(zm.band).not.toBeNull();
-    expect(zm.hoursText).toBe('6 h of 40 h · 4 learnings');
-    expect(zm.hoursW).toBe('15.0%');
+    expect(zm.hoursText).toBe('6 h of 46 h · 5 learnings');
+    expect(zm.hoursW).toBe('13.0%');
     expect(vm.cHint).toMatch(/^Rings are levels L1/);
   });
   it('says when a domain is at target', () => {
@@ -217,7 +217,7 @@ describe('domain zoom', () => {
     expect(zm.nextSub).toBe('Mandatory · L2 · 1.5 h · due 30 Nov 2026 →');
   });
   it('points to the library once everything in the domain is done', () => {
-    const h = harness({ subject: person({ data: withProgress({ L1: 'accepted', L2: 'accepted', L3: 'accepted', L4: 'submitted' }) }), state: { zoom: 'tech' } });
+    const h = harness({ subject: person({ data: withProgress({ L1: 'accepted', L2: 'accepted', L3: 'accepted', L4: 'submitted', L64: 'accepted' }) }), state: { zoom: 'tech' } });
     const zm = h.vm().zm!;
     expect(zm).toMatchObject({ nextTitle: 'Everything here is done', nextSub: 'Pick a stretch item in the library' });
     zm.nextOpen();

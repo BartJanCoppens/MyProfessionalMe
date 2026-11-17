@@ -1,11 +1,11 @@
 import { AUDS, BLS } from '../data';
-import type { Bundle, Learn, LearnMeta, Mapping } from '../types';
+import type { Bundle, FormatContent, Learn, LearnMeta, Mapping } from '../types';
 import { supabase } from './supabase';
 
 // The learning catalogue, curriculum mappings and knowledge bundles, stored in Supabase.
 // Row-level security decides who may write: General and System Admins everything, Domain Admins their own business line.
 
-export type LearningRow = { id: string; title: string; domain: string; level: number; format: string; source: string; hours: number | string; cpd: number | string; due: string; why: string; business_line: string | null; status: LearnMeta['status'] };
+export type LearningRow = { id: string; title: string; domain: string; level: number; format: string; source: string; hours: number | string; cpd: number | string; due: string; why: string; business_line: string | null; status: LearnMeta['status']; content?: unknown };
 export type MappingRow = { audience: string; learning_id: string; stage: string; obligation: string };
 export type BundleRow = { id: string; business_line: string | null; access: string; data: Omit<Bundle, 'id' | 'access' | 'line'> };
 export type Content = { learnings: [Learn, LearnMeta][]; maps: Record<string, Mapping[]>; bundles: Bundle[] };
@@ -13,8 +13,38 @@ export type LearningFields = Omit<LearningRow, 'id'>;
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 
+const isText = (v: unknown): v is string => typeof v === 'string';
+const isTexts = (v: unknown): v is string[] => Array.isArray(v) && v.every(isText);
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isPair = (v: unknown): v is [string, string] => Array.isArray(v) && v.length === 2 && v.every(isText);
+
+// Stored content (jsonb) to a typed value; anything malformed is null so a screen can fall back to the plain page.
+export function parseFormatContent(raw: unknown): FormatContent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const c = raw as Record<string, any>;
+  switch (c.kind) {
+    case 'flash': return isCount(c.total) && isCount(c.due) && isText(c.next) && Array.isArray(c.cards) && c.cards.every(isPair) ? c as FormatContent : null;
+    case 'exam': return isCount(c.bank) && isText(c.real) && Array.isArray(c.qs) && c.qs.every(examQuestionOk) ? c as FormatContent : null;
+    case 'case': return isText(c.brief) && isTexts(c.deliv) && isTexts(c.rubric) && isText(c.reviewer) ? c as FormatContent : null;
+    case 'teach': return isText(c.prompt) && Array.isArray(c.crit) ? teach(c.prompt, c.crit) : null;
+    case 'stretch': return isText(c.brief) && isTexts(c.checks) ? c as FormatContent : null;
+    case 'webinar': return [c.mon, c.day, c.time, c.when, c.speakers].every(isText) && isTexts(c.agenda) ? c as FormatContent : null;
+    case 'aid': return isTexts(c.items) ? c as FormatContent : null;
+    default: return null;
+  }
+}
+const examQuestionOk = (q: any) => !!q && [q.t, q.q, q.why].every(isText) && isTexts(q.o) && Number.isInteger(q.a) && q.a >= 0 && q.a < q.o.length;
+function teach(prompt: string, crit: unknown[]): FormatContent | null {
+  const out: [string, RegExp | null][] = [];
+  for (const c of crit) {
+    if (!Array.isArray(c) || c.length !== 2 || !isText(c[0]) || !(c[1] === null || isText(c[1]))) return null;
+    try { out.push([c[0], c[1] === null ? null : new RegExp(c[1], 'i')]); } catch { return null; }
+  }
+  return { kind: 'teach', prompt, crit: out };
+}
+
 export const toLearn = (r: LearningRow): [Learn, LearnMeta] =>
-  [[r.id, r.title, r.domain, r.level, r.format, r.source, Number(r.hours), Number(r.cpd), r.due, r.why], { line: r.business_line, status: r.status }];
+  [[r.id, r.title, r.domain, r.level, r.format, r.source, Number(r.hours), Number(r.cpd), r.due, r.why], { line: r.business_line, status: r.status, ...(r.content ? { content: parseFormatContent(r.content) } : {}) }];
 
 // Every audience gets a list, empty when nothing is mapped to it. Mappings to learnings outside `known` are left out.
 export function mapsFrom(rows: MappingRow[], known?: Set<string>): Record<string, Mapping[]> {
@@ -59,7 +89,7 @@ export function bundleRow(b: Bundle): BundleRow {
 
 export async function loadContent(): Promise<Content> {
   const [l, m, b] = await Promise.all([
-    supabase.from('learnings').select('id, title, domain, level, format, source, hours, cpd, due, why, business_line, status').order('id'),
+    supabase.from('learnings').select('id, title, domain, level, format, source, hours, cpd, due, why, business_line, status, content').order('id'),
     supabase.from('curriculum_mappings').select('audience, learning_id, stage, obligation'),
     supabase.from('knowledge_bundles').select('id, business_line, access, data').order('id'),
   ]);

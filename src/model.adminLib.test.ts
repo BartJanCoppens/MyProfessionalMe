@@ -29,7 +29,7 @@ describe('the admin learning list', () => {
   it('searches title and source', () => {
     const h = admin();
     h.vm().setAdminQ(ev('MICROSOFT'));
-    expect(h.vm().adminRows.map((r) => r.id)).toEqual(['L23', 'L26', 'L35']);
+    expect(h.vm().adminRows.map((r) => r.id)).toEqual(['L23', 'L26', 'L35', 'L61']);
   });
   it('filters by publication status and names the owning line', () => {
     LEARN_META.L19 = { line: 'Audit', status: 'review' };
@@ -44,7 +44,7 @@ describe('the admin learning list', () => {
   it('counts learnings per connected program', () => {
     const vm = admin().vm();
     expect(vm.programs.map((p) => p.name)).toEqual(PROGRAMS.map((p) => p[0]));
-    expect(vm.programs.find((p) => p.name === 'Microsoft Learn')!.count).toBe(3);
+    expect(vm.programs.find((p) => p.name === 'Microsoft Learn')!.count).toBe(4);
   });
   it('starts a sync', () => {
     const h = admin();
