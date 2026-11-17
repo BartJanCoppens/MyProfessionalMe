@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  autoEnrolled, canBeMandatory, credentialExpiry, inMandatoryAudience, monthLabel, relevantMap, startMonth, stepCpd, stepHours, totals, trajectoryProgress,
+  autoEnrolled, canBeMandatory, credentialExpiry, inMandatoryAudience, mapAtStage, monthLabel, relevantMap, startMonth, stepCpd, stepHours, totals, trajectoryProgress,
   type Enrolment, type LearningRef, type Trajectory,
 } from './trajectory';
 
@@ -79,7 +79,16 @@ describe('relevance, auto-enrolment, start month and expiry', () => {
   it('relevantMap finds the map for the person audiences (and stage when given)', () => {
     expect(relevantMap(base, ['Tax & Legal', 'ind:x'])).toEqual(['Tax & Legal', 'senior', 'mandatory']);
     expect(relevantMap(base, ['Audit'])).toBeUndefined();
-    expect(relevantMap(base, ['Tax & Legal'], 'junior')).toBeUndefined();
+    expect(mapAtStage(base, ['Tax & Legal'], 'junior')).toBeUndefined();
+    expect(relevantMap(base, ['Tax & Legal'], 'junior')).toEqual(['Tax & Legal', 'senior', 'mandatory']);
+  });
+  it('relevantMap prefers a mandatory map at the person\'s stage, then any at their stage, then any match', () => {
+    const t: Trajectory = { ...base, maps: [['Audit', 'senior', 'advised'], ['tec:data', 'senior', 'mandatory'], ['ind:energy', 'junior', 'advised']] };
+    expect(relevantMap(t, ['Audit', 'tec:data'], 'senior')).toEqual(['tec:data', 'senior', 'mandatory']);
+    expect(relevantMap(t, ['Audit', 'ind:energy'], 'senior')).toEqual(['Audit', 'senior', 'advised']);
+    expect(relevantMap(t, ['ind:energy'], 'senior')).toEqual(['ind:energy', 'junior', 'advised']);
+    expect(mapAtStage(t, ['ind:energy'], 'senior')).toBeUndefined();
+    expect(relevantMap(t, ['pro:blue'], 'senior')).toBeUndefined();
   });
   it('autoEnrolled mirrors private.in_mandatory_audience', () => {
     const me = { line: 'Tax & Legal', stage: 'senior', audiences: [] };

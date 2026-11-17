@@ -12,7 +12,7 @@ const step = (over: Partial<TrjStep> & Pick<TrjStep, 'id' | 'k'>): TrjStep => ({
 const trj = (id: string, over: Partial<Trajectory> = {}): Trajectory => ({ ...blankTrajectory('Audit'), id, name: 'Trajectory ' + id, issuer: 'ITAA', status: 'live', enrol: 'open', ...over });
 const enrolled = (steps: Enrolment['steps'] = {}, status: Enrolment['status'] = 'enrolled'): Enrolment => ({ status, start_month: 2026 * 12 + 9, steps });
 const kim = (enrols: Record<string, Enrolment>, creds: Credential[] = [], data = emptyData()): Member =>
-  ({ id: 'm1', name: 'Kim Learner', stage: 'Consultant', businessLine: 'Audit', data, trj: { enrols, creds } });
+  ({ id: 'm1', name: 'Kim Learner', stage: 'Consultant', businessLine: 'Audit', data, trj: { enrols, creds }, audiences: [] });
 const cred = (over: Partial<Credential> = {}): Credential => ({ id: 'c1', user_id: 'm1', name: 'Certified', issuer: 'ITAA', earned_on: '2026-01-05', expires_on: null, link: '', ref: '', trajectory_id: 'T1', status: 'confirmed', ...over });
 const reload = vi.fn(async () => {});
 const setup = (members: Member[], trjs: Trajectory[], subject = person()) => {

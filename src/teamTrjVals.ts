@@ -4,7 +4,7 @@
 import { AUD_INFO, LEARN, LEARN_BY } from './data';
 import { confirmCredential, decideTrajectory } from './lib/trajectoryStore';
 import type { Member } from './logic/team';
-import { canBeMandatory, totals, trajectoryProgress } from './logic/trajectory';
+import { canBeMandatory, mapAtStage, totals, trajectoryProgress } from './logic/trajectory';
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjStep } from './logic/trajectory';
 import { effectiveEnrolment } from './logic/trajectoryLearner';
 import { fmtHours, stepTitle } from './logic/trajectoryView';
@@ -25,7 +25,7 @@ function library(progress: Member['data']['progress'] = {}): Library {
 export function personTrajectories(trjs: Trajectory[], audiences: string[], stage: string | null): string[] {
   const lib = library();
   return trjs.flatMap((t) => {
-    const map = t.maps.find((x) => audiences.includes(x[0]) && x[1] === stage);
+    const map = mapAtStage(t, audiences, stage);
     if (!map) return [];
     const tot = totals(t, lib), obligation = canBeMandatory(map[0]) && map[2] === 'mandatory' ? 'mandatory' : 'suggested';
     return [t.name + ' via ' + (AUD_INFO[map[0]]?.name ?? map[0]) + ' · ' + obligation + (t.status === 'live' ? '' : t.status === 'retired' ? ' · retired' : ' · draft') + ' · ' + fmtHours(tot.perYear[0]) + ' this year of ' + fmtHours(tot.tot) + ' over ' + t.months + ' months'];
@@ -110,9 +110,10 @@ export function teamTrjVals(L: Logic, members: Member[], reload: (userId: string
     ...members.flatMap((m) => waitingFor(m, trjs)).map((w) => approvalRow(L, w, canDecide, reload)),
     ...members.flatMap((m) => (m.trj?.creds ?? []).filter((c) => c.status === 'waiting').map((c) => credentialRow(L, m, c, canDecide, reload))),
   ];
-  const notLoaded = members.filter((m) => !m.trj).map((m) => m.name);
-  const teamTrj = members.flatMap((m) => trjs.flatMap((t) => {
-    const e = effectiveEnrolment(t, m.trj?.enrols[t.id], { line: m.businessLine, stage: m.stage, audiences: m.audiences ?? [] }, now);
+  // A person whose trajectory data or memberships did not load is named, never computed without them.
+  const notLoaded = members.filter((m) => !m.trj || !m.audiences).map((m) => m.name);
+  const teamTrj = members.filter((m) => m.audiences).flatMap((m) => trjs.flatMap((t) => {
+    const e = effectiveEnrolment(t, m.trj?.enrols[t.id], { line: m.businessLine, stage: m.stage, audiences: m.audiences! }, now);
     return e ? [tableRow(m, t, e, now)] : [];
   }));
   return { approvals, approvalCount: String(approvals.length), noApprovals: approvals.length === 0, canDecide, teamTrj, notLoaded };

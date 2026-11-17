@@ -100,7 +100,7 @@ function callout(c: Ctx, t: Trajectory, pg: ReturnType<typeof trajectoryProgress
   }
   if (status === 'requested') return 'Waiting for ' + c.boss + ' to approve the start. It can begin once they approve.';
   if (c.ro) return 'Not started.';
-  const m = relevantMap(t, keysOf(c), c.person.stage) ?? relevantMap(t, keysOf(c));
+  const m = relevantMap(t, keysOf(c), c.person.stage);
   if (!m) return 'This trajectory is for ' + (t.maps.map((x) => (AUD_INFO[x[0]]?.name ?? x[0]) + ' at ' + x[1]).join(', ') || 'nobody yet') + '. If it fits where you want to go, talk to ' + c.boss + ' first.';
   if (t.enrol === 'approval') return 'Open to you via ' + AUD_INFO[m[0]]?.name + '. ' + c.boss + ' approves the start.';
   return 'Open to you via ' + AUD_INFO[m[0]]?.name + '. Start whenever you like; it never counts toward readiness.';
@@ -109,7 +109,7 @@ function callout(c: Ctx, t: Trajectory, pg: ReturnType<typeof trajectoryProgress
 export function trajectoryPage(c: Ctx, t: Trajectory) {
   const e = enrolmentOf(c, t), enrolled = e?.status === 'enrolled', pg = trajectoryProgress(t, e, c.byId), tot = totals(t, c.byId);
   const start = e ? e.start_month : (c.now.getUTCFullYear() * 12 + c.now.getUTCMonth()), validity = t.valid_months ? validLabel(t.valid_months) : '';
-  const m = relevantMap(t, keysOf(c), c.person.stage) ?? relevantMap(t, keysOf(c));
+  const m = relevantMap(t, keysOf(c), c.person.stage);
   const mandatory = !!m && m[2] === 'mandatory' && canBeMandatory(m[0]);
   const ob = m ? (mandatory ? ['neutral', 'Mandatory'] : m[2] === 'advised' && canBeMandatory(m[0]) ? ['blue', 'Advised'] : ['muted', 'Suggested']) : e ? ['green', 'Chosen by me'] : ['muted', 'Open'];
   const binds = enrolled && !c.enrols[t.id];

@@ -95,9 +95,15 @@ export function trajectoryProgress(t: Trajectory, e: Enrolment | null, byId: Lib
   };
 }
 
-// The first map for one of the person's audience keys (and, when given, their career stage).
+// Among the maps for the person's audience keys (line and memberships): a mandatory one at their stage, so a bound
+// person is told why, else any at their stage. None without a stage.
+export function mapAtStage(t: Trajectory, keys: string[], stage: string | null | undefined): TrjMap | undefined {
+  const mine = t.maps.filter((m) => keys.includes(m[0]) && stage != null && m[1] === stage);
+  return mine.find((m) => m[2] === 'mandatory') ?? mine[0];
+}
+// The map that explains why a trajectory concerns the person: mapAtStage, else any map for one of their keys.
 export function relevantMap(t: Trajectory, keys: string[], stage?: string | null): TrjMap | undefined {
-  return t.maps.find((m) => keys.includes(m[0]) && (stage == null || m[1] === stage));
+  return mapAtStage(t, keys, stage) ?? t.maps.find((m) => keys.includes(m[0]));
 }
 
 // A person as the mandatory rule sees them: business line, career stage and industry and technology memberships.

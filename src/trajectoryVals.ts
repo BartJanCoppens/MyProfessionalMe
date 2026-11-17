@@ -13,10 +13,10 @@ import { walletVals } from './walletVals';
 const BACK: Partial<Record<Screen, string>> = { map: '← Back to my growth map', profile: '← Back to my profile', library: '← Back to library' };
 
 function libraryCards(c: Ctx) {
-  const rank = (t: ReturnType<typeof visibleTo>[number]) => (enrolmentOf(c, t) ? 0 : relevantMap(t, keysOf(c), c.person.stage) ?? relevantMap(t, keysOf(c)) ? 1 : 2);
+  const rank = (t: ReturnType<typeof visibleTo>[number]) => (enrolmentOf(c, t) ? 0 : relevantMap(t, keysOf(c), c.person.stage) ? 1 : 2);
   const visible = visibleTo(c);
   const cards = visible.slice().sort((a, b) => rank(a) - rank(b)).map((t) => {
-    const e = enrolmentOf(c, t), m = relevantMap(t, keysOf(c), c.person.stage) ?? relevantMap(t, keysOf(c)), pg = trajectoryProgress(t, e, c.byId), tot = totals(t, c.byId);
+    const e = enrolmentOf(c, t), m = relevantMap(t, keysOf(c), c.person.stage), pg = trajectoryProgress(t, e, c.byId), tot = totals(t, c.byId);
     const status = e ? (e.status === 'requested' ? 'Waiting for ' + c.boss + ' to approve' : credentialEarned(c, t) ? 'Credential earned' : 'Enrolled · ' + pg.reqDone + ' of ' + pg.reqN + ' required steps')
       : m ? 'For you · via ' + (AUD_INFO[m[0]]?.name ?? m[0]) : 'For ' + (t.maps.map((x) => AUD_INFO[x[0]]?.name ?? x[0]).join(', ') || 'nobody yet');
     return {

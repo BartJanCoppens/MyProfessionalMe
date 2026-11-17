@@ -91,6 +91,17 @@ describe('what membership changes', () => {
     expect(h.vm().teamTrjVals([kim()], async () => {}).teamTrj.map((r) => r.trj)).toEqual(['Data engineer']);
     expect(h.vm().teamTrjVals([kim({ audiences: [] })], async () => {}).teamTrj).toEqual([]);
   });
+  it('a counsellee whose memberships did not load is named, not computed without them', () => {
+    const h = harness({ state: { trjs: [data] } });
+    const v = h.vm().teamTrjVals([kim({ audiences: undefined })], async () => {});
+    expect(v.teamTrj).toEqual([]);
+    expect(v.notLoaded).toEqual(['Kim Learner']);
+  });
+  it('the person zoom names the mandatory map, not an advised one for the business line listed first', () => {
+    const both: Trajectory = { ...data, maps: [['Consulting', 'Consultant', 'advised'], ['tec:data', 'Consultant', 'mandatory']] };
+    const h = harness({ state: { trjs: [both], trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'] } } });
+    expect(h.vm().pz.trjRows[0]).toMatch(/^Data engineer via Data & Azure · mandatory · /);
+  });
   it('the person zoom lists trajectories mapped to the subject\'s memberships', () => {
     const h = harness({ state: { trjs: [data], trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'] } } });
     expect(h.vm().pz.trjRows[0]).toMatch(/^Data engineer via Data & Azure · mandatory · /);

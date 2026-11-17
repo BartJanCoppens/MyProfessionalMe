@@ -377,6 +377,13 @@ describe('industry and technology membership', () => {
   it('binds nobody outside the audience: they may start it like an open one', () => {
     expect(page(data, mine({})).vm().tv!.primary!.label).toBe('Start this trajectory');
   });
+  it('names the binding map when an advised one for the business line comes first', () => {
+    const both = trj('T9', { enrol: 'auto', maps: [['Audit', 'Consultant', 'advised'], ['tec:data', 'Consultant', 'mandatory']] });
+    const v = page(both, member, person({ businessLine: 'Audit', counsellor: boss })).vm();
+    expect(v.tv!.obLabel).toBe('Mandatory');
+    expect(v.tv!.callout).toMatch(/^Enrolled automatically: mandatory for Data & Azure at Consultant\./);
+    expect(v.tv!.secondary).toBeNull();
+  });
   it('a removed membership lets the person leave while no step is done', () => {
     expect(page(data, mine({ T9: enrolled() })).vm().tv!.secondary!.label).toBe('Leave this trajectory');
   });

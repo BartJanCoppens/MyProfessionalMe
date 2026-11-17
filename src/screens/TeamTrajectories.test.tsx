@@ -13,7 +13,7 @@ vi.mock('../lib/trajectoryStore', async (orig) => ({ ...(await orig<object>()), 
 const t: Trajectory = { ...blankTrajectory('Audit'), id: 'T1', name: 'Tax adviser', issuer: 'ITAA', status: 'live', enrol: 'approval',
   steps: [{ id: 's1', k: 'evidence', title: 'Portfolio', win: 6, req: true, pre: null }] };
 const kim = (steps = {}): Member => ({ id: 'm1', name: 'Kim Learner', stage: 'Consultant', businessLine: 'Audit', data: emptyData(),
-  trj: { enrols: { T1: { status: 'enrolled', start_month: 2026 * 12 + 9, steps } }, creds: [] } });
+  trj: { enrols: { T1: { status: 'enrolled', start_month: 2026 * 12 + 9, steps } }, creds: [] }, audiences: [] });
 
 beforeEach(() => { vi.clearAllMocks(); stubWindow(); vi.mocked(store.decideTrajectory).mockResolvedValue({ result: 'done', error: null }); });
 afterEach(cleanup);
