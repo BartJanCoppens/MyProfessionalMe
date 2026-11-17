@@ -48,7 +48,7 @@ describe('the Shape and Produce steps', () => {
 describe('the hub', () => {
   it('opens the Job Aid Studio and the Case Studio', () => {
     const h = open();
-    expect(h.st().cards.filter((x) => !x.disabled).map((x) => x.id)).toEqual(['explainer', 'aid', 'flash', 'case']);
+    expect(h.st().cards.filter((x) => !x.disabled).map((x) => x.id)).toEqual(['motion', 'explainer', 'aid', 'flash', 'case']);
     card(h, 'case').open();
     expect(h.state.studio).toMatchObject({ view: 'studio', id: 'case', step: 0 });
     expect(h.state.nw.type).toBe('Case exercise');

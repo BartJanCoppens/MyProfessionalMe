@@ -93,7 +93,7 @@ describe('parseFormatContent', () => {
 describe('studio content kinds', () => {
   const q = { t: 'Peppol', q: 'Who checks the format?', o: ['The supplier', 'The access point', 'The customer', 'The tax office'], a: 1, why: 'The access point validates it.' };
   const explainer = { kind: 'explainer', style: 'Step-through', depth: 'Overview', steps: [{ label: 'Supplier', text: 'Creates the invoice.' }, { label: 'Access point', text: 'Checks it.', svg: '<svg/>' }], end: 'A summary card' };
-  const motion = { kind: 'motion', stages: [{ label: 'Order', text: 'The customer orders.' }], svg: '<svg/>', alt: 'Order, then delivery, then cash.', seconds: 30 };
+  const motion = { kind: 'motion', stages: [{ label: 'Order', text: 'The customer orders.' }], svg: '<svg/>', alt: 'Order, then delivery, then cash.', seconds: 30, made: 'scripted' };
   it('reads an interactive explainer, with or without its three-question check', () => {
     expect(parseFormatContent(explainer)).toEqual(explainer);
     expect(parseFormatContent({ ...explainer, check: [q, q, q] })).not.toBeNull();
@@ -112,5 +112,6 @@ describe('studio content kinds', () => {
     expect(parseFormatContent({ ...motion, svg: null })).toBeNull();
     expect(parseFormatContent({ ...motion, alt: undefined })).toBeNull();
     expect(parseFormatContent({ ...motion, seconds: '30' })).toBeNull();
+    expect(parseFormatContent({ ...motion, made: undefined })).toBeNull();
   });
 });

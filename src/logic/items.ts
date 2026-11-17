@@ -4,11 +4,14 @@
 import type { ExamQuestion } from '../types';
 import type { Check } from './contribution';
 import { jsonObject } from './json';
+import { MADE_LABEL, isDrawing } from './motionSvg';
+import type { MotionDrawing } from './motionSvg';
 
 export type Card = [string, string];
 // A generic studio's row is [label, text] (a Card has that shape) or [label, text, text2].
 export type StudioRow = [string, string, string];
-export type Item = Card | StudioRow | ExamQuestion;
+// An Animated flow's items end with its drawing (motionSvg.ts).
+export type Item = Card | StudioRow | ExamQuestion | MotionDrawing;
 export type ItemSource = 'ai' | 'scripted' | 'csv' | 'manual' | 'saved' | '';
 // list: the items; how: where they came from ('ai' makes the contribution AI-assisted, see aiAssisted); note: the label shown with them;
 // problems: bad CSV lines to show.
@@ -46,7 +49,10 @@ export const isQuestion = (v: unknown): v is ExamQuestion => {
 const isRow = (v: unknown): v is StudioRow => Array.isArray(v) && (v.length === 2 || v.length === 3) && v.every((x) => typeof x === 'string');
 // The Interactive explainer's items are its step rows and, after them, its check's exam questions (studios.ts).
 const isStepOrQuestion = (v: unknown): v is StudioRow | ExamQuestion => isRow(v) || isQuestion(v);
-const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice exam' ? isQuestion : type === 'Interactive explainer' ? isStepOrQuestion : isRow);
+// An Animated flow's items are its stage rows and, after them, its drawing.
+const isStageOrDrawing = (v: unknown): v is StudioRow | MotionDrawing => isRow(v) || isDrawing(v);
+const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice exam' ? isQuestion : type === 'Interactive explainer' ? isStepOrQuestion
+  : type === 'Animated flow' ? isStageOrDrawing : isRow);
 
 // The first sentence of a passage, and its first n words without a trailing punctuation mark; shared by the scripted drafts.
 export const firstSentence = (p: string) => p.trim().split(/(?<=[.!?])\s+/)[0];
@@ -137,12 +143,14 @@ export function itemsFromSaved(type: string, raw: unknown): Item[] {
 export const validItems = (type: string, list: Item[]): Item[] => list.filter(isItem(type));
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
   return validItems(type, list).map((x) => (Array.isArray(x) ? { front: x[0], back: x.slice(1).filter(Boolean).join(' · ') }
-    : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
+    : isDrawing(x) ? { front: 'Animation · ' + MADE_LABEL[x.made], back: x.alt } : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
 }
 // Saved as AI-assisted when the outline was drafted by AI or the items were, in any studio; scripted and manual items never are.
-export const aiAssisted = (nw: { ai: boolean; items?: DraftItems }) => nw.ai || nw.items?.how === 'ai';
+// An Animated flow whose drawing AI animated is AI-assisted too.
+export const aiAssisted = (nw: { ai: boolean; items?: DraftItems }) => nw.ai || nw.items?.how === 'ai' || !!nw.items?.list.some((x) => isDrawing(x) && x.made === 'ai');
 // Every text of the items, for the client-name check.
-export const itemsText = (list: Item[]): string[] => list.flatMap((x) => (Array.isArray(x) ? x : [x.t, x.q, ...(x.o || []), x.why]));
+// A drawing's text alternative and markup are scanned too, as the database scans the items.
+export const itemsText = (list: Item[]): string[] => list.flatMap((x) => (Array.isArray(x) ? x : isDrawing(x) ? [x.alt, x.svg] : [x.t, x.q, ...(x.o || []), x.why]));
 
 export function itemsCheck(type: string, d: DraftItems): Check {
   const n = d.list.length, what = countText(type, n);

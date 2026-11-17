@@ -24,7 +24,7 @@ export function evidenceRule(format: string): EvidenceRule {
 export type Completion = 'acceptance' | 'media' | 'mark' | 'feedback' | 'quiz';
 export const COMPLETION: Record<string, Exclude<Completion, 'acceptance'>> = {
   Podcast: 'media', Reel: 'media', 'E-learning': 'mark', Classroom: 'feedback', Avatar: 'quiz',
-  'Flash cards': 'mark', 'Job aid': 'mark', 'Practice exam': 'mark', 'Teach-back': 'mark', Webinar: 'feedback', 'Interactive explainer': 'mark',
+  'Flash cards': 'mark', 'Job aid': 'mark', 'Practice exam': 'mark', 'Teach-back': 'mark', Webinar: 'feedback', 'Interactive explainer': 'mark', 'Animated flow': 'mark',
 };
 export const SELF_COMPLETE = Object.keys(COMPLETION);
 export const completionOf = (format: string): Completion => COMPLETION[format] || 'acceptance';
@@ -44,6 +44,7 @@ export function feedbackProblem(rating: number | null | undefined, text: string)
 const PANEL_TODO: Record<string, string> = {
   'Flash cards': 'review every card once', 'Job aid': 'tick every item', 'Practice exam': 'finish one round', 'Teach-back': 'send your explanation',
   'Interactive explainer': 'go through to the last step (and the check, if any)',
+  'Animated flow': 'play it to the end, or read the text version',
 };
 const panelTodo = (format: string, panel: boolean) => (panel ? PANEL_TODO[format] : undefined);
 

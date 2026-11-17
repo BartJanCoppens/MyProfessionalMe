@@ -1,7 +1,9 @@
-// What a studio's rows publish as (studios plan, Tasks 2.1 and 2.2): the learning content the library reads
+// What a studio's rows publish as (studios plan, Tasks 2.1 to 2.3): the learning content the library reads
 // (parseFormatContent). The database builds the same when it publishes (private.aid_content, private.case_content,
-// private.explainer_content); the studio's preview uses this so the creator tries exactly what learners will get. Pure.
+// private.explainer_content, private.motion_content); the studio's preview uses this so the creator tries exactly what
+// learners will get. Pure.
 import type { FormatContent } from '../types';
+import { ALT_MAX, drawingOf } from './motionSvg';
 import { itemsValid, questionsOf, stepsOf } from './studios';
 import type { StudioDef, StudioEntry, StudioItem } from './studios';
 
@@ -37,6 +39,21 @@ export function explainerProblems(items: StudioEntry[], shape: Record<string, st
 // What a studio's Draft step still needs: the item rules, and for the Explainer the ending and check agreeing.
 export const studioProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>, aiOn: boolean) =>
   [...itemsValid(def, items), ...(def.format === 'Interactive explainer' ? explainerProblems(items, shape, aiOn) : [])];
+// The Motion Studio's "Length?" is the animation's length in seconds (private.motion_content); 45 s when unanswered.
+export const MOTION_LENGTH = 'Length?';
+export const MOTION_SECONDS: Record<string, number> = { '20 s': 20, '45 s': 45, '90 s': 90 };
+export const motionSeconds = (shape: Record<string, string>) => MOTION_SECONDS[shape[MOTION_LENGTH]] ?? MOTION_SECONDS['45 s'];
+// What an Animated flow needs after its Draft step: the animated drawing and its text alternative (private.drawing_ok).
+export const BUILD_FIRST = 'Build the animation in Produce';
+export const ALT_NEEDED = 'Write the text alternative in Produce: learners who cannot watch the animation read it';
+export function motionProblems(items: StudioEntry[]): string[] {
+  const d = drawingOf(items);
+  if (!d || d.made === 'layout') return [BUILD_FIRST];
+  return !d.alt.trim() ? [ALT_NEEDED] : d.alt.length > ALT_MAX ? ['Keep the text alternative to at most ' + ALT_MAX + ' characters'] : [];
+}
+// What the Produce step still has to make before a studio piece can be sent (only the Motion Studio makes something there).
+export const outputProblems = (def: StudioDef, items: StudioEntry[]) => (def.format === 'Animated flow' ? motionProblems(items) : []);
+
 // Answers only Draft with AI can deliver (question to answers): offered only while it can run, with the reason otherwise;
 // an answer already chosen stays on screen, with the reason.
 export const AI_ONLY: Record<string, { options: string[]; why: string }> = {
@@ -44,7 +61,7 @@ export const AI_ONLY: Record<string, { options: string[]; why: string }> = {
 };
 
 const texts = (items: StudioItem[], label: string) => items.filter((i) => i[0] === label).map((i) => i[1].trim());
-const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, string>) => FormatContent> = {
+const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, string>) => FormatContent | null> = {
   'Job aid': (items) => ({ kind: 'aid', items: stepsOf(items).map((i) => i[0].trim() + ' · ' + i[1].trim()) }),
   'Case exercise': (entries, shape) => { const items = stepsOf(entries);
     return { kind: 'case', brief: texts(items, 'Brief').join(' '), deliv: texts(items, 'Deliverable'), rubric: texts(items, 'Criterion'), reviewer: CASE_REVIEWER, evidence: shape[EVIDENCE_QUESTION] === 'Yes' }; },
@@ -53,9 +70,16 @@ const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, stri
     return { kind: 'explainer', style: STEP_THROUGH, depth: answer(shape, DEPTH_QUESTION, DEPTHS, DEPTHS[0]), end,
       steps: stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() })), ...(end === END_CHECK && check.length ? { check } : {}) };
   },
+  // None until the drawing is animated.
+  'Animated flow': (items, shape) => {
+    const d = drawingOf(items);
+    return d && d.made !== 'layout' ? { kind: 'motion', stages: stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() })), svg: d.svg, alt: d.alt.trim(),
+      seconds: motionSeconds(shape), made: d.made } : null;
+  },
 };
 
-// The content of a format's rows and "Shape it" answers; null for a format no built studio publishes rows for.
+// The content of a format's rows and "Shape it" answers; null for a format no built studio publishes rows for (or an
+// Animated flow not animated yet).
 export function studioContent(format: string, items: StudioEntry[], shape: Record<string, string>): FormatContent | null {
   const build = BUILDERS[format];
   return build ? build(items, shape) : null;

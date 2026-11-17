@@ -78,7 +78,8 @@ export type WebinarContent = { kind: 'webinar'; mon: string; day: string; time: 
 export type AidContent = { kind: 'aid'; items: string[] };
 // Studio content (studios plan Tasks 2.2 and 2.3): a clickable step-through with an optional three-question check, and an animated flow.
 export type ExplainerContent = { kind: 'explainer'; style: string; depth: string; steps: { label: string; text: string; svg?: string }[]; check?: ExamQuestion[]; end: string };
-export type MotionContent = { kind: 'motion'; stages: { label: string; text: string }[]; svg: string; alt: string; seconds: number };
+// made: who animated the drawing ('ai' shows as Made with AI, 'scripted' as Scripted), see src/logic/motionSvg.ts.
+export type MotionContent = { kind: 'motion'; stages: { label: string; text: string }[]; svg: string; alt: string; seconds: number; made: 'ai' | 'scripted' };
 export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent;
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null };
 export type View = 'constellation' | 'radar' | 'road';
@@ -191,6 +192,7 @@ export type DetailOf = {
   webinar: { registered: boolean };
   aid: { ticks: number[] };                  // indexes of the ticked items
   explainer: { last: boolean; best?: number }; // the last step seen; the check's best score, in percent
+  motion: { played?: boolean; read?: boolean }; // played to the end; the text version read
 };
 export type LearningDetail = Partial<DetailOf[keyof DetailOf]>;
 

@@ -3,17 +3,20 @@
 import { STUDIOS, STUDIO_STEPS } from '../studioData';
 import type { ExamQuestion } from '../types';
 import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, isQuestion, rowFieldMax } from './items';
+import { isDrawing } from './motionSvg';
+import type { MotionDrawing } from './motionSvg';
 
 // steersAi: the answer only steers the AI draft (the studio says so); without it the answer changes what is published.
 export type StudioQuestion = [question: string, options: string[], steersAi?: boolean];
 export type ProduceRow = [label: string, options: string[], steersAi?: boolean];
 export type BuildStep = string;
 export type StudioItem = [label: string, text: string] | [label: string, text: string, text2: string];
-// What a studio's items hold: its rows and, in the Explainer only, the three exam questions of its check after them.
-export type StudioEntry = StudioItem | ExamQuestion;
+// What a studio's items hold: its rows and, after them, the Explainer's three exam questions of its check or the
+// Animated flow's one drawing.
+export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing;
 export const CHECK_SIZE = 3;
 export const stepsOf = (items: StudioEntry[]) => items.filter((i): i is StudioItem => Array.isArray(i));
-export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i));
+export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i));
 // What a studio's cast is: one stock look, two voices, one voice, or nothing to cast.
 export type StudioCast = 'look' | 'voices' | 'voice' | null;
 export type ItemSchema = (items: StudioItem[]) => string[];
@@ -61,8 +64,12 @@ export const CASE_LABELS = ['Brief', 'Deliverable', 'Criterion'];
 const caseExercise = (items: StudioItem[]) => [...CASE_LABELS.flatMap((l) => need(items, l)),
   ...items.filter((i) => !blank(i[0]) && !CASE_LABELS.includes(i[0])).map((i) => i[0] + ': use Brief, Deliverable or Criterion as the label')];
 
+// An Animated flow's drawing takes the last place of its items, so its stages leave one free (private.motion_ok).
+const STAGES_MAX = ITEM_MAX['Animated flow'] - 1;
+const motion = (items: StudioItem[]) => (items.length > STAGES_MAX ? ['Keep at most ' + STAGES_MAX + ' stages: the animation takes the last place'] : []);
+
 // One schema per studio on top of what every studio needs: a label and text on each row, and at least def.min rows.
-const SCHEMAS: Record<string, ItemSchema> = { avatar, reel: onScreen, slides: () => [], podcast, game, motion: () => [], explainer: () => [], aid: () => [], case: caseExercise };
+const SCHEMAS: Record<string, ItemSchema> = { avatar, reel: onScreen, slides: () => [], podcast, game, motion, explainer: () => [], aid: () => [], case: caseExercise };
 
 // The most rows a studio's items hold: its format's ITEM_MAX (one table for cards, questions and rows).
 export const rowsMax = (def: StudioDef) => ITEM_MAX[def.format];

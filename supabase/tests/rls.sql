@@ -2083,6 +2083,62 @@ insert into results (check_name, expected, actual) select 'EX the summary explai
 select public.save_learning((select learning_id from public.contributions where title = 'T ex check'), p_state => 'accepted', p_pct => 100::smallint, p_detail => '{"last":true,"best":100}');
 insert into results (check_name, expected, actual) select 'EX a learner completes an interactive explainer without a counsellor', 'accepted', state
   from public.learner_learnings where user_id = '00000000-0000-0000-0000-0000000000e5' and learning_id = (select learning_id from public.contributions where title = 'T ex check');
+-- ---------- Motion Studio: stages, one animated drawing with its text alternative, and the content they publish (MO) ----------
+-- e5 also makes Animated flows, without review. Stages are [label, text] rows, then one drawing {svg, alt, made}
+-- (private.motion_ok, private.drawing_ok, private.motion_content).
+reset role;
+update public.creator_rules set formats = formats || '{"Animated flow"}' where user_id = '00000000-0000-0000-0000-0000000000e5';
+update public.review_policies set formats = formats || '{"Animated flow"}' where formats @> '{"Job aid","Case exercise"}';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e5","role":"authenticated"}';
+select set_config('test.mo_stages', '[["Order","The customer orders. "],["Deliver","Goods leave."],["Collect","Payment arrives."]]', true);
+select set_config('test.mo_svg', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320"><rect width="9" height="9"><animate attributeName="opacity" dur="1s"/></rect></svg>', true);
+select set_config('test.mo_d', jsonb_build_object('svg', current_setting('test.mo_svg'), 'alt', ' Three stages, order to cash. ', 'made', 'ai')::text, true);
+insert into public.contributions (business_line, type, title, domain, takeaway, items, studio, shape) values
+ ('Consulting','Animated flow','T mo flow','corp','Cash follows the order.', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb),'motion','{"Length?":"20 s","What moves?":"A process flow"}'),
+ ('Consulting','Animated flow','T mo scripted','corp','Cash follows the order.', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb || '{"made":"scripted"}'),'motion',null),
+ ('Consulting','Animated flow','T mo no drawing','corp','x', current_setting('test.mo_stages')::jsonb,'motion',null),
+ ('Consulting','Animated flow','T mo no alt','corp','x', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb || '{"alt":"  "}'),'motion',null),
+ ('Consulting','Animated flow','T mo layout','corp','x', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb || '{"made":"layout"}'),'motion',null),
+ ('Consulting','Animated flow','T mo not svg','corp','x', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb || '{"svg":"Here: <svg/>"}'),'motion',null),
+ ('Consulting','Animated flow','T mo oversize','corp','x', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb || jsonb_build_object('svg', '<svg>' || repeat('x', 60000) || '</svg>')),'motion',null),
+ ('Consulting','Animated flow','T mo two drawings','corp','x', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb, current_setting('test.mo_d')::jsonb),'motion',null),
+ ('Consulting','Animated flow','T mo too few stages','corp','x', '[["Order","a"],["Collect","b"]]'::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb),'motion',null),
+ ('Consulting','Animated flow','T mo client alt','corp','x', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb || '{"alt":"As we did for Delcroix."}'),'motion',null),
+ ('Consulting','Animated flow','T mo changed','corp','x', current_setting('test.mo_stages')::jsonb || jsonb_build_array(current_setting('test.mo_d')::jsonb),'motion',null);
+do $$ begin
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, items, studio) values ('Consulting','Animated flow','T mo too many','corp','x',
+      (select jsonb_agg(jsonb_build_array('Stage '||g, 'x')) from generate_series(1, 8) g) || jsonb_build_array(current_setting('test.mo_d')::jsonb),'motion');
+    insert into results (check_name, expected, actual) values ('MO more stages and drawing than an Animated flow holds (8)', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('MO more stages and drawing than an Animated flow holds (8)', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'MO '||t||' fails the check', 'Add the stages, build the animation and write its text alternative first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T mo '||t)), '|')
+  from unnest(array['no drawing', 'no alt', 'layout', 'not svg', 'oversize', 'two drawings']) t;
+insert into results (check_name, expected, actual) select 'MO a drawing never makes up for too few stages', 'Add at least 3 items', array_to_string(public.check_contribution((select id from public.contributions where title = 'T mo too few stages')), '|');
+insert into results (check_name, expected, actual) select 'MO a client name in the text alternative fails the check', '“Delcroix” looks like a client name · anonymise it',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T mo client alt')), '|');
+insert into results (check_name, expected, actual) select 'MO a flow passes the check before its text alternative changes', '{}', public.check_contribution((select id from public.contributions where title = 'T mo changed'))::text;
+update public.contributions set items = jsonb_set(items, '{3,alt}', '"Changed."') where title = 'T mo changed';
+do $$ begin
+  perform public.submit_contribution((select id from public.contributions where title = 'T mo changed'));
+  insert into results (check_name, expected, actual) values ('MO a text alternative changed after the check is refused (submit)', 'blocked: The content changed after the automatic check', 'allowed');
+exception when others then insert into results (check_name, expected, actual) values ('MO a text alternative changed after the check is refused (submit)', 'blocked: The content changed after the automatic check', 'blocked: '||sqlerrm); end $$;
+insert into results (check_name, expected, actual) select 'MO an Animated flow with its drawing passes the check and is published', '{}/published',
+  public.check_contribution((select id from public.contributions where title = 'T mo flow'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T mo flow'));
+-- compared as jsonb: the drawing's quotes are escaped in its text, which a LIKE pattern would read as escapes
+insert into results (check_name, expected, actual) select 'MO the flow becomes motion content: stages, drawing, text alternative, length, maker', 'true',
+  (l.content = jsonb_build_object('kind', 'motion', 'stages', '[{"label":"Order","text":"The customer orders."},{"label":"Deliver","text":"Goods leave."},{"label":"Collect","text":"Payment arrives."}]'::jsonb,
+    'svg', current_setting('test.mo_svg'), 'alt', 'Three stages, order to cash.', 'seconds', 20, 'made', 'ai'))::text from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T mo flow';
+insert into results (check_name, expected, actual) select 'MO the published flow is a short media learning (hours kept to two decimals)', 'Animated flow/published/0.03', l.format||'/'||l.status||'/'||l.hours
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T mo flow';
+insert into results (check_name, expected, actual) select 'MO a scripted flow passes the check and is published', '{}/published',
+  public.check_contribution((select id from public.contributions where title = 'T mo scripted'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T mo scripted'));
+insert into results (check_name, expected, actual) select 'MO the scripted flow keeps its maker, and 45 s when the length is unanswered', 'scripted/45', (l.content ->> 'made')||'/'||(l.content ->> 'seconds')
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T mo scripted';
+-- the learner completes an Animated flow themselves (completion 'mark', private.is_self_complete)
+select public.save_learning((select learning_id from public.contributions where title = 'T mo flow'), p_state => 'accepted', p_pct => 100::smallint, p_detail => '{"played":true}');
+insert into results (check_name, expected, actual) select 'MO a learner completes an Animated flow without a counsellor', 'accepted', state
+  from public.learner_learnings where user_id = '00000000-0000-0000-0000-0000000000e5' and learning_id = (select learning_id from public.contributions where title = 'T mo flow');
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

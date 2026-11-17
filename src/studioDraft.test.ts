@@ -54,7 +54,8 @@ describe('the request size', () => {
     const max = (id: string) => studioRequest(def(id), nw(def(id).format), PASSAGES);
     ['slides', 'aid', 'avatar'].forEach((id) => expect(max(id).max_tokens).toBe(2000));
     expect(max('motion').max_tokens).toBe(1000);
-    IDS.forEach((id) => { expect(max(id).max_tokens!).toBeLessThanOrEqual(2048); expect(max(id).messages[0].content).toContain('about one short sentence per row, and stay within ' + rowsMax(def(id)) + ' rows'); });
+    // An Animated flow's drawing takes one place of its items (tested under caps).
+    IDS.forEach((id) => { expect(max(id).max_tokens!).toBeLessThanOrEqual(2048); expect(max(id).messages[0].content).toContain('about one short sentence per row, and stay within ' + (rowsMax(def(id)) - (id === 'motion' ? 1 : 0)) + ' rows'); });
   });
 });
 
@@ -87,9 +88,11 @@ describe('caps', () => {
     expect(parseStudioItems(d, JSON.stringify({ items: [...ok.slice(0, 2), ['C'.repeat(301), 'x']] }))).toBeNull();
     expect(parseStudioItems(d, JSON.stringify({ items: [...ok.slice(0, 2), ['C', 'x'.repeat(600)]] }))).toHaveLength(3);
   });
-  it('keeps at most the studio maximum of rows', () => {
+  it('keeps at most the studio maximum of rows, less the place an Animated flow\'s drawing takes', () => {
     const items = Array.from({ length: rowsMax(def('motion')) + 5 }, (_, k) => row(k));
-    expect(parseStudioItems(def('motion'), JSON.stringify({ items }))).toHaveLength(rowsMax(def('motion')));
+    expect(parseStudioItems(def('motion'), JSON.stringify({ items }))).toHaveLength(rowsMax(def('motion')) - 1);
+    expect(parseStudioItems(def('aid'), JSON.stringify({ items: Array.from({ length: rowsMax(def('aid')) + 5 }, (_, k) => row(k)) }))).toHaveLength(rowsMax(def('aid')));
+    expect(studioRequest(def('motion'), nw('Animated flow'), PASSAGES).messages[0].content).toContain('stay within ' + (rowsMax(def('motion')) - 1) + ' rows');
   });
   it('itemsValid names too many rows', () => {
     const rows = Array.from({ length: rowsMax(def('motion')) + 1 }, (_, k) => row(k)) as [string, string][];
