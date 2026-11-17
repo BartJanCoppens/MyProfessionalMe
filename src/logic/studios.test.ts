@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STUDIOS, STUDIO_STEPS, STOCK_LOOKS } from '../data';
-import { STUDIO_STEPS as FLASH_STEPS } from '../studioVals';
+import { STUDIOS, STUDIO_STEPS, STOCK_LOOKS } from '../studioData';
 import { itemsValid, studioById, visibleSteps } from './studios';
 import type { StudioItem } from './studios';
 
@@ -29,7 +28,7 @@ describe('studio definitions', () => {
 
 describe('visibleSteps', () => {
   it('gives the four v4 steps for Flash and six for Reel', () => {
-    expect(visibleSteps(def('flash'))).toEqual(FLASH_STEPS);
+    expect(visibleSteps(def('flash'))).toEqual(STUDIO_STEPS);
     expect(visibleSteps(def('reel'))).toEqual(STUDIO_STEPS);
   });
   it('drops Shape without questions and Produce without rows and cast', () => {

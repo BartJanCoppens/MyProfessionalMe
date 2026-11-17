@@ -1,6 +1,6 @@
-// The ten studios (design v4+, studios plan Task 1.1): types and pure rules. The data is STUDIOS in src/data.ts.
+// The ten studios (design v4+, studios plan Task 1.1): types and pure rules. The data is STUDIOS in src/studioData.ts.
 // A studio's items are [label, text] or [label, text, text2] rows; what each row means depends on the studio (itemsValid).
-import { STUDIOS, STUDIO_STEPS } from '../data';
+import { STUDIOS, STUDIO_STEPS } from '../studioData';
 
 export type StudioQuestion = [question: string, options: string[]];
 export type ProduceRow = [label: string, options: string[]];
