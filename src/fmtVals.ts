@@ -7,6 +7,7 @@ import { completedToast, contentOf, detailOf, downloadText, handedIn, saveDetail
 import { examVals, flashVals, teachVals } from './fmtStudy';
 import { countLabel } from './logic/formats';
 import { webinarIcs } from './logic/ics';
+import { fmtHours } from './logic/trajectoryView';
 import { submit } from './recordVals';
 import { examTrajectory } from './trajectoryVals';
 import type { Item, Logic } from './model';
@@ -17,8 +18,9 @@ const toggled = (list: number[], k: number) => (list.includes(k) ? list.filter((
 
 // The case panel's content, for the learner and for the studio preview.
 const caseView = (c: CaseContent, sub: string) => ({ sub, brief: c.brief, deliv: numbered(c.deliv), rubric: c.rubric.map((t) => ({ t })), reviewer: c.reviewer });
-// The Case Studio's preview: the case as learners read it, without the hand-in (that needs a learning and the evidence flow).
-export const casePreview = (c: CaseContent) => ({ ...caseView(c, 'Anonymised · learners share a link, not the file'), ro: true, handed: false, submitLabel: '', note: '', submit: () => {} });
+// The Case Studio's preview: the case as learners read it, with the hours it will count, without the hand-in (that needs a
+// learning and the evidence flow).
+export const casePreview = (c: CaseContent, hours: number) => ({ ...caseView(c, fmtHours(hours) + ' · anonymised · learners share a link, not the file'), ro: true, handed: false, submitLabel: '', note: '', submit: () => {} });
 
 function caseVals(L: Logic, it: Item, c: CaseContent) {
   const handed = handedIn(it);

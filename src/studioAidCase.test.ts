@@ -12,7 +12,7 @@ import { flush, harness, member, person, stubWindow } from './test/harness';
 import type { AppState } from './types';
 
 vi.mock('./lib/contributionStore', () => ({
-  loadCreate: vi.fn(), saveDraft: vi.fn(async () => 'new1'), removeDraft: vi.fn(async () => {}), submitContribution: vi.fn(async () => 'review'),
+  loadCreate: vi.fn(), saveDraft: vi.fn(async (_fields: unknown, id?: string | null) => id ?? 'new1'), removeDraft: vi.fn(async () => {}), submitContribution: vi.fn(async () => 'review'),
   checkContribution: vi.fn(async () => ({ passed: true, reasons: [] })), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(async () => {}), removePolicy: vi.fn(async () => {}),
 }));
 vi.mock('./lib/learnerStore', () => ({
@@ -34,6 +34,16 @@ const card = (h: ReturnType<typeof open>, id: string) => h.st().cards.find((x) =
 const stepOf = (h: ReturnType<typeof open>, name: string) => h.st().steps.indexOf(name);
 
 beforeEach(() => { stubWindow(); vi.clearAllMocks(); });
+
+describe('the Shape and Produce steps', () => {
+  it('says which questions only steer the AI draft; the ones that change the case do not', () => {
+    const h = open({ studio: { view: 'studio', step: 0, id: 'case' }, nw: nwOf('Case exercise') });
+    expect(h.st().shape.map((g) => [g.key, g.hint])).toEqual([['How long should it take?', ''], [EVIDENCE_QUESTION, '']]);
+    expect(h.st().produce.map((g) => [g.key, g.hint])).toEqual([['Names', 'Steers the AI draft']]);
+    const a = open({ studio: { view: 'studio', step: 0, id: 'aid' } });
+    expect(a.st().shape.every((g) => g.hint === 'Steers the AI draft')).toBe(true);
+  });
+});
 
 describe('the hub', () => {
   it('opens the Job Aid Studio and the Case Studio', () => {
@@ -84,14 +94,48 @@ describe('Preview & test', () => {
 
 describe('a saved studio draft', () => {
   const saved = contribution({ id: 'c7', type: 'Job aid', studio: 'aid', items: AID, shape: { 'Template?': 'Checklist' }, ai_assisted: true });
-  it('Continue editing keeps its rows and answers, and saving writes them back', async () => {
+  it('Continue editing opens its studio with its rows and answers, and saving writes them back', async () => {
     const h = open({ data: data({ contributions: [saved] }), state: { createTab: 'mine', contribSel: 'c7' } });
     h.c().cs!.second();
+    expect(h.c().newView).toBe('studio');
+    expect(h.state.studio).toMatchObject({ view: 'studio', id: 'aid', step: 0 });
+    expect(h.st().rows.map((r) => r.text)).toEqual(AID.map((r) => r[1]));
     expect(h.state.nw.items).toMatchObject({ list: AID, how: 'ai' });
     expect(h.state.nw.shape).toEqual({ 'Template?': 'Checklist' });
     expect(h.state.nw.ai).toBe(false);
     h.c().nwDraft(); await flush();
     expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ items: AID, shape: { 'Template?': 'Checklist' }, ai_assisted: true }), 'c7');
+  });
+  it('changes requested: the author edits the rows in the studio, checks and resubmits the same row', async () => {
+    const asked = { ...saved, status: 'changes' as const };
+    const h = open({ data: data({ contributions: [asked] }), state: { createTab: 'mine', contribSel: 'c7' } });
+    expect(h.c().cs!.mainLabel).toBe('Edit and resubmit');
+    h.c().cs!.main();
+    h.L().setState({ studio: { ...h.state.studio, step: stepOf(h, 'Draft') } });
+    h.st().rows[1].edit(1, 'Stakeholder map with sponsors');
+    h.L().setState({ studio: { ...h.state.studio, step: stepOf(h, 'Check & send') } });
+    h.st().send.check(); await flush();
+    const edited = [AID[0], ['Before', 'Stakeholder map with sponsors'], ...AID.slice(2)];
+    expect(store.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ items: edited }), 'c7');
+    expect(store.checkContribution).toHaveBeenCalledWith('c7');
+    h.st().send.run(); await flush(10);
+    expect(store.submitContribution).toHaveBeenCalledWith('c7');
+    expect(h.state.editing).toBeNull();
+  });
+  it('leaving the edit from the studio goes back to My contributions; a Flash edit stays in the form', () => {
+    const h = open({ data: data({ contributions: [saved, contribution({ id: 'c8', type: 'Flash cards', studio: 'flash', items: [['F', 'B']] })] }), state: { createTab: 'mine', contribSel: 'c7' } });
+    h.c().cs!.second();
+    expect(h.st().backLabel).toBe('← My contributions');
+    h.st().toHub();
+    expect(h.state).toMatchObject({ editing: null, createTab: 'mine', studio: { view: 'hub' } });
+    h.L().setState({ contribSel: 'c8' });
+    h.c().cs!.second();
+    expect(h.c().newView).toBe('form');
+  });
+  it('the compact Flash studio drops another studio\'s answers', () => {
+    const h = open({ nw: { shape: { 'Template?': 'Checklist' } } });
+    card(h, 'flash').open();
+    expect(h.state.nw.shape).toEqual({});
   });
   it('reopening its studio continues the draft; another studio starts a new one', () => {
     const h = open({ data: data({ contributions: [{ ...saved, id: 'new1' }] }), nw: { items: rows(AID), savedId: 'new1', shape: { 'Template?': 'Checklist' } } });
@@ -108,5 +152,7 @@ describe('a saved studio draft', () => {
     expect(h.c().rs!.itemsHead).toBe('4 items to check');
     expect(h.c().rs!.itemRows[0]).toEqual({ front: 'Before', back: 'Objectives agreed' });
     expect(h.c().rs!.fileNote).toBe('Check each item against the takeaway.');
+    expect(h.c().rs!.answerRows).toEqual([{ front: 'Template?', back: 'Checklist' }]);
+    expect(h.c().rs!.answersHead).toBe('Studio answers');
   });
 });

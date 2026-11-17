@@ -24,14 +24,14 @@ const HINTS: Record<string, string> = {
 };
 const LABELS: Record<string, string> = { ai: 'Made with AI', scripted: 'Scripted from the bundle', csv: 'Imported from a CSV' };
 const FLASH = 'flash';
-// The studio the draft is made in; null on the upload form and while a saved contribution is edited (that shows the form).
-export const studioOf = (s: AppState) => (s.studio.view === 'studio' && !s.editing ? s.studio.id ?? FLASH : null);
+// The studio the draft is made in, also while a saved contribution is edited in its studio; null on the upload form.
+export const studioOf = (s: AppState) => (s.studio.view === 'studio' ? s.studio.id ?? FLASH : null);
 
 // What createVals already computed for the form; the studio only arranges it.
 export type StudioSrc = {
   nw: NewDraft; setNw: SetNw; bundles: Bundle[]; rules: RuleParts[]; canCreate: boolean; busy: boolean;
   checks: { text: string; dot: string; fg: string }[]; blocked: boolean; route: { n: string; name: string; role: string }[]; policyNote: string; routeWarn: string;
-  submitLabel: string; submit: () => void; saveDraft: () => void;
+  submitLabel: string; submit: () => void; saveDraft: () => void; cancel: () => void; // cancel: leave an edit, back to My contributions
   checkReasons: string[] | null; runCheck: () => void; // the automatic check of the draft on screen: null when not run on it, [] when passed
 };
 
@@ -56,7 +56,8 @@ export function studioVals(L: Logic, src: StudioSrc) {
     // Reopening the studio a saved draft was made in continues it; another studio starts a new piece in a new row.
     const savedIn = nw.savedId ? L.state.create?.contributions.find((c) => c.id === nw.savedId)?.studio : null;
     const keep = !!savedIn && savedIn === d.id, other = !!savedIn && savedIn !== d.id;
-    setNw((cur) => ({ ...changeFormat(cur, f, src.rules), ...(keep || d.compact ? {} : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() }), ...(other && { savedId: undefined }) }));
+    const fresh = keep ? {} : d.compact ? { shape: {} } : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() };
+    setNw((cur) => ({ ...changeFormat(cur, f, src.rules), ...fresh, ...(other && { savedId: undefined }) }));
     set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined });
   };
   // What the Draft step still needs: a generic studio's item schema; Flash's cards or questions have their own shape, so only
@@ -75,7 +76,8 @@ export function studioVals(L: Logic, src: StudioSrc) {
   return {
     cards: STUDIOS.map((d) => { const note = reason(d); return { id: d.id, name: d.name, tag: d.tag, out: d.out, time: d.time, open: () => open(d, note), disabled: readOnly || !!note, note }; }),
     uploadLabel: 'Upload something you already made →', openUpload: () => set({ view: 'form' }),
-    backLabel: '← All studios', toHub: () => set(HUB),
+    // An edit opened in its studio leaves the way the form's Cancel does.
+    backLabel: L.state.editing ? '← My contributions' : '← All studios', toHub: () => (L.state.editing ? src.cancel() : set(HUB)),
     readOnly, studioName: def.name, flash, def, steps, step, stepName: name, stepTitle: name, stepHint: HINTS[name] ?? '',
     prev: () => set({ step: Math.max(0, step - 1) }), next, noPrev: step === 0, hasNext: step < steps.length - 1, nextLabel: 'Next: ' + (steps[step + 1] ?? ''),
     formats: formats.map((f) => ({ label: f, on: nw.type === f, pick: () => pick(f) })),

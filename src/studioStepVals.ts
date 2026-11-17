@@ -15,9 +15,11 @@ import type { Chip } from './screens/ChipGroup';
 
 type Field = 'shape' | 'produce' | 'cast';
 
-// A group of chips for one question: choosing stores the answer under the question (or row label) on the draft.
-const choices = (nw: NewDraft, setNw: SetNw, field: Field, key: string, options: string[]): { key: string; chips: Chip[] } => ({
-  key, chips: options.map((o) => ({ key: o, label: o, on: nw[field]?.[key] === o, pick: () => setNw((cur) => ({ [field]: { ...cur[field], [key]: o } })) })),
+// A group of chips for one question: choosing stores the answer under the question (or row label) on the draft. A
+// question that only steers the AI draft says so (honest UI).
+const STEERS = 'Steers the AI draft';
+const choices = (nw: NewDraft, setNw: SetNw, field: Field, key: string, options: string[], steersAi = false): { key: string; hint: string; chips: Chip[] } => ({
+  key, hint: steersAi ? STEERS : '', chips: options.map((o) => ({ key: o, label: o, on: nw[field]?.[key] === o, pick: () => setNw((cur) => ({ [field]: { ...cur[field], [key]: o } })) })),
 });
 
 // Which stock looks and voices a studio casts (no media yet: the picks are role labels and voice names).
@@ -33,8 +35,8 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
   const change = (f: (rows: StudioItem[]) => StudioItem[]) => setNw((cur) => { const it = cur.items ?? noItems();
     return { items: { ...it, list: f(it.list as StudioItem[]) as StudioRow[], how: it.how || 'manual', problems: [] } }; });
   return {
-    shape: def.qs.map(([q, options]) => choices(nw, setNw, 'shape', q, options)),
-    produce: def.rows.map(([row, options]) => choices(nw, setNw, 'produce', row, options)),
+    shape: def.qs.map(([q, options, steers]) => choices(nw, setNw, 'shape', q, options, steers)),
+    produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers)),
     cast: castPickers(def).map((p) => choices(nw, setNw, 'cast', p.key, p.options)),
     rows: list.map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
       edit: (f: 0 | 1 | 2, v: string) => change((rows) => rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x))),

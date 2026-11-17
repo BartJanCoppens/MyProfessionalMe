@@ -1,10 +1,11 @@
 // The ten studios (design v4+, studios plan Task 1.1): types and pure rules. The data is STUDIOS in src/studioData.ts.
 // A studio's items are [label, text] or [label, text, text2] rows; what each row means depends on the studio (itemsValid).
 import { STUDIOS, STUDIO_STEPS } from '../studioData';
-import { ITEM_MAX, LONG_MAX, SHORT_MAX } from './items';
+import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, rowFieldMax } from './items';
 
-export type StudioQuestion = [question: string, options: string[]];
-export type ProduceRow = [label: string, options: string[]];
+// steersAi: the answer only steers the AI draft (the studio says so); without it the answer changes what is published.
+export type StudioQuestion = [question: string, options: string[], steersAi?: boolean];
+export type ProduceRow = [label: string, options: string[], steersAi?: boolean];
 export type BuildStep = string;
 export type StudioItem = [label: string, text: string] | [label: string, text: string, text2: string];
 // What a studio's cast is: one stock look, two voices, one voice, or nothing to cast.
@@ -67,8 +68,8 @@ export const tooFew = (def: StudioDef, count: number) => count < def.min;
 // Labels up to SHORT_MAX and texts up to LONG_MAX characters, as private.studio_rows_ok.
 export function itemsValid(def: StudioDef, items: StudioItem[]): string[] {
   const blanks = items.filter((i) => blank(i[0]) || blank(i[1])).map((i) => (i[0] || 'An item') + ': text is empty');
-  const over = (v: string | undefined, max: number) => (v ?? '').length > max;
-  const long = items.filter((i) => over(i[0], SHORT_MAX) || over(i[1], LONG_MAX) || over(i[2], LONG_MAX))
+  // A field that has text but breaks the field rule is too long (blank ones are reported above).
+  const long = items.filter((i) => Array.isArray(i) && i.some((v, k) => !!v?.trim() && !fieldOk(rowFieldMax(k))(v)))
     .map((i) => i[0].slice(0, 40) + ': too long (labels up to ' + SHORT_MAX + ' characters, texts up to ' + LONG_MAX + ')');
   const few = tooFew(def, items.length) ? ['Add at least ' + def.min + ' items'] : [];
   const max = rowsMax(def), many = max && items.length > max ? ['Add at most ' + max + ' items'] : [];

@@ -9,7 +9,7 @@ import StudioBuild from './StudioBuild';
 
 type ST = NonNullable<VM['create']>['studio'];
 type Group = ST['shape'][number];
-const Group = ({ g, st }: { g: Group; st: ST }) => <ChipGroup heading={g.key} chips={g.chips} readOnly={st.readOnly} />;
+const Group = ({ g, st }: { g: Group; st: ST }) => <ChipGroup heading={g.key} hint={g.hint} chips={g.chips} readOnly={st.readOnly} />;
 
 export function Shape({ st }: { st: ST }) {
   return <>{st.shape.map((g) => <Group key={g.key} g={g} st={st} />)}</>;

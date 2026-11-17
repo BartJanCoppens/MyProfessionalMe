@@ -22,7 +22,10 @@ export const ITEM_MAX: Record<string, number> = { 'Flash cards': 40, 'Practice e
   'Interactive explainer': 10, 'Job aid': 20, 'Case exercise': 12 };
 // The formats whose items are cards or exam questions, always there (the upload form's item panel); any other format's
 // items are a studio's rows.
-export const hasItems = (type: string) => type === 'Flash cards' || type === 'Practice exam';
+export const CARD_FORMATS = ['Flash cards', 'Practice exam'];
+export const hasItems = (type: string) => CARD_FORMATS.includes(type);
+// Whether a contribution carries items: the card formats always, anything made in a studio (private.carries_items).
+export const carriesItems = (type: string, studio: string | null | undefined) => hasItems(type) || !!studio;
 const isFlash = (type: string) => type === 'Flash cards';
 export const noun = (type: string, n: number) => (isFlash(type) ? (n === 1 ? 'card' : 'cards') : type === 'Practice exam' ? (n === 1 ? 'question' : 'questions') : n === 1 ? 'item' : 'items');
 export const countText = (type: string, n: number) => n + ' ' + noun(type, n);
@@ -30,11 +33,14 @@ export const countText = (type: string, n: number) => n + ' ' + noun(type, n);
 // Text limits, mirrored in private.items_ok: fronts, questions, options and topics; backs and explanations.
 export const SHORT_MAX = 300;
 export const LONG_MAX = 600;
-const text = (max: number) => (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.length <= max;
-const isCard = (v: unknown): v is Card => Array.isArray(v) && v.length === 2 && text(SHORT_MAX)(v[0]) && text(LONG_MAX)(v[1]);
+// The one field rule: text, not blank, within its cap. A row's first field (a front or a label) is short, the rest long
+// (private.rows_ok).
+export const fieldOk = (max: number) => (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.length <= max;
+export const rowFieldMax = (k: number) => (k === 0 ? SHORT_MAX : LONG_MAX);
+const isCard = (v: unknown): v is Card => Array.isArray(v) && v.length === 2 && v.every((x, k) => fieldOk(rowFieldMax(k))(x));
 const isQuestion = (v: unknown): v is ExamQuestion => {
   const x = v as Record<string, unknown> | null;
-  return !!x && typeof x === 'object' && text(SHORT_MAX)(x.t) && text(SHORT_MAX)(x.q) && text(LONG_MAX)(x.why) && Array.isArray(x.o) && x.o.length === 4 && x.o.every(text(SHORT_MAX))
+  return !!x && typeof x === 'object' && fieldOk(SHORT_MAX)(x.t) && fieldOk(SHORT_MAX)(x.q) && fieldOk(LONG_MAX)(x.why) && Array.isArray(x.o) && x.o.length === 4 && x.o.every(fieldOk(SHORT_MAX))
     && Number.isInteger(x.a) && (x.a as number) >= 0 && (x.a as number) < 4;
 };
 const isRow = (v: unknown): v is StudioRow => Array.isArray(v) && (v.length === 2 || v.length === 3) && v.every((x) => typeof x === 'string');

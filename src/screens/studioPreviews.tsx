@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { aidView, casePreview } from '../fmtVals';
+import { caseHours } from '../logic/studioContent';
 import type { VM } from '../model';
 import type { AidContent } from '../types';
 import { AidPanel, CasePanel } from './FormatWork';
@@ -26,7 +27,7 @@ function Learner({ c }: { c: CS }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={note}>A play-test, as learners will see it: nothing is saved or counted.</div>
       {content.kind === 'aid' && <AidTry content={content} />}
-      {content.kind === 'case' && <CasePanel ce={casePreview(content)} />}
+      {content.kind === 'case' && <CasePanel ce={casePreview(content, caseHours(c.nw.shape ?? {}))} />}
     </div>
   );
 }

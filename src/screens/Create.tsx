@@ -93,6 +93,7 @@ function Mine({ c }: { c: CS }) {
           {cs.hasTake && <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea' }}><div style={label}>Takeaway</div><p style={{ margin: '4px 0 0', textWrap: 'pretty' }}>{cs.takeaway}</p></div>}
           <Outline outline={cs.outline} sources={cs.sources} aiTag={cs.aiTag} />
           <ItemList head={cs.itemsHead} rows={cs.itemRows} />
+          <ItemList head={cs.answersHead} rows={cs.answerRows} />
           {cs.hasRevs && (
             <div style={{ padding: '4px 20px 8px', borderBottom: '1px solid #eef0ea' }}>
               {cs.revs.map((rv) => (
@@ -150,6 +151,7 @@ function ReviewTab({ c }: { c: CS }) {
           <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea' }}><div style={label}>Author's takeaway</div><p style={{ margin: '4px 0 0', textWrap: 'pretty' }}>{rs.takeaway}</p></div>
           <Outline outline={rs.outline} sources={rs.sources} aiTag={rs.aiTag} />
           <ItemList head={rs.itemsHead} rows={rs.itemRows} />
+          <ItemList head={rs.answersHead} rows={rs.answerRows} />
           <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={label}>Automatic checks</div>
             {rs.checks.map((ck) => <div key={ck.text} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: ck.dot, flex: 'none' }} /><span style={{ color: ck.fg }}>{ck.text}</span></div>)}

@@ -5,7 +5,7 @@ import { RUBRIC } from './data';
 import type { Logic } from './model';
 import type { AppState, NewDraft } from './types';
 import { addFirst } from './createItems';
-import { aiAssisted, hasItems, itemsFromSaved, itemsText, noItems } from './logic/items';
+import { aiAssisted, carriesItems, hasItems, itemsFromSaved, itemsText, noItems } from './logic/items';
 import { MAKEABLE_FORMATS, attrsOf, checksPass, contentChecks, mayCreate, rubricComplete } from './logic/contribution';
 import type { Attrs, Contribution, CreateData, Review, RuleParts } from './logic/contribution';
 import { checkContribution, decideReview, loadCreate, removeDraft, saveDraft, submitContribution } from './lib/contributionStore';
@@ -46,7 +46,7 @@ const fieldsOf = (nw: NewDraft, bundles: string[], studio: string | null): Draft
   const shape = studio && nw.shape && Object.keys(nw.shape).length ? nw.shape : null;
   return { business_line: nw.line || null, audience: nw.aud || null, type: nw.type, title: nw.title.trim().slice(0, 120), domain: nw.dom, level: +nw.lvl, audience_stage: nw.stage,
     takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: aiAssisted(nw), bundle_ids: bundles,
-    items: hasItems(nw.type) || studio ? nw.items?.list ?? [] : null, shape };
+    items: carriesItems(nw.type, studio) ? nw.items?.list ?? [] : null, shape };
 };
 // The row to save: a new draft made in a studio says which (only on insert; the database keeps it).
 const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles, studio) : { ...fieldsOf(nw, bundles, studio), studio });
@@ -54,7 +54,7 @@ const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: strin
 export const checkKey = (nw: NewDraft, bundles: string[], studio: string | null) => JSON.stringify(fieldsOf(nw, bundles, studio));
 // A saved contribution back on screen, with its items (AI-assisted then means AI-made items) and its answers.
 export function draftOf(c: Contribution): NewDraft {
-  const list = itemsFromSaved(c.type, c.items), withItems = hasItems(c.type) || !!c.studio;
+  const list = itemsFromSaved(c.type, c.items), withItems = carriesItems(c.type, c.studio);
   return { line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
     outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !withItems, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
     items: withItems ? { ...noItems(), list, how: c.ai_assisted ? 'ai' : 'saved' } : noItems(), ...(c.shape && { shape: c.shape }) };

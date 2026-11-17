@@ -4,7 +4,7 @@
 import type { AiRequest } from '../lib/ai';
 import type { NewDraft } from '../types';
 import { jsonObject } from './json';
-import { LONG_MAX, SHORT_MAX, firstSentence, leadWords, marked } from './items';
+import { LONG_MAX, SHORT_MAX, fieldOk, firstSentence, leadWords, marked, rowFieldMax } from './items';
 import { itemsValid, rowsMax } from './studios';
 import type { StudioDef, StudioItem } from './studios';
 
@@ -43,8 +43,7 @@ export function parseStudioItems(def: StudioDef, raw: string): StudioItem[] | nu
   const r = jsonObject(raw) as { items?: unknown } | null;
   const width = arity(def), rows = r?.items;
   if (!Array.isArray(rows) || !rows.length) return null;
-  const field = (v: unknown, k: number) => typeof v === 'string' && v.trim() !== '' && v.length <= (k === 0 ? SHORT_MAX : LONG_MAX);
-  if (!rows.every((x) => Array.isArray(x) && x.length === width && x.every(field))) return null;
+  if (!rows.every((x) => Array.isArray(x) && x.length === width && x.every((v: unknown, k: number) => fieldOk(rowFieldMax(k))(v)))) return null;
   const list = (rows as string[][]).slice(0, rowsMax(def)).map((x) => x.map((v) => v.trim()) as StudioItem);
   return itemsValid(def, list).length ? null : list;
 }

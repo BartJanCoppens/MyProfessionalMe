@@ -45,7 +45,8 @@ describe('Job Aid preview', () => {
 
 describe('Case preview', () => {
   it('is the learner\'s case, without a hand-in', () => {
-    const h = at('case', 'Case exercise', CASE, { [EVIDENCE_QUESTION]: 'Yes' });
+    const h = at('case', 'Case exercise', CASE, { [EVIDENCE_QUESTION]: 'Yes', 'How long should it take?': 'A full day' });
+    expect(screen.getByText(/^8 h · anonymised/)).toBeTruthy();
     expect(screen.getByText('Two companies merged.')).toBeTruthy();
     expect(screen.getByText('Three decisions')).toBeTruthy();
     expect(screen.getByText('Realism')).toBeTruthy();

@@ -8,6 +8,10 @@ import type { StudioItem } from './studios';
 export const EVIDENCE_QUESTION = 'Can it count as trajectory evidence?';
 // A learner hands a case in through the evidence flow, which goes to their counsellor.
 export const CASE_REVIEWER = 'Reviewed by your counsellor.';
+// A published case's study hours from its length answer (private.case_hours); half a day when unanswered.
+export const LENGTH_QUESTION = 'How long should it take?';
+export const CASE_HOURS: Record<string, number> = { '2 hours': 2, 'Half a day': 4, 'A full day': 8 };
+export const caseHours = (shape: Record<string, string>) => CASE_HOURS[shape[LENGTH_QUESTION]] ?? CASE_HOURS['Half a day'];
 
 const texts = (items: StudioItem[], label: string) => items.filter((i) => i[0] === label).map((i) => i[1].trim());
 const BUILDERS: Record<string, (items: StudioItem[], shape: Record<string, string>) => FormatContent> = {

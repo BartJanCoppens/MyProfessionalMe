@@ -7,7 +7,7 @@ import type { Logic } from './model';
 import type { AppState } from './types';
 import { itemsPanel, viewItems } from './createItems';
 import type { SetNw } from './createItems';
-import { hasItems, itemsCheck, itemsFromSaved, itemsText, noItems, noun } from './logic/items';
+import { carriesItems, hasItems, itemsCheck, itemsFromSaved, itemsText, noItems, noun } from './logic/items';
 import {
   CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
   emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
@@ -18,6 +18,7 @@ import {
   attrsOfDraft, blankDraft, checkKey, decide, deleteDraft, draftOf, effective, first, myLine, revKey, runCheck, saveForm, submitSaved, submittedEdit, writePolicy,
 } from './createSave';
 import { bundleFinder, draftAi, usableBundles } from './createGrounding';
+import { studioById } from './logic/studios';
 import { changeFormat } from './studioRules';
 import { HUB, studioOf, studioVals } from './studioVals';
 
@@ -160,11 +161,11 @@ function createScreen(L: Logic) {
     rulesLead: (anyLine ? 'You can set review requirements for anything.' : 'You can set review requirements within ' + L.access.domains.join(', ') + '.')
       + ' A requirement applies to every contribution it matches (same parts as creation rules); a contribution is routed by the strictest one when it is submitted, and with no review at all it is published on submit, after the content checks.',
   };
-  // The Studios hub arranges what the form already computed (studioVals.ts); an edit always shows the form.
+  // The Studios hub arranges what the form already computed (studioVals.ts); an edit shows the form unless it opened in its studio.
   const chk = s.studio.check, checkReasons = chk && chk.key === checkKey(nw, s.nwKb, studioOf(s)) ? chk.reasons : null;
   const studio = studioVals(L, { nw, setNw, bundles: picked, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
-    routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, checkReasons, runCheck: () => runCheck(L) });
-  return { ...vm, studio, newView: s.editing ? 'form' as const : s.studio.view };
+    routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, cancel: vm.nwCancel, checkReasons, runCheck: () => runCheck(L) });
+  return { ...vm, studio, newView: s.editing && s.studio.view !== 'studio' ? 'form' as const : s.studio.view };
 }
 
 function dateLine(c: Contribution) {
@@ -188,7 +189,10 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
     isPub: c.status === 'published', pubNote: c.learning_id ? 'In the library as ' + c.learning_id + ' · admins can map it to paths like any learning.' : 'Published.',
     mainLabel: '', mainVariant: 'primary', main: () => {}, secondLabel: '', second: () => {}, thirdLabel: '', third: () => {},
   };
-  const edit = () => L.setState({ createTab: 'new', editing: c.id, nw: draftOf(c), nwKb: c.bundle_ids || [], nwKbQ: '' });
+  // A contribution made in a studio with its own steps is edited there (its rows need the row editor); the rest in the form.
+  const inStudio = !!c.studio && studioById(c.studio)?.compact === false;
+  const edit = () => L.setState({ createTab: 'new', editing: c.id, nw: draftOf(c), nwKb: c.bundle_ids || [], nwKbQ: '',
+    studio: inStudio ? { view: 'studio', step: 0, id: c.studio ?? undefined } : { view: 'form', step: 0 } });
   if (c.status === 'published') return { ...base, mainLabel: learning ? 'Open in library' : '', mainVariant: 'secondary', main: () => L.openDetail(c.learning_id!, 'create') };
   if (c.status === 'changes') return { ...base, mainLabel: 'Edit and resubmit', main: edit, secondLabel: 'Resubmit as it is', second: () => submitSaved(L, c) };
   if (c.status === 'review') return { ...base, secondLabel: '', mainLabel: '' };
@@ -210,7 +214,7 @@ function reviewDetail(L: Logic, c: Contribution, r: Review, d: CreateData, now: 
     meta: 'By ' + c.author_name + ' · for ' + c.audience_stage + ' · ' + (open ? daysWaiting(c.submitted_at, now) : 'submitted ' + fmtDate(c.submitted_at)),
     takeaway: c.takeaway, outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft · check the cited sources' : '',
     ...viewItems(c, ' to check'),
-    fileNote: hasItems(c.type) || c.studio ? 'Check each ' + noun(c.type, 1) + ' against the takeaway.'
+    fileNote: carriesItems(c.type, c.studio) ? 'Check each ' + noun(c.type, 1) + ' against the takeaway.'
       : 'The ' + (c.type === 'Podcast' ? 'audio' : c.type === 'Reel' ? 'video' : 'document') + ' is attached later; review the takeaway and outline for now.',
     checks: contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(itemsFromSaved(c.type, c.items)) }).map(dot),
     open, closed: !open, bannerTone: r.verdict === 'approved' || c.status === 'published' ? 'success' : 'warning', doneText,
