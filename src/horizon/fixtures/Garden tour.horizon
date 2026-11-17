@@ -1,0 +1,13 @@
+{
+ "format": "horizon",
+ "version": 1,
+ "title": "Garden tour",
+ "deckId": "e2e-garden-tour",
+ "theme": { "world": "globe" },
+ "planning": [],
+ "frames": [
+  { "id": "g1", "x": 0, "y": 0, "next": ["g2"], "title": "Welcome to the garden", "body": "A short walk through the beds.", "viz": null },
+  { "id": "g2", "x": 0, "y": -640, "next": ["g3"], "title": "What grows where", "body": "Beds by sunlight, in square metres.", "viz": { "type": "bars", "items": [{ "label": "Sun", "value": 40 }, { "label": "Shade", "value": 15 }] } },
+  { "id": "g3", "x": 0, "y": -1280, "next": [], "title": "Come back in spring", "body": "The roses open in May.", "viz": null }
+ ]
+}
