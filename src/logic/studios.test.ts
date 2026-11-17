@@ -28,7 +28,7 @@ describe('studio definitions', () => {
 
 describe('visibleSteps', () => {
   it('gives the four v4 steps for Flash and six for Reel', () => {
-    expect(visibleSteps(def('flash'))).toEqual(STUDIO_STEPS);
+    expect(visibleSteps(def('flash'))).toEqual(['Idea & sources', 'Draft', 'Preview & test', 'Check & send']);
     expect(visibleSteps(def('reel'))).toEqual(STUDIO_STEPS);
   });
   it('drops Shape without questions and Produce without rows and cast', () => {
