@@ -1,5 +1,5 @@
 import type { DraftItems } from './logic/items';
-import type { StudioItem } from './logic/studios';
+import type { BuildStepState } from './logic/studioBuild';
 import type { CreateData } from './logic/contribution';
 import type { Trajectory } from './logic/trajectory';
 import type { TrjMine } from './logic/trajectoryLearner';
@@ -158,8 +158,8 @@ export type RenewDraft = { id: string; link: string; ref: string; expires: strin
 // sources come from Draft with AI.
 export type NewDraft = { line: string; aud: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string; items?: DraftItems;
   // Generic studios (Task 1.2): the Shape answers (question to answer), the Produce choices (row label to option), the picked stock look and voices
-  // (role label to stock name) and the studio's own item rows. Flash cards and Practice exams keep `items`.
-  shape?: Record<string, string>; produce?: Record<string, string>; cast?: Record<string, string>; studioItems?: StudioItem[] };
+  // (role label to stock name) and the build steps' state. A studio's rows live in `items` like every format's.
+  shape?: Record<string, string>; produce?: Record<string, string>; cast?: Record<string, string>; build?: BuildStepState[] };
 
 // Knowledge library: retrieval models and bundles
 export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };

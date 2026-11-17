@@ -2,19 +2,19 @@
 // (GameStudio's pattern). The state machine is src/logic/studioBuild.ts; without a runner nothing can be built, and it says so.
 import { useState } from 'react';
 import { Button, Tag } from '../ds';
-import { retryStep, runBuild, startBuild } from '../logic/studioBuild';
+import { retryStep, runBuild } from '../logic/studioBuild';
 import type { BuildRunner, BuildStepState, StepStatus } from '../logic/studioBuild';
 
 const WORD: Record<StepStatus, string> = { todo: 'To do', running: 'Running', done: 'Done', failed: 'Failed' };
 const TONE: Record<StepStatus, 'muted' | 'blue' | 'green' | 'amber'> = { todo: 'muted', running: 'blue', done: 'green', failed: 'amber' };
 
-export default function StudioBuild({ names, runner, readOnly, initial }: { names: string[]; runner: BuildRunner | undefined; readOnly?: boolean; initial?: BuildStepState[] }) {
-  const [steps, setSteps] = useState<BuildStepState[]>(() => initial ?? startBuild(names));
+// Controlled: the steps' state lives on the draft (nw.build), so it survives Back and Next.
+export default function StudioBuild({ steps, onChange, runner, readOnly }: { steps: BuildStepState[]; onChange: (steps: BuildStepState[]) => void; runner: BuildRunner | undefined; readOnly?: boolean }) {
   const [busy, setBusy] = useState(false);
   if (!runner) return <div style={{ fontSize: 12.5, color: '#5a6058' }}>Building comes with this studio</div>;
   const go = async (job: () => Promise<unknown>) => { setBusy(true); try { await job(); } finally { setBusy(false); } };
-  const start = () => go(() => runBuild(steps, runner, setSteps));
-  const retry = (k: number) => go(() => retryStep(steps, k, runner, setSteps));
+  const start = () => go(() => runBuild(steps, runner, onChange));
+  const retry = (k: number) => go(() => retryStep(steps, k, runner, onChange));
   const started = steps.some((s) => s.status !== 'todo');
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

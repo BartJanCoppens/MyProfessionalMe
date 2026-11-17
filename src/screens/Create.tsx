@@ -2,13 +2,13 @@
 // A transcription of the template's CREATE & SHARE block; it only reads from the view-model (createVals.ts).
 import { Banner, Button, Checkbox, Eyebrow, Field, Hover, Input, LinkButton, PageTitle, Select, StatusChip, Stepper, Tabs, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
+import { label } from './labelStyle';
 import { BundlePicker, SubmitSide } from './CreateParts';
 import { ItemList, ItemPanel } from './CreateItems';
 import { Hub, Studio } from './Studios';
 import RuleChips from './RuleChips';
 
 type CS = NonNullable<VM['create']>;
-const label = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase' as const, letterSpacing: '.04em' };
 const card = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6 };
 
 export default function CreateScreen({ c }: { c: CS }) {

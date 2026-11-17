@@ -3,11 +3,10 @@
 // (AppState.nw), so "Send for review" is the form's save and submit: nothing is written twice.
 // Flash card & Exam Studio is compact: its Draft step is the form's item panel and it has four steps, as in v4.
 import type { Logic } from './model';
-import type { NewDraft, StudioState } from './types';
+import type { ExamQuestion, NewDraft, StudioState } from './types';
 import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
-import { aiAssisted, noItems, validItems } from './logic/items';
-import type { Item } from './logic/items';
+import { noItems, validItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
 import { studioById, visibleSteps } from './logic/studios';
 import type { StudioDef } from './logic/studios';
@@ -42,13 +41,15 @@ export function studioVals(L: Logic, src: StudioSrc) {
   const items = validItems(nw.type, nw.items?.list ?? []);
   const parts = stepVals(def, nw, setNw);
   const pick = (f: string) => (L.state.nwAiBusy ? L.say('Wait for the draft to finish') : setNw((cur) => (cur.type === f ? {} : { type: f, items: noItems(), ...fit(src.rules, cur, f) })));
-  const open = (d: StudioDef) => {
+  // Why a studio cannot be opened, once per card; '' when it can.
+  const reason = (d: StudioDef) => (!d.available ? 'Coming in a later release' : formatsOf(d).length ? '' : 'Not in your creation rules');
+  const open = (d: StudioDef, note: string) => {
     if (readOnly) return;
     if (!src.canCreate) { L.say('Ask an admin for creation rights first'); return; }
+    if (note) { L.say(note); return; }
     const fs = formatsOf(d);
-    if (!d.available || !fs.length) { L.say(d.available ? 'Not in your creation rules' : 'Coming in a later release'); return; }
     const f = fs.includes(nw.type) ? nw.type : fs[0];
-    setNw((cur) => ({ ...(cur.type === f ? {} : { type: f, items: noItems() }), ...fit(src.rules, cur, f), ...(d.compact ? {} : { shape: {}, produce: {}, cast: {}, studioItems: [] }) }));
+    setNw((cur) => ({ ...(cur.type === f ? {} : { type: f, items: noItems() }), ...fit(src.rules, cur, f), ...(d.compact ? {} : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() }) }));
     set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id });
   };
   const next = () => {
@@ -60,8 +61,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
   };
   const exam = nw.type === 'Practice exam';
   return {
-    cards: STUDIOS.map((d) => ({ id: d.id, name: d.name, tag: d.tag, out: d.out, time: d.time, open: () => open(d),
-      disabled: readOnly || !d.available || !formatsOf(d).length, note: !d.available ? 'Coming in a later release' : formatsOf(d).length ? '' : 'Not in your creation rules' })),
+    cards: STUDIOS.map((d) => { const note = reason(d); return { id: d.id, name: d.name, tag: d.tag, out: d.out, time: d.time, open: () => open(d, note), disabled: readOnly || !!note, note }; }),
     uploadLabel: 'Upload something you already made →', openUpload: () => set({ view: 'form' }),
     backLabel: '← All studios', toHub: () => set(HUB),
     readOnly, studioName: def.name, flash, def, steps, step, stepName: name, stepTitle: name, stepHint: HINTS[name] ?? '',
@@ -69,8 +69,8 @@ export function studioVals(L: Logic, src: StudioSrc) {
     formats: formats.map((f) => ({ label: f, on: nw.type === f, pick: () => pick(f) })),
     ...parts, buildRunner: BUILD_RUNNERS[def.id],
     // Only "Made with AI" when the items are AI's; a scripted deck says so.
-    itemsLabel: aiAssisted({ ai: false, type: nw.type, items: nw.items }) ? LABELS.ai : LABELS[nw.items?.how ?? ''] ?? '',
-    preview: exam ? { kind: 'questions' as const, cards: [], questions: items as Exclude<Item, [string, string]>[] }
+    itemsLabel: LABELS[nw.items?.how ?? ''] ?? '',
+    preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
     send: { checks: src.checks, blocked: src.blocked || (!flash && parts.problems.length > 0), problems: flash ? [] : parts.problems, route: src.route, routeEmpty: !src.route.length, policyNote: src.policyNote, routeWarn: src.routeWarn,
       label: src.submitLabel === 'Submit for review' ? 'Send for review' : src.submitLabel, run: src.submit, saveDraft: src.saveDraft, busy: src.busy },

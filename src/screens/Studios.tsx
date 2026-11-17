@@ -4,7 +4,9 @@ import { Banner, Button, Field, Input, LinkButton, Select, Stepper, Tag, Textare
 import type { VM } from '../model';
 import { BundlePicker, SubmitSide } from './CreateParts';
 import { ItemPanel } from './CreateItems';
-import { Chips, DraftRows, Produce, Shape } from './StudioSteps';
+import ChipGroup from './ChipGroup';
+import { Problems } from './CreateShared';
+import { DraftRows, Produce, Shape } from './StudioSteps';
 import { Preview } from './studioPreviews';
 
 type CS = NonNullable<VM['create']>;
@@ -37,7 +39,7 @@ function Idea({ c }: { c: CS }) {
   const nw = c.nw;
   return (
     <>
-      {c.studio.formats.length > 1 && <Chips group={{ key: 'Format', options: c.studio.formats.map((f) => ({ label: f.label, on: f.on, pick: f.pick })) }} title="What are you making?" readOnly={false} />}
+      {c.studio.formats.length > 1 && <ChipGroup heading="What are you making?" ariaLabel="Format" chips={c.studio.formats.map((f) => ({ ...f, key: f.label }))} />}
       <Field label="Title" hint="Say what people will be able to do, in under 60 characters.">
         <Input value={nw.title} onChange={c.nwSetTitle} placeholder="e.g. Belgian VAT invoice essentials" aria-label="Title" />
       </Field>
@@ -63,7 +65,7 @@ function Check({ c }: { c: CS }) {
   return (
     <>
       {c.nwRuleWarn && <Banner tone="warning">{c.nwRuleWarn}</Banner>}
-      {send.problems.map((p) => <div key={p} role="alert" style={{ fontSize: 12, color: '#7a5000' }}>{p}</div>)}
+      <Problems list={send.problems} />
       {!c.studio.readOnly && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button onClick={send.run} disabled={send.blocked}>{send.label}</Button>

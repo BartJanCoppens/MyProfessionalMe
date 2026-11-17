@@ -2,9 +2,9 @@
 // the two side cards (automatic checks, who will review it). They only read from the view-model (createVals.ts).
 import { Banner, Button, Input } from '../ds';
 import type { VM } from '../model';
+import { label } from './labelStyle';
 
 type CS = NonNullable<VM['create']>;
-const label = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase' as const, letterSpacing: '.04em' };
 const card = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6 };
 
 export function BundlePicker({ c }: { c: CS }) {

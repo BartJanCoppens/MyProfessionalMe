@@ -9,6 +9,8 @@ import { cfg, member, person } from '../test/harness';
 import type { CreateData } from '../logic/contribution';
 import type { AppState } from '../types';
 import { runBuild, startBuild } from '../logic/studioBuild';
+import type { BuildStepState } from '../logic/studioBuild';
+import { harness } from '../test/harness';
 import CreateScreen from './Create';
 import StudioBuild from './StudioBuild';
 
@@ -28,6 +30,11 @@ const rule = (formats: string[]) => ({ id: 1, user_id: 'u1', lines: ['Consulting
 const data = (formats: string[] = []): CreateData => ({ contributions: [], reviews: [], rules: [rule(formats)], policies: [], peers: 3 });
 const nw = { line: 'Consulting', aud: '', type: 'Podcast', title: 'Pillar Two', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One takeaway.', outline: [], sources: [], ai: false, aiNote: '' };
 const atStep = (step: number, readOnly = false) => <Live readOnly={readOnly} state={{ create: data(), createTab: 'new', nw, studio: { view: 'studio', step, id: 'podcast' } }} />;
+// StudioBuild is controlled (the steps live on the draft); this holds them the way the draft does.
+function Held({ initial, ...rest }: { initial: BuildStepState[]; runner: Parameters<typeof StudioBuild>[0]['runner']; readOnly?: boolean }) {
+  const [steps, setSteps] = useState(initial);
+  return <StudioBuild steps={steps} onChange={setSteps} {...rest} />;
+}
 const card = (name: RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement;
 
 beforeEach(() => { window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; });
@@ -113,7 +120,7 @@ describe('build steps', () => {
     const calls: number[] = []; let fail = true;
     const runner = async (_n: string, i: number) => { calls.push(i); if (i === 1 && fail) throw new Error('Voice service unavailable'); };
     const failed = await runBuild(startBuild(names), runner, () => {});
-    render(<StudioBuild names={names} runner={runner} initial={failed} />);
+    render(<Held runner={runner} initial={failed} />);
     expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
     expect(screen.getByText('Voice service unavailable')).toBeTruthy();
     calls.length = 0; fail = false;
@@ -123,12 +130,47 @@ describe('build steps', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
   it('is honest when no builder exists for the studio', () => {
-    render(<StudioBuild names={names} runner={undefined} />);
+    render(<Held runner={undefined} initial={startBuild(names)} />);
     expect(screen.getByText('Building comes with this studio')).toBeTruthy();
     expect(screen.queryByText('Done')).toBeNull();
   });
   it('hides Start and Retry in View as', () => {
-    render(<StudioBuild names={names} runner={async () => {}} readOnly initial={startBuild(names)} />);
+    render(<Held runner={async () => {}} readOnly initial={startBuild(names)} />);
     expect(screen.queryByRole('button', { name: /Start|Retry/ })).toBeNull();
+  });
+});
+
+describe('one draft', () => {
+  const open = () => {
+    const h = harness({ access: member('u1'), state: { screen: 'create', create: data(), createTab: 'new', nw, nwKb: [], studio: { view: 'studio', step: 2, id: 'podcast' } } });
+    return Object.assign(h, { st: () => h.vm().create!.studio });
+  };
+  it('keeps a studio\'s rows in nw.items with their provenance, and marks AI items as AI-assisted', () => {
+    const h = open();
+    h.st().add();
+    h.st().rows[0].edit(0, 'Chapter 1 · 0:00');
+    expect(h.state.nw.items).toMatchObject({ how: 'manual', list: [['Chapter 1 · 0:00', '', '']] });
+    expect(h.st().itemsLabel).toBe('');
+    h.L().setState({ nw: { ...h.state.nw, items: { ...h.state.nw.items!, how: 'ai' } } });
+    expect(h.st().itemsLabel).toBe('Made with AI');
+  });
+  it('keeps the build state on the draft so it survives Back and Next', () => {
+    const h = open();
+    const steps: BuildStepState[] = [{ name: 'Writing the script', status: 'done' }, { name: 'Voicing host and guest', status: 'failed', error: 'x' }, { name: 'Mixing and chapter marks', status: 'todo' }];
+    h.st().build!.set(steps);
+    h.L().setState({ studio: { view: 'studio', step: 1, id: 'podcast' } });
+    h.L().setState({ studio: { view: 'studio', step: 3, id: 'podcast' } });
+    expect(h.st().build!.steps).toEqual(steps);
+  });
+});
+
+describe('the Idea step', () => {
+  const idea = (formats: string[]) => render(<Live state={{ create: data(formats), createTab: 'new', nw: { ...nw, type: 'Flash cards' }, studio: { view: 'studio', step: 0 } }} />);
+  it('asks what you are making only when more than one format is reachable', () => {
+    idea([]);
+    expect(screen.getByText('What are you making?')).toBeTruthy();
+    cleanup();
+    idea(['Flash cards']);
+    expect(screen.queryByText('What are you making?')).toBeNull();
   });
 });

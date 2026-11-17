@@ -4,7 +4,9 @@ import type { ExamQuestion } from '../types';
 import type { Check } from './contribution';
 
 export type Card = [string, string];
-export type Item = Card | ExamQuestion;
+// A generic studio's row is [label, text] (a Card has that shape) or [label, text, text2].
+export type StudioRow = [string, string, string];
+export type Item = Card | StudioRow | ExamQuestion;
 export type ItemSource = 'ai' | 'scripted' | 'csv' | 'manual' | 'saved' | '';
 // list: the items; how: where they came from ('ai' makes the contribution AI-assisted, see aiAssisted); note: the label shown with them;
 // problems: bad CSV lines to show.

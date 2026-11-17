@@ -2,12 +2,14 @@
 // block (draft, CSV import, the list to check); ItemList shows saved items to the author and to reviewers.
 // It only reads from the view-model (createItems.ts).
 import { useState } from 'react';
-import { Button, LinkButton, Tag, Textarea } from '../ds';
+import { Button, Textarea } from '../ds';
 import type { VM } from '../model';
+import { ItemRows, Problems } from './CreateShared';
 
 type Panel = NonNullable<NonNullable<VM['create']>['itemsPanel']>;
-const label = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase' as const, letterSpacing: '.04em' };
-const row = { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 10, alignItems: 'start', fontSize: 12.5, border: '1px solid #eef0ea', borderRadius: 5, padding: '6px 10px', background: '#fff' };
+
+const front = (t: string) => <span style={{ fontWeight: 500, textWrap: 'pretty' }}>{t}</span>;
+const back = (t: string) => <span style={{ color: '#3d423b', textWrap: 'pretty' }}>{t}</span>;
 
 export function ItemPanel({ p }: { p: Panel }) {
   const [csv, setCsv] = useState('');
@@ -26,18 +28,8 @@ export function ItemPanel({ p }: { p: Panel }) {
         <Button size="sm" variant="secondary" onClick={() => { p.importCsv(csv); setCsv(''); }} disabled={!csv.trim()}>Import CSV</Button>
         <label style={{ fontSize: 12.5, color: '#3d423b' }}>or a file <input type="file" accept=".csv,text/csv" aria-label="CSV file" onChange={p.importFile} style={{ fontSize: 12 }} /></label>
       </div>
-      {p.problems.map((x) => <div key={x} role="alert" style={{ fontSize: 12, color: '#7a5000' }}>{x}</div>)}
-      {p.rows.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><span style={label}>{p.head}</span>{p.note && <Tag tone="blue">{p.note}</Tag>}</div>
-          {p.rows.map((r, k) => (
-            <div key={k} style={row}>
-              <span style={{ fontWeight: 500, textWrap: 'pretty' }}>{r.front}</span><span style={{ color: '#3d423b', textWrap: 'pretty' }}>{r.back}</span>
-              <LinkButton tone="muted" onClick={r.remove} title={'Remove item ' + (k + 1)}>Remove</LinkButton>
-            </div>
-          ))}
-        </div>
-      )}
+      <Problems list={p.problems} />
+      {p.rows.length > 0 && <ItemRows head={p.head} note={p.note} rows={p.rows.map((r, k) => ({ cells: [front(r.front), back(r.back)], remove: r.remove, removeTitle: 'Remove item ' + (k + 1) }))} />}
     </div>
   );
 }
@@ -45,13 +37,8 @@ export function ItemPanel({ p }: { p: Panel }) {
 export function ItemList({ head, rows }: { head: string; rows: { front: string; back: string }[] }) {
   if (!rows.length) return null;
   return (
-    <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={label}>{head}</span>
-      {rows.map((r, k) => (
-        <div key={k} style={{ ...row, gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
-          <span style={{ fontWeight: 500, textWrap: 'pretty' }}>{r.front}</span><span style={{ color: '#3d423b', textWrap: 'pretty' }}>{r.back}</span>
-        </div>
-      ))}
+    <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea' }}>
+      <ItemRows head={head} rows={rows.map((r) => ({ cells: [front(r.front), back(r.back)] }))} />
     </div>
   );
 }
