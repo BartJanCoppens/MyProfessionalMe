@@ -1,13 +1,19 @@
 // The ten studios (design v4+, studios plan Task 1.1): types and pure rules. The data is STUDIOS in src/studioData.ts.
 // A studio's items are [label, text] or [label, text, text2] rows; what each row means depends on the studio (itemsValid).
 import { STUDIOS, STUDIO_STEPS } from '../studioData';
-import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, rowFieldMax } from './items';
+import type { ExamQuestion } from '../types';
+import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, isQuestion, rowFieldMax } from './items';
 
 // steersAi: the answer only steers the AI draft (the studio says so); without it the answer changes what is published.
 export type StudioQuestion = [question: string, options: string[], steersAi?: boolean];
 export type ProduceRow = [label: string, options: string[], steersAi?: boolean];
 export type BuildStep = string;
 export type StudioItem = [label: string, text: string] | [label: string, text: string, text2: string];
+// What a studio's items hold: its rows and, in the Explainer only, the three exam questions of its check after them.
+export type StudioEntry = StudioItem | ExamQuestion;
+export const CHECK_SIZE = 3;
+export const stepsOf = (items: StudioEntry[]) => items.filter((i): i is StudioItem => Array.isArray(i));
+export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i));
 // What a studio's cast is: one stock look, two voices, one voice, or nothing to cast.
 export type StudioCast = 'look' | 'voices' | 'voice' | null;
 export type ItemSchema = (items: StudioItem[]) => string[];
@@ -65,13 +71,16 @@ export const rowsMax = (def: StudioDef) => ITEM_MAX[def.format];
 export const tooFew = (def: StudioDef, count: number) => count < def.min;
 
 // The problems with a studio's items, in words; empty means valid (the shape of the contribution path's problem lists).
-// Labels up to SHORT_MAX and texts up to LONG_MAX characters, as private.studio_rows_ok.
-export function itemsValid(def: StudioDef, items: StudioItem[]): string[] {
-  const blanks = items.filter((i) => blank(i[0]) || blank(i[1])).map((i) => (i[0] || 'An item') + ': text is empty');
+// Labels up to SHORT_MAX and texts up to LONG_MAX characters, as private.rows_ok. The rows count toward the minimum, every
+// item toward the maximum; a check holds exactly CHECK_SIZE well-formed questions (private.explainer_ok).
+export function itemsValid(def: StudioDef, items: StudioEntry[]): string[] {
+  const rows = stepsOf(items), questions = questionsOf(items);
+  const blanks = rows.filter((i) => blank(i[0]) || blank(i[1])).map((i) => (i[0] || 'An item') + ': text is empty');
   // A field that has text but breaks the field rule is too long (blank ones are reported above).
-  const long = items.filter((i) => Array.isArray(i) && i.some((v, k) => !!v?.trim() && !fieldOk(rowFieldMax(k))(v)))
+  const long = rows.filter((i) => i.some((v, k) => !!v?.trim() && !fieldOk(rowFieldMax(k))(v)))
     .map((i) => i[0].slice(0, 40) + ': too long (labels up to ' + SHORT_MAX + ' characters, texts up to ' + LONG_MAX + ')');
-  const few = tooFew(def, items.length) ? ['Add at least ' + def.min + ' items'] : [];
+  const few = tooFew(def, rows.length) ? ['Add at least ' + def.min + ' items'] : [];
   const max = rowsMax(def), many = max && items.length > max ? ['Add at most ' + max + ' items'] : [];
-  return [...few, ...many, ...blanks, ...long, ...(SCHEMAS[def.id] ?? (() => []))(items)];
+  const check = questions.length && (questions.length !== CHECK_SIZE || !questions.every(isQuestion)) ? ['The check needs exactly ' + CHECK_SIZE + ' questions: draft it again or remove it'] : [];
+  return [...few, ...many, ...blanks, ...long, ...check, ...(SCHEMAS[def.id] ?? (() => []))(rows)];
 }

@@ -4,11 +4,16 @@ import { describe, expect, it } from 'vitest';
 import { parseFormatContent } from '../lib/contentStore';
 import { STUDIOS } from '../studioData';
 import { CARD_FORMATS, ITEM_MAX, LONG_MAX, SHORT_MAX } from './items';
-import { CASE_HOURS, CASE_REVIEWER, EVIDENCE_QUESTION, LENGTH_QUESTION, caseHours, countsAsEvidence, studioContent } from './studioContent';
-import { CASE_LABELS, itemsValid, rowsMax, studioById } from './studios';
-import type { StudioItem } from './studios';
+import { CASE_HOURS, CASE_REVIEWER, DEPTH_QUESTION, END_CHECK, END_NONE, END_QUESTION, END_SUMMARY, EVIDENCE_QUESTION, LENGTH_QUESTION, NEEDS_CHECK, UNUSED_CHECK,
+  caseHours, countsAsEvidence, explainerProblems, studioContent } from './studioContent';
+import { CASE_LABELS, CHECK_SIZE, itemsValid, rowsMax, studioById } from './studios';
+import type { StudioEntry, StudioItem } from './studios';
+import type { ExamQuestion } from '../types';
 
 const AID: StudioItem[] = [['Before', 'Objectives and scope confirmed '], ['Before', 'Stakeholder map ready'], ['During', 'Agree who signs off'], ['After', 'Minutes out within 24 hours']];
+const STEPS: StudioItem[] = [['Supplier', 'Creates the invoice. '], ['Access point', 'Checks the format.'], ['Customer', 'Gets the invoice.']];
+const Q = (k: number): ExamQuestion => ({ t: 'Peppol', q: 'Question ' + k + '?', o: ['a', 'b', 'c', 'd'], a: k % 4, why: 'Because.' });
+const CHECK = [Q(0), Q(1), Q(2)];
 const CASE: StudioItem[] = [['Brief', 'Two companies merged on 1 October.'], ['Deliverable', 'A day-100 roadmap'], ['Deliverable', 'Three decisions for the CFO'], ['Criterion', 'Realistic sequencing']];
 
 describe('studioContent', () => {
@@ -23,6 +28,29 @@ describe('studioContent', () => {
       reviewer: 'Reviewed by your counsellor.', evidence: true });
     expect(parseFormatContent(c)).toEqual(c);
   });
+  it('makes an explainer of its steps, its depth and its ending, as private.explainer_content does', () => {
+    const c = studioContent('Interactive explainer', STEPS, { [DEPTH_QUESTION]: 'With technical detail', [END_QUESTION]: END_SUMMARY });
+    expect(c).toEqual({ kind: 'explainer', style: 'Step-through', depth: 'With technical detail', end: END_SUMMARY,
+      steps: [{ label: 'Supplier', text: 'Creates the invoice.' }, { label: 'Access point', text: 'Checks the format.' }, { label: 'Customer', text: 'Gets the invoice.' }] });
+    expect(parseFormatContent(c)).toEqual(c);
+  });
+  it('ends an explainer with its three-question check only when that is the chosen ending', () => {
+    const c = studioContent('Interactive explainer', [...STEPS, ...CHECK], { [END_QUESTION]: END_CHECK });
+    expect(c).toMatchObject({ end: END_CHECK, check: CHECK });
+    expect(parseFormatContent(c)).toEqual(c);
+    expect(studioContent('Interactive explainer', [...STEPS, ...CHECK], { [END_QUESTION]: END_NONE })).not.toHaveProperty('check');
+  });
+  it('reads an unanswered or unknown depth and ending as an overview with a summary card', () => {
+    expect(studioContent('Interactive explainer', STEPS, {})).toMatchObject({ depth: 'Overview', end: END_SUMMARY });
+    expect(studioContent('Interactive explainer', STEPS, { [DEPTH_QUESTION]: 'Deep', [END_QUESTION]: 'Fireworks' })).toMatchObject({ depth: 'Overview', end: END_SUMMARY });
+  });
+  it('asks for the check when the ending is the check, and for its removal when it is not', () => {
+    expect(explainerProblems(STEPS, { [END_QUESTION]: END_CHECK })).toEqual([NEEDS_CHECK]);
+    expect(explainerProblems([...STEPS, ...CHECK], { [END_QUESTION]: END_CHECK })).toEqual([]);
+    expect(explainerProblems([...STEPS, ...CHECK], { [END_QUESTION]: END_SUMMARY })).toEqual([UNUSED_CHECK]);
+    expect(explainerProblems([...STEPS, ...CHECK], {})).toEqual([UNUSED_CHECK]);
+    expect(explainerProblems(STEPS, {})).toEqual([]);
+  });
   it('counts a case as trajectory evidence only when the answer is Yes', () => {
     expect(studioContent('Case exercise', CASE, { [EVIDENCE_QUESTION]: 'No' })).toMatchObject({ evidence: false });
     expect(studioContent('Case exercise', CASE, {})).toMatchObject({ evidence: false });
@@ -32,7 +60,7 @@ describe('studioContent', () => {
     expect(countsAsEvidence(null)).toBe(false);
   });
   it('makes the design examples into content the library reads', () => {
-    ['aid', 'case'].forEach((id) => { const d = studioById(id)!; expect(parseFormatContent(studioContent(d.format, d.items, {}))).not.toBeNull(); });
+    ['aid', 'case', 'explainer'].forEach((id) => { const d = studioById(id)!; expect(parseFormatContent(studioContent(d.format, d.items, {}))).not.toBeNull(); });
   });
   it('has no content for a format without a built studio', () => {
     expect(studioContent('Reel', [['Hook', 'x', 'y']], {})).toBeNull();
@@ -46,11 +74,18 @@ describe('studioContent', () => {
     expect([caseHours({ [LENGTH_QUESTION]: '2 hours' }), caseHours({ [LENGTH_QUESTION]: 'Half a day' }), caseHours({ [LENGTH_QUESTION]: 'A full day' }), caseHours({})]).toEqual([2, 4, 8, 4]);
   });
   it('offers only answers the product delivers: every other question or row says it steers the AI draft', () => {
-    const published = [LENGTH_QUESTION, EVIDENCE_QUESTION];
+    const published = [LENGTH_QUESTION, EVIDENCE_QUESTION, END_QUESTION];
     STUDIOS.filter((d) => d.available && !d.compact).forEach((d) => [...d.qs, ...d.rows].forEach(([q, , steers]) => expect(steers || published.includes(q), d.id + ' · ' + q).toBe(true)));
     expect(studioById('case')!.rows.map((r) => r[0])).toEqual(['Names']);
     expect(studioById('aid')!.qs.map((q) => q[0])).toEqual(['Template?', 'When is it used?']);
     expect(studioById('aid')!.rows.map((r) => r[0])).toEqual(['Template']);
+  });
+  it('keeps only the Explainer choices its panel delivers: depth steers the draft, the ending is published; no style, look or narration', () => {
+    const d = studioById('explainer')!;
+    expect(d.available).toBe(true);
+    expect(d.qs).toEqual([[DEPTH_QUESTION, ['Overview', 'With technical detail'], true], [END_QUESTION, [END_CHECK, END_SUMMARY, END_NONE]]]);
+    expect(d.rows).toEqual([]);
+    expect(d.cast).toBeNull();
   });
 });
 
@@ -62,6 +97,15 @@ describe('itemsValid: the rules private.items_ok repeats', () => {
   });
   it('refuses a case row outside Brief, Deliverable and Criterion', () => {
     expect(itemsValid(studioById('case')!, [...CASE, ['Note', 'Bring coffee']]).join(' ')).toMatch(/Note: use Brief, Deliverable or Criterion/);
+  });
+  it('lets an explainer carry a check of exactly three questions after its steps, and counts only steps toward its minimum', () => {
+    const d = studioById('explainer')!;
+    expect(CHECK_SIZE).toBe(3);
+    expect(itemsValid(d, [...STEPS, ...CHECK])).toEqual([]);
+    expect(itemsValid(d, [...STEPS, ...CHECK.slice(0, 2)]).join(' ')).toMatch(/exactly 3 questions/);
+    expect(itemsValid(d, [...STEPS.slice(0, 2), ...CHECK]).join(' ')).toMatch(/at least 3 items/);
+    expect(itemsValid(d, [...STEPS, ...CHECK.slice(0, 2), { ...Q(3), o: ['a', 'b'] }] as StudioEntry[]).join(' ')).toMatch(/exactly 3 questions/);
+    expect(itemsValid(d, [...Array.from({ length: 8 }, (_, k): StudioItem => ['Step ' + k, 'x']), ...CHECK]).join(' ')).toMatch(/at most 10 items/);
   });
   it('takes the most rows of a studio from ITEM_MAX, by its format', () => {
     expect(rowsMax(studioById('aid')!)).toBe(ITEM_MAX['Job aid']);
@@ -94,7 +138,9 @@ describe('the database repeats these rules', () => {
     const b = body('private.items_ok');
     expect(b).toContain("when p_type = 'Flash cards' then private.rows_ok(p_items, private.item_max(p_type), 2)");
     const rows = /when p_type in \(([^)]*)\) then private\.rows_ok\(p_items, private\.item_max\(p_type\), 3\)/.exec(b);
-    expect(quoted(rows![1])).toEqual(STUDIOS.filter((d) => d.available && !d.compact).map((d) => d.format));
+    expect(quoted(rows![1])).toEqual(STUDIOS.filter((d) => d.available && !d.compact && d.id !== 'explainer').map((d) => d.format));
+    expect(b).toContain("when p_type = 'Practice exam' then jsonb_array_length(p_items) between 1 and private.item_max(p_type) and not exists (select 1 from jsonb_array_elements(p_items) e where not private.question_ok(e))");
+    expect(b).toContain("when p_type = 'Interactive explainer' then private.explainer_ok(p_items)");
     expect(quoted(/\(e ->> 0\) not in \(([^)]*)\)/.exec(b)![1])).toEqual(CASE_LABELS);
     expect(b).toContain('= ' + CASE_LABELS.length + ')');
   });
@@ -119,10 +165,23 @@ describe('the database repeats these rules', () => {
     expect(b).toContain('else ' + caseHours({}) + ' end');
     expect(body('private.publish_contribution')).toContain("when 'Case exercise' then private.case_hours(c.shape)");
   });
-  it('the answers are in the check fingerprint and the client-name scan', () => {
+  it('the answers are in the check fingerprint and the client-name scan, questions and answers alike', () => {
     expect(body('private.check_contribution')).toContain('private.contribution_fingerprint(c.items, c.title, c.type, c.shape)');
     expect(body('private.submit_contribution')).toContain('private.contribution_fingerprint(c.items, c.title, c.type, c.shape)');
-    expect(body('private.contribution_problems')).toContain('jsonb_each_text(c.shape)');
+    expect(body('private.contribution_problems')).toContain("string_agg(a.key || ' ' || a.value, ' ') from jsonb_each_text(c.shape) a");
+  });
+  it('private.explainer_ok and private.explainer_content follow the Explainer rules: a check of CHECK_SIZE, the same words', () => {
+    const ok = body('private.explainer_ok');
+    expect(ok).toContain('private.rows_ok(');
+    expect(ok).toContain('in (0, ' + CHECK_SIZE + ')');
+    expect(ok).toContain('private.question_ok(e)');
+    const c = body('private.explainer_content');
+    expect(c).toContain("'style', 'Step-through'");
+    [DEPTH_QUESTION, END_QUESTION].forEach((q) => expect(c).toContain("p_shape ->> '" + q + "'"));
+    [END_CHECK, END_SUMMARY, END_NONE, 'Overview', 'With technical detail'].forEach((w) => expect(c).toContain("'" + w + "'"));
+    const p = body('private.contribution_problems');
+    [NEEDS_CHECK, UNUSED_CHECK].forEach((m) => expect(p).toContain("'" + m.replace(/'/g, "''") + "'"));
+    expect(p).toContain("c.type <> 'Interactive explainer' or jsonb_typeof(e) = 'array'");
   });
   it('private.contribution_content publishes every format whose studio is available', () => {
     const b = body('private.contribution_content');

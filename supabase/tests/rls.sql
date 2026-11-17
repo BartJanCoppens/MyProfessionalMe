@@ -2031,5 +2031,58 @@ do $$ begin
     insert into results (check_name, expected, actual) values ('SC the guard keeps the answers of a published case', 'blocked: 42501', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('SC the guard keeps the answers of a published case', 'blocked: 42501', 'blocked: '||sqlstate); end;
 end $$;
+-- ---------- Explainer Studio: steps, the optional three-question check, the ending and the content they publish (EX) ----------
+-- e5 also makes Interactive explainers, without review. Steps are [label, text] rows; the check is three exam questions
+-- after them, published only when "End with?" is the check (private.explainer_ok, private.explainer_content).
+reset role;
+update public.creator_rules set formats = formats || '{"Interactive explainer"}' where user_id = '00000000-0000-0000-0000-0000000000e5';
+update public.review_policies set formats = formats || '{"Interactive explainer"}' where formats = '{"Job aid","Case exercise"}';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e5","role":"authenticated"}';
+select set_config('test.ex_steps', '[["Supplier","Creates the invoice. "],["Access point","Checks the format."],["Customer","Gets the invoice."]]', true);
+select set_config('test.ex_q', '{"t":"Peppol","q":"Who checks the format?","o":["The supplier","The access point","The customer","The tax office"],"a":1,"why":"The access point checks it."}', true);
+insert into public.contributions (business_line, type, title, domain, takeaway, items, studio, shape) values
+ ('Consulting','Interactive explainer','T ex check','reg','Peppol carries it.', current_setting('test.ex_steps')::jsonb || jsonb_build_array(current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb),'explainer',
+  '{"Depth?":"With technical detail","End with?":"A three-question check"}'),
+ ('Consulting','Interactive explainer','T ex summary','reg','Peppol carries it.', current_setting('test.ex_steps')::jsonb,'explainer','{"End with?":"A summary card"}'),
+ ('Consulting','Interactive explainer','T ex two questions','reg','x', current_setting('test.ex_steps')::jsonb || jsonb_build_array(current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb),'explainer','{"End with?":"A three-question check"}'),
+ ('Consulting','Interactive explainer','T ex bad question','reg','x', current_setting('test.ex_steps')::jsonb || jsonb_build_array(current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb - 'why'),'explainer','{"End with?":"A three-question check"}'),
+ ('Consulting','Interactive explainer','T ex check missing','reg','x', current_setting('test.ex_steps')::jsonb,'explainer','{"End with?":"A three-question check"}'),
+ ('Consulting','Interactive explainer','T ex check unused','reg','x', current_setting('test.ex_steps')::jsonb || jsonb_build_array(current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb),'explainer','{"End with?":"Nothing"}'),
+ ('Consulting','Interactive explainer','T ex too few steps','reg','x', '[["Supplier","a"],["Customer","b"]]'::jsonb || jsonb_build_array(current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb),'explainer','{"End with?":"A three-question check"}'),
+ ('Consulting','Interactive explainer','T ex client key','reg','x', current_setting('test.ex_steps')::jsonb,'explainer','{"For Delcroix?":"Nothing"}');
+do $$ begin
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, items, studio) values ('Consulting','Interactive explainer','T ex too many','reg','x',
+      (select jsonb_agg(jsonb_build_array('Step '||g, 'x')) from generate_series(1, 8) g) || jsonb_build_array(current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb),'explainer');
+    insert into results (check_name, expected, actual) values ('EX more steps and questions than an explainer holds (10)', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EX more steps and questions than an explainer holds (10)', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'EX a check of two questions fails the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex two questions')), '|');
+insert into results (check_name, expected, actual) select 'EX a question without its explanation fails the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex bad question')), '|');
+insert into results (check_name, expected, actual) select 'EX ending with the check needs the check', 'Ending with a three-question check needs its questions: draft them with AI, or choose another ending in Shape it',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex check missing')), '|');
+insert into results (check_name, expected, actual) select 'EX a check that is not the ending fails the check', 'The check is only shown when the explainer ends with it: remove it, or choose “A three-question check” in Shape it',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex check unused')), '|');
+insert into results (check_name, expected, actual) select 'EX the check''s questions do not count as steps', 'Add at least 3 items', array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex too few steps')), '|');
+insert into results (check_name, expected, actual) select 'EX a client name in a question of Shape it fails the check', '“Delcroix” looks like a client name · anonymise it',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex client key')), '|');
+insert into results (check_name, expected, actual) select 'EX an explainer with its check passes the check and is published', '{}/published',
+  public.check_contribution((select id from public.contributions where title = 'T ex check'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T ex check'));
+insert into results (check_name, expected, actual) select 'EX the explainer becomes explainer content with its check',
+  jsonb_build_object('kind', 'explainer', 'style', 'Step-through', 'depth', 'With technical detail', 'end', 'A three-question check',
+    'steps', '[{"label":"Supplier","text":"Creates the invoice."},{"label":"Access point","text":"Checks the format."},{"label":"Customer","text":"Gets the invoice."}]'::jsonb,
+    'check', jsonb_build_array(current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb, current_setting('test.ex_q')::jsonb))::text,
+  l.content::text from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T ex check';
+insert into results (check_name, expected, actual) select 'EX the published explainer keeps its format', 'Interactive explainer/published/0.25', l.format||'/'||l.status||'/'||l.hours
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T ex check';
+insert into results (check_name, expected, actual) select 'EX an explainer ending with a summary card is published', '{}/published',
+  public.check_contribution((select id from public.contributions where title = 'T ex summary'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T ex summary'));
+insert into results (check_name, expected, actual) select 'EX the summary explainer has no check', 'A summary card/Overview/false', (l.content ->> 'end')||'/'||(l.content ->> 'depth')||'/'||(l.content ? 'check')::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T ex summary';
+-- the learner completes an interactive explainer themselves (completion 'mark', private.is_self_complete)
+select public.save_learning((select learning_id from public.contributions where title = 'T ex check'), p_state => 'accepted', p_pct => 100::smallint, p_detail => '{"last":true,"best":100}');
+insert into results (check_name, expected, actual) select 'EX a learner completes an interactive explainer without a counsellor', 'accepted', state
+  from public.learner_learnings where user_id = '00000000-0000-0000-0000-0000000000e5' and learning_id = (select learning_id from public.contributions where title = 'T ex check');
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

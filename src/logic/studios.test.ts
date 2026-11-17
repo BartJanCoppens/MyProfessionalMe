@@ -7,16 +7,16 @@ const def = (id: string) => studioById(id)!;
 const ITEMS = (id: string) => def(id).items as StudioItem[];
 
 describe('studio definitions', () => {
-  it('has the ten design studios, each with questions and produce rows (flash: both too)', () => {
+  it('has the ten design studios, each with questions and, but for the Explainer (its options were not deliverable), produce rows', () => {
     expect(STUDIOS.map((s) => s.id)).toEqual(['avatar', 'reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
-    for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length).toBeGreaterThan(0); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
+    for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length > 0, s.id).toBe(s.id !== 'explainer'); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
     expect(def('avatar').qs).toHaveLength(4);
     expect(def('reel').build).toEqual(['Writing the voice-over', 'Recording the avatar take', 'Adding visuals and captions', 'Final cut']);
   });
-  it('names a learning format per studio; Job aid, Flash and Case are available', () => {
+  it('names a learning format per studio; Explainer, Job aid, Flash and Case are available', () => {
     expect(STUDIOS.map((s) => s.format)).toEqual(['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Flash cards', 'Case exercise']);
     expect(def('flash').alsoFormats).toEqual(['Practice exam']);
-    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['aid', 'flash', 'case']);
+    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['explainer', 'aid', 'flash', 'case']);
   });
   it('names no person: examples and stock looks use roles', () => {
     const text = JSON.stringify([STUDIOS, STOCK_LOOKS]);
@@ -30,6 +30,7 @@ describe('visibleSteps', () => {
   it('gives the four v4 steps for Flash and six for Reel', () => {
     expect(visibleSteps(def('flash'))).toEqual(['Idea & sources', 'Draft', 'Preview & test', 'Check & send']);
     expect(visibleSteps(def('reel'))).toEqual(STUDIO_STEPS);
+    expect(visibleSteps(def('explainer'))).toEqual(['Idea & sources', 'Shape it', 'Draft', 'Preview & test', 'Check & send']);
   });
   it('drops Shape without questions and Produce without rows and cast', () => {
     const bare = { ...def('reel'), qs: [], rows: [], cast: null };

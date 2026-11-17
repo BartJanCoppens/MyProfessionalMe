@@ -179,6 +179,12 @@ describe('completion and evidence for the seven new formats (D3)', () => {
     expect(evidenceNeed('Stretch assignment', ev({ note: long }))).toBeNull();
     expect(['Flash cards', 'Job aid', 'Practice exam', 'Teach-back', 'Webinar'].map(evidenceRule)).toEqual(['none', 'none', 'none', 'none', 'none']);
   });
+  it('completes an interactive explainer itself, in its panel: the last step seen, and the check when it has one', () => {
+    expect(completionOf('Interactive explainer')).toBe('mark');
+    expect(evidenceRule('Interactive explainer')).toBe('none');
+    expect(completionTodo('Interactive explainer', true)).toBe('go through to the last step (and the check, if any)');
+    expect(completionText('Interactive explainer', 'Sam Coach', true)).toBe('Go through to the last step (and the check, if any) to complete it. It counts right away; no acceptance needed.');
+  });
   it('words the case exercise rule', () => {
     expect(ruleText('Case exercise', 'Sam Coach')).toMatch(/link/);
   });

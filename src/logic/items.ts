@@ -38,13 +38,15 @@ export const LONG_MAX = 600;
 export const fieldOk = (max: number) => (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.length <= max;
 export const rowFieldMax = (k: number) => (k === 0 ? SHORT_MAX : LONG_MAX);
 const isCard = (v: unknown): v is Card => Array.isArray(v) && v.length === 2 && v.every((x, k) => fieldOk(rowFieldMax(k))(x));
-const isQuestion = (v: unknown): v is ExamQuestion => {
+export const isQuestion = (v: unknown): v is ExamQuestion => {
   const x = v as Record<string, unknown> | null;
   return !!x && typeof x === 'object' && fieldOk(SHORT_MAX)(x.t) && fieldOk(SHORT_MAX)(x.q) && fieldOk(LONG_MAX)(x.why) && Array.isArray(x.o) && x.o.length === 4 && x.o.every(fieldOk(SHORT_MAX))
     && Number.isInteger(x.a) && (x.a as number) >= 0 && (x.a as number) < 4;
 };
 const isRow = (v: unknown): v is StudioRow => Array.isArray(v) && (v.length === 2 || v.length === 3) && v.every((x) => typeof x === 'string');
-const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice exam' ? isQuestion : isRow);
+// The Interactive explainer's items are its step rows and, after them, its check's exam questions (studios.ts).
+const isStepOrQuestion = (v: unknown): v is StudioRow | ExamQuestion => isRow(v) || isQuestion(v);
+const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice exam' ? isQuestion : type === 'Interactive explainer' ? isStepOrQuestion : isRow);
 
 // The first sentence of a passage, and its first n words without a trailing punctuation mark; shared by the scripted drafts.
 export const firstSentence = (p: string) => p.trim().split(/(?<=[.!?])\s+/)[0];
@@ -112,13 +114,17 @@ export function parseCsv(type: string, raw: string): { list: Item[]; problems: s
 // Anything malformed is null, never repaired.
 export function parseDraftItems(type: string, raw: string): Item[] | null {
   const r = jsonObject(raw) as Record<string, unknown> | null;
-  const rows = r && (isFlash(type) ? r.cards : r.questions);
+  if (!isFlash(type)) return readQuestions(r?.questions)?.slice(0, ITEM_MAX[type]) ?? null;
+  const rows = r?.cards;
   if (!Array.isArray(rows) || !rows.length) return null;
-  const items = isFlash(type) ? rows.map((c) => (c && typeof c.front === 'string' && typeof c.back === 'string' ? [c.front.trim(), c.back.trim()] : null)) : rows;
-  if (!items.every(isItem(type))) return null;
-  const clean = isFlash(type) ? items as Item[]
-    : (items as ExamQuestion[]).map((x) => ({ t: x.t.trim(), q: x.q.trim(), o: x.o.map((o) => o.trim()), a: x.a, why: x.why.trim() }));
-  return clean.slice(0, ITEM_MAX[type]);
+  const items = rows.map((c) => (c && typeof c.front === 'string' && typeof c.back === 'string' ? [c.front.trim(), c.back.trim()] : null));
+  return items.every(isCard) ? (items as Item[]).slice(0, ITEM_MAX[type]) : null;
+}
+// Exam questions from an AI answer ({t, q, o, a, why} with a 0-based answer), trimmed; null when any is malformed or there
+// are none. Practice exams and the Explainer's check read their questions with it.
+export function readQuestions(rows: unknown): ExamQuestion[] | null {
+  if (!Array.isArray(rows) || !rows.length || !rows.every(isQuestion)) return null;
+  return (rows as ExamQuestion[]).map((x) => ({ t: x.t.trim(), q: x.q.trim(), o: x.o.map((o) => o.trim()), a: x.a, why: x.why.trim() }));
 }
 
 // Items stored on a contribution, read again strictly: a wrong shape gives none.
@@ -130,8 +136,8 @@ export function itemsFromSaved(type: string, raw: unknown): Item[] {
 // The well-formed items only: a stray item of the other format is left out, never a crash.
 export const validItems = (type: string, list: Item[]): Item[] => list.filter(isItem(type));
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
-  return validItems(type, list).map((x) => (type === 'Practice exam' ? { front: (x as ExamQuestion).q, back: 'Answer: ' + (x as ExamQuestion).o[(x as ExamQuestion).a] + ' · ' + (x as ExamQuestion).why }
-    : { front: (x as StudioRow)[0], back: (x as StudioRow).slice(1).filter(Boolean).join(' · ') }));
+  return validItems(type, list).map((x) => (Array.isArray(x) ? { front: x[0], back: x.slice(1).filter(Boolean).join(' · ') }
+    : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
 }
 // Saved as AI-assisted when the outline was drafted by AI or the items were, in any studio; scripted and manual items never are.
 export const aiAssisted = (nw: { ai: boolean; items?: DraftItems }) => nw.ai || nw.items?.how === 'ai';
