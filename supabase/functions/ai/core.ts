@@ -6,8 +6,12 @@
 //   openai_compatible  Chat completions at <base URL>/chat/completions, key as a bearer token (and api-key for
 //                      Azure). Covers OpenAI, Azure OpenAI and EU-hosted OpenAI-compatible services such as Mistral.
 // The key is only ever put in a request header; errors are scrubbed of it before they leave the function.
+import { isLimitError, scrub } from '../_shared/aiGuard.ts';
+import type { Provider } from '../_shared/aiGuard.ts';
 
-export type Provider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'heygen' | 'other';
+export { isLimitError, scrub };
+export type { Provider };
+
 export const TEXT_PROVIDERS: Provider[] = ['anthropic', 'openai_compatible'];
 export type Msg = { role: 'user' | 'assistant'; content: string };
 export type Ask = { system?: string; messages: Msg[]; max_tokens: number };
@@ -61,8 +65,6 @@ export function withPreamble(ask: Ask, preamble: string | null | undefined): Ask
 }
 // Characters sent to the model, counted per person and day (ai_usage.input_chars).
 export const inputChars = (ask: Ask) => (ask.system || '').length + ask.messages.reduce((a, m) => a + m.content.length, 0);
-// The database refuses a call beyond the use's daily limit with this message.
-export const isLimitError = (message: string | undefined) => /daily ai limit reached/i.test(message || '');
 export const limitMessage = (limit: number | null) => 'Daily AI limit reached' + (limit != null ? ' (' + limit + ' a day per person for this use)' : '') + '; the scripted reply is used until tomorrow (UTC)';
 
 const trimUrl = (u: string) => u.replace(/\/+$/, '');
@@ -103,11 +105,6 @@ export function parseReply(provider: Provider, status: number, json: unknown): O
   const c = j.choices?.[0]?.message?.content;
   const text = (typeof c === 'string' ? c : Array.isArray(c) ? c.map((p: any) => (p && typeof p.text === 'string' ? p.text : '')).join('') : '').trim();
   return text ? { ok: true, text } : { ok: false, error: j.choices?.[0]?.finish_reason === 'length' ? 'The model ran out of tokens before answering' : 'The model returned no text' };
-}
-
-// Removes the key from any text that leaves the function (a provider may echo part of it in an error).
-export function scrub(text: string, key: string) {
-  return key && key.length >= 4 ? text.split(key).join('[key]') : text;
 }
 
 // One call: build, send with a timeout, read. fetchFn is injectable for tests.

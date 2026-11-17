@@ -425,3 +425,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/ai/deno.json"
 entrypoint = "./functions/ai/index.ts"
+
+[functions.voice]
+enabled = true
+verify_jwt = true
+import_map = "./functions/voice/deno.json"
+entrypoint = "./functions/voice/index.ts"
