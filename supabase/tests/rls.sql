@@ -2145,6 +2145,17 @@ reset role;
 -- ---------- Phase 2 review fixes (P2) ----------
 insert into results (check_name, expected, actual) values ('P2 studio_motion use is seeded, text and off, asking for one SVG', 'text/false/true/false',
   (select kind||'/'||enabled||'/'||(preamble like '%SVG only%')||'/'||(preamble like '%JSON%') from public.ai_uses where key = 'studio_motion'));
+-- private.rows_of: an explainer's or a flow's rows (its array items) in order, without its check or drawing
+insert into results (check_name, expected, actual) values ('P2 rows_of keeps the rows in order and leaves the rest out', '[["a", "b"], ["c", "d"]]/[]',
+  private.rows_of('[["a","b"],{"q":"x"},["c","d"]]'::jsonb)::text||'/'||private.rows_of('[{"svg":"<svg/>"}]'::jsonb)::text);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e5","role":"authenticated"}';
+do $$ begin
+  begin perform private.rows_of('[]'::jsonb);
+    insert into results (check_name, expected, actual) values ('P2 a signed-in user cannot call rows_of', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('P2 a signed-in user cannot call rows_of', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
 -- learnings.ai_made: publishing marks a learning AI made from the contribution's ai_assisted, and always when AI
 -- animated an Animated flow's drawing; nobody writes it directly (as content).
 insert into results (check_name, expected, actual) values ('P2 a flow whose drawing AI animated is marked AI made', 'true',

@@ -121,6 +121,13 @@ describe('the database repeats the Animated flow rules', () => {
     expect(b).toContain('private.drawing_ok(e)');
     expect(body('private.items_ok')).toContain("when p_type = 'Animated flow' then private.motion_ok(p_items)");
   });
+  it('the explainer\'s and the flow\'s rows come from one helper, private.rows_of', () => {
+    expect(body('private.rows_of')).toContain("where jsonb_typeof(x.e) = 'array'");
+    ['private.explainer_ok', 'private.motion_ok', 'private.explainer_content', 'private.motion_content'].forEach((fn) => {
+      expect(body(fn), fn).toContain('private.rows_of(p_items)');
+      expect(body(fn), fn).not.toContain("jsonb_typeof(x.e) = 'array'");
+    });
+  });
   it('private.motion_content publishes the length the drawing was built for', () => {
     const b = body('private.motion_content');
     expect(b).toContain("'seconds', (d.e ->> 'seconds')::integer");

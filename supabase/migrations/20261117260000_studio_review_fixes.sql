@@ -4,6 +4,9 @@
 --      EU AI Act Art. 50). Set only by publish_contribution, from the contribution's ai_assisted, and always when AI
 --      animated an Animated flow's drawing (content made 'ai'). Like content, no client role writes it: the column grants
 --      of 20261101144300 leave it out, so the admin library edits the other columns and never this one.
+--   3. private.rows_of: the one reading of a studio's rows (its array items, in order) out of items that also hold an
+--      explainer's check or a flow's drawing; explainer_ok, motion_ok, explainer_content and motion_content use it,
+--      with their behaviour unchanged.
 
 -- AI use for animating an Animated flow in the Motion Studio. Off by default: until a System Admin chooses a connection
 -- and switches it on, the studio animates the scripted flow of boxes and arrows and says so. Same shape as the
@@ -48,3 +51,72 @@ begin
   return v_id;
 end;
 $$;
+
+-- 3. A studio's rows: the array items, in order ('[]' when there are none).
+create function private.rows_of(p_items jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce((select jsonb_agg(x.e order by x.n) from jsonb_array_elements(p_items) with ordinality as x(e, n) where jsonb_typeof(x.e) = 'array'), '[]'::jsonb);
+$$;
+
+-- As before (20261117240000), its steps through rows_of.
+create or replace function private.explainer_ok(p_items jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select private.rows_ok(private.rows_of(p_items), private.item_max('Interactive explainer'), 3)
+    and (select count(*) from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array') in (0, 3)
+    and not exists (select 1 from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array' and not private.question_ok(e));
+$$;
+
+-- As before (20261117250000), its stages through rows_of.
+create or replace function private.motion_ok(p_items jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select private.rows_ok(private.rows_of(p_items), private.item_max('Animated flow') - 1, 2)
+    and (select count(*) from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array') = 1
+    and not exists (select 1 from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array' and not private.drawing_ok(e));
+$$;
+
+-- As before (20261117240000), its steps through rows_of.
+create or replace function private.explainer_content(p_items jsonb, p_shape jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $$
+  select jsonb_build_object('kind', 'explainer', 'style', 'Step-through',
+      'depth', case p_shape ->> 'Depth?' when 'With technical detail' then 'With technical detail' else 'Overview' end,
+      'steps', (select jsonb_agg(jsonb_build_object('label', btrim(r.e ->> 0), 'text', btrim(r.e ->> 1)) order by r.n)
+                from jsonb_array_elements(private.rows_of(p_items)) with ordinality as r(e, n)),
+      'end', v.ending)
+    || case when v.ending = 'A three-question check' and v.questions is not null then jsonb_build_object('check', v.questions) else '{}'::jsonb end
+  from (select case p_shape ->> 'End with?' when 'A three-question check' then 'A three-question check' when 'Nothing' then 'Nothing' else 'A summary card' end as ending,
+               (select jsonb_agg(x.e order by x.n) from jsonb_array_elements(p_items) with ordinality as x(e, n) where jsonb_typeof(x.e) = 'object') as questions) v;
+$$;
+
+-- As before (20261117250000), its stages through rows_of.
+create or replace function private.motion_content(p_items jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $$
+  select jsonb_build_object('kind', 'motion',
+      'stages', (select jsonb_agg(jsonb_build_object('label', btrim(r.e ->> 0), 'text', btrim(r.e ->> 1)) order by r.n)
+                 from jsonb_array_elements(private.rows_of(p_items)) with ordinality as r(e, n)),
+      'svg', d.e ->> 'svg', 'alt', btrim(d.e ->> 'alt'),
+      'seconds', (d.e ->> 'seconds')::integer,
+      'made', d.e ->> 'made')
+  from (select e from jsonb_array_elements(p_items) e where jsonb_typeof(e) = 'object' limit 1) d;
+$$;
+
+revoke execute on function private.rows_of(jsonb) from public, anon, authenticated;
