@@ -38,7 +38,13 @@ function useClock(fl: FlowView) {
     scrub: (v: number) => { if (playing) play(v); else { svg.current?.pauseAnimations?.(); seek(v); } } };
 }
 
+// Another drawing (or length, or motion setting) starts a new player: its clock at the first frame, stopped, wherever
+// the last one was.
 export default function AnimatedFlowPanel({ fl }: { fl: FlowView }) {
+  return <Player key={fl.svg + '|' + fl.seconds + '|' + fl.still} fl={fl} />;
+}
+
+function Player({ fl }: { fl: FlowView }) {
   const c = useClock(fl), [text, setText] = useState(fl.still), cap = fl.caption(c.t);
   return (
     <Card title="Watch the flow" subtitle={fl.sub}>

@@ -17,6 +17,8 @@ import { initState, Logic } from '../model';
 import { cfg, emptyData, harness, member, person } from '../test/harness';
 import type { LearnerData } from '../lib/learnerStore';
 import type { AppState, Learn } from '../types';
+import { flowView } from '../fmtMotion';
+import AnimatedFlowPanel from './AnimatedFlowPanel';
 import { DetailScreen } from './Library';
 import { Preview } from './studioPreviews';
 
@@ -94,6 +96,20 @@ describe('the learner\'s Animated flow', () => {
     expect(lastAt()).toBe(0);
     expect(smil.unpause).toHaveBeenCalledTimes(2);
     expect(learner.saveProgress).not.toHaveBeenCalled();
+  });
+  it('starts a new drawing at its first frame, stopped, wherever the last one was', () => {
+    vi.useFakeTimers();
+    const opts = { ro: false, still: false, done: false, onEnd: vi.fn(), onRead: () => {} };
+    const flow = (svg: string) => flowView({ kind: 'motion', stages: STAGES, svg, alt: ALT, seconds: 20, made: 'ai' }, opts);
+    const { rerender } = render(<AnimatedFlowPanel fl={flow('<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>')} />);
+    click('Play');
+    act(() => { vi.advanceTimersByTime(9000); });
+    rerender(<AnimatedFlowPanel fl={flow('<svg xmlns="http://www.w3.org/2000/svg"><circle r="2"/></svg>')} />);
+    expect((screen.getByRole('slider', { name: 'Position in the flow' }) as HTMLInputElement).value).toBe('0');
+    expect(screen.getByText('Stage 1 of 3 · Order')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(20000); });
+    expect(opts.onEnd).not.toHaveBeenCalled();
   });
   it('completes when played to the end, once, and holds the last frame', () => {
     vi.useFakeTimers();
