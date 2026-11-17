@@ -24,6 +24,13 @@ describe('loading content', () => {
     expect(c.maps.Audit).toEqual([['L2', 'Analyst', 'mandatory']]);
     expect(c.bundles).toEqual([{ name: 'K', id: 'B1', access: 'all', line: null }]);
   });
+  it('loads whether AI made a learning (ai_made, set when a contribution is published)', async () => {
+    db.answer((c) => (c.table === 'learnings' ? { data: [{ id: 'L1', title: 'One', domain: 'prof', level: 1, format: 'Job aid', source: 'Peer contribution', hours: 1, cpd: 0, due: '', why: '', business_line: null, status: 'published', ai_made: true },
+      { id: 'L2', title: 'Two', domain: 'prof', level: 1, format: 'Book', source: '', hours: 1, cpd: 0, due: '', why: '', business_line: null, status: 'published', ai_made: false }] } : { data: [] }));
+    const c = await loadContent();
+    expect(has(db.on('learnings')[0], 'select', 'id, title, domain, level, format, source, hours, cpd, due, why, business_line, status, content, ai_made')).toBe(true);
+    expect(c.learnings.map(([r, m]) => [r[0], m.aiMade ?? false])).toEqual([['L1', true], ['L2', false]]);
+  });
   it('fails with the database message', async () => {
     db.answer((c) => (c.table === 'curriculum_mappings' ? { error: { message: 'permission denied' } } : { data: [] }));
     await expect(loadContent()).rejects.toThrow('permission denied');

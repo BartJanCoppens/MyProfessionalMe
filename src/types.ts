@@ -81,7 +81,8 @@ export type ExplainerContent = { kind: 'explainer'; style: string; depth: string
 // made: who animated the drawing ('ai' shows as Made with AI, 'scripted' as Scripted), see src/logic/motionSvg.ts.
 export type MotionContent = { kind: 'motion'; stages: { label: string; text: string }[]; svg: string; alt: string; seconds: number; made: 'ai' | 'scripted' };
 export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent;
-export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null };
+// aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
+export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
 export type View = 'constellation' | 'radar' | 'road';
 export type Sel = { type: 'node'; id: string; dom: string } | { type: 'hub'; id: string } | { type: 'cloud'; id: CloudKey } | { type: 'cert' } | null;
 

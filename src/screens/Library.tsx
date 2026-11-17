@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { Avatar, Banner, Button, Card, Checkbox, Eyebrow, Field, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, PillToggle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
+import AiMadeTag from './AiMadeTag';
 import { AvatarBadge } from './Map';
 import { CoverArt } from './Cover';
 import { FormatPanels } from './FormatPanels';
@@ -61,7 +62,7 @@ export function LibraryScreen({ vm }: { vm: VM }) {
             <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <Eyebrow tone="muted" size={11}>{it.domLabel} · {it.format}</Eyebrow>
-              <Tag tone={it.obTone}>{it.obLabel}</Tag>
+              <span style={{ display: 'flex', gap: 6, flex: 'none' }}><AiMadeTag on={it.aiMade} /><Tag tone={it.obTone}>{it.obLabel}</Tag></span>
             </div>
             <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.25, textWrap: 'pretty' }}>{it.title}</div>
             <div style={{ fontSize: 12.5, color: '#5a6058' }}>{it.meta}</div>
@@ -97,6 +98,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
           <h1 style={{ margin: '4px 0 0', fontSize: 24, fontWeight: 600, lineHeight: 1.2, textWrap: 'pretty' }}>{det.title}</h1>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <AiMadeTag on={det.aiMade} />
           <Tag tone={det.obTone}>{det.obLabel}</Tag>
           <StatusChip status={det.state} label={det.stateLabel} icon={det.stateIcon} size="md" />
         </div>

@@ -6,11 +6,12 @@ import { supabase } from './supabase';
 // The learning catalogue, curriculum mappings and knowledge bundles, stored in Supabase.
 // Row-level security decides who may write: General and System Admins everything, Domain Admins their own business line.
 
-export type LearningRow = { id: string; title: string; domain: string; level: number; format: string; source: string; hours: number | string; cpd: number | string; due: string; why: string; business_line: string | null; status: LearnMeta['status']; content?: unknown };
+export type LearningRow = { id: string; title: string; domain: string; level: number; format: string; source: string; hours: number | string; cpd: number | string; due: string; why: string; business_line: string | null; status: LearnMeta['status']; content?: unknown; ai_made?: boolean };
 export type MappingRow = { audience: string; learning_id: string; stage: string; obligation: string };
 export type BundleRow = { id: string; business_line: string | null; access: string; data: Omit<Bundle, 'id' | 'access' | 'line'> };
 export type Content = { learnings: [Learn, LearnMeta][]; maps: Record<string, Mapping[]>; bundles: Bundle[] };
-export type LearningFields = Omit<LearningRow, 'id'>;
+// What the admin library writes; content and ai_made are set by publishing only (no column grant).
+export type LearningFields = Omit<LearningRow, 'id' | 'content' | 'ai_made'>;
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 
@@ -50,7 +51,7 @@ function teach(prompt: string, crit: unknown[]): FormatContent | null {
 }
 
 export const toLearn = (r: LearningRow): [Learn, LearnMeta] =>
-  [[r.id, r.title, r.domain, r.level, r.format, r.source, Number(r.hours), Number(r.cpd), r.due, r.why], { line: r.business_line, status: r.status, ...(r.content ? { content: parseFormatContent(r.content) } : {}) }];
+  [[r.id, r.title, r.domain, r.level, r.format, r.source, Number(r.hours), Number(r.cpd), r.due, r.why], { line: r.business_line, status: r.status, ...(r.content ? { content: parseFormatContent(r.content) } : {}), ...(r.ai_made ? { aiMade: true } : {}) }];
 
 // Every audience gets a list, empty when nothing is mapped to it. Mappings to learnings outside `known` are left out.
 export function mapsFrom(rows: MappingRow[], known?: Set<string>): Record<string, Mapping[]> {
@@ -95,7 +96,7 @@ export function bundleRow(b: Bundle): BundleRow {
 
 export async function loadContent(): Promise<Content> {
   const [l, m, b] = await Promise.all([
-    supabase.from('learnings').select('id, title, domain, level, format, source, hours, cpd, due, why, business_line, status, content').order('id'),
+    supabase.from('learnings').select('id, title, domain, level, format, source, hours, cpd, due, why, business_line, status, content, ai_made').order('id'),
     supabase.from('curriculum_mappings').select('audience, learning_id, stage, obligation'),
     supabase.from('knowledge_bundles').select('id, business_line, access, data').order('id'),
   ]);

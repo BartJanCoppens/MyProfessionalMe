@@ -2145,5 +2145,33 @@ reset role;
 -- ---------- Phase 2 review fixes (P2) ----------
 insert into results (check_name, expected, actual) values ('P2 studio_motion use is seeded, text and off, asking for one SVG', 'text/false/true/false',
   (select kind||'/'||enabled||'/'||(preamble like '%SVG only%')||'/'||(preamble like '%JSON%') from public.ai_uses where key = 'studio_motion'));
+-- learnings.ai_made: publishing marks a learning AI made from the contribution's ai_assisted, and always when AI
+-- animated an Animated flow's drawing; nobody writes it directly (as content).
+insert into results (check_name, expected, actual) values ('P2 a flow whose drawing AI animated is marked AI made', 'true',
+  (select l.ai_made::text from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T mo flow'));
+insert into results (check_name, expected, actual) values ('P2 a scripted flow is not marked AI made', 'false',
+  (select l.ai_made::text from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T mo scripted'));
+insert into results (check_name, expected, actual) values ('P2 a job aid made by hand is not marked AI made', 'false',
+  (select l.ai_made::text from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sc aid'));
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e5","role":"authenticated"}';
+insert into public.contributions (business_line, type, title, domain, takeaway, items, studio, ai_assisted) values
+ ('Consulting','Job aid','T p2 ai aid','prof','Tick it.','[["Before","Scope"],["Before","Map"],["During","Sign-off"],["After","Minutes"]]','aid', true);
+insert into results (check_name, expected, actual) select 'P2 an AI-assisted job aid passes the check and is published', '{}/published',
+  public.check_contribution((select id from public.contributions where title = 'T p2 ai aid'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T p2 ai aid'));
+reset role;
+insert into results (check_name, expected, actual) values ('P2 the AI-assisted job aid is marked AI made', 'true',
+  (select l.ai_made::text from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T p2 ai aid'));
+insert into results (check_name, expected, actual) values ('P2 a learning added by an admin is not AI made', 'false', (select ai_made::text from public.learnings where id = 'L68'));
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+do $$ begin
+  begin update public.learnings set ai_made = true where id = 'L68';
+    insert into results (check_name, expected, actual) values ('P2 a General Admin cannot set ai_made', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('P2 a General Admin cannot set ai_made', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+with u as (update public.learnings set title = title where id = 'L68' returning 1)
+  insert into results (check_name, expected, actual) select 'P2 a General Admin still edits the other columns', '1 rows', count(*)||' rows' from u;
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

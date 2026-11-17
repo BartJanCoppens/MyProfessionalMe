@@ -234,7 +234,7 @@ export class Logic {
     const hoursLabel = lengthLabel(row); const MD = MEDIA[id]; const isPeer = source === 'Peer contribution';
     return {
       id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
-      isMedia: !!MD, mediaLine: MD ? format + ' · ' + MD.len + ' · ' + MD.by : '', isPeer, peerLine: isPeer ? 'Made by a colleague · peer-reviewed' : '',
+      isMedia: !!MD, mediaLine: MD ? format + ' · ' + MD.len + ' · ' + MD.by : '', isPeer, peerLine: isPeer ? 'Made by a colleague · peer-reviewed' : '', aiMade: !!LEARN_META[id]?.aiMade,
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
       stateLabel: changes ? 'Changes requested' : state === 'in-progress' ? (pct >= 100 && completionOf(format) !== 'acceptance' ? 'All hours logged · ' + completionTodo(format, !!LEARN_META[id]?.content) : 'In progress · ' + pct + '%') : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
