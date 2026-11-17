@@ -28,6 +28,8 @@ Known proof-of-concept shortcuts and what a production version replaces them wit
 | `src/screens/Create.tsx` is oversized | same path | Split the tabs (Mine, Review, New content) by behaviour |
 | Hand-rolled chips and label-style copies remain in older screens (Membership, Mapping, TrajectoryEditor, Knowledge, FormatPanels, Map, AiConnections, Library, MapCert) | those screens | `ChipGroup.tsx` and `labelStyle.ts` when each screen is next touched |
 | The AI animation path (`studio_motion` with a live connection) has not been run against a real provider; only the scripted flow and the strict reader are tested | `src/studioMotion.ts` | A live smoke test once a System Admin switches `studio_motion` on |
+| The `voice` function has not been run against ElevenLabs, nor type-checked by Deno locally (no Deno here); its core is tested under Vitest with a fake ElevenLabs | `supabase/functions/voice/` | `deno check` in CI and a live smoke test once `studio_voice` is switched on |
+| A re-voiced narration with changed words leaves the old mp3 in the draft's folder until the draft is deleted | `supabase/functions/voice/core.ts` | The studio removes the replaced file, or a cleanup job removes files no item names |
 
 ## Trajectory start month and who an auto-enrol trajectory binds (design v4, Task 5, 2026-11-17)
 
@@ -138,4 +140,14 @@ Plan: `docs/superpowers/plans/2026-11-17-studios.md`. The owner reversed D1 ("pa
 - **Files freeze with the contribution.** The author writes (adds, replaces, removes) only while the contribution is a draft or has changes requested, as for the contribution row; in review and once published nobody removes them from the app. Deleting a draft removes its files first (`removeDraft` → `removeContributionMedia`), because once the row is gone nobody may remove them; if a file cannot be removed the draft is kept and the person is told. A contribution with changes requested cannot be deleted, so its files are never touched.
 - **Per-kind sizes are checked in TypeScript only.** `.horizon` 50 MB and audio 25 MB per file (`MEDIA_KINDS`) are checked before upload; the bucket caps every file at 50 MB, so a client that skips the check can store audio up to 50 MB. *Alternative:* one bucket per kind or a size check in a policy (refused for now: Storage limits are per bucket, and object metadata is written after the policy check).
 - **Readers follow the brief exactly: author, reviewers, published.** A System Admin, who can read every contribution row, cannot read its unpublished files; a content admin who sets a published learning back to draft or review closes its files to learners, as the learning itself. *Open for the owner:* whether System Admins should read all media.
+
+## Studios Phase 3, Task 3.2: voice adapter
+
+- **General Admins open the AI connections page, for the stock voices only.** *What:* the brief has System and General Admins manage `stock_voices` there; connections, uses and usage stay System Admin only (RLS and the screen). *Alternative:* a separate page (refused: the brief names this page, and one page keeps voices next to the connection that speaks them).
+- **"Hear the voice" plays ElevenLabs' own preview of the voice, not a sentence we voice.** *Why:* it costs no characters, needs no draft to store into, and is what Horizon does. It is offered only while `studio_voice` is live.
+- **A voice id stays as added; voices are deactivated, never deleted.** Stored narration was made with the voice; a wrong id is deactivated and added again.
+- **Daily characters per use (`ai_uses.daily_chars`), 30,000 for `studio_voice`.** About a 30-minute podcast a day per person; the System Admin changes it in the use editor. Text uses keep calls only (null).
+- **The voice function asks `public.can_write_media` with the caller's token before it spends characters, and uploads with that token.** The one media rule decides twice (before the call and at upload); nothing is copied into the function.
+- **The `ai` function shares its database helpers with `voice` (`supabase/functions/_shared/`).** It refuses voice uses, which `ai_live_uses()` now also lists.
+- **The narration step player builds on the Animated flow's clock**, now `src/screens/useClock.ts`; podcasts and reels keep the app's media tick (two clocks, not three).
 
