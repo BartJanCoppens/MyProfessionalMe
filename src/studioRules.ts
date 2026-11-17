@@ -1,7 +1,7 @@
 // Which of a studio's formats the person's creation rules reach, and what the draft must change to fit one.
 // Moved out of studioVals.ts (v4 Task 13) and applied to every studio's `format` and `alsoFormats`.
 import type { NewDraft } from './types';
-import { mayCreate } from './logic/contribution';
+import { CREATE_TYPES, mayCreate } from './logic/contribution';
 import { noItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
 
@@ -23,3 +23,9 @@ export const changeFormat = (cur: NewDraft, format: string, rules?: RuleParts[])
 // A format is offered when some rule allows it with a combination the studio can reach.
 export const reachable = (rules: RuleParts[], nw: NewDraft, f: string) => mayCreate(rules, { line: nw.line || null, format: f, domain: nw.dom, audience: nw.aud || null })
   || rules.some((r) => (!r.formats.length || r.formats.includes(f)) && mayCreate(rules, { line: r.lines[0] ?? nw.line, format: f, domain: r.domains[0] ?? nw.dom, audience: r.audiences[0] ?? null }));
+// The upload form's format for a draft: its own when the form offers it, else the first the form offers that the rules
+// reach (the form's first when none is; it then says the rules do not allow it). Studio-only formats are never kept.
+export function uploadFormat(rules: RuleParts[], nw: NewDraft): string {
+  const forms = CREATE_TYPES.map((t) => t[0]);
+  return forms.includes(nw.type) ? nw.type : forms.find((f) => reachable(rules, nw, f)) ?? forms[0];
+}

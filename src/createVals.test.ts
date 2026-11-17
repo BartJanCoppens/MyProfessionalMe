@@ -385,6 +385,10 @@ describe('a fresh draft', () => {
     expect(blankDraft([rule({ formats: ['Game', 'Podcast'] })], null).type).toBe('Podcast');
     expect(blankDraft([rule({})], null).type).toBe('Reel');
   });
+  it('starts on the first upload-form format the rules allow, never on a studio-only one, with a line it is allowed in', () => {
+    expect(blankDraft([rule({ formats: ['Job aid', 'Podcast'] })], null).type).toBe('Podcast');
+    expect(blankDraft([rule({ formats: ['Animated flow'] }), rule({ lines: ['Audit'], formats: ['Micro-guide'] })], 'Consulting')).toMatchObject({ type: 'Micro-guide', line: 'Audit' });
+  });
 });
 
 describe('Draft with AI', () => {

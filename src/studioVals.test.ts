@@ -52,6 +52,19 @@ describe('the hub', () => {
     h.st().toHub();
     expect(h.state.studio.view).toBe('hub');
   });
+  it('opens the upload form on the first upload-form format the rules allow, not on a studio-only one', () => {
+    const h = open({ studio: { view: 'hub', step: 0 }, nw: { type: 'Job aid', items: { list: [['Before', 'x']], how: 'manual', problems: [], note: '' } },
+      data: data({ rules: [rule({ lines: ['Consulting'], formats: ['Job aid', 'Podcast'] })] }) });
+    h.st().openUpload();
+    expect(h.c().newView).toBe('form');
+    expect(h.state.nw.type).toBe('Podcast');
+    expect(h.state.nw.items?.list).toEqual([]);
+  });
+  it('keeps an upload-form format when the upload form opens', () => {
+    const h = open({ studio: { view: 'hub', step: 0 }, nw: { type: 'Practice exam' } });
+    h.st().openUpload();
+    expect(h.state.nw.type).toBe('Practice exam');
+  });
   it('keeps the studio closed when no rule allows cards or exams', () => {
     const h = open({ studio: { view: 'hub', step: 0 }, data: data({ rules: [rule({ lines: ['Consulting'], formats: ['Reel'] })] }) });
     expect(flashCard(h).disabled).toBe(true);

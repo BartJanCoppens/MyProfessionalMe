@@ -12,7 +12,7 @@ import { outputProblems, studioContent } from './logic/studioContent';
 import { studioById, studioFormats, tooFew, visibleSteps } from './logic/studios';
 import type { StudioDef, StudioEntry } from './logic/studios';
 import { STUDIOS } from './studioData';
-import { changeFormat, reachable } from './studioRules';
+import { changeFormat, reachable, uploadFormat } from './studioRules';
 import { BUILDS } from './studioRunners';
 import { stepVals } from './studioStepVals';
 import { stillMotion } from './fmtMotion';
@@ -78,7 +78,9 @@ export function studioVals(L: Logic, src: StudioSrc) {
   const exam = nw.type === 'Practice exam', passed = !!src.checkReasons && !src.checkReasons.length;
   return {
     cards: STUDIOS.map((d) => { const note = reason(d); return { id: d.id, name: d.name, tag: d.tag, out: d.out, time: d.time, open: () => open(d, note), disabled: readOnly || !!note, note }; }),
-    uploadLabel: 'Upload something you already made →', openUpload: () => set({ view: 'form' }),
+    uploadLabel: 'Upload something you already made →',
+    // The upload form opens on a format it offers (never a studio-only one), the first the rules allow.
+    openUpload: () => { setNw((cur) => { const f = uploadFormat(src.rules, cur); return f === cur.type ? {} : changeFormat(cur, f, src.rules); }); set({ view: 'form' }); },
     // An edit opened in its studio leaves the way the form's Cancel does.
     backLabel: L.state.editing ? '← My contributions' : '← All studios', toHub: () => (L.state.editing ? src.cancel() : set(HUB)),
     readOnly, studioName: def.name, flash, def, steps, step, stepName: name, stepTitle: name, stepHint: HINTS[name] ?? '',
