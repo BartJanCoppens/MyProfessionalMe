@@ -1182,12 +1182,16 @@ do $$ begin
   begin update public.trajectories set maps = '[["Marketing","Manager","advised"]]' where id = 'TX3';
     insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'blocked: '||sqlstate); end;
+  -- industry and technology membership is stored (audience_members), so these audiences may be mandatory
   begin update public.trajectories set maps = '[["tec:data","Manager","mandatory"]]' where id = 'TX3';
-    insert into results (check_name, expected, actual) values ('TR a tec: audience is mandatory', 'blocked: 23514', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('TR a tec: audience is mandatory', 'blocked: 23514', 'blocked: '||sqlstate); end;
+    insert into results (check_name, expected, actual) values ('TR a tec: audience is mandatory', 'allowed', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a tec: audience is mandatory', 'allowed', 'blocked: '||sqlstate); end;
   begin update public.trajectories set maps = '[["ind:energy","Manager","mandatory"]]' where id = 'TX3';
-    insert into results (check_name, expected, actual) values ('TR an ind: audience is mandatory', 'blocked: 23514', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('TR an ind: audience is mandatory', 'blocked: 23514', 'blocked: '||sqlstate); end;
+    insert into results (check_name, expected, actual) values ('TR an ind: audience is mandatory', 'allowed', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR an ind: audience is mandatory', 'allowed', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["pro:blue","Manager","mandatory"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR a profile audience is mandatory', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a profile audience is mandatory', 'blocked: 23514', 'blocked: '||sqlstate); end;
   begin perform private.in_mandatory_audience('00000000-0000-0000-0000-0000000000a7', '[]'::jsonb);
     insert into results (check_name, expected, actual) values ('TR a signed-in user calls the audience helper', 'blocked: 42501', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('TR a signed-in user calls the audience helper', 'blocked: 42501', 'blocked: '||sqlstate); end;
@@ -1477,6 +1481,114 @@ insert into results (check_name, expected, actual) select 'FX the published lear
   from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T fx cards';
 with u as (update public.contributions set items = '[["changed","after publishing"]]' where title = 'T fx cards' returning 1)
   insert into results (check_name, expected, actual) select 'FX items cannot change after publishing', '0 rows', count(*)||' rows' from u;
+reset role;
+-- ---------- design v4 follow-ups: industry and technology membership (AM) ----------
+-- audience_members: the counsellor, the person's Domain Admins, General and System Admins set a person's ind:/tec: audiences;
+-- never the person. A mandatory map on such an audience binds its members at the map's stage.
+-- d1: Consulting analyst, counsellor a6. d3: Audit consultant, counsellor a6 (becomes a tec:data member). d4: Audit consultant,
+-- no membership. a2 counsels someone else, a1 is the Consulting Domain Admin, a4 the Audit Domain Admin, a7 a General Admin.
+select set_config('request.jwt.claims', '', true);
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000d3','t.member@test.local'), ('00000000-0000-0000-0000-0000000000d4','t.nonmember@test.local');
+update public.profiles set business_line='Audit', career_stage='Consultant', counsellor_id='00000000-0000-0000-0000-0000000000a6' where id in ('00000000-0000-0000-0000-0000000000d3','00000000-0000-0000-0000-0000000000d4');
+update public.profiles set career_stage='Analyst' where id='00000000-0000-0000-0000-0000000000d1';
+set local role authenticated;
+-- the counsellor a6 sets and removes a counsellee's audience
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+with i as (insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','tec:data') returning 1)
+  insert into results (check_name, expected, actual) select 'AM counsellor sets a counsellee''s technology', '1 rows', count(*)||' rows' from i;
+with d as (delete from public.audience_members where user_id='00000000-0000-0000-0000-0000000000d1' and audience='tec:data' returning 1)
+  insert into results (check_name, expected, actual) select 'AM counsellor removes it', '1 rows', count(*)||' rows' from d;
+insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','tec:data'), ('00000000-0000-0000-0000-0000000000d3','tec:data');
+insert into results (check_name, expected, actual) select 'AM counsellor reads the counsellees'' audiences', '2', count(*)::text from public.audience_members where user_id in ('00000000-0000-0000-0000-0000000000d1','00000000-0000-0000-0000-0000000000d3');
+do $$ begin
+  begin insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','amb:sust');
+    insert into results (check_name, expected, actual) values ('AM an ambition is not a membership', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM an ambition is not a membership', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','tec:Data');
+    insert into results (check_name, expected, actual) values ('AM a malformed audience', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM a malformed audience', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin insert into public.audience_members (user_id, audience, set_by) values ('00000000-0000-0000-0000-0000000000d1','ind:health','00000000-0000-0000-0000-0000000000a7');
+    insert into results (check_name, expected, actual) values ('AM set_by cannot be chosen', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM set_by cannot be chosen', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update public.audience_members set audience = 'tec:sap' where user_id = '00000000-0000-0000-0000-0000000000d1';
+    insert into results (check_name, expected, actual) values ('AM a membership is not updated', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM a membership is not updated', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- someone else's counsellor a2: reads nothing, sets nothing, removes nothing
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'AM someone else''s counsellor reads the audiences', '0', count(*)::text from public.audience_members where user_id = '00000000-0000-0000-0000-0000000000d1';
+with d as (delete from public.audience_members where user_id = '00000000-0000-0000-0000-0000000000d1' returning 1)
+  insert into results (check_name, expected, actual) select 'AM someone else''s counsellor removes one', '0 rows', count(*)||' rows' from d;
+do $$ begin
+  begin insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','ind:energy');
+    insert into results (check_name, expected, actual) values ('AM someone else''s counsellor sets one', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM someone else''s counsellor sets one', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- the person reads their own, never sets or removes them
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'AM the person reads their own', 'tec:data', string_agg(audience, ' ') from public.audience_members where user_id = '00000000-0000-0000-0000-0000000000d1';
+with d as (delete from public.audience_members where user_id = '00000000-0000-0000-0000-0000000000d1' returning 1)
+  insert into results (check_name, expected, actual) select 'AM the person removes their own', '0 rows', count(*)||' rows' from d;
+do $$ begin
+  begin insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','ind:health');
+    insert into results (check_name, expected, actual) values ('AM the person sets their own', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM the person sets their own', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- Domain Admins: the person's line (a1 for Consulting d1) sets one; another line's (a4, Audit) does not
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','ind:energy') returning set_by)
+  insert into results (check_name, expected, actual) select 'AM the person''s Domain Admin sets one (set_by is them)', '1 rows true', count(*)||' rows '||bool_and(set_by = '00000000-0000-0000-0000-0000000000a1') from i;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+with d as (delete from public.audience_members where user_id = '00000000-0000-0000-0000-0000000000d1' returning 1)
+  insert into results (check_name, expected, actual) select 'AM another line''s Domain Admin removes one', '0 rows', count(*)||' rows' from d;
+do $$ begin
+  begin insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','ind:public');
+    insert into results (check_name, expected, actual) values ('AM another line''s Domain Admin sets one', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM another line''s Domain Admin sets one', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- a General Admin sets one and reads them all
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+with i as (insert into public.audience_members (user_id, audience) values ('00000000-0000-0000-0000-0000000000d1','ind:health') returning 1)
+  insert into results (check_name, expected, actual) select 'AM a General Admin sets one', '1 rows', count(*)||' rows' from i;
+insert into results (check_name, expected, actual) select 'AM a General Admin reads them', 'ind:energy ind:health tec:data', string_agg(audience, ' ' order by audience) from public.audience_members where user_id = '00000000-0000-0000-0000-0000000000d1';
+-- a mandatory tec:data map binds members at its stage (a General Admin publishes it, D2)
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+  values ('TX4', 'T data mandatory', 'T issuer', 'T credential', 'auto', 6, 'live', null,
+          '[{"id":"s1","k":"evidence","title":"T pipeline"},{"id":"s2","k":"exam","title":"T exam","pre":"s1"}]', '[["tec:data","Consultant","mandatory"]]');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'AM a member at the map''s stage: the first action writes the row', 'submitted', public.submit_trajectory_step('TX4', 's1', p_note => 'T built the pipeline');
+do $$ begin
+  begin perform public.withdraw_trajectory('TX4');
+    insert into results (check_name, expected, actual) values ('AM a member leaves the mandatory trajectory', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM a member leaves the mandatory trajectory', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+do $$ begin
+  begin perform public.submit_trajectory_step('TX4', 's1', p_note => 'T not my stage');
+    insert into results (check_name, expected, actual) values ('AM a member at another stage is not bound', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM a member at another stage is not bound', 'blocked: P0002', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d4","role":"authenticated"}';
+do $$ begin
+  begin perform public.submit_trajectory_step('TX4', 's1', p_note => 'T not a member');
+    insert into results (check_name, expected, actual) values ('AM a non-member is not bound', 'blocked: P0002', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM a non-member is not bound', 'blocked: P0002', 'blocked: '||sqlstate); end;
+end $$;
+select public.request_trajectory('TX4');
+select public.withdraw_trajectory('TX4');
+insert into results (check_name, expected, actual) select 'AM a non-member starts and leaves it like an open one', '0', count(*)::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d4' and trajectory_id = 'TX4';
+-- the counsellor removes the membership; with no step done the row may be left
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+delete from public.audience_members where user_id = '00000000-0000-0000-0000-0000000000d3' and audience = 'tec:data';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d3","role":"authenticated"}';
+select public.withdraw_trajectory('TX4');
+insert into results (check_name, expected, actual) select 'AM without the membership the former member leaves', '0', count(*)::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d3' and trajectory_id = 'TX4';
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+do $$ begin
+  begin perform count(*) from public.audience_members; insert into results (check_name, expected, actual) values ('AM anon reads memberships', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AM anon reads memberships', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
