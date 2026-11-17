@@ -4,7 +4,7 @@ import { Banner, Button, Field, Input, LinkButton, Select, Stepper, Tag, Textare
 import type { VM } from '../model';
 import { BundlePicker, SubmitSide } from './CreateParts';
 import { ItemPanel } from './CreateItems';
-import { DraftRows, Produce, Shape } from './StudioSteps';
+import { Chips, DraftRows, Produce, Shape } from './StudioSteps';
 import { Preview } from './studioPreviews';
 
 type CS = NonNullable<VM['create']>;
@@ -37,15 +37,7 @@ function Idea({ c }: { c: CS }) {
   const nw = c.nw;
   return (
     <>
-      {c.studio.formats.length > 1 && <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={{ fontWeight: 500 }}>What are you making?</span>
-        <div role="group" aria-label="Format" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {c.studio.formats.map((f) => (
-            <button key={f.label} type="button" onClick={f.pick} aria-pressed={f.on} style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid ' + (f.on ? '#1a1d18' : '#d5dacf'), background: f.on ? '#1a1d18' : '#fff',
-              color: f.on ? '#fff' : '#1a1d18', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13 }}>{f.label}</button>
-          ))}
-        </div>
-      </div>}
+      {c.studio.formats.length > 1 && <Chips group={{ key: 'Format', options: c.studio.formats.map((f) => ({ label: f.label, on: f.on, pick: f.pick })) }} title="What are you making?" readOnly={false} />}
       <Field label="Title" hint="Say what people will be able to do, in under 60 characters.">
         <Input value={nw.title} onChange={c.nwSetTitle} placeholder="e.g. Belgian VAT invoice essentials" aria-label="Title" />
       </Field>

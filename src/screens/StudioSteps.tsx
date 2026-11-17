@@ -1,7 +1,7 @@
 // The step bodies a generic studio adds to the spine: Shape it (questions), Draft (item rows) and Produce (choices,
 // stock look and voice, build). They only read from the view-model (studioVals.ts, studioStepVals.ts). In View as the
 // choices show as plain text and every action is gone.
-import { Input, LinkButton, Button, Tag } from '../ds';
+import { Button, FilterChip, Input, LinkButton, Tag } from '../ds';
 import type { VM } from '../model';
 import StudioBuild from './StudioBuild';
 
@@ -10,17 +10,15 @@ type Group = ST['shape'][number];
 const label = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase' as const, letterSpacing: '.04em' };
 const col = { display: 'flex', flexDirection: 'column' as const, gap: 8 };
 
-function Chips({ group, readOnly }: { group: Group; readOnly: boolean }) {
+// The one chip-choice group: Shape, Produce, cast pickers and the Idea step's format all use it (DS FilterChip).
+export function Chips({ group, readOnly, title = group.key }: { group: Group; readOnly: boolean; title?: string }) {
   const picked = group.options.find((o) => o.on);
   return (
     <div style={col}>
-      <span style={{ fontWeight: 500 }}>{group.key}</span>
+      <span style={{ fontWeight: 500 }}>{title}</span>
       {readOnly ? <div style={{ fontSize: 12.5, color: '#3d423b' }}>{picked ? picked.label : 'Not chosen'}</div> : (
         <div role="group" aria-label={group.key} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {group.options.map((o) => (
-            <button key={o.label} type="button" onClick={o.pick} aria-pressed={o.on} style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid ' + (o.on ? '#1a1d18' : '#d5dacf'), background: o.on ? '#1a1d18' : '#fff',
-              color: o.on ? '#fff' : '#1a1d18', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13 }}>{o.label}</button>
-          ))}
+          {group.options.map((o) => <FilterChip key={o.label} selected={o.on} onClick={o.pick}>{o.label}</FilterChip>)}
         </div>
       )}
     </div>

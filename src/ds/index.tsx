@@ -42,7 +42,7 @@ export function FilterChip({ selected = false, tone = 'default', children, onCli
   const fg = selected ? '#fff' : amber ? 'var(--tc-amber-text)' : isStatic ? 'var(--tc-ink)' : 'var(--tc-ink-3)';
   const bd = selected ? 'var(--tc-ink)' : amber ? 'var(--tc-amber-line)' : isStatic ? 'transparent' : 'var(--tc-line)';
   return (
-    <button type="button" onClick={isStatic ? undefined : onClick}
+    <button type="button" onClick={isStatic ? undefined : onClick} aria-pressed={isStatic ? undefined : selected}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 30, padding: '0 12px', border: '1px solid ' + bd, borderRadius: 999, background: bg, color: fg,
         fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, cursor: isStatic ? 'default' : 'pointer', whiteSpace: 'nowrap', ...style }}>
       {children}
