@@ -1,5 +1,6 @@
 // Flash cards and practice exams made in Create & share: the items, where they came from, CSV import, strict reading of
-// an AI answer and the lines Create & share shows about them. The database repeats the shape rules (private.items_ok).
+// an AI answer and the lines Create & share shows about them. A studio's rows are items too (StudioRow; their rules are
+// itemsValid in studios.ts). The database repeats the shape rules (private.items_ok) and the caps (private.item_max).
 import type { ExamQuestion } from '../types';
 import type { Check } from './contribution';
 import { jsonObject } from './json';
@@ -14,10 +15,16 @@ export type ItemSource = 'ai' | 'scripted' | 'csv' | 'manual' | 'saved' | '';
 export type DraftItems = { list: Item[]; how: ItemSource; note: string; problems: string[] };
 
 export const noItems = (): DraftItems => ({ list: [], how: '', note: '', problems: [] });
-export const ITEM_MAX: Record<string, number> = { 'Flash cards': 40, 'Practice exam': 30 };
-export const hasItems = (type: string) => type in ITEM_MAX;
+// The most items of each format: cards, exam questions and every studio's rows (the design's example counts with room to
+// grow; reel and motion stay inside 90 s, podcast inside 30 min at four minutes a chapter, slides inside 15 min).
+// Mirrored in private.item_max.
+export const ITEM_MAX: Record<string, number> = { 'Flash cards': 40, 'Practice exam': 30, Avatar: 12, Reel: 8, Podcast: 8, Game: 10, Slides: 15, 'Animated flow': 8,
+  'Interactive explainer': 10, 'Job aid': 20, 'Case exercise': 12 };
+// The formats whose items are cards or exam questions, always there (the upload form's item panel); any other format's
+// items are a studio's rows.
+export const hasItems = (type: string) => type === 'Flash cards' || type === 'Practice exam';
 const isFlash = (type: string) => type === 'Flash cards';
-const noun = (type: string, n: number) => (isFlash(type) ? (n === 1 ? 'card' : 'cards') : n === 1 ? 'question' : 'questions');
+export const noun = (type: string, n: number) => (isFlash(type) ? (n === 1 ? 'card' : 'cards') : type === 'Practice exam' ? (n === 1 ? 'question' : 'questions') : n === 1 ? 'item' : 'items');
 export const countText = (type: string, n: number) => n + ' ' + noun(type, n);
 
 // Text limits, mirrored in private.items_ok: fronts, questions, options and topics; backs and explanations.
@@ -30,7 +37,8 @@ const isQuestion = (v: unknown): v is ExamQuestion => {
   return !!x && typeof x === 'object' && text(SHORT_MAX)(x.t) && text(SHORT_MAX)(x.q) && text(LONG_MAX)(x.why) && Array.isArray(x.o) && x.o.length === 4 && x.o.every(text(SHORT_MAX))
     && Number.isInteger(x.a) && (x.a as number) >= 0 && (x.a as number) < 4;
 };
-const isItem = (type: string) => (isFlash(type) ? isCard : isQuestion);
+const isRow = (v: unknown): v is StudioRow => Array.isArray(v) && (v.length === 2 || v.length === 3) && v.every((x) => typeof x === 'string');
+const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice exam' ? isQuestion : isRow);
 
 // The first sentence of a passage, and its first n words without a trailing punctuation mark; shared by the scripted drafts.
 export const firstSentence = (p: string) => p.trim().split(/(?<=[.!?])\s+/)[0];
@@ -109,15 +117,15 @@ export function parseDraftItems(type: string, raw: string): Item[] | null {
 
 // Items stored on a contribution, read again strictly: a wrong shape gives none.
 export function itemsFromSaved(type: string, raw: unknown): Item[] {
-  return hasItems(type) && Array.isArray(raw) && raw.every(isItem(type)) ? (raw as Item[]) : [];
+  return Array.isArray(raw) && raw.every(isItem(type)) ? (raw as Item[]) : [];
 }
 
 // One row per item for the form and for reviewers.
 // The well-formed items only: a stray item of the other format is left out, never a crash.
-export const validItems = (type: string, list: Item[]): Item[] => (hasItems(type) ? list.filter(isItem(type)) : []);
+export const validItems = (type: string, list: Item[]): Item[] => list.filter(isItem(type));
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
-  return validItems(type, list).map((x) => (isFlash(type) ? { front: (x as Card)[0], back: (x as Card)[1] }
-    : { front: (x as ExamQuestion).q, back: 'Answer: ' + (x as ExamQuestion).o[(x as ExamQuestion).a] + ' · ' + (x as ExamQuestion).why }));
+  return validItems(type, list).map((x) => (type === 'Practice exam' ? { front: (x as ExamQuestion).q, back: 'Answer: ' + (x as ExamQuestion).o[(x as ExamQuestion).a] + ' · ' + (x as ExamQuestion).why }
+    : { front: (x as StudioRow)[0], back: (x as StudioRow).slice(1).filter(Boolean).join(' · ') }));
 }
 // Saved as AI-assisted when the outline was drafted by AI or the items were, in any studio; scripted and manual items never are.
 export const aiAssisted = (nw: { ai: boolean; items?: DraftItems }) => nw.ai || nw.items?.how === 'ai';

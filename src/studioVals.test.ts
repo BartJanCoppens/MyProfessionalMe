@@ -32,11 +32,11 @@ beforeEach(() => { stubWindow(); vi.clearAllMocks(); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('the hub', () => {
-  it('opens on the hub with ten studios, one of them available and the link to the upload form', () => {
+  it('opens on the hub with ten studios, three of them available and the link to the upload form', () => {
     const h = open({ studio: { view: 'hub', step: 0 } });
     expect(h.c().newView).toBe('hub');
     expect(h.st().cards.map((x) => x.name)).toHaveLength(10);
-    expect(h.st().cards.filter((x) => !x.disabled).map((x) => x.name)).toEqual(['Flash card & Exam Studio']);
+    expect(h.st().cards.filter((x) => !x.disabled).map((x) => x.name)).toEqual(['Job Aid Studio', 'Flash card & Exam Studio', 'Case Studio']);
     expect(h.st().uploadLabel).toBe('Upload something you already made →');
   });
   it('opens the studio at step one with a format a studio makes', () => {

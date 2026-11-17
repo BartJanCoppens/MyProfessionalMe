@@ -1,6 +1,7 @@
 // The ten studios (design v4+, studios plan Task 1.1): types and pure rules. The data is STUDIOS in src/studioData.ts.
 // A studio's items are [label, text] or [label, text, text2] rows; what each row means depends on the studio (itemsValid).
 import { STUDIOS, STUDIO_STEPS } from '../studioData';
+import { ITEM_MAX, LONG_MAX, SHORT_MAX } from './items';
 
 export type StudioQuestion = [question: string, options: string[]];
 export type ProduceRow = [label: string, options: string[]];
@@ -48,22 +49,28 @@ function podcast(items: StudioItem[]): string[] {
 }
 const game = (items: StudioItem[]) => [...(items[0]?.[0] === 'Concept' && labelled(items, 'Concept').length === 1 ? [] : ['Start with exactly one Concept']),
   ...(items.filter((i) => /^Round \d+$/.test(i[0])).length >= 2 ? [] : ['Add at least 2 Round items'])];
-const caseExercise = (items: StudioItem[]) => [...need(items, 'Brief'), ...need(items, 'Deliverable'), ...need(items, 'Criterion')];
+// A case's rows, each at least once and nothing else (private.items_ok repeats them).
+export const CASE_LABELS = ['Brief', 'Deliverable', 'Criterion'];
+const caseExercise = (items: StudioItem[]) => [...CASE_LABELS.flatMap((l) => need(items, l)),
+  ...items.filter((i) => !blank(i[0]) && !CASE_LABELS.includes(i[0])).map((i) => i[0] + ': use Brief, Deliverable or Criterion as the label')];
 
 // One schema per studio on top of what every studio needs: a label and text on each row, and at least def.min rows.
 const SCHEMAS: Record<string, ItemSchema> = { avatar, reel: onScreen, slides: () => [], podcast, game, motion: () => [], explainer: () => [], aid: () => [], case: caseExercise };
 
-// The most rows a studio's items hold (the design's example counts, with room to grow; reel and motion stay inside 90 s,
-// podcast inside 30 min at four minutes a chapter, slides inside 15 min).
-export const ROWS_MAX: Record<string, number> = { avatar: 12, reel: 8, podcast: 8, game: 10, slides: 15, motion: 8, explainer: 10, aid: 20, case: 12 };
+// The most rows a studio's items hold: its format's ITEM_MAX (one table for cards, questions and rows).
+export const rowsMax = (def: StudioDef) => ITEM_MAX[def.format];
 
 // The one minimum: fewer rows than the studio needs. Flash card & Exam Studio's items have their own shape and only this rule.
 export const tooFew = (def: StudioDef, count: number) => count < def.min;
 
 // The problems with a studio's items, in words; empty means valid (the shape of the contribution path's problem lists).
+// Labels up to SHORT_MAX and texts up to LONG_MAX characters, as private.studio_rows_ok.
 export function itemsValid(def: StudioDef, items: StudioItem[]): string[] {
   const blanks = items.filter((i) => blank(i[0]) || blank(i[1])).map((i) => (i[0] || 'An item') + ': text is empty');
+  const over = (v: string | undefined, max: number) => (v ?? '').length > max;
+  const long = items.filter((i) => over(i[0], SHORT_MAX) || over(i[1], LONG_MAX) || over(i[2], LONG_MAX))
+    .map((i) => i[0].slice(0, 40) + ': too long (labels up to ' + SHORT_MAX + ' characters, texts up to ' + LONG_MAX + ')');
   const few = tooFew(def, items.length) ? ['Add at least ' + def.min + ' items'] : [];
-  const many = ROWS_MAX[def.id] && items.length > ROWS_MAX[def.id] ? ['Add at most ' + ROWS_MAX[def.id] + ' items'] : [];
-  return [...few, ...many, ...blanks, ...(SCHEMAS[def.id] ?? (() => []))(items)];
+  const max = rowsMax(def), many = max && items.length > max ? ['Add at most ' + max + ' items'] : [];
+  return [...few, ...many, ...blanks, ...long, ...(SCHEMAS[def.id] ?? (() => []))(items)];
 }

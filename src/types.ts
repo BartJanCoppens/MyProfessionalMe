@@ -70,7 +70,8 @@ export type MediaState = { playing: string | null; owner?: string | null; pos: R
 export type FlashContent = { kind: 'flash'; total: number; due: number; next: string; cards: [string, string][] };
 export type ExamQuestion = { t: string; q: string; o: string[]; a: number; why: string };
 export type ExamContent = { kind: 'exam'; bank: number; real: string; qs: ExamQuestion[] };
-export type CaseContent = { kind: 'case'; brief: string; deliv: string[]; rubric: string[]; reviewer: string };
+// evidence: the creator said it can count as trajectory evidence (Case Studio); absent on cases made before the studio.
+export type CaseContent = { kind: 'case'; brief: string; deliv: string[]; rubric: string[]; reviewer: string; evidence?: boolean };
 export type TeachContent = { kind: 'teach'; prompt: string; crit: [string, RegExp | null][] };
 export type StretchContent = { kind: 'stretch'; brief: string; checks: string[] };
 export type WebinarContent = { kind: 'webinar'; mon: string; day: string; time: string; when: string; speakers: string; agenda: string[] };

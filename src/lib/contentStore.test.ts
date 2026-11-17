@@ -74,6 +74,12 @@ describe('parseFormatContent', () => {
   it('returns null for an invalid teach-back pattern', () => {
     expect(parseFormatContent({ kind: 'teach', prompt: 'p', crit: [['Bad', '(']] })).toBeNull();
   });
+  it('reads whether a case counts as trajectory evidence, when it says', () => {
+    const kase = { kind: 'case', brief: 'b', deliv: ['d'], rubric: ['r'], reviewer: 'x' };
+    expect(parseFormatContent({ ...kase, evidence: true })).toEqual({ ...kase, evidence: true });
+    expect(parseFormatContent(kase)).toEqual(kase);
+    expect(parseFormatContent({ ...kase, evidence: 'Yes' })).toBeNull();
+  });
   it('reads content from a learning row', () => {
     const content = { kind: 'aid', items: ['a'] };
     const [, meta] = toLearn({ id: 'L68', title: 'T', domain: 'prof', level: 2, format: 'Job aid', source: 'S', hours: 1, cpd: 0, due: '', why: '', business_line: null, status: 'published', content });

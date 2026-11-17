@@ -25,7 +25,7 @@ export function parseFormatContent(raw: unknown): FormatContent | null {
   switch (c.kind) {
     case 'flash': return isCount(c.total) && isCount(c.due) && isText(c.next) && Array.isArray(c.cards) && c.cards.every(isPair) ? c as FormatContent : null;
     case 'exam': return isCount(c.bank) && isText(c.real) && Array.isArray(c.qs) && c.qs.every(examQuestionOk) ? c as FormatContent : null;
-    case 'case': return isText(c.brief) && isTexts(c.deliv) && isTexts(c.rubric) && isText(c.reviewer) ? c as FormatContent : null;
+    case 'case': return isText(c.brief) && isTexts(c.deliv) && isTexts(c.rubric) && isText(c.reviewer) && (c.evidence === undefined || typeof c.evidence === 'boolean') ? c as FormatContent : null;
     case 'teach': return isText(c.prompt) && Array.isArray(c.crit) ? teach(c.prompt, c.crit) : null;
     case 'stretch': return isText(c.brief) && isTexts(c.checks) ? c as FormatContent : null;
     case 'webinar': return [c.mon, c.day, c.time, c.when, c.speakers].every(isText) && isTexts(c.agenda) ? c as FormatContent : null;

@@ -50,9 +50,9 @@ describe('navigation', () => {
     expect(cs({ data: d, readOnly: true }).vm().reviewBadge).toBe(1);
   });
   it('lists every contribution format in the lead, from the format list', () => {
-    expect(cs().c().lead).toMatch(/^Make something for your colleagues: Reel, Podcast, Micro-guide, Case write-up, Flash cards or Practice exam\. /);
+    expect(cs().c().lead).toMatch(/^Make something for your colleagues: Reel, Podcast, Micro-guide, Case write-up, Flash cards, Practice exam, Job aid or Case exercise\. /);
     MAKEABLE_FORMATS.forEach((f) => expect(cs().c().lead).toContain(f));
-    ['Game', 'Slides', 'Job aid'].forEach((f) => expect(cs().c().lead).not.toContain(f));
+    ['Game', 'Slides', 'Avatar'].forEach((f) => expect(cs().c().lead).not.toContain(f));
   });
   it('shows loading until the data arrives, then an error with a retry', () => {
     const h = cs({ state: { create: null } });
