@@ -350,6 +350,9 @@ describe('the curriculum mapping screen', () => {
   it('shows four signals, toggles Show all, and labels the copilot input', () => {
     mapping();
     expect(screen.getAllByText('Dismiss')).toHaveLength(4);
+    expect(screen.getByText(/^Found in the data · \d+$/)).toBeTruthy();
+    expect(screen.getByText(/^\d+ open signals · new evaluations are read every night$/)).toBeTruthy();
+    expect(screen.getByText(/^Show all \d+$/).closest('div[style*="max-height: 430px"]')).toBeNull();
     click(/^Show all \d+$/);
     expect(screen.getAllByText('Dismiss').length).toBeGreaterThan(4);
     expect(screen.getByText('Show fewer')).toBeTruthy();

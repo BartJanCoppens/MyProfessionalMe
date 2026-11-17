@@ -110,9 +110,12 @@ function Copilot({ vm }: { vm: VM }) {
     <div style={{ ...card, flex: '0 1 420px', minWidth: 320, display: 'flex', flexDirection: 'column', position: 'sticky', top: 78, maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' }}>
       <div style={{ padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#171a16', color: '#fff', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ width: 22, height: 22, borderRadius: 5, background: '#86BC25', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10180a' }} /></span>
-        <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600 }}>Curriculum copilot</div><div style={{ fontSize: 11.5, color: '#a9b0a5' }}>{vm.cpMode} · reads anonymised evaluations, staffing and shared profiles. Proposes; you decide.</div></div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600 }}>Curriculum copilot</div><div style={{ fontSize: 11.5, color: '#a9b0a5' }}>{vm.cpMode} · reads anonymised evaluations, staffing and shared profiles. Proposes; you decide.</div>
+          <div style={{ fontSize: 11.5, color: '#c9cec5' }}>{vm.sigCount} open signals · new evaluations are read every night</div>
+        </div>
       </div>
-      <div style={{ ...label, padding: '10px 18px 4px' }}>{vm.sigCount} open signals · new evaluations are read every night</div>
+      <div style={{ ...label, padding: '10px 18px 4px' }}>Found in the data · {vm.sigCount}</div>
       <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 430, overflow: 'auto' }}>
         {vm.sigShown.map((sg) => (
           <div key={sg.id} style={{ padding: '10px 18px 12px', borderTop: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 6, animation: 'pmFadeUp .35s ease-out backwards', animationDelay: sg.delay }}>
@@ -129,9 +132,9 @@ function Copilot({ vm }: { vm: VM }) {
             </div>
           </div>
         ))}
-        {vm.sigMore && <div style={{ padding: '8px 18px', borderTop: '1px solid #eef0ea' }}><LinkButton onClick={vm.toggleSigAll}>{vm.sigToggleLabel}</LinkButton></div>}
         {vm.noSig && <div style={{ padding: '14px 18px', borderTop: '1px solid #eef0ea', fontSize: 12.5, color: '#5a6058' }}>Nothing open. New evaluations are read every night.</div>}
       </div>
+      {vm.sigMore && <div style={{ padding: '8px 18px', borderTop: '1px solid #eef0ea' }}><LinkButton onClick={vm.toggleSigAll}>{vm.sigToggleLabel}</LinkButton></div>}
       <div style={{ borderTop: '1px solid #e1e5dc', padding: '12px 18px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: '#fafbf8' }}>
         <div style={label}>Ask in plain words</div>
         {vm.cpHasReply && (
