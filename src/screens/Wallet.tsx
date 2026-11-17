@@ -15,7 +15,7 @@ function CredentialForm({ f }: { f: Cf }) {
   );
   return (
     <div style={{ borderTop: '1px solid #eef0ea', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, background: '#fafbf8' }}>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{field('Credential', 'name')}{field('Issued by', 'issuer')}</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{field('Credential', 'name', { max: 160 })}{field('Issued by', 'issuer', { max: 120 })}</div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{field('Earned on', 'earned', { type: 'date' })}{field('Expires on (if it does)', 'expires', { type: 'date' })}</div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{field('Link to the certificate', 'link', { placeholder: 'https://', max: 500 })}{field('or certificate number', 'ref', { max: 80 })}</div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><Button size="sm" onClick={f.submit}>Add credential</Button><LinkButton tone="muted" onClick={f.cancel}>Cancel</LinkButton></div>

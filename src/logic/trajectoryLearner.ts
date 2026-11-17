@@ -1,6 +1,6 @@
 // The learner's side of a trajectory: who counts as enrolled, when a person may leave, which action a step offers and how
 // a credential looks in the wallet. Pure rules; withdraw mirrors withdraw_trajectory in the migration.
-import { autoEnrolled, monthLabel, startMonth } from './trajectory';
+import { autoEnrolled, inMandatoryAudience, monthLabel, startMonth } from './trajectory';
 import type { Credential, Enrolment, StepKind, StepState, Trajectory } from './trajectory';
 
 type Person = { line: string | null; stage: string | null };
@@ -14,7 +14,7 @@ export function effectiveEnrolment(t: Trajectory, row: Enrolment | undefined, pe
 
 // A request, or an enrolment with no signed-off step; never a mandatory auto-enrolment.
 export function canWithdraw(t: Trajectory, row: Enrolment | undefined, person: Person): boolean {
-  return !!row && !autoEnrolled(t, person) && (row.status === 'requested' || !Object.values(row.steps).some((e) => e.state === 'done'));
+  return !!row && !inMandatoryAudience(t, person) && (row.status === 'requested' || !Object.values(row.steps).some((e) => e.state === 'done'));
 }
 
 export type StepAction = 'open' | 'evidence' | 'signoff' | 'book' | 'result';

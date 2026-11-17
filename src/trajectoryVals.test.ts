@@ -4,7 +4,7 @@ import { parseFormatContent } from './lib/contentStore';
 import * as store from './lib/trajectoryStore';
 import type { Credential, Enrolment, Trajectory, TrjStep } from './logic/trajectory';
 import { blankTrajectory } from './logic/trajectoryEdit';
-import { flush, harness, person, stubWindow } from './test/harness';
+import { flush, harness, person, stubWindow, withProgress } from './test/harness';
 import type { AppState } from './types';
 
 vi.mock('./lib/trajectoryStore', async (orig) => ({
@@ -192,14 +192,45 @@ describe('View as is read-only', () => {
     expect(tv.primary).toBeNull();
   });
   it('shows no way to add a credential, and the form cannot be opened', () => {
-    const v = harness({ subject: viewing, state: mine({}) }).vm();
+    const h = harness({ subject: viewing, state: mine({}) }), v = h.vm();
     expect(v.canAddCred).toBe(false);
     v.addCred();
+    expect(h.state.credForm).toBeNull();
+    expect(h.vm().credForm).toBeNull();
   });
   it('ignores data loaded for someone else', () => {
     const h = page(t, { trjMine: { userId: 'someone-else', enrols: { T1: enrolled() }, creds: [cred()] } });
     expect(h.vm().wallet).toEqual([]);
     expect(h.vm().tv!.stLabel).toBe('Not started');
+  });
+});
+
+describe('credentials and hints', () => {
+  const done = { a: { state: 'done' as const } };
+  const one = trj('T1', { steps: [step({ id: 'a', k: 'evidence', title: 'E' })] });
+  it('claims a credential only when a confirmed one exists for the trajectory', () => {
+    const none = page(one, mine({ T1: enrolled(done) })).vm();
+    expect(none.tv!.callout).toBe('All required steps are done.');
+    expect(none.libTrj[0].status).toBe('Enrolled · 1 of 1 required steps');
+    const has = page(one, mine({ T1: enrolled(done) }, [cred({ trajectory_id: 'T1' })])).vm();
+    expect(has.tv!.callout).toMatch(/in the wallet/);
+    expect(has.libTrj[0].status).toBe('Credential earned');
+  });
+  it('offers no start on a trajectory that is not live', () => {
+    expect(page(trj('T1', { status: 'draft' }), mine({})).vm().tv!.primary).toBeNull();
+  });
+  it('says the sign-off naturally without a counsellor', () => {
+    const t = trj('T1', { steps: [step({ id: 'a', k: 'check', title: 'S' })] });
+    expect(page(t, mine({ T1: enrolled() }), person()).vm().tv!.steps[0].act!.hint).not.toMatch(/your counsellor signs off in Waiting/);
+  });
+  it('advises on the exam from the best practice score, never locking it', () => {
+    const t = trj('T1', { steps: [step({ id: 'a', k: 'learn', lid: 'L61' }), step({ id: 'b', k: 'exam', title: 'Exam' })] });
+    const sub = (best?: number) => person({ counsellor: boss, data: withProgress({ L61: 'accepted' }, {}) , ...(best == null ? {} : {}) });
+    const h = (best?: number) => page(t, mine({ T1: enrolled() }), (() => { const p = sub(); if (best != null) p.data.progress.L61 = { ...p.data.progress.L61, detail: { best } }; return p; })());
+    expect(h().vm().tv!.steps[1].meta).toContain('practice exam not taken yet');
+    expect(h(55).vm().tv!.steps[1].meta).toContain('practice score 55 % · aim for 70 % first');
+    const ready = h(80).vm().tv!.steps[1];
+    expect(ready.meta).toContain('ready to book'); expect(ready.act!.hint).toContain('ready to book');
   });
 });
 

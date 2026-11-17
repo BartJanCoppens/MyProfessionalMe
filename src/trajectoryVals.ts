@@ -5,7 +5,7 @@ import { relevantMap, totals, trajectoryProgress } from './logic/trajectory';
 import { enrolLabel, fmtHours } from './logic/trajectoryView';
 import type { Item, Logic } from './model';
 import type { AppState, Screen } from './types';
-import { context, enrolmentOf, mineOf, openTrajectory, visibleTo } from './trajectoryCtx';
+import { context, credentialEarned, enrolmentOf, mineOf, openTrajectory, visibleTo } from './trajectoryCtx';
 import type { Ctx } from './trajectoryCtx';
 import { trajectoryPage } from './trajectoryPage';
 import { walletVals } from './walletVals';
@@ -17,7 +17,7 @@ function libraryCards(c: Ctx) {
   const visible = visibleTo(c);
   const cards = visible.slice().sort((a, b) => rank(a) - rank(b)).map((t) => {
     const e = enrolmentOf(c, t), m = relevantMap(t, [c.L.bl()], c.person.stage) ?? relevantMap(t, [c.L.bl()]), pg = trajectoryProgress(t, e, c.byId), tot = totals(t, c.byId);
-    const status = e ? (e.status === 'requested' ? 'Waiting for ' + c.boss + ' to approve' : pg.complete ? 'Credential earned' : 'Enrolled · ' + pg.reqDone + ' of ' + pg.reqN + ' required steps')
+    const status = e ? (e.status === 'requested' ? 'Waiting for ' + c.boss + ' to approve' : credentialEarned(c, t) ? 'Credential earned' : 'Enrolled · ' + pg.reqDone + ' of ' + pg.reqN + ' required steps')
       : m ? 'For you · via ' + (AUD_INFO[m[0]]?.name ?? m[0]) : 'For ' + (t.maps.map((x) => AUD_INFO[x[0]]?.name ?? x[0]).join(', ') || 'nobody yet');
     return {
       id: t.id, name: t.name, sub: t.issuer + ' · ' + (t.credential || 'credential to be named'),
@@ -43,7 +43,6 @@ export function trajectoryVals(L: Logic, byId: Record<string, Item>) {
     ...libraryCards(c), ...walletVals(c),
     isTrjPage: s.screen === 'trajectory' && !!t, tv: t ? trajectoryPage(c, t) : null,
     trjBack: () => L.go(s.trjOrigin), trjBackLabel: BACK[s.trjOrigin] ?? BACK.library!,
-    trjTitle: t ? t.name : 'Certification trajectory',
   };
 }
 

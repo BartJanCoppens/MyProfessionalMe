@@ -98,12 +98,13 @@ export function relevantMap(t: Trajectory, keys: string[], stage?: string | null
   return t.maps.find((m) => keys.includes(m[0]) && (stage == null || m[1] === stage));
 }
 
-// Mirror of private.in_mandatory_audience plus the auto/live conditions: the trajectory binds this person
-// (written at their first action, cannot be withdrawn).
-export function autoEnrolled(t: Trajectory, person: { line: string | null; stage: string | null }): boolean {
-  return t.enrol === 'auto' && t.status === 'live' && !!person.line && !!person.stage
+// Mirror of private.in_mandatory_audience on an auto trajectory, whatever its status: such a person cannot withdraw.
+export function inMandatoryAudience(t: Trajectory, person: { line: string | null; stage: string | null }): boolean {
+  return t.enrol === 'auto' && !!person.line && !!person.stage
     && t.maps.some((m) => m[2] === 'mandatory' && m[0] === person.line && m[1] === person.stage);
 }
+// The trajectory binds this person while it is live (the row is written at their first action).
+export const autoEnrolled = (t: Trajectory, person: { line: string | null; stage: string | null }): boolean => t.status === 'live' && inMandatoryAudience(t, person);
 
 export const monthOf = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth();
 // Mandatory auto-enrolment starts in the publication month (now when unpublished); everything else starts now.

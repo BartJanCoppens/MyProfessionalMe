@@ -30,6 +30,7 @@ describe('canWithdraw', () => {
     expect(canWithdraw(trj(), row({ steps: { s1: { state: 'done' } } }), person)).toBe(false);
     expect(canWithdraw(trj(), undefined, person)).toBe(false);
     expect(canWithdraw(auto, row(), person)).toBe(false);
+    expect(canWithdraw({ ...auto, status: 'retired' }, row(), person)).toBe(false);
   });
 });
 

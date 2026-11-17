@@ -28,10 +28,13 @@ export const enrolmentOf = (c: Ctx, t: Trajectory) => effectiveEnrolment(t, c.en
 // Live trajectories, plus any the person is enrolled in (a retired one still lets them finish).
 export const visibleTo = (c: Ctx) => c.L.state.trjs.filter((t) => t.status === 'live' || !!c.enrols[t.id]);
 
-export async function loadMine(L: Logic) {
+// A confirmed credential from this trajectory: the only proof that it ended in one.
+export const credentialEarned = (c: Ctx, t: Trajectory) => c.creds.some((cr) => cr.trajectory_id === t.id && cr.status === 'confirmed');
+
+export async function loadMine(L: Logic, current: () => boolean = () => true) {
   const userId = L.subject.id;
   const [enrols, creds] = await Promise.all([loadEnrolments(userId), loadCredentials(userId)]);
-  L.setState({ trjMine: { userId, enrols, creds } });
+  if (current()) L.setState({ trjMine: { userId, enrols, creds } });
 }
 
 // One write: refused in View as, a refusal (returned as `error`) becomes a toast, success reloads the subject's data.

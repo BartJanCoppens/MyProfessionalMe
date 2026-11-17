@@ -123,7 +123,11 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
     return () => { live = false; };
   }, [me]);
   // The viewed person's enrolments and credentials load when the subject changes; every learner action reloads them.
-  useEffect(() => { loadMine(logicRef.current).catch((err) => logicRef.current.say('Trajectories did not load · ' + (err as Error).message)); }, [subject.id]);
+  useEffect(() => {
+    let live = true;
+    loadMine(logicRef.current, () => live).catch((err) => { if (live) logicRef.current.say('Trajectories did not load · ' + (err as Error).message); });
+    return () => { live = false; };
+  }, [subject.id]);
   useEffect(() => { if (state.screen === 'adminAi') loadAiPage(logicRef.current); }, [state.screen]);
   useEffect(() => {
     if (!state.media.playing) return;

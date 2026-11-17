@@ -7,7 +7,9 @@ import { canWithdraw, stepAction } from './logic/trajectoryLearner';
 import { STEP_KINDS, enrolLabel, fmtHours, stepTitle, validLabel } from './logic/trajectoryView';
 import { requestTrajectory, submitTrajectoryStep, withdrawTrajectory } from './lib/trajectoryStore';
 import type { StepDraft } from './types';
-import { act, enrolmentOf } from './trajectoryCtx';
+import { detailOf } from './fmtShared';
+import { READY_PCT } from './logic/formats';
+import { act, credentialEarned, enrolmentOf } from './trajectoryCtx';
 import type { Ctx } from './trajectoryCtx';
 
 // The design's yearly hours budget: the app has no per-stage or per-line goal.
@@ -16,6 +18,14 @@ const BLANK: StepDraft = { link: '', ref: '', note: '' };
 export type Btn = { label: string; run: () => unknown };
 export type StepForm = StepDraft & { showNote: boolean; showRef: boolean; set: (field: keyof StepDraft, value: string) => void };
 export type StepActVm = { label: string; variant: 'primary' | 'secondary'; hint: string; run: () => unknown; form: StepForm | null };
+
+// Advice only: the best practice-exam score among the trajectory's Practice exam learnings (never locks the step).
+function examHint(c: Ctx, t: Trajectory): string {
+  const lids = t.steps.filter((st) => st.k === 'learn' && st.lid && c.byId[st.lid]?.format === 'Practice exam').map((st) => st.lid!);
+  if (!lids.length) return '';
+  const scores = lids.map((id) => detailOf<'exam'>(c.L, id).best).filter((x): x is number => x != null), best = scores.length ? Math.max(...scores) : null;
+  return best == null ? 'practice exam not taken yet' : best >= READY_PCT ? 'practice score ' + best + ' % · ready to book' : 'practice score ' + best + ' % · aim for ' + READY_PCT + ' % first';
+}
 
 const STATE_CHIP = { done: 'accepted', progress: 'in-progress', submitted: 'submitted', booked: 'in-progress', open: 'not-started' } as const;
 
@@ -33,8 +43,8 @@ function stepAct(c: Ctx, t: Trajectory, st: TrjStep, p: StepProgress, enrolled: 
     return problem ? c.L.say(problem) : send('submitted', proof, done);
   };
   const set = (field: keyof StepDraft, value: string) => c.L.setState((s) => ({ stepDraft: { ...s.stepDraft, [key]: { ...(s.stepDraft[key] ?? BLANK), [field]: value } } }));
-  if (what === 'signoff') return { label: 'Request sign-off', variant, hint: c.boss + ' signs off in Waiting for you.', form: null, run: () => send('submitted', {}, 'Sign-off requested from ' + c.boss) };
-  if (what === 'book') return { label: 'Book the exam', variant, hint: 'Marks the exam as booked; book your slot with ' + t.issuer + '.' + (t.cost ? ' ' + t.cost : ''), form: null, run: () => send('booked', {}, 'Exam marked as booked') };
+  if (what === 'signoff') return { label: 'Request sign-off', variant, hint: (c.L.subject.counsellor ? c.boss + ' signs off in Waiting for you.' : 'Sign-off is given by your counsellor once one is assigned.'), form: null, run: () => send('submitted', {}, 'Sign-off requested from ' + c.boss) };
+  if (what === 'book') return { label: 'Book the exam', variant, hint: [examHint(c, t), 'marks the exam as booked; book your slot with ' + t.issuer + (t.cost ? ' · ' + t.cost : '')].filter(Boolean).join(' · ').replace(/^./, (x) => x.toUpperCase()) + '.', form: null, run: () => send('booked', {}, 'Exam marked as booked') };
   const evidence = what === 'evidence';
   return {
     label: evidence ? 'Send for review' : 'Submit the result', variant, form: { ...d, showNote: evidence, showRef: !evidence, set },
@@ -52,7 +62,7 @@ function stepVm(c: Ctx, t: Trajectory, i: number, p: StepProgress, enrolled: boo
   return {
     id: st.id, mark: done ? '✓' : String(i + 1), kind, tone, st: chip[0], stLabel: chip[1],
     title: stepTitle(st, (id) => c.byId[id]?.title ?? 'A learning that is no longer in the library'),
-    meta: [it ? it.format + ' · ' + it.source : null, h ? fmtHours(h) + (st.k === 'elect' ? ' at least' : '') : null, 'target ' + monthLabel(start + (st.win || 1)), required ? null : 'optional'].filter(Boolean).join(' · '),
+    meta: [it ? it.format + ' · ' + it.source : null, h ? fmtHours(h) + (st.k === 'elect' ? ' at least' : '') : null, 'target ' + monthLabel(start + (st.win || 1)), st.k === 'exam' ? examHint(c, t) || null : null, required ? null : 'optional'].filter(Boolean).join(' · '),
     cBg: done ? '#86BC25' : isNext ? '#1a1d18' : '#fff', cFg: done ? '#10180a' : isNext ? '#fff' : '#1a1d18', cBd: required ? '1.5px solid #1a1d18' : '1.5px dashed #8b918a',
     lineBg: done ? '#86BC25' : '#e1e5dc', bg: isNext ? '#fbfdf6' : '#fff', op: p.locked ? 0.7 : 1,
     lockText: p.locked ? 'Unlocks when step ' + (t.steps.findIndex((x) => x.id === st.pre) + 1) + ' is done.' : '',
@@ -67,6 +77,7 @@ function buttons(c: Ctx, t: Trajectory): { primary: Btn | null; secondary: Btn |
   if (c.ro) return { primary: null, secondary: null };
   const leave = (label: string, done: string): Btn => ({ label, run: () => act(c, () => withdrawTrajectory(t.id), done) });
   if (!e) {
+    if (t.status !== 'live') return { primary: null, secondary: null };
     const ask = t.enrol === 'approval';
     return { secondary: null, primary: { label: ask ? 'Ask ' + c.bossFirst + ' to approve' : 'Start this trajectory',
       run: () => act(c, async () => { const r = await requestTrajectory(t.id); return { error: r.error }; }, ask ? 'Sent to ' + c.boss + ' for approval' : 'Started') } };
@@ -78,7 +89,7 @@ function buttons(c: Ctx, t: Trajectory): { primary: Btn | null; secondary: Btn |
 function callout(c: Ctx, t: Trajectory, pg: ReturnType<typeof trajectoryProgress>, status: string | undefined, start: number, binds: boolean): string {
   if (status === 'enrolled') {
     const m = relevantMap(t, [c.L.bl()], c.person.stage), intro = binds && m ? 'Enrolled automatically: mandatory for ' + (AUD_INFO[m[0]]?.name ?? m[0]) + ' at ' + m[1] + '. ' : '';
-    if (pg.complete) return 'Every required step is done. The credential is in the wallet on My profile.';
+    if (pg.complete) return credentialEarned(c, t) ? 'Every required step is done. The credential is in the wallet on My profile.' : 'All required steps are done.';
     if (pg.next >= 0) return intro + 'Next: ' + stepTitle(t.steps[pg.next], (id) => c.byId[id]?.title ?? '') + '. Aim for ' + monthLabel(start + (t.steps[pg.next].win || 1)) + '.';
     return intro + 'The open steps are with ' + c.boss + ' or waiting on a prerequisite.';
   }
@@ -103,7 +114,7 @@ export function trajectoryPage(c: Ctx, t: Trajectory) {
     stLabel: enrolled ? (pg.complete ? 'All steps done' : 'Enrolled since ' + monthLabel(start)) : e ? 'Waiting for approval' : 'Not started',
     stepsSub: enrolled ? 'Done steps turn green. Locked steps open once their prerequisite is done. Dashed circles are optional.' : 'This is the path you would follow. Dates assume you start this month.',
     steps: t.steps.map((_, i) => stepVm(c, t, i, pg.steps[i], enrolled, pg.next, start)),
-    credBg: pg.complete ? '#e0a100' : '#fdf3dc', credFg: pg.complete ? '#fff' : '#7a5000',
+    credBg: credentialEarned(c, t) ? '#e0a100' : '#fdf3dc', credFg: credentialEarned(c, t) ? '#fff' : '#7a5000',
     credMeta: t.issuer + ' · expected ' + monthLabel(start + t.months) + ' · ' + (validity ? 'valid ' + (t.valid_months === 12 ? '1 year' : validity) + (t.renewal ? ', then ' + t.renewal.charAt(0).toLowerCase() + t.renewal.slice(1) : '') : 'does not expire'),
     frac: pg.reqDone / Math.max(1, pg.reqN), progLabel: pg.reqDone + ' of ' + pg.reqN, progSub: 'required steps done',
     callout: callout(c, t, pg, e?.status, start, binds), ...buttons(c, t),

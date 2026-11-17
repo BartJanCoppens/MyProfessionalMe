@@ -7,12 +7,15 @@ import type { CredDraft } from './types';
 import { act, enrolmentOf, openTrajectory, visibleTo } from './trajectoryCtx';
 import type { Ctx } from './trajectoryCtx';
 
+let adding = false;
 const BLANK: CredDraft = { name: '', issuer: '', earned: '', expires: '', link: '', ref: '' };
 
 // The first thing wrong with the form, as the database would refuse it, or null.
 function problemWith(f: CredDraft): string | null {
   if (!f.name.trim()) return 'Add the credential name';
+  if (f.name.trim().length > 160) return 'The credential name is too long';
   if (!f.issuer.trim()) return 'Add who issued it';
+  if (f.issuer.trim().length > 120) return 'The issuer is too long';
   if (!f.earned) return 'Add the date you earned it';
   if (!f.link.trim() && !f.ref.trim()) return 'Add a link or the certificate number';
   if (f.expires && f.expires < f.earned) return 'The expiry date is before the date you earned it';
@@ -25,8 +28,10 @@ function credForm(c: Ctx) {
   const submit = () => {
     const why = problemWith(f);
     if (why) return c.L.say(why);
+    if (adding) return;
+    adding = true;
     return act(c, () => addExternalCredential({ name: f.name, issuer: f.issuer, earned_on: f.earned, expires_on: f.expires || null, link: f.link, ref: f.ref }),
-      'Added · ' + c.boss + ' confirms it', () => c.L.setState({ credForm: null }));
+      'Added · ' + c.boss + ' confirms it', () => c.L.setState({ credForm: null })).finally(() => { adding = false; });
   };
   return { ...f, set: (field: keyof CredDraft, value: string) => c.L.setState((s) => ({ credForm: { ...(s.credForm ?? BLANK), [field]: value } })), submit, cancel: () => c.L.setState({ credForm: null }) };
 }
