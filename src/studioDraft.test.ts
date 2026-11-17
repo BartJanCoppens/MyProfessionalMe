@@ -135,7 +135,7 @@ describe('the one pipeline, on a studio that is not Flash', () => {
     expect(complete).toHaveBeenCalledTimes(1);
     expect(h.state.nw.items).toMatchObject({ how: 'ai', list: rows });
     expect(h.st().itemsLabel).toBe('Made with AI');
-    h.st().send.check(); await flush(10);
+    h.st().send.saveDraft(); await flush(10);
     expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ ai_assisted: true }), null);
   });
   it('malformed AI JSON falls back to the scripted rows, labelled as scripted and never AI', async () => {

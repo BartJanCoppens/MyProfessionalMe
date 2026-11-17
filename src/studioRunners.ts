@@ -1,5 +1,12 @@
-// Build runners per studio id: the real work of one build step (BuildRunner, src/logic/studioBuild.ts).
-// Phase 1 has none: no available studio has a build. Each later phase registers its runner here when its studio ships.
+// Build runners per studio id: the real work of one build step (BuildRunner, src/logic/studioBuild.ts) over the draft on
+// screen, and how many of the studio's build steps its own output shows done (fitBuilt). A studio without one cannot
+// build (StudioBuild says so). Each phase registers its studio here when it ships: Motion in Task 2.3.
 import type { BuildRunner } from './logic/studioBuild';
+import type { StudioEntry } from './logic/studios';
+import { motionBuilt, motionRunner } from './studioMotion';
+import type { BuildCtx } from './studioMotion';
 
-export const BUILD_RUNNERS: Record<string, BuildRunner> = {};
+export type { BuildCtx };
+export const BUILDS: Record<string, { runner: (ctx: BuildCtx) => BuildRunner; built: (items: StudioEntry[]) => number }> = {
+  motion: { runner: motionRunner, built: motionBuilt },
+};

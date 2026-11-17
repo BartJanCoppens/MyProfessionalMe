@@ -8,12 +8,12 @@ import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { noItems, validItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
-import { studioContent } from './logic/studioContent';
+import { outputProblems, studioContent } from './logic/studioContent';
 import { studioById, studioFormats, tooFew, visibleSteps } from './logic/studios';
 import type { StudioDef, StudioEntry } from './logic/studios';
 import { STUDIOS } from './studioData';
 import { changeFormat, reachable } from './studioRules';
-import { BUILD_RUNNERS } from './studioRunners';
+import { BUILDS } from './studioRunners';
 import { stepVals } from './studioStepVals';
 
 export const HUB: StudioState = { view: 'hub', step: 0 };
@@ -63,6 +63,8 @@ export function studioVals(L: Logic, src: StudioSrc) {
   // What the Draft step still needs: a generic studio's item schema; Flash's cards or questions have their own shape, so only
   // the studio's minimum, worded as in the design ("Draft at least 4 items in step 2").
   const problems = !flash ? parts.problems : tooFew(def, items.length) ? ['Draft at least ' + def.min + ' items in step ' + (steps.indexOf('Draft') + 1)] : [];
+  // What the Produce step still has to make (the Motion Studio's animation and its text alternative): blocks the check, not the Draft step.
+  const unsent = [...problems, ...outputProblems(def, (nw.items?.list ?? []) as StudioEntry[])];
   // Server reasons the checks above already show (a client name) are not listed twice.
   const reasons = (src.checkReasons ?? []).filter((r) => !src.checks.some((c) => c.text === r));
   const next = () => {
@@ -81,19 +83,21 @@ export function studioVals(L: Logic, src: StudioSrc) {
     readOnly, studioName: def.name, flash, def, steps, step, stepName: name, stepTitle: name, stepHint: HINTS[name] ?? '',
     prev: () => set({ step: Math.max(0, step - 1) }), next, noPrev: step === 0, hasNext: step < steps.length - 1, nextLabel: 'Next: ' + (steps[step + 1] ?? ''),
     formats: formats.map((f) => ({ label: f, on: nw.type === f, pick: () => pick(f) })),
-    ...parts, buildRunner: BUILD_RUNNERS[def.id],
+    ...parts, buildRunner: BUILDS[def.id]?.runner({ L, nw, setNw }),
     // Only "Made with AI" when the items are AI's; a scripted deck says so.
     itemsLabel: LABELS[nw.items?.how ?? ''] ?? '',
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
     // Any other studio previews the content publishing makes of its rows (studioContent), once they are valid.
     content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioEntry[], nw.shape ?? {}),
+    // Why there is nothing to preview yet.
+    previewNote: parts.problems.length ? 'Fix the items in the Draft step first; the preview shows them as learners will.' : unsent[0] ?? '',
     // Send for review opens once the automatic check (check_contribution) passed on the draft on screen.
-    send: { checks: src.checks, blocked: src.blocked || problems.length > 0 || !passed, problems: [...problems, ...reasons],
+    send: { checks: src.checks, blocked: src.blocked || unsent.length > 0 || !passed, problems: [...unsent, ...reasons],
       route: src.route, routeEmpty: !src.route.length, policyNote: src.policyNote, routeWarn: src.routeWarn,
       label: src.submitLabel === 'Submit for review' ? 'Send for review' : src.submitLabel, run: src.submit, saveDraft: src.saveDraft, busy: src.busy,
       // The server is asked once the studio itself sees nothing left to fix.
-      check: () => (problems.length ? L.say(problems[0]) : src.runCheck()), checkBlocked: src.busy || problems.length > 0, checkLabel: 'Run the automatic check',
+      check: () => (unsent.length ? L.say(unsent[0]) : src.runCheck()), checkBlocked: src.busy || unsent.length > 0, checkLabel: 'Run the automatic check',
       checkNote: !src.checkReasons ? 'Saves your draft and checks it on the server. Send for review opens when it passes.' : passed ? 'The automatic check passed on this version.' : '' },
   };
 }

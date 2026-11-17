@@ -1,19 +1,22 @@
 // The Shape, Draft and Produce steps of a generic studio, as view-model: questions and produce rows as chip choices and the
 // studio's rows as label/text(/text2). Answers live on the draft: `nw.shape`, `nw.produce`, `nw.cast`, `nw.build` and, for the
 // rows, `nw.items` (the one item store, with its `how` provenance, like every format). The Explainer's check questions
-// follow its rows in `nw.items`; they are shown as a block and removed as a whole.
+// follow its rows in `nw.items`; they are shown as a block and removed as a whole. An Animated flow's drawing follows its
+// rows too; editing the rows drops it (it was built from them), and the build steps show how far it got (fitBuilt).
 import type { Logic } from './model';
 import type { Bundle, ExamQuestion, NewDraft } from './types';
 import type { SetNw } from './createItems';
 import { draftItems, studioQuery, studioSpec } from './studioDraft';
 import { itemRows, noItems } from './logic/items';
 import type { Item } from './logic/items';
-import { startBuild } from './logic/studioBuild';
+import { fitBuilt, startBuild } from './logic/studioBuild';
 import { AI_ONLY, studioProblems } from './logic/studioContent';
 import { questionsOf, stepsOf } from './logic/studios';
 import type { StudioDef, StudioEntry, StudioItem } from './logic/studios';
 import { STOCK_LOOKS, STOCK_VOICES } from './studioData';
 import type { Chip } from './screens/ChipGroup';
+import { motionVals } from './studioMotion';
+import { BUILDS } from './studioRunners';
 
 type Field = 'shape' | 'produce' | 'cast';
 
@@ -38,6 +41,12 @@ function offered(aiOn: boolean, q: string, options: string[], chosen: string | u
   return { options: cut ? options.filter((o) => !only.options.includes(o) || o === chosen) : options, note: cut ? only.why : '' };
 }
 
+// The build steps as stored on the draft, fitted to the studio's own output when it has a runner that makes one.
+function built(def: StudioDef, nw: NewDraft, list: StudioEntry[]) {
+  const steps = nw.build ?? startBuild(def.build ?? []), b = BUILDS[def.id];
+  return b ? fitBuilt(steps, b.built(list)) : steps;
+}
+
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
   const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list), aiOn = L.aiCan('studio_draft');
   // Editing the rows keeps the items' provenance and any check after them; a hand-made list says 'manual'.
@@ -56,6 +65,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     // "Draft with AI" (the one pipeline in studioDraft.ts). Flash keeps its own draft button in the item panel and does not use this.
     aiDraft: { label: L.state.nwAiBusy ? 'Drafting' : 'Draft with AI', busy: L.state.nwAiBusy,
       run: () => draftItems(L, nw, bundles, setNw, studioQuery(nw), studioSpec(def, nw)) },
-    build: def.build ? { steps: nw.build ?? startBuild(def.build), set: (b: NonNullable<NewDraft['build']>) => setNw({ build: b }) } : null,
+    build: def.build ? { steps: built(def, nw, list), set: (b: NonNullable<NewDraft['build']>) => setNw({ build: b }) } : null,
+    motion: def.id === 'motion' ? motionVals(L, nw, setNw) : null,
   };
 }
