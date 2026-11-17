@@ -25,16 +25,20 @@ const STEP_THROUGH = 'Step-through';
 const answer = (shape: Record<string, string>, q: string, options: string[], none: string) => (options.includes(shape[q]) ? shape[q] : none);
 export const explainerEnd = (shape: Record<string, string>) => answer(shape, END_QUESTION, ENDINGS, END_SUMMARY);
 // The ending and the check agree (private.contribution_problems says the same).
-export const NEEDS_CHECK = 'Ending with a three-question check needs its questions: draft them with AI, or choose another ending in Shape it';
+export const NEEDS_CHECK = 'Ending with a three-question check needs its three questions';
+// What to do about it, in the studio: depends on whether Draft with AI can run (the database names the problem only).
+export const NEEDS_CHECK_AI = ': Draft with AI again (it rewrites the steps as well), or choose another ending in Shape it';
+export const NEEDS_CHECK_NO_AI = ': only Draft with AI writes them and it is not switched on, so choose another ending in Shape it';
 export const UNUSED_CHECK = 'The check is only shown when the explainer ends with it: remove it, or choose “A three-question check” in Shape it';
-export function explainerProblems(items: StudioEntry[], shape: Record<string, string>): string[] {
+export function explainerProblems(items: StudioEntry[], shape: Record<string, string>, aiOn = true): string[] {
   const has = questionsOf(items).length > 0, wants = explainerEnd(shape) === END_CHECK;
-  return wants && !has ? [NEEDS_CHECK] : !wants && has ? [UNUSED_CHECK] : [];
+  return wants && !has ? [NEEDS_CHECK + (aiOn ? NEEDS_CHECK_AI : NEEDS_CHECK_NO_AI)] : !wants && has ? [UNUSED_CHECK] : [];
 }
 // What a studio's Draft step still needs: the item rules, and for the Explainer the ending and check agreeing.
-export const studioProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>) =>
-  [...itemsValid(def, items), ...(def.format === 'Interactive explainer' ? explainerProblems(items, shape) : [])];
-// Answers only Draft with AI can deliver (question to answers): offered only while it can run, with the reason otherwise.
+export const studioProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>, aiOn: boolean) =>
+  [...itemsValid(def, items), ...(def.format === 'Interactive explainer' ? explainerProblems(items, shape, aiOn) : [])];
+// Answers only Draft with AI can deliver (question to answers): offered only while it can run, with the reason otherwise;
+// an answer already chosen stays on screen, with the reason.
 export const AI_ONLY: Record<string, { options: string[]; why: string }> = {
   [END_QUESTION]: { options: [END_CHECK], why: 'A three-question check is written by Draft with AI, which is not switched on' },
 };

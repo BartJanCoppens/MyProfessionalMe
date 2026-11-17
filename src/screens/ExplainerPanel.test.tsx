@@ -15,6 +15,7 @@ import { initState, Logic } from '../model';
 import { cfg, harness, member, person } from '../test/harness';
 import type { AppState, Learn } from '../types';
 import { DetailScreen } from './Library';
+import SafeSvg from './SafeSvg';
 import { Preview } from './studioPreviews';
 
 vi.mock('../lib/learnerStore', () => ({
@@ -81,5 +82,20 @@ describe('the Explainer Studio preview', () => {
     expect(learner.saveProgress).not.toHaveBeenCalled();
     expect(store.saveDraft).not.toHaveBeenCalled();
     expect(h.patches).toHaveLength(0);
+  });
+});
+
+describe('SafeSvg', () => {
+  it('gives each rendered copy of a drawing its own ids', () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"/></defs><rect fill="url(#g)"/></svg>';
+    const { container } = render(<><SafeSvg svg={svg} label="One" /><SafeSvg svg={svg} label="Two" /></>);
+    const ids = [...container.querySelectorAll('linearGradient')].map((e) => e.id);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect([...container.querySelectorAll('rect')].map((r) => r.getAttribute('fill'))).toEqual(ids.map((id) => 'url(#' + id + ')'));
+  });
+  it('renders nothing when nothing survives the sanitiser', () => {
+    const { container } = render(<SafeSvg svg="<script>alert(1)</script>" label="x" />);
+    expect(container.innerHTML).toBe('');
   });
 });

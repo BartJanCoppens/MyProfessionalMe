@@ -21,7 +21,7 @@ vi.mock('../lib/attendanceStore', () => ({ loadRoster: vi.fn(async () => []), re
 
 const CONTENT: Record<string, unknown> = {
   L60: { kind: 'flash', total: 40, due: 3, next: 'Thu 19 Nov', cards: [['Q one', 'A one'], ['Q two', 'A two'], ['Q three', 'A three'], ['Q four', 'A four'], ['Q five', 'A five'], ['Q six', 'A six']] },
-  L61: { kind: 'exam', bank: 40, real: 'x', qs: [{ t: 'Rates', q: 'First?', o: ['a', 'b'], a: 1, why: 'Because b' }, { t: 'SMEs', q: 'Second?', o: ['a', 'b'], a: 0, why: 'Because a' }] },
+  L61: { kind: 'exam', bank: 40, real: 'x', qs: [{ t: 'Rates', q: 'First?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because b' }, { t: 'SMEs', q: 'Second?', o: ['a', 'b', 'c', 'd'], a: 0, why: 'Because a' }] },
   L64: { kind: 'case', brief: 'A carve-out.', deliv: ['A plan', 'A risk list'], rubric: ['Clear'], reviewer: 'Reviewed by a peer.' },
   L65: { kind: 'teach', prompt: 'Explain it.', crit: [['Impact', 'impact'], ['Plain language', null]] },
   L66: { kind: 'stretch', brief: 'Lead a meeting.', checks: ['Agree scope', 'Run it'] },

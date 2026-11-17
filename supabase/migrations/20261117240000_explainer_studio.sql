@@ -129,7 +129,7 @@ begin
   if c.type = 'Interactive explainer' and c.studio is not null and jsonb_typeof(c.items) = 'array' then
     v_check := exists (select 1 from jsonb_array_elements(c.items) e where jsonb_typeof(e) = 'object');
     if coalesce(c.shape ->> 'End with?', '') = 'A three-question check' and not v_check then
-      p := array_append(p, 'Ending with a three-question check needs its questions: draft them with AI, or choose another ending in Shape it');
+      p := array_append(p, 'Ending with a three-question check needs its three questions');
     elsif coalesce(c.shape ->> 'End with?', '') <> 'A three-question check' and v_check then
       p := array_append(p, 'The check is only shown when the explainer ends with it: remove it, or choose “A three-question check” in Shape it');
     end if;

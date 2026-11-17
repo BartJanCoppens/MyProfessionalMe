@@ -46,7 +46,7 @@ describe('mergeMaps', () => {
 });
 
 describe('parseFormatContent', () => {
-  const q = { t: 'Store', q: 'Which format?', o: ['CSV', 'Delta'], a: 1, why: 'Delta.' };
+  const q = { t: 'Store', q: 'Which format?', o: ['CSV', 'Delta', 'Parquet', 'JSON'], a: 1, why: 'Delta.' };
   it('returns an exam', () => {
     const raw = { kind: 'exam', bank: 60, real: 'About 100 minutes.', qs: [q] };
     expect(parseFormatContent(raw)).toEqual(raw);
@@ -56,8 +56,10 @@ describe('parseFormatContent', () => {
     expect(parseFormatContent('x')).toBeNull();
     expect(parseFormatContent(null)).toBeNull();
   });
-  it('returns null for an exam answer outside its options', () => {
-    expect(parseFormatContent({ kind: 'exam', bank: 1, real: '', qs: [{ ...q, a: 2 }] })).toBeNull();
+  // One question rule (isQuestion in src/logic/items.ts, private.question_ok): four options and the answer among them.
+  it('returns null for an exam answer outside its options, or a question without four options', () => {
+    expect(parseFormatContent({ kind: 'exam', bank: 1, real: '', qs: [{ ...q, a: 4 }] })).toBeNull();
+    expect(parseFormatContent({ kind: 'exam', bank: 1, real: '', qs: [{ ...q, o: ['CSV', 'Delta'] }] })).toBeNull();
   });
   it('returns null for a flash card that is not a pair', () => {
     expect(parseFormatContent({ kind: 'flash', total: 1, due: 1, next: 'Thu', cards: [['only one']] })).toBeNull();
@@ -89,7 +91,7 @@ describe('parseFormatContent', () => {
 
 // Studios plan Phase 2 shapes (Tasks 2.2 and 2.3), read here so that a published explainer or animated flow reads back.
 describe('studio content kinds', () => {
-  const q = { t: 'Peppol', q: 'Who checks the format?', o: ['The supplier', 'The access point', 'The customer'], a: 1, why: 'The access point validates it.' };
+  const q = { t: 'Peppol', q: 'Who checks the format?', o: ['The supplier', 'The access point', 'The customer', 'The tax office'], a: 1, why: 'The access point validates it.' };
   const explainer = { kind: 'explainer', style: 'Step-through', depth: 'Overview', steps: [{ label: 'Supplier', text: 'Creates the invoice.' }, { label: 'Access point', text: 'Checks it.', svg: '<svg/>' }], end: 'A summary card' };
   const motion = { kind: 'motion', stages: [{ label: 'Order', text: 'The customer orders.' }], svg: '<svg/>', alt: 'Order, then delivery, then cash.', seconds: 30 };
   it('reads an interactive explainer, with or without its three-question check', () => {

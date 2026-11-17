@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as store from './lib/contributionStore';
 import { emptyParts } from './logic/contribution';
 import type { CreateData } from './logic/contribution';
-import { DEPTH_QUESTION, END_CHECK, END_NONE, END_QUESTION, END_SUMMARY, NEEDS_CHECK, UNUSED_CHECK } from './logic/studioContent';
+import { DEPTH_QUESTION, END_CHECK, END_NONE, END_QUESTION, END_SUMMARY, NEEDS_CHECK, NEEDS_CHECK_AI, NEEDS_CHECK_NO_AI, UNUSED_CHECK } from './logic/studioContent';
 import { parseStudioItems, studioRequest } from './logic/studioItems';
 import { CHECK_SIZE, rowsMax, studioById } from './logic/studios';
 import type { StudioEntry, StudioItem } from './logic/studios';
@@ -51,6 +51,19 @@ describe('Shape it', () => {
     const end = h.st().shape.find((g) => g.key === END_QUESTION)!;
     expect(end.chips.map((c) => c.label)).toEqual([END_SUMMARY, END_NONE]);
     expect(end.hint).toBe('A three-question check is written by Draft with AI, which is not switched on');
+  });
+  it('keeps a check ending already chosen on screen, with the reason, while Draft with AI is off', () => {
+    const h = open({ list: STEPS, shape: { [END_QUESTION]: END_CHECK } });
+    const end = h.st().shape.find((g) => g.key === END_QUESTION)!;
+    expect(end.chips.map((c) => [c.label, c.on])).toEqual([[END_CHECK, true], [END_SUMMARY, false], [END_NONE, false]]);
+    expect(end.hint).toMatch(/not switched on/);
+    expect(h.st().problems).toEqual([NEEDS_CHECK + NEEDS_CHECK_NO_AI]);
+    expect(h.st().problems[0]).not.toMatch(/Draft with AI again/);
+  });
+  it('with Draft with AI on, says that drafting the check again rewrites the steps too', () => {
+    const h = open({ live: true, list: STEPS, shape: { [END_QUESTION]: END_CHECK } });
+    expect(h.st().problems).toEqual([NEEDS_CHECK + NEEDS_CHECK_AI]);
+    expect(h.st().problems[0]).toMatch(/rewrites the steps/);
   });
 });
 
@@ -98,7 +111,7 @@ describe('the Draft step', () => {
     h.st().check!.remove();
     expect(h.state.nw.items!.list).toEqual(STEPS);
     expect(h.st().check).toBeNull();
-    expect(h.st().problems).toEqual([NEEDS_CHECK]);
+    expect(h.st().problems).toEqual([NEEDS_CHECK + NEEDS_CHECK_NO_AI]);
   });
   it('asks to remove a check the ending does not use, and shows no preview until they agree', () => {
     const h = open({ list: [...STEPS, ...CHECK], shape: { [END_QUESTION]: END_NONE } });

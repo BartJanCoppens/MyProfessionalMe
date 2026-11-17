@@ -367,7 +367,7 @@ describe('the credentials wallet', () => {
 });
 
 describe('the practice exam', () => {
-  const exam = () => parseFormatContent({ kind: 'exam', bank: 40, real: 'The real exam has 50 questions', qs: [{ t: 'Rates', q: 'First?', o: ['a', 'b'], a: 1, why: 'Because b' }] });
+  const exam = () => parseFormatContent({ kind: 'exam', bank: 40, real: 'The real exam has 50 questions', qs: [{ t: 'Rates', q: 'First?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because b' }] });
   let saved: (typeof LEARN_META)[string];
   beforeEach(() => { saved = LEARN_META.L61; LEARN_META.L61 = { line: null, status: 'published', content: exam() }; });
   afterEach(() => { LEARN_META.L61 = saved; });

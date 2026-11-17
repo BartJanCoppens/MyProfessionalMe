@@ -22,7 +22,7 @@ vi.mock('./lib/aiStore', () => ({
 const CONTENT: Record<string, unknown> = {
   L60: { kind: 'flash', total: 40, due: 3, next: 'Thu 19 Nov', cards: [['Q one', 'A one'], ['Q two', 'A two'], ['Q three', 'A three']] },
   L61: { kind: 'exam', bank: 40, real: 'The real exam has 50 questions', qs: [
-    { t: 'Rates', q: 'First?', o: ['a', 'b'], a: 1, why: 'Because b' }, { t: 'SMEs', q: 'Second?', o: ['a', 'b'], a: 0, why: 'Because a' }] },
+    { t: 'Rates', q: 'First?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because b' }, { t: 'SMEs', q: 'Second?', o: ['a', 'b', 'c', 'd'], a: 0, why: 'Because a' }] },
   L64: { kind: 'case', brief: 'A carve-out.', deliv: ['A plan', 'A risk list'], rubric: ['Clear', 'Complete'], reviewer: 'Reviewed by your counsellor or a peer.' },
   L65: { kind: 'teach', prompt: 'Explain double materiality.', crit: [['Impact', 'impact|people'], ['Financial', 'financ|risk'], ['Both', 'both|two'], ['Plain language', null]] },
   L66: { kind: 'stretch', brief: 'Lead a meeting.', checks: ['Agree scope', 'Run it', 'Reflect'] },

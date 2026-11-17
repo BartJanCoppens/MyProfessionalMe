@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parseFormatContent } from '../lib/contentStore';
 import { STUDIOS } from '../studioData';
 import { CARD_FORMATS, ITEM_MAX, LONG_MAX, SHORT_MAX } from './items';
-import { CASE_HOURS, CASE_REVIEWER, DEPTH_QUESTION, END_CHECK, END_NONE, END_QUESTION, END_SUMMARY, EVIDENCE_QUESTION, LENGTH_QUESTION, NEEDS_CHECK, UNUSED_CHECK,
+import { CASE_HOURS, CASE_REVIEWER, DEPTH_QUESTION, END_CHECK, END_NONE, END_QUESTION, END_SUMMARY, EVIDENCE_QUESTION, LENGTH_QUESTION, NEEDS_CHECK, NEEDS_CHECK_AI, NEEDS_CHECK_NO_AI, UNUSED_CHECK,
   caseHours, countsAsEvidence, explainerProblems, studioContent } from './studioContent';
 import { CASE_LABELS, CHECK_SIZE, itemsValid, rowsMax, studioById } from './studios';
 import type { StudioEntry, StudioItem } from './studios';
@@ -45,7 +45,8 @@ describe('studioContent', () => {
     expect(studioContent('Interactive explainer', STEPS, { [DEPTH_QUESTION]: 'Deep', [END_QUESTION]: 'Fireworks' })).toMatchObject({ depth: 'Overview', end: END_SUMMARY });
   });
   it('asks for the check when the ending is the check, and for its removal when it is not', () => {
-    expect(explainerProblems(STEPS, { [END_QUESTION]: END_CHECK })).toEqual([NEEDS_CHECK]);
+    expect(explainerProblems(STEPS, { [END_QUESTION]: END_CHECK })).toEqual([NEEDS_CHECK + NEEDS_CHECK_AI]);
+    expect(explainerProblems(STEPS, { [END_QUESTION]: END_CHECK }, false)).toEqual([NEEDS_CHECK + NEEDS_CHECK_NO_AI]);
     expect(explainerProblems([...STEPS, ...CHECK], { [END_QUESTION]: END_CHECK })).toEqual([]);
     expect(explainerProblems([...STEPS, ...CHECK], { [END_QUESTION]: END_SUMMARY })).toEqual([UNUSED_CHECK]);
     expect(explainerProblems([...STEPS, ...CHECK], {})).toEqual([UNUSED_CHECK]);

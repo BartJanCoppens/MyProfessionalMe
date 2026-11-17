@@ -31,26 +31,27 @@ function castPickers(def: StudioDef) {
     : def.cast === 'voices' ? [{ key: 'Host voice', options: STOCK_VOICES }, { key: 'Guest voice', options: STOCK_VOICES }] : [];
 }
 
-// A question's options, without the ones only Draft with AI delivers while it cannot run (and why they are gone).
-function offered(L: Logic, q: string, options: string[]) {
-  const only = AI_ONLY[q], cut = !!only && !L.aiCan('studio_draft');
-  return { options: cut ? options.filter((o) => !only.options.includes(o)) : options, note: cut ? only.why : '' };
+// A question's options, without the ones only Draft with AI delivers while it cannot run (and why), but never hiding the
+// answer already chosen.
+function offered(aiOn: boolean, q: string, options: string[], chosen: string | undefined) {
+  const only = AI_ONLY[q], cut = !!only && !aiOn;
+  return { options: cut ? options.filter((o) => !only.options.includes(o) || o === chosen) : options, note: cut ? only.why : '' };
 }
 
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
-  const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list);
+  const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list), aiOn = L.aiCan('studio_draft');
   // Editing the rows keeps the items' provenance and any check after them; a hand-made list says 'manual'.
   const change = (f: (rows: StudioItem[], check: ExamQuestion[]) => StudioEntry[]) => setNw((cur) => { const it = cur.items ?? noItems(), all = it.list as StudioEntry[];
     return { items: { ...it, list: f(stepsOf(all), questionsOf(all)) as Item[], how: it.how || 'manual', problems: [] } }; });
   return {
-    shape: def.qs.map(([q, options, steers]) => { const o = offered(L, q, options); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
+    shape: def.qs.map(([q, options, steers]) => { const o = offered(aiOn, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers)),
     cast: castPickers(def).map((p) => choices(nw, setNw, 'cast', p.key, p.options)),
     rows: stepsOf(list).map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
       edit: (f: 0 | 1 | 2, v: string) => change((rows, q) => [...rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x)), ...q]),
       remove: () => change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]) })),
     check: check.length ? { head: 'Check · ' + check.length + ' questions · with the right answer', rows: itemRows('Practice exam', check), remove: () => change((rows) => rows) } : null,
-    hasText2: text2, problems: studioProblems(def, list, nw.shape ?? {}),
+    hasText2: text2, problems: studioProblems(def, list, nw.shape ?? {}, aiOn),
     add: () => change((rows, q) => [...rows, (text2 ? ['', '', ''] : ['', '']) as StudioItem, ...q]),
     // "Draft with AI" (the one pipeline in studioDraft.ts). Flash keeps its own draft button in the item panel and does not use this.
     aiDraft: { label: L.state.nwAiBusy ? 'Drafting' : 'Draft with AI', busy: L.state.nwAiBusy,

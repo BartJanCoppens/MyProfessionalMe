@@ -2059,7 +2059,7 @@ do $$ begin
 end $$;
 insert into results (check_name, expected, actual) select 'EX a check of two questions fails the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex two questions')), '|');
 insert into results (check_name, expected, actual) select 'EX a question without its explanation fails the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex bad question')), '|');
-insert into results (check_name, expected, actual) select 'EX ending with the check needs the check', 'Ending with a three-question check needs its questions: draft them with AI, or choose another ending in Shape it',
+insert into results (check_name, expected, actual) select 'EX ending with the check needs the check', 'Ending with a three-question check needs its three questions',
   array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex check missing')), '|');
 insert into results (check_name, expected, actual) select 'EX a check that is not the ending fails the check', 'The check is only shown when the explainer ends with it: remove it, or choose “A three-question check” in Shape it',
   array_to_string(public.check_contribution((select id from public.contributions where title = 'T ex check unused')), '|');

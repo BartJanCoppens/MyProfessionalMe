@@ -7,11 +7,11 @@ import { READY_PCT, countLabel, dueCards, examScore, examVerdict, nextReview, te
 const exam = parseFormatContent({
   kind: 'exam', bank: 40, real: 'x',
   qs: [
-    { t: 'Rates', q: 'q1', o: ['a', 'b', 'c'], a: 1, why: 'w' },
-    { t: 'SMEs', q: 'q2', o: ['a', 'b', 'c'], a: 0, why: 'w' },
-    { t: 'Pillar Two', q: 'q3', o: ['a', 'b', 'c'], a: 0, why: 'w' },
-    { t: 'Payments', q: 'q4', o: ['a', 'b', 'c'], a: 2, why: 'w' },
-    { t: 'Profession', q: 'q5', o: ['a', 'b', 'c'], a: 1, why: 'w' },
+    { t: 'Rates', q: 'q1', o: ['a', 'b', 'c', 'd'], a: 1, why: 'w' },
+    { t: 'SMEs', q: 'q2', o: ['a', 'b', 'c', 'd'], a: 0, why: 'w' },
+    { t: 'Pillar Two', q: 'q3', o: ['a', 'b', 'c', 'd'], a: 0, why: 'w' },
+    { t: 'Payments', q: 'q4', o: ['a', 'b', 'c', 'd'], a: 2, why: 'w' },
+    { t: 'Profession', q: 'q5', o: ['a', 'b', 'c', 'd'], a: 1, why: 'w' },
   ],
 }) as ExamContent;
 const teach = parseFormatContent({
