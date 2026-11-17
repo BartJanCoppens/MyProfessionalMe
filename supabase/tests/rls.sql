@@ -2184,5 +2184,102 @@ end $$;
 with u as (update public.learnings set title = title where id = 'L68' returning 1)
   insert into results (check_name, expected, actual) select 'P2 a General Admin still edits the other columns', '1 rows', count(*)||' rows' from u;
 reset role;
+-- ---------- Private media storage (ME) ----------
+-- Bucket `media` is private. A file lives at <author id>/<contribution id>/<file>. The author writes it while the
+-- contribution is a draft or has changes requested; the author, the contribution's reviewers and, once the published
+-- learning names the path in a "path" member of its content, every signed-in person read it (private.can_read_media).
+-- Storage refuses direct row deletes unless storage.allow_delete_query is on, as the Storage API sets it.
+reset role;
+insert into results (check_name, expected, actual) select 'ME the media bucket is private, 50 MB, with audio and .horizon (JSON) among its types', 'false/52428800/true',
+  public||'/'||file_size_limit||'/'||(allowed_mime_types @> '{audio/mpeg,audio/mp4,application/json}') from storage.buckets where id = 'media';
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000f1','t.mediamaker@test.local'), ('00000000-0000-0000-0000-0000000000f2','t.othermaker@test.local'), ('00000000-0000-0000-0000-0000000000f3','t.medialearner@test.local');
+update public.profiles set business_line='Consulting' where id in ('00000000-0000-0000-0000-0000000000f1','00000000-0000-0000-0000-0000000000f2');
+update public.profiles set business_line='Audit' where id = '00000000-0000-0000-0000-0000000000f3'; -- never a peer of a Consulting author
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000f1','{Consulting}','{"Job aid"}'), ('00000000-0000-0000-0000-0000000000f2','{Consulting}','{"Job aid"}');
+delete from public.review_policies; -- one peer, then published
+insert into public.review_policies (formats, peers, expert, quality) values ('{"Job aid"}', 1, false, false);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f2","role":"authenticated"}';
+insert into public.contributions (business_line, type, title, domain, takeaway, items, studio) values
+ ('Consulting','Job aid','T me other','prof','x','[["Before","a"],["Before","b"],["During","c"],["After","d"]]','aid');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
+insert into public.contributions (business_line, type, title, domain, takeaway, items, studio) values
+ ('Consulting','Job aid','T me aid','prof','Tick it.','[["Before","Scope"],["Before","Map"],["During","Sign-off"],["After","Minutes"]]','aid');
+reset role;
+select set_config('test.me_c', (select id::text from public.contributions where title = 'T me aid'), true);
+select set_config('test.me_o', (select id::text from public.contributions where title = 'T me other'), true);
+select set_config('test.me_a', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/narration.mp3', true);
+select set_config('test.me_b', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/notes.mp3', true);
+select set_config('test.me_x', '00000000-0000-0000-0000-0000000000f2/'||current_setting('test.me_o')||'/deck.horizon', true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f2","role":"authenticated"}';
+insert into storage.objects (bucket_id, name) values ('media', current_setting('test.me_x'));
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
+with i as (insert into storage.objects (bucket_id, name) values ('media', current_setting('test.me_a')) returning 1)
+  insert into results (check_name, expected, actual) select 'ME the author uploads a file of their draft under their own id', '1 rows', count(*)||' rows' from i;
+insert into storage.objects (bucket_id, name) values ('media', current_setting('test.me_b')), ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/spare.mp3');
+with u as (update storage.objects set metadata = '{"size":1}' where bucket_id = 'media' and name = current_setting('test.me_a') returning 1)
+  insert into results (check_name, expected, actual) select 'ME the author replaces a file of their draft', '1 rows', count(*)||' rows' from u;
+insert into results (check_name, expected, actual) select 'ME the author reads their own files only', '3', count(*)::text from storage.objects where bucket_id = 'media';
+do $$ begin
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f2/'||current_setting('test.me_c')||'/x.mp3');
+    insert into results (check_name, expected, actual) values ('ME no upload under someone else''s id', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME no upload under someone else''s id', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_o')||'/x.mp3');
+    insert into results (check_name, expected, actual) values ('ME no upload for another person''s contribution', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME no upload for another person''s contribution', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/sub/x.mp3');
+    insert into results (check_name, expected, actual) values ('ME no upload outside <user>/<contribution>/<file>', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME no upload outside <user>/<contribution>/<file>', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update storage.objects set name = '00000000-0000-0000-0000-0000000000f2/'||current_setting('test.me_o')||'/moved.mp3' where bucket_id = 'media' and name = current_setting('test.me_b');
+    insert into results (check_name, expected, actual) values ('ME no move to someone else''s contribution', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME no move to someone else''s contribution', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local storage.allow_delete_query = 'true';
+with d as (delete from storage.objects where bucket_id = 'media' and name like '%/spare.mp3' returning 1)
+  insert into results (check_name, expected, actual) select 'ME the author removes a file of their draft', '1 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f2","role":"authenticated"}';
+with d as (delete from storage.objects where bucket_id = 'media' and name = current_setting('test.me_b') returning 1)
+  insert into results (check_name, expected, actual) select 'ME another person cannot remove the author''s file', '0 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'ME a learner cannot read an unpublished file', '0', count(*)::text from storage.objects where bucket_id = 'media';
+-- sent for review: the author's files are frozen; the assigned peer reads them
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'ME the draft passes the check and goes to one peer', '{}/review',
+  public.check_contribution(current_setting('test.me_c')::uuid)::text||'/'||public.submit_contribution(current_setting('test.me_c')::uuid);
+do $$ begin
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/late.mp3');
+    insert into results (check_name, expected, actual) values ('ME no upload once the contribution is in review', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME no upload once the contribution is in review', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+with d as (delete from storage.objects where bucket_id = 'media' and name = current_setting('test.me_b') returning 1)
+  insert into results (check_name, expected, actual) select 'ME the author cannot remove a file in review', '0 rows', count(*)||' rows' from d;
+reset role;
+select set_config('test.me_r', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.me_c')::uuid), true);
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.me_r'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'ME the reviewer reads the contribution''s files', '2', count(*)::text from storage.objects where bucket_id = 'media' and name like '00000000-0000-0000-0000-0000000000f1/%';
+insert into results (check_name, expected, actual) select 'ME the peer approves; published', 'published', public.review_contribution(current_setting('test.me_c')::uuid, 'approved', '{t,t,t,t}', '');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'ME a published learning that names no file opens none', '0', count(*)::text from storage.objects where bucket_id = 'media';
+-- a later studio names its files in the learning content, here an audio part (and, wrongly, another person's file)
+reset role;
+update public.learnings set content = content || jsonb_build_object('audio', jsonb_build_object('path', current_setting('test.me_a')), 'extra', jsonb_build_array(jsonb_build_object('path', current_setting('test.me_x'))))
+  where id = (select learning_id from public.contributions where id = current_setting('test.me_c')::uuid);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'ME a signed-in learner reads the file a published learning names', '1', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.me_a');
+insert into results (check_name, expected, actual) select 'ME but not the files it does not name', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.me_b');
+insert into results (check_name, expected, actual) select 'ME nor another contribution''s file it names', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.me_x');
+reset role;
+set local role anon;
+set local request.jwt.claims = '';
+insert into results (check_name, expected, actual) select 'ME anon reads no media', '0', count(*)::text from storage.objects where bucket_id = 'media';
+do $$ begin
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/anon.mp3');
+    insert into results (check_name, expected, actual) values ('ME anon uploads nothing', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('ME anon uploads nothing', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
