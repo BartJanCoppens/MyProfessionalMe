@@ -1,9 +1,10 @@
 // The detail page's panels for the study formats of design v4: flash cards, practice exam, teach-back. The work formats
 // (case, stretch, webinar, job aid) are in FormatWork.tsx. They read from VM only (fmtVals.ts, fmtStudy.ts).
 import type { CSSProperties } from 'react';
-import { Button, Card, LinkButton, ProgressRing, Tag, Textarea } from '../ds';
+import { Button, Card, LinkButton, ProgressRing, Textarea } from '../ds';
 import type { VM } from '../model';
 import { WorkPanels } from './FormatWork';
+import QuestionRound from './QuestionRound';
 
 type Det = VM['det'];
 const caps: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
@@ -52,22 +53,7 @@ function ExamPanel({ ex }: { ex: NonNullable<Det['ex']> }) {
             <LinkButton onClick={ex.openTrj ?? undefined}>Open the trajectory →</LinkButton>
           </div>
         )}
-        {ex.active && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 12, color: '#5a6058' }}><span>{ex.pos}</span><Tag tone="muted">{ex.topic}</Tag></div>
-            <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.35, textWrap: 'pretty' }}>{ex.q}</div>
-            <div role="radiogroup" aria-label="Answer options" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {ex.opts.map((o) => (
-                <button key={o.label} type="button" role="radio" aria-checked={o.on} onClick={o.pick} style={{ appearance: 'none', textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 12px', borderRadius: 6, border: '1px solid ' + o.bd, background: o.bg, width: '100%' }}>
-                  <span aria-hidden="true" style={{ width: 20, height: 20, borderRadius: '50%', flex: 'none', border: '1.5px solid ' + o.markBd, background: o.markBg, color: o.markFg, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{o.mark}</span>
-                  <span style={{ textWrap: 'pretty' }}>{o.label}</span>
-                </button>
-              ))}
-            </div>
-            {ex.hasFb && <div style={{ borderLeft: '3px solid ' + ex.fbColor, padding: '6px 10px', fontSize: 12.5, color: '#3d423b', textWrap: 'pretty' }}><span style={{ fontWeight: 600, color: ex.fbColor }}>{ex.fbHead} </span>{ex.why}</div>}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Button size="sm" onClick={ex.main} disabled={ex.mainOff}>{ex.mainLabel}</Button><span style={{ fontSize: 12, color: '#5a6058' }}>{ex.hint}</span></div>
-          </>
-        )}
+        {ex.active && <QuestionRound r={ex} />}
         {ex.finished && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>

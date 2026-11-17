@@ -1,9 +1,10 @@
 // The study-type v4 panels: flash cards (spaced repetition), practice exam and teach-back. The learner's session
 // lives in AppState.fmt; what is saved goes through saveDetail() into learner_learnings.detail. Each one completes the
-// learning by itself (flash: every card rated once, exam: a round finished, teach-back: an explanation sent); the exam
+// learning by itself (flash: every card rated once, exam: a round finished (fmtRound.ts), teach-back: an explanation sent); the exam
 // verdict and the teach-back score are advice and never lock anything.
 import { completedToast, detailOf, draftOf, first, patchDraft, saveDetail } from './fmtShared';
 import { dueCards, examScore, examVerdict, nextReview, READY_PCT, teachCheck } from './logic/formats';
+import { roundView } from './fmtRound';
 import type { Item, Logic } from './model';
 import type { ExamContent, FlashContent, TeachContent, TeachResult } from './types';
 import { jsonObject } from './logic/json';
@@ -38,31 +39,16 @@ export function flashVals(L: Logic, it: Item, c: FlashContent) {
 
 export function examVals(L: Logic, it: Item, c: ExamContent) {
   const ro = L.subject.readOnly, d = draftOf(L, it.id), best = detailOf<'exam'>(L, it.id).best;
-  const n = c.qs.length, fin = d.qAt >= n, q = c.qs[Math.min(d.qAt, n - 1)];
-  const score = fin ? examScore(c.qs, d.picks) : null;
-  const main = () => {
-    if (L.readOnly() || fin) return;
-    if (!d.checked) { if (d.pick !== null) patchDraft(L, it.id, { checked: true, picks: { ...d.picks, [d.qAt]: d.pick } }); return; }
-    patchDraft(L, it.id, { qAt: d.qAt + 1, pick: null, checked: false });
-    if (d.qAt + 1 < n) return;
-    saveDetail(L, it, { best: Math.max(examScore(c.qs, d.picks).pct, best ?? 0) }, { complete: true, done: completedToast(it, 'Round finished') });
-  };
-  const right = d.checked && d.pick === q.a;
+  const r = roundView(c.qs, d, (p) => patchDraft(L, it.id, p), { locked: () => L.readOnly(), finishLabel: 'See my score',
+    onFinish: (picks) => saveDetail(L, it, { best: Math.max(examScore(c.qs, picks).pct, best ?? 0) }, { complete: true, done: completedToast(it, 'Round finished') }) });
+  const score = r.score;
   return {
-    ro, note: ro ? viewOnly(L, 'take this practice exam') : '',
-    sub: n + ' questions from a bank of ' + c.bank + ' · ' + c.real + (best != null ? ' · best ' + best + ' %' : ''),
-    active: !ro && !fin, finished: !ro && fin, pos: 'Question ' + (Math.min(d.qAt, n - 1) + 1) + ' of ' + n, topic: q.t, q: q.q,
-    opts: q.o.map((label, k) => {
-      const on = d.pick === k, ok = d.checked && k === q.a, bad = d.checked && on && k !== q.a;
-      return { label, on, mark: ok ? '✓' : bad ? '×' : String.fromCharCode(65 + k), markBg: ok ? '#86BC25' : bad ? '#d14537' : on ? '#1a1d18' : '#fff', markFg: ok ? '#10180a' : bad || on ? '#fff' : '#1a1d18', markBd: ok ? '#86BC25' : bad ? '#d14537' : '#1a1d18',
-        bg: ok ? '#f6f9ef' : bad ? '#fff6f5' : on ? '#fafbf8' : '#fff', bd: ok ? '#86BC25' : bad ? '#d14537' : on ? '#1a1d18' : '#e1e5dc', pick: () => { if (!ro && !d.checked) patchDraft(L, it.id, { pick: k }); } };
-    }),
-    hasFb: d.checked, fbHead: right ? 'Correct.' : 'Not quite.', fbColor: right ? '#3f6a0a' : '#9a2b22', why: q.why,
-    mainLabel: d.checked ? (d.qAt + 1 >= n ? 'See my score' : 'Next question') : 'Check answer', mainOff: !d.checked && d.pick === null, hint: !d.checked && d.pick === null ? 'Pick one answer' : '', main,
+    ...r, ro, note: ro ? viewOnly(L, 'take this practice exam') : '',
+    sub: c.qs.length + ' questions from a bank of ' + c.bank + ' · ' + c.real + (best != null ? ' · best ' + best + ' %' : ''),
+    active: !ro && !r.finished, finished: !ro && r.finished,
     frac: (score?.pct ?? 0) / 100, scoreLabel: score ? score.pct + ' %' + (best != null && best > score.pct ? ' · best ' + best + ' %' : '') : '',
     verdict: score ? examVerdict(score.pct) : '', verdictColor: score && score.pct >= READY_PCT ? '#3f6a0a' : '#9a3d0c',
     topics: (score?.byTopic ?? []).map((t) => ({ label: t.label, v: t.v + ' %', w: Math.max(4, t.v) + '%', c: t.v > 0 ? '#86BC25' : '#d14537' })),
-    restart: () => patchDraft(L, it.id, { qAt: 0, pick: null, checked: false, picks: {} }),
   };
 }
 

@@ -59,3 +59,22 @@ describe('Case preview', () => {
     expect(screen.getByText(/fix the items/i)).toBeTruthy();
   });
 });
+
+describe('Flash studio preview of a practice exam', () => {
+  it('runs the shared question round with its state in the preview only', () => {
+    const q = (k: number) => ({ t: 'Rates', q: 'Question ' + k + '?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because b.' });
+    const h = harness({ access: member('u1'), subject: person(), state: { screen: 'create', createTab: 'new', nwKb: [], studio: { view: 'studio', step: 2 },
+      create: { contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 },
+      nw: { line: 'Consulting', aud: '', type: 'Practice exam', title: 'T', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'x', outline: [], sources: [], ai: false, aiNote: '', items: { list: [q(1), q(2)], how: 'manual', problems: [], note: '' } } } });
+    render(<Preview kind="flash" c={h.vm().create!} />);
+    [0, 1].forEach(() => {
+      fireEvent.click(screen.getByRole('radio', { name: /b$/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Check answer' }));
+      expect(screen.getByText('Because b.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: /Next question|See the score/ }));
+    });
+    expect(screen.getByText('100 %')).toBeTruthy();
+    expect(learner.saveProgress).not.toHaveBeenCalled();
+    expect(h.patches).toHaveLength(0);
+  });
+});
