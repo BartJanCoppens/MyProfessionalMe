@@ -2,6 +2,7 @@
 // Status, steps and verdicts only change through the submit_contribution and review_contribution functions;
 // row-level security decides what each person reads and writes.
 import { supabase } from './supabase';
+import { removeContributionMedia } from './mediaStore';
 import type { Contribution, CreateData, Policy, PolicyRow, Review, Rule, RuleParts } from '../logic/contribution';
 
 // The database's refusals, in words: row-level security, and a studio-only format saved without a studio (check 23514).
@@ -45,7 +46,13 @@ export async function saveDraft(fields: DraftFields, id?: string | null): Promis
   return (data as { id: string }).id;
 }
 
+// Only a draft is deleted, and its media files go first: once the row is gone nobody may remove them. A contribution
+// with changes requested keeps its files (it cannot be deleted). If the files stay, the draft stays too.
 export async function removeDraft(id: string) {
+  const row = await supabase.from('contributions').select('status').eq('id', id).maybeSingle();
+  fail(row.error);
+  if ((row.data as { status: string } | null)?.status !== 'draft') throw new Error('Only a draft can be deleted');
+  try { await removeContributionMedia(id); } catch { throw new Error('Not deleted · its files could not all be removed; try again'); }
   const { data, error } = await supabase.from('contributions').delete().eq('id', id).select('id');
   fail(error);
   if (!data?.length) throw new Error('Only a draft can be deleted');

@@ -45,11 +45,14 @@ export function mediaProblem(name: string, bytes: number): string | null {
   return null;
 }
 
-// The one place a media path is built.
-export function mediaPath(userId: string, contributionId: string, name: string): string {
+// The one place a contribution's folder and a media path are built.
+export function mediaFolder(userId: string, contributionId: string): string {
   if (!ID.test(userId)) throw new Error('Sign in again to add files');
   if (!ID.test(contributionId)) throw new Error('Save the contribution before adding files');
-  const path = userId + '/' + contributionId + '/' + mediaFileName(name);
+  return userId + '/' + contributionId;
+}
+export function mediaPath(userId: string, contributionId: string, name: string): string {
+  const path = mediaFolder(userId, contributionId) + '/' + mediaFileName(name);
   if (!MEDIA_PATH.test(path)) throw new Error('Give the file a name');
   return path;
 }
