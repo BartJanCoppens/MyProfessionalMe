@@ -76,6 +76,9 @@ describe('the Explainer Studio preview', () => {
         shape: { [END_QUESTION]: END_CHECK }, items: { list: list as never, how: 'manual', problems: [], note: '' } } } });
     render(<Preview kind="explainer" c={h.vm().create!} />);
     expect(screen.getByText(/play-test/i)).toBeTruthy();
+    // The learner's lock holds in the preview too: the check opens once the last step is seen.
+    expect((screen.getByRole('button', { name: 'Check' }) as HTMLButtonElement).disabled).toBe(true);
+    click('3 · Customer');
     click('Check');
     [0, 1, 2].forEach(() => { fireEvent.click(screen.getByRole('radio', { name: /x$/ })); click('Check answer'); click(/Next question|See my result/); });
     expect(screen.getByText('3 of 3 right')).toBeTruthy();

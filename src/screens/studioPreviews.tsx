@@ -27,10 +27,11 @@ function AidTry({ content }: { content: AidContent }) {
   return <AidPanel ja={aidView(content, ticks, setTicks, { ro: false, saved: false })} />;
 }
 
-// The learner's explainer; the step and the check's answers live in this preview only.
+// The learner's explainer; the step and the check's answers live in this preview only. As for the learner, the ending
+// opens once the last step is seen.
 function ExplainerTry({ content }: { content: ExplainerContent }) {
   const [s, setS] = useState<ExplainerState>({ ...NEW_ROUND, at: 0, seen: false });
-  const ie = explainerView(content, s, (p) => setS((cur) => ({ ...cur, ...p })), { ro: false, note: '', lastSeen: true, locked: () => false, onLast: () => {}, onCheck: () => {} });
+  const ie = explainerView(content, s, (p) => setS((cur) => ({ ...cur, ...p })), { ro: false, note: '', lastSeen: false, locked: () => false, onLast: () => {}, onCheck: () => {} });
   return <ExplainerPanel ie={ie} />;
 }
 
