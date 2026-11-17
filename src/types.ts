@@ -101,7 +101,7 @@ export type AppState = {
   avatarEdit: { userId: string; initials?: string; bg?: string; photo?: string | null } | null;
   chat: ChatMsg[];
   // curriculum mapping: lens, selected audience and stage, signals handled, learner's-eye reads, copilot
-  mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>;
+  mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>; sigAll: boolean;
   // certification trajectories (admin): the tab, the trajectory and step being edited (step by id), and the audience and stage about to be mapped
   trjs: Trajectory[]; mapMode: 'learn' | 'traj'; trjSel: string | null; trjStep: string | null; trjAud: string; trjStage: string;
   // certification trajectories (learner): the page being viewed and where it was opened from, the subject's enrolments and credentials,

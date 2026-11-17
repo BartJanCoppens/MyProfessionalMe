@@ -112,9 +112,9 @@ function Copilot({ vm }: { vm: VM }) {
         <span style={{ width: 22, height: 22, borderRadius: 5, background: '#86BC25', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10180a' }} /></span>
         <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600 }}>Curriculum copilot</div><div style={{ fontSize: 11.5, color: '#a9b0a5' }}>{vm.cpMode} · reads anonymised evaluations, staffing and shared profiles. Proposes; you decide.</div></div>
       </div>
-      <div style={{ ...label, padding: '10px 18px 4px' }}>Found in the data · {vm.sigCount}</div>
+      <div style={{ ...label, padding: '10px 18px 4px' }}>{vm.sigCount} open signals · new evaluations are read every night</div>
       <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 430, overflow: 'auto' }}>
-        {vm.sigCards.map((sg) => (
+        {vm.sigShown.map((sg) => (
           <div key={sg.id} style={{ padding: '10px 18px 12px', borderTop: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 6, animation: 'pmFadeUp .35s ease-out backwards', animationDelay: sg.delay }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><StatusChip status={sg.st} label={sg.kind} />{sg.example && <Tag tone="muted">Example signal</Tag>}<span style={{ fontSize: 11.5, color: '#8b918a' }}>{sg.where}</span></div>
             <div style={{ fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty' }}>{sg.title}</div>
@@ -129,6 +129,7 @@ function Copilot({ vm }: { vm: VM }) {
             </div>
           </div>
         ))}
+        {vm.sigMore && <div style={{ padding: '8px 18px', borderTop: '1px solid #eef0ea' }}><LinkButton onClick={vm.toggleSigAll}>{vm.sigToggleLabel}</LinkButton></div>}
         {vm.noSig && <div style={{ padding: '14px 18px', borderTop: '1px solid #eef0ea', fontSize: 12.5, color: '#5a6058' }}>Nothing open. New evaluations are read every night.</div>}
       </div>
       <div style={{ borderTop: '1px solid #e1e5dc', padding: '12px 18px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: '#fafbf8' }}>
@@ -154,7 +155,7 @@ function Copilot({ vm }: { vm: VM }) {
           {vm.cpPrompts.map((cp) => <FilterChip key={cp.label} onClick={cp.send}>{cp.label}</FilterChip>)}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1, minWidth: 0 }}><Input placeholder="e.g. Give Public sector analysts a lighter start" value={vm.cpInput} onChange={vm.setCpInput} onKeyDown={vm.cpKey} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}><Input aria-label="Ask the curriculum copilot" placeholder="e.g. Give Public sector analysts a lighter start" value={vm.cpInput} onChange={vm.setCpInput} onKeyDown={vm.cpKey} /></div>
           <Button size="lg" onClick={vm.cpSend} disabled={vm.cpBusy}>Ask</Button>
         </div>
       </div>

@@ -347,6 +347,14 @@ describe('the curriculum mapping screen', () => {
     expect(current.mapLens).toBe('amb');
     expect(screen.getAllByText('Sustainability lead').length).toBeGreaterThan(0);
   });
+  it('shows four signals, toggles Show all, and labels the copilot input', () => {
+    mapping();
+    expect(screen.getAllByText('Dismiss')).toHaveLength(4);
+    click(/^Show all \d+$/);
+    expect(screen.getAllByText('Dismiss').length).toBeGreaterThan(4);
+    expect(screen.getByText('Show fewer')).toBeTruthy();
+    expect(screen.getByLabelText('Ask the curriculum copilot')).toBeTruthy();
+  });
   it('asks the copilot from its input and applies the proposal', async () => {
     mapping();
     const box = screen.getByPlaceholderText('e.g. Give Public sector analysts a lighter start');

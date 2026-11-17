@@ -235,6 +235,16 @@ describe('signals', () => {
     expect(curr(generalAdmin()).vm().sigCount).toBe(String(SIGNALS.length));
     expect(curr(domainAdmin(['Consulting'])).vm()).toMatchObject({ noSig: true, sigCount: '0' });
   });
+  it('show the first four, and all of them after Show all', () => {
+    const h = curr();
+    const vm = h.vm();
+    expect(SIGNALS.length).toBeGreaterThan(4);
+    expect(vm).toMatchObject({ sigMore: true, sigAll: false, sigToggleLabel: 'Show all ' + SIGNALS.length });
+    expect(vm.sigShown.map((g) => g.id)).toEqual(SIGNALS.slice(0, 4).map((g) => g.id));
+    vm.toggleSigAll();
+    expect(h.vm()).toMatchObject({ sigAll: true, sigToggleLabel: 'Show fewer' });
+    expect(h.vm().sigShown).toHaveLength(SIGNALS.length);
+  });
   it('describe the change, where it lands and its impact', () => {
     const cards = curr().vm().sigCards;
     expect(cards[0]).toMatchObject({ title: 'Add “Negotiating scope with procurement”', where: 'Industry · Energy & utilities · Senior consultant', impact: 'Reaches about 22 people · +7 h each (estimate)', hasQuote: true });
