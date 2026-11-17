@@ -168,3 +168,13 @@ describe('format lists', () => {
     expect(rows).toEqual(STUDIOS.flatMap((d) => studioFormats(d).map((f) => [d.id, f, d.min])));
   });
 });
+
+describe('the Interactive explainer\'s items', () => {
+  const q = { t: 'Peppol', q: 'Who checks the format?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'The access point.' };
+  it('holds step rows and check questions, read back strictly and shown to reviewers as rows', () => {
+    expect(itemsFromSaved('Interactive explainer', [['Supplier', 'Creates it.'], q])).toEqual([['Supplier', 'Creates it.'], q]);
+    expect(itemsFromSaved('Interactive explainer', [['Supplier', 'Creates it.'], { ...q, o: 'x' }])).toEqual([]);
+    expect(itemsFromSaved('Job aid', [['Before', 'x'], q])).toEqual([]);
+    expect(itemRows('Interactive explainer', [['Supplier', 'Creates it.'], q])).toEqual([{ front: 'Supplier', back: 'Creates it.' }, { front: 'Who checks the format?', back: 'Answer: b · The access point.' }]);
+  });
+});
