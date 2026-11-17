@@ -1108,12 +1108,15 @@ insert into results (check_name, expected, actual) select 'FC nobody else change
 insert into results (check_name, expected, actual) select 'FC the faculty registers webinar attendance', 'accepted attended', coalesce(max(l.state), 'none')||' '||coalesce(max(d.verdict), 'none') from public.learner_learnings l left join public.learning_decisions d on d.user_id=l.user_id and d.learning_id=l.learning_id where l.user_id='00000000-0000-0000-0000-0000000000c2' and l.learning_id='L67';
 reset role;
 -- ---------- design v4: certification trajectories, enrolments and credentials ----------
--- d1: Consulting learner with counsellor a6. a2 counsels a8 (someone else's counsellor), a1 is the Consulting Domain Admin,
+-- d1: Consulting learner with counsellor a6 (outside T1's mandatory audience); d2: Tax & Legal consultant (inside it). a2 counsels a8 (someone else's counsellor), a1 is the Consulting Domain Admin,
 -- a4 the Audit Domain Admin, a7 a General Admin, a3 the Tax & Legal Domain Admin. T1 (auto, mandatory), T2 (approval)
 -- and T3 (open) are the seeds; TX1–TX3 are made here.
 select set_config('request.jwt.claims', '', true);
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000d1','t.trajectory@test.local');
 update public.profiles set business_line='Consulting', counsellor_id='00000000-0000-0000-0000-0000000000a6' where id='00000000-0000-0000-0000-0000000000d1';
+-- d2: Tax & Legal consultant, inside T1's mandatory audience (Tax & Legal at Consultant)
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000d2','t.mandatory@test.local');
+update public.profiles set business_line='Tax & Legal', career_stage='Consultant', counsellor_id=null where id='00000000-0000-0000-0000-0000000000d2';
 set local role authenticated;
 -- Consulting Domain Admin a1: drafts and advised trajectories of the own line; never a mandatory one live (D2)
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
@@ -1145,15 +1148,13 @@ do $$ begin
   begin update public.trajectories set maps = '[["Consulting","Manager","mandatory"]]' where id = 'TX2';
     insert into results (check_name, expected, actual) values ('TR Domain Admin makes a live trajectory mandatory (D2)', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('TR Domain Admin makes a live trajectory mandatory (D2)', 'blocked', 'blocked: '||sqlstate); end;
-  begin update public.trajectories set maps = '[["amb:sust","Manager","mandatory"]]' where id = 'TX3';
-    insert into results (check_name, expected, actual) values ('TR an ambition audience is mandatory', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('TR an ambition audience is mandatory', 'blocked', 'blocked: '||sqlstate); end;
-  begin update public.trajectories set maps = '[["Consulting","Intern","advised"]]' where id = 'TX3';
-    insert into results (check_name, expected, actual) values ('TR a map with an unknown stage', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('TR a map with an unknown stage', 'blocked', 'blocked: '||sqlstate); end;
-  begin update public.trajectories set maps = '[["Marketing","Manager","advised"]]' where id = 'TX3';
-    insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["Audit","Manager","advised"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR Domain Admin maps another line''s audience', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR Domain Admin maps another line''s audience', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+      values ('TX9', 'T tec', 'T', 'T', 'open', 6, 'draft', 'Consulting', '[]', '[["tec:data","Manager","advised"]]');
+    insert into results (check_name, expected, actual) values ('TR Domain Admin maps a tec: audience', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR Domain Admin maps a tec: audience', 'blocked', 'blocked: '||sqlstate); end;
   begin update public.trajectories set steps = '[{"id":"s1","k":"learn"},{"id":"s1","k":"exam"}]' where id = 'TX3';
     insert into results (check_name, expected, actual) values ('TR steps with a repeated id', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('TR steps with a repeated id', 'blocked', 'blocked: '||sqlstate); end;
@@ -1168,6 +1169,18 @@ with u as (update public.trajectories set name = 'T renamed' where id = 'TX2' re
 with d as (delete from public.trajectories where id = 'TX2' returning 1) insert into results (check_name, expected, actual) select 'TR another line''s Domain Admin removes', '0 rows', count(*)||' rows' from d;
 -- General Admin a7 publishes the mandatory one (D2)
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+with u as (update public.trajectories set maps = '[["Audit","Manager","advised"],["tec:data","Manager","advised"]]' where id = 'TX3' returning 1) insert into results (check_name, expected, actual) select 'TR General Admin maps any line or tec: audience', '1 rows', count(*)||' rows' from u;
+do $$ begin
+  begin update public.trajectories set maps = '[["amb:sust","Manager","mandatory"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR an ambition audience is mandatory', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR an ambition audience is mandatory', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["Consulting","Intern","advised"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR a map with an unknown stage', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a map with an unknown stage', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["Marketing","Manager","advised"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
 with u as (update public.trajectories set status = 'live' where id = 'TX1' returning published_at) insert into results (check_name, expected, actual) select 'TR General Admin publishes a mandatory trajectory', '1 rows true', count(*)||' rows '||coalesce(bool_and(published_at is not null), false) from u;
 -- Consulting Domain Admin a1 can no longer touch the live mandatory one
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
@@ -1208,14 +1221,38 @@ do $$ begin
   begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T2', null, 'approve');
     insert into results (check_name, expected, actual) values ('TR learner approves the own start request', 'blocked', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('TR learner approves the own start request', 'blocked', 'blocked: '||sqlstate); end;
-  begin perform public.withdraw_trajectory('T1');
-    insert into results (check_name, expected, actual) values ('TR learner leaves an auto-enrol trajectory', 'blocked', 'allowed');
-  exception when others then insert into results (check_name, expected, actual) values ('TR learner leaves an auto-enrol trajectory', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_trajectory_step('T1', 's6', p_link => 'https://sharepoint.example/log.pdf');
+    insert into results (check_name, expected, actual) values ('TR outside the audience, the first action does not start an auto-enrol trajectory', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR outside the audience, the first action does not start an auto-enrol trajectory', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
 insert into results (check_name, expected, actual) select 'TR learner asks for the sign-off', 'submitted', public.submit_trajectory_step('T3', 's5');
--- D6: the first action on an auto-enrol trajectory writes the enrolled row
-insert into results (check_name, expected, actual) select 'TR learner sends evidence on an auto-enrol trajectory', 'submitted', public.submit_trajectory_step('T1', 's6', p_link => 'https://sharepoint.example/traineeship-log.pdf');
+do $$ begin
+  begin perform public.submit_trajectory_step('T3', 's5', p_note => 'T changed after sending');
+    insert into results (check_name, expected, actual) values ('TR learner rewrites a step waiting for the counsellor', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner rewrites a step waiting for the counsellor', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+-- outside its mandatory audience an auto-enrol trajectory is like an open one: start, leave, start again (current month)
+insert into results (check_name, expected, actual) select 'TR outside the audience, learner starts an auto-enrol trajectory', 'enrolled', public.request_trajectory('T1');
+select public.withdraw_trajectory('T1');
+insert into results (check_name, expected, actual) select 'TR outside the audience, learner leaves an auto-enrol trajectory', '0', count(*)::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T1';
+select public.request_trajectory('T1');
+insert into results (check_name, expected, actual) select 'TR outside the audience, the start is the current month', 'true', (start_month = private.current_month())::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T1';
+insert into results (check_name, expected, actual) select 'TR learner sends evidence', 'submitted', public.submit_trajectory_step('T1', 's6', p_link => 'https://sharepoint.example/traineeship-log.pdf');
 insert into results (check_name, expected, actual) select 'TR learner''s rows', 'T1 enrolled, T2 requested, T3 enrolled, TX2 enrolled', string_agg(trajectory_id||' '||status, ', ' order by trajectory_id) from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1';
+-- T1 published in Sep 2025, so its publication month differs from the current month
+reset role;
+update public.trajectories set published_at = '2025-09-15' where id = 'T1';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR inside the audience, the first action writes the enrolled row (D6)', 'submitted', public.submit_trajectory_step('T1', 's6', p_link => 'https://sharepoint.example/d2-log.pdf');
+insert into results (check_name, expected, actual) select 'TR inside the audience, the start is the publication month', 'enrolled 24308', e.status||' '||e.start_month from public.trajectory_enrolments e join public.trajectories t on t.id = e.trajectory_id where e.user_id = '00000000-0000-0000-0000-0000000000d2' and e.trajectory_id = 'T1';
+insert into results (check_name, expected, actual) select 'TR inside the audience, asking to start changes nothing', 'enrolled', public.request_trajectory('T1');
+do $$ begin
+  begin perform public.withdraw_trajectory('T1');
+    insert into results (check_name, expected, actual) values ('TR inside the audience, learner leaves a mandatory trajectory', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR inside the audience, learner leaves a mandatory trajectory', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
 -- a trajectory back in draft stays readable for the person enrolled in it, and only while they are
 reset role;
 update public.trajectories set status = 'draft' where id = 'TX2';
@@ -1248,6 +1285,21 @@ do $$ begin
   exception when others then insert into results (check_name, expected, actual) values ('TR counsellor accepts a step never submitted', 'blocked', 'blocked: '||sqlstate); end;
 end $$;
 insert into results (check_name, expected, actual) select 'TR the steps after the decisions', 'T1 {} / T3 done', 'T1 '||(select steps::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T1')||' / T3 '||(select steps -> 's5' ->> 'state' from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR after talk the learner sends the evidence again', 'submitted', public.submit_trajectory_step('T1', 's6', p_link => 'https://sharepoint.example/traineeship-log-v2.pdf');
+do $$ begin
+  begin perform public.withdraw_trajectory('T3');
+    insert into results (check_name, expected, actual) values ('TR learner leaves a trajectory with a signed-off step', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner leaves a trajectory with a signed-off step', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
+do $$ begin
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T1', 's6', 'approve');
+    insert into results (check_name, expected, actual) values ('TR another line''s Domain Admin decides', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR another line''s Domain Admin decides', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR the person''s own-line Domain Admin decides', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T1', 's6', 'approve');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'TR learner books the exam', 'booked', public.submit_trajectory_step('T3', 's6', 'booked');
 insert into results (check_name, expected, actual) select 'TR learner sends the exam result', 'submitted', public.submit_trajectory_step('T3', 's6', p_link => 'https://academy.example/cert/123', p_ref => 'CSRD-123');
@@ -1314,5 +1366,30 @@ insert into results (check_name, expected, actual) select 'TR seed learnings all
   lateral (select s ->> 'lid' as lid union all select jsonb_array_elements_text(coalesce(s -> 'opts', '[]'))) l
   where t.id in ('T1', 'T2', 'T3') and l.lid is not null and not exists (select 1 from public.learnings where id = l.lid);
 insert into results (check_name, expected, actual) select 'TR seed maps', 'T1 Tax & Legal/Consultant/mandatory, T2 tec:data/Consultant/advised, T3 amb:sust/Senior consultant/advised', string_agg(id||' '||(maps -> 0 ->> 0)||'/'||(maps -> 0 ->> 1)||'/'||(maps -> 0 ->> 2), ', ' order by id) from public.trajectories where id in ('T1', 'T2', 'T3');
+-- a second acceptance of the same exam adds no second credential while the first is valid; after expiry it renews
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+do $$ begin
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
+    insert into results (check_name, expected, actual) values ('TR counsellor accepts a signed-off exam again', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR counsellor accepts a signed-off exam again', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
+update public.trajectory_enrolments set steps = jsonb_set(steps, '{s6,state}', '"submitted"') where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+do $$ begin
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
+    insert into results (check_name, expected, actual) values ('TR a second exam acceptance while the credential is valid', 'blocked: 23505', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a second exam acceptance while the credential is valid', 'blocked: 23505', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'TR still one credential from the trajectory', '1', count(*)::text from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
+reset role;
+update public.credentials set expires_on = current_date - 1 where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR an expired credential is renewed through the exam', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
+insert into results (check_name, expected, actual) select 'TR the renewal adds a credential', '2', count(*)::text from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3';
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

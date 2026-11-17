@@ -8,9 +8,10 @@
 -- 2. public.trajectory_enrolments: one row per person and trajectory. Learners write it only through
 --    request_trajectory, withdraw_trajectory and submit_trajectory_step: they may submit an evidence, check or exam
 --    step, or book an exam, never mark one done. The counsellor or a managing admin (private.can_accept, as for
---    decide_learning) approves a start request and signs off steps through decide_trajectory. Someone in an
---    auto-enrol audience has no row until their first action (D6). Learning and elective steps are done when their
---    learning is accepted in learner_learnings; they are not stored here.
+--    decide_learning) approves a start request and signs off steps through decide_trajectory. An auto-enrol
+--    trajectory is mandatory only for people inside one of its mandatory audiences: they have no row until their
+--    first action (D6) and cannot leave it; for everyone else it behaves like an open one. Learning and elective
+--    steps are done when their learning is accepted in learner_learnings; they are not stored here.
 -- 3. public.credentials: the wallet. Accepting a trajectory's exam adds a confirmed credential in the same transaction
 --    (D5). A learner adds an external credential as waiting, with a link or a certificate number; the counsellor or a
 --    managing admin confirms it (confirm_credential). Credentials never count toward readiness.
@@ -65,7 +66,9 @@ as $$
   select jsonb_typeof(maps) = 'array' and exists (select 1 from jsonb_array_elements(maps) m where m ->> 2 = 'mandatory');
 $$;
 
--- Writing a trajectory: content editors of its line; a live one with a mandatory map only by a System or General Admin.
+-- Writing a trajectory: content editors of its line who may also edit every audience it maps
+-- (private.can_edit_audience, as for curriculum_mappings); a live one with a mandatory map only by a System or
+-- General Admin (D2).
 create function private.can_write_trajectory(line public.business_line, status text, maps jsonb)
 returns boolean
 language sql
@@ -73,25 +76,54 @@ stable
 security definer
 set search_path = ''
 as $$
-  select private.can_edit_content(line) and (
-    status <> 'live' or not private.trajectory_has_mandatory(maps) or private.is_system_admin() or private.is_general_admin()
+  select private.can_edit_content(line)
+    and (jsonb_typeof(maps) <> 'array'
+         or not exists (select 1 from jsonb_array_elements(maps) m where not coalesce(private.can_edit_audience(m ->> 0), false)))
+    and (status <> 'live' or not private.trajectory_has_mandatory(maps) or private.is_system_admin() or private.is_general_admin());
+$$;
+
+-- Inside a mandatory audience: a mandatory map whose audience is the person's business line at their career stage.
+-- Only business-line audiences resolve: the schema records no membership of ind:/tec: audiences, nor when a person
+-- reached their stage.
+create function private.in_mandatory_audience(p_user uuid, maps jsonb)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_typeof(maps) = 'array' and exists (
+    select 1 from public.profiles p, jsonb_array_elements(maps) m
+    where p.id = p_user and m ->> 2 = 'mandatory'
+      and m ->> 0 = p.business_line::text and m ->> 1 = p.career_stage::text
   );
 $$;
 
 -- Months are counted as year * 12 + month index (Sep 2026 = 2026 * 12 + 8), as in the design.
+create function private.month_of(p_at timestamptz)
+returns int
+language sql
+immutable
+set search_path = ''
+as $$
+  select (extract(year from p_at at time zone 'UTC')::int * 12) + extract(month from p_at at time zone 'UTC')::int - 1;
+$$;
+
 create function private.current_month()
 returns int
 language sql
 stable
 set search_path = ''
 as $$
-  select (extract(year from current_date)::int * 12) + extract(month from current_date)::int - 1;
+  select private.month_of(now());
 $$;
 
 revoke execute on function private.trajectory_maps_ok(jsonb), private.trajectory_steps_ok(jsonb), private.trajectory_has_mandatory(jsonb),
-  private.can_write_trajectory(public.business_line, text, jsonb), private.current_month() from public, anon;
+  private.can_write_trajectory(public.business_line, text, jsonb), private.in_mandatory_audience(uuid, jsonb),
+  private.month_of(timestamptz), private.current_month() from public, anon;
 grant execute on function private.trajectory_maps_ok(jsonb), private.trajectory_steps_ok(jsonb), private.trajectory_has_mandatory(jsonb),
-  private.can_write_trajectory(public.business_line, text, jsonb), private.current_month() to authenticated;
+  private.can_write_trajectory(public.business_line, text, jsonb), private.in_mandatory_audience(uuid, jsonb),
+  private.month_of(timestamptz), private.current_month() to authenticated;
 
 -- ---------- tables ----------
 
@@ -209,7 +241,8 @@ create policy "credentials: owner adds waiting" on public.credentials for insert
 -- ---------- the learner ----------
 
 -- Start a live trajectory: enrolled for an open or auto-enrol one, a start request for one that needs approval.
--- Returns the row's status; asking again changes nothing.
+-- Someone inside a mandatory audience of an auto-enrol trajectory starts from its publication month (D6, see
+-- docs/decisions.md); everyone else from the current month. Returns the row's status; asking again changes nothing.
 create function public.request_trajectory(p_trajectory text)
 returns text
 language plpgsql
@@ -227,24 +260,36 @@ begin
   end if;
   s := case when t.enrol = 'approval' then 'requested' else 'enrolled' end;
   insert into public.trajectory_enrolments (user_id, trajectory_id, status, start_month, asked_at)
-  values (uid, t.id, s, private.current_month(), case when s = 'requested' then now() end)
+  values (uid, t.id, s,
+          case when t.enrol = 'auto' and private.in_mandatory_audience(uid, t.maps)
+               then private.month_of(coalesce(t.published_at, now())) else private.current_month() end,
+          case when s = 'requested' then now() end)
   on conflict (user_id, trajectory_id) do nothing;
   return (select status from public.trajectory_enrolments where user_id = uid and trajectory_id = t.id);
 end;
 $$;
 
--- Leave a trajectory, or take back a start request. Not an auto-enrol one: everyone in its audience follows it.
+-- Take back a start request, or leave a trajectory while no step is signed off. Never one that is mandatory for the
+-- person (auto-enrol, inside a mandatory audience): everyone there follows it.
 create function public.withdraw_trajectory(p_trajectory text)
 returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  uid uuid := (select auth.uid());
+  t public.trajectories;
 begin
-  if (select enrol from public.trajectories where id = p_trajectory) = 'auto' then
+  select * into t from public.trajectories where id = p_trajectory;
+  if t.enrol = 'auto' and private.in_mandatory_audience(uid, t.maps) then
     raise exception 'Everyone in its audience follows this trajectory' using errcode = '42501';
   end if;
-  delete from public.trajectory_enrolments where user_id = (select auth.uid()) and trajectory_id = p_trajectory;
+  if exists (select 1 from public.trajectory_enrolments e, jsonb_each(e.steps) s
+             where e.user_id = uid and e.trajectory_id = p_trajectory and s.value ->> 'state' = 'done') then
+    raise exception 'A step is already signed off; ask your counsellor' using errcode = '42501';
+  end if;
+  delete from public.trajectory_enrolments where user_id = uid and trajectory_id = p_trajectory;
   if not found then
     raise exception 'You are not on this trajectory' using errcode = 'P0002';
   end if;
@@ -252,7 +297,9 @@ end;
 $$;
 
 -- Submit an evidence, check or exam step, or book the exam. An exam result needs a certificate link or number,
--- evidence a link or a note. Only the counsellor marks a step done (decide_trajectory). Returns the step's state.
+-- evidence a link or a note. A submitted step stays as sent until the counsellor decides (so they decide on what they
+-- saw); 'talk' clears it for a resubmission. Only the counsellor marks a step done (decide_trajectory).
+-- Returns the step's state.
 create function public.submit_trajectory_step(p_trajectory text, p_step text, p_state text default 'submitted',
                                               p_link text default null, p_ref text default null, p_note text default null)
 returns text
@@ -297,18 +344,21 @@ begin
   end if;
   select * into r from public.trajectory_enrolments where user_id = uid and trajectory_id = t.id for update;
   if not found then
-    -- auto-enrol: the first action writes the row (D6)
-    if t.enrol <> 'auto' or t.status <> 'live' then
+    -- mandatory auto-enrol: the first action writes the row, from the publication month (D6)
+    if t.enrol <> 'auto' or t.status <> 'live' or not private.in_mandatory_audience(uid, t.maps) then
       raise exception 'Start this trajectory first' using errcode = 'P0002';
     end if;
     insert into public.trajectory_enrolments (user_id, trajectory_id, status, start_month)
-    values (uid, t.id, 'enrolled', private.current_month()) returning * into r;
+    values (uid, t.id, 'enrolled', private.month_of(coalesce(t.published_at, now()))) returning * into r;
   end if;
   if r.status <> 'enrolled' then
     raise exception 'Your counsellor has not approved the start yet' using errcode = '42501';
   end if;
   if r.steps -> p_step ->> 'state' = 'done' then
     raise exception 'This step is already signed off' using errcode = '42501';
+  end if;
+  if r.steps -> p_step ->> 'state' = 'submitted' then
+    raise exception 'This step waits for your counsellor' using errcode = '42501';
   end if;
   update public.trajectory_enrolments
     set steps = steps || jsonb_build_object(p_step, jsonb_strip_nulls(jsonb_build_object('state', p_state, 'link', l, 'ref', rf, 'note', n)))
@@ -360,6 +410,11 @@ begin
   if r.status <> 'enrolled' or k is null or k not in ('evidence', 'check', 'exam')
      or (r.steps -> p_step ->> 'state') is distinct from 'submitted' then
     raise exception 'This step is not waiting for a decision' using errcode = 'P0002';
+  end if;
+  if p_decision = 'approve' and k = 'exam' and exists (
+       select 1 from public.credentials where user_id = p_user and trajectory_id = t.id and status = 'confirmed'
+         and (expires_on is null or expires_on >= current_date)) then
+    raise exception 'This person already holds this credential' using errcode = '23505';
   end if;
   if p_decision = 'talk' then
     update public.trajectory_enrolments set steps = steps - p_step, decided_by = uid, decided_at = now()
