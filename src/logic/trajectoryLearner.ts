@@ -20,9 +20,11 @@ export function canWithdraw(t: Trajectory, row: Enrolment | undefined, person: P
 // The counsellor's latest "talk first" comment on a step (stepId) or the start request (null), as "<first name>: <comment>",
 // while it still applies: the latest decision on it is a talk and, for a step, it is not sent again (submitted) or signed
 // off; for the start request, the request still waits and was made before the talk. Step submissions carry no time, so a
-// step's comment shows until its state changes to submitted or done. '' when nothing applies.
+// step's comment shows until its state changes to submitted or done. Decisions from before this enrolment row (the
+// learner left and started again) never count. '' when nothing applies.
 export function talkNote(decisions: TrjDecision[], trajectoryId: string, stepId: string | null, e: Enrolment | null): string {
-  const last = decisions.filter((d) => d.trajectoryId === trajectoryId && d.stepId === stepId).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+  const since = e?.created_at ? Date.parse(e.created_at) : -Infinity;
+  const last = decisions.filter((d) => d.trajectoryId === trajectoryId && d.stepId === stepId && Date.parse(d.at) >= since).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
   if (!e || !last || last.decision !== 'talk' || !last.comment) return '';
   if (stepId === null ? e.status !== 'requested' || (!!e.asked_at && Date.parse(e.asked_at) > Date.parse(last.at)) : ['submitted', 'done'].includes(e.steps[stepId]?.state ?? '')) return '';
   return (last.byName.trim().split(/\s+/)[0] || 'Your counsellor') + ': ' + last.comment;

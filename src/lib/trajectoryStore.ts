@@ -8,7 +8,7 @@ import { supabase } from './supabase';
 export type TrajectoryDraft = Omit<Trajectory, 'id' | 'published_at'>;
 export type ExternalCredential = { name: string; issuer: string; earned_on: string; expires_on: string | null; link: string; ref: string };
 type TrajectoryRow = Omit<Trajectory, 'steps' | 'maps'> & { steps: unknown; maps: unknown };
-type EnrolmentRow = { trajectory_id: string; status: Enrolment['status']; start_month: number; steps: unknown; asked_at: string | null };
+type EnrolmentRow = { trajectory_id: string; status: Enrolment['status']; start_month: number; steps: unknown; asked_at: string | null; created_at: string | null };
 type DecisionRow = { trajectory_id: string; step_id: string | null; decision: TrjDecision['decision']; comment: string | null; decided_by_name: string | null; decided_at: string };
 type CredentialRow = Omit<Credential, 'link' | 'ref'> & { link: string | null; ref: string | null };
 type Failure = { message: string; code?: string };
@@ -31,7 +31,7 @@ export function parseTrajectory(r: TrajectoryRow): Trajectory | null {
 function parseEnrolment(r: EnrolmentRow): Enrolment {
   const ok = isObject(r.steps) && Object.values(r.steps).every(entryOk);
   if (!ok) console.warn(`Enrolment on ${r.trajectory_id} has malformed steps; shown with none`);
-  return { status: r.status, start_month: r.start_month, steps: ok ? r.steps as Record<string, StepEntry> : {}, asked_at: r.asked_at ?? null };
+  return { status: r.status, start_month: r.start_month, steps: ok ? r.steps as Record<string, StepEntry> : {}, asked_at: r.asked_at ?? null, created_at: r.created_at ?? null };
 }
 
 // Postgres errors to what a person can read. The RPCs raise their own 42501 messages ("A step is already signed off"),
@@ -55,7 +55,7 @@ export async function loadTrajectories(): Promise<Trajectory[]> {
 }
 
 export async function loadEnrolments(userId: string): Promise<Record<string, Enrolment>> {
-  const { data, error } = await supabase.from('trajectory_enrolments').select('trajectory_id, status, start_month, steps, asked_at').eq('user_id', userId);
+  const { data, error } = await supabase.from('trajectory_enrolments').select('trajectory_id, status, start_month, steps, asked_at, created_at').eq('user_id', userId);
   fail(error);
   return Object.fromEntries(((data || []) as EnrolmentRow[]).map((r) => [r.trajectory_id, parseEnrolment(r)]));
 }

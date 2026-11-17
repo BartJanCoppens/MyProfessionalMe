@@ -4,8 +4,12 @@
 --    as learning_decisions does for decide_learning. Read by the person and whoever reads their formal track
 --    (private.can_view_track); no client writes it: only decide_trajectory inserts.
 -- 2. decide_trajectory takes a comment: 'talk' needs 10 to 500 characters (trimmed), 'approve' takes an optional one
---    (at most 500). The limits are COMMENT_MIN and COMMENT_MAX in src/logic/record.ts (record.sync.test.ts).
+--    (with the same bounds). The limits are COMMENT_MIN and COMMENT_MAX in src/logic/record.ts (record.sync.test.ts).
 --    Every other check is unchanged from 20261117170000_trajectories.sql.
+-- 3. trajectory_enrolments.created_at: when this enrolment row began. Leaving deletes the row and starting again
+--    inserts a new one, so the learner page ignores decisions taken on an earlier enrolment.
+
+alter table public.trajectory_enrolments add column created_at timestamptz not null default now();
 
 create table public.trajectory_decisions (
   id uuid primary key default gen_random_uuid(),
@@ -32,7 +36,8 @@ create policy "trajectory_decisions: read" on public.trajectory_decisions for se
 
 -- p_step null: approve a start request ('talk' leaves it waiting, stamped). A step: approve marks a submitted step
 -- done ('talk' sends it back to the learner). Accepting the exam adds the confirmed credential (D5). 'talk' needs a
--- comment of 10 to 500 characters; every decision is logged in trajectory_decisions.
+-- comment of 10 to 500 characters, and a comment given with 'approve' has the same bounds; every decision is logged in
+-- trajectory_decisions.
 -- Returns the new status or state, or 'talk'.
 drop function public.decide_trajectory(uuid, text, text, text);
 create function public.decide_trajectory(p_user uuid, p_trajectory text, p_step text, p_decision text, p_comment text default null)
@@ -55,7 +60,7 @@ begin
   if not coalesce(private.can_accept(p_user), false) then
     raise exception 'Only their counsellor or an admin can decide on this trajectory' using errcode = '42501';
   end if;
-  if p_decision = 'talk' and char_length(coalesce(c, '')) < 10 then
+  if (p_decision = 'talk' or c is not null) and char_length(coalesce(c, '')) < 10 then
     raise exception 'Say what to talk about (at least 10 characters)' using errcode = '22023';
   end if;
   if char_length(coalesce(c, '')) > 500 then

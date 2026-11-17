@@ -95,6 +95,11 @@ describe('talkNote: the latest "talk first" comment the learner sees', () => {
     expect(talkNote([talk()], 'T2', 's1', row())).toBe('');
     expect(talkNote([talk()], 'T1', null, row({ status: 'requested' }))).toBe('');
   });
+  it('a talk from before this enrolment is not shown (the learner left and started again)', () => {
+    expect(talkNote([talk()], 'T1', 's1', row({ created_at: '2026-11-12T09:00:00Z' }))).toBe('');
+    expect(talkNote([talk({ stepId: null })], 'T1', null, row({ status: 'requested', created_at: '2026-11-12T09:00:00Z' }))).toBe('');
+    expect(talkNote([talk()], 'T1', 's1', row({ created_at: '2026-11-01T09:00:00Z' }))).toBe('Casey: Add the client file, please.');
+  });
   it('on the start request: shows it while the request waits and was made before the talk', () => {
     const start = talk({ stepId: null, comment: 'Let us plan the study leave.' });
     expect(talkNote([start], 'T1', null, row({ status: 'requested', asked_at: '2026-11-01T09:00:00Z' }))).toBe('Casey: Let us plan the study leave.');

@@ -1302,6 +1302,9 @@ do $$ begin
   begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's5', 'approve', repeat('x', 501));
     insert into results (check_name, expected, actual) values ('TD approve with a comment over 500 characters', 'blocked: 22023', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('TD approve with a comment over 500 characters', 'blocked: 22023', 'blocked: '||sqlstate); end;
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's5', 'approve', ' fine ');
+    insert into results (check_name, expected, actual) values ('TD approve with a comment under 10 characters', 'blocked: 22023', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TD approve with a comment under 10 characters', 'blocked: 22023', 'blocked: '||sqlstate); end;
 end $$;
 insert into results (check_name, expected, actual) select 'TD decide_trajectory has one signature, with the comment', 'p_user uuid, p_trajectory text, p_step text, p_decision text, p_comment text DEFAULT NULL::text', string_agg(pg_get_function_arguments(p.oid), ' / ') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'decide_trajectory';
 insert into results (check_name, expected, actual) select 'TD nothing is logged for a refused decision', '0', count(*)::text from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1';
@@ -1452,6 +1455,14 @@ do $$ begin
     insert into results (check_name, expected, actual) values ('TD the learner rewrites a comment', 'blocked: 42501', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('TD the learner rewrites a comment', 'blocked: 42501', 'blocked: '||sqlstate); end;
 end $$;
+-- leaving and starting again makes a new enrolment row with its own created_at (the page ignores older decisions)
+reset role;
+update public.trajectory_enrolments set created_at = '2020-01-01' where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T2';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+select public.withdraw_trajectory('T2');
+select public.request_trajectory('T2');
+insert into results (check_name, expected, actual) select 'TD a re-created enrolment gets a newer created_at', 'requested true', status||' '||(created_at > '2020-01-01')::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T2';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d2","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'TD another learner reads the person''s decisions', '0', count(*)::text from public.trajectory_decisions where user_id = '00000000-0000-0000-0000-0000000000d1';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';

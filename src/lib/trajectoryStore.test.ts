@@ -47,13 +47,14 @@ describe('loadTrajectories', () => {
 
 describe('loadEnrolments', () => {
   it('keys the person\'s enrolments by trajectory', async () => {
-    db.answer(() => ({ data: [{ trajectory_id: 'T1', status: 'enrolled', start_month: 24321, steps: { s6: { state: 'submitted', note: 'n' } }, asked_at: '2026-11-01T09:00:00Z' }] }));
-    expect(await loadEnrolments('u1')).toEqual({ T1: { status: 'enrolled', start_month: 24321, steps: { s6: { state: 'submitted', note: 'n' } }, asked_at: '2026-11-01T09:00:00Z' } });
+    db.answer(() => ({ data: [{ trajectory_id: 'T1', status: 'enrolled', start_month: 24321, steps: { s6: { state: 'submitted', note: 'n' } }, asked_at: '2026-11-01T09:00:00Z', created_at: '2026-10-31T09:00:00Z' }] }));
+    expect(await loadEnrolments('u1')).toEqual({ T1: { status: 'enrolled', start_month: 24321, steps: { s6: { state: 'submitted', note: 'n' } }, asked_at: '2026-11-01T09:00:00Z', created_at: '2026-10-31T09:00:00Z' } });
     expect(has(db.calls[0], 'eq', 'user_id', 'u1')).toBe(true);
+    expect(has(db.calls[0], 'select', 'trajectory_id, status, start_month, steps, asked_at, created_at')).toBe(true);
   });
   it('keeps the row with no steps when its steps are malformed, and warns', async () => {
     db.answer(() => ({ data: [{ trajectory_id: 'T1', status: 'enrolled', start_month: 1, steps: { s6: { state: 'finished' } } }, { trajectory_id: 'T2', status: 'requested', start_month: 2, steps: [] }] }));
-    expect(await loadEnrolments('u1')).toEqual({ T1: { status: 'enrolled', start_month: 1, steps: {}, asked_at: null }, T2: { status: 'requested', start_month: 2, steps: {}, asked_at: null } });
+    expect(await loadEnrolments('u1')).toEqual({ T1: { status: 'enrolled', start_month: 1, steps: {}, asked_at: null, created_at: null }, T2: { status: 'requested', start_month: 2, steps: {}, asked_at: null, created_at: null } });
     expect(warn).toHaveBeenCalledTimes(2);
   });
 });

@@ -14,8 +14,9 @@ export type Trajectory = {
   renewal: string; cost: string; status: 'draft' | 'live' | 'retired'; business_line: string | null; steps: TrjStep[]; maps: TrjMap[]; published_at: string | null;
 };
 export type StepEntry = { state: 'submitted' | 'booked' | 'done'; link?: string; ref?: string; note?: string };
-// asked_at: when a start request was made (null when none was needed); absent where a test or an auto-enrolment has none.
-export type Enrolment = { status: 'requested' | 'enrolled'; start_month: number; steps: Record<string, StepEntry>; asked_at?: string | null };
+// asked_at: when a start request was made (null when none was needed); created_at: when this row began (leaving and
+// starting again makes a new row). Both absent where a test or an auto-enrolment without a row has none.
+export type Enrolment = { status: 'requested' | 'enrolled'; start_month: number; steps: Record<string, StepEntry>; asked_at?: string | null; created_at?: string | null };
 // One decide_trajectory decision (trajectory_decisions). stepId null: the start request. comment '' when none was given.
 export type TrjDecision = { trajectoryId: string; stepId: string | null; decision: 'approve' | 'talk'; comment: string; byName: string; at: string };
 export type Credential = {
