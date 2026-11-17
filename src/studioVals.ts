@@ -3,7 +3,7 @@
 // (AppState.nw), so "Send for review" is the form's save and submit: nothing is written twice.
 // Flash card & Exam Studio is compact: its Draft step is the form's item panel and it has four steps, as in v4.
 import type { Logic } from './model';
-import type { ExamQuestion, NewDraft, StudioState } from './types';
+import type { AppState, ExamQuestion, NewDraft, StudioState } from './types';
 import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { noItems, validItems } from './logic/items';
@@ -23,12 +23,15 @@ const HINTS: Record<string, string> = {
 };
 const LABELS: Record<string, string> = { ai: 'Made with AI', scripted: 'Scripted from the bundle', csv: 'Imported from a CSV' };
 const FLASH = 'flash';
+// The studio the draft is made in; null on the upload form and while a saved contribution is edited (that shows the form).
+export const studioOf = (s: AppState) => (s.studio.view === 'studio' && !s.editing ? s.studio.id ?? FLASH : null);
 
 // What createVals already computed for the form; the studio only arranges it.
 export type StudioSrc = {
   nw: NewDraft; setNw: SetNw; rules: RuleParts[]; canCreate: boolean; busy: boolean;
   checks: { text: string; dot: string; fg: string }[]; blocked: boolean; route: { n: string; name: string; role: string }[]; policyNote: string; routeWarn: string;
   submitLabel: string; submit: () => void; saveDraft: () => void;
+  checkReasons: string[] | null; runCheck: () => void; // the automatic check of the draft on screen: null when not run on it, [] when passed
 };
 
 export function studioVals(L: Logic, src: StudioSrc) {
@@ -50,7 +53,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     const fs = formatsOf(d);
     const f = fs.includes(nw.type) ? nw.type : fs[0];
     setNw((cur) => ({ ...(cur.type === f ? {} : { type: f, items: noItems() }), ...fit(src.rules, cur, f), ...(d.compact ? {} : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() }) }));
-    set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id });
+    set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined });
   };
   const next = () => {
     if (L.state.nwAiBusy) { L.say('Wait for the draft to finish'); return; }
@@ -59,7 +62,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     if (name === 'Draft' && !flash && parts.problems.length) { L.say(parts.problems[0]); return; }
     set({ step: Math.min(steps.length - 1, step + 1) });
   };
-  const exam = nw.type === 'Practice exam';
+  const exam = nw.type === 'Practice exam', passed = !!src.checkReasons && !src.checkReasons.length;
   return {
     cards: STUDIOS.map((d) => { const note = reason(d); return { id: d.id, name: d.name, tag: d.tag, out: d.out, time: d.time, open: () => open(d, note), disabled: readOnly || !!note, note }; }),
     uploadLabel: 'Upload something you already made →', openUpload: () => set({ view: 'form' }),
@@ -72,7 +75,11 @@ export function studioVals(L: Logic, src: StudioSrc) {
     itemsLabel: LABELS[nw.items?.how ?? ''] ?? '',
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
-    send: { checks: src.checks, blocked: src.blocked || (!flash && parts.problems.length > 0), problems: flash ? [] : parts.problems, route: src.route, routeEmpty: !src.route.length, policyNote: src.policyNote, routeWarn: src.routeWarn,
-      label: src.submitLabel === 'Submit for review' ? 'Send for review' : src.submitLabel, run: src.submit, saveDraft: src.saveDraft, busy: src.busy },
+    // Send for review opens once the automatic check (check_contribution) passed on the draft on screen.
+    send: { checks: src.checks, blocked: src.blocked || (!flash && parts.problems.length > 0) || !passed, problems: [...(flash ? [] : parts.problems), ...(src.checkReasons ?? [])],
+      route: src.route, routeEmpty: !src.route.length, policyNote: src.policyNote, routeWarn: src.routeWarn,
+      label: src.submitLabel === 'Submit for review' ? 'Send for review' : src.submitLabel, run: src.submit, saveDraft: src.saveDraft, busy: src.busy,
+      check: src.runCheck, checkLabel: 'Run the automatic check',
+      checkNote: !src.checkReasons ? 'Saves your draft and checks it on the server. Send for review opens when it passes.' : passed ? 'The automatic check passed on this version.' : '' },
   };
 }

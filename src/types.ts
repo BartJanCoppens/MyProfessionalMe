@@ -200,4 +200,5 @@ export type FmtDraft = {
 };
 
 // `id` is the open studio (Flash card & Exam Studio when absent); `step` indexes visibleSteps of that studio.
-export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string };
+// check: the draft the studio saved (id), what was checked (key, see createVals) and the reasons it failed (none: passed).
+export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; check?: { id: string; key: string; reasons: string[] } };

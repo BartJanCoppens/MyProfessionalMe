@@ -66,8 +66,10 @@ function Check({ c }: { c: CS }) {
     <>
       {c.nwRuleWarn && <Banner tone="warning">{c.nwRuleWarn}</Banner>}
       <Problems list={send.problems} />
+      {send.checkNote && <div style={{ fontSize: 12.5, color: '#5a6058' }}>{send.checkNote}</div>}
       {!c.studio.readOnly && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button variant="secondary" onClick={send.check} disabled={send.busy}>{send.checkLabel}</Button>
           <Button onClick={send.run} disabled={send.blocked}>{send.label}</Button>
           <Button variant="secondary" onClick={send.saveDraft} disabled={send.busy}>Save draft</Button>
         </div>

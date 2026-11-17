@@ -13,7 +13,7 @@ import type { AppState } from './types';
 
 vi.mock('./lib/contributionStore', () => ({
   loadCreate: vi.fn(), saveDraft: vi.fn(async () => 'new1'), removeDraft: vi.fn(async () => {}), submitContribution: vi.fn(async () => 'review'),
-  decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(async () => {}), removePolicy: vi.fn(async () => {}),
+  checkContribution: vi.fn(async () => ({ passed: true, reasons: [] })), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(async () => {}), removePolicy: vi.fn(async () => {}),
   loadGrants: vi.fn(), addGrant: vi.fn(), removeGrant: vi.fn(), loadExperts: vi.fn(), setExpert: vi.fn(),
 }));
 vi.mock('./lib/learnerStore', () => ({
@@ -248,6 +248,26 @@ describe('My contributions', () => {
     h.c().cs!.main();
     expect(store.submitContribution).not.toHaveBeenCalled();
     expect(h.lastToast()).toBe('Not allowed by your creation rules · ask an admin');
+  });
+  it('runs the automatic check before submitting a saved studio draft, and stops on its first reason', async () => {
+    const deck = Array.from({ length: 4 }, (_, i) => ['F' + i, 'B' + i]);
+    const d = data({ contributions: [contribution({ type: 'Flash cards', items: deck, studio: 'flash' })] });
+    const h = cs({ data: d });
+    h.c().cs!.main(); await flush(10);
+    expect(store.checkContribution).toHaveBeenCalledWith('c1');
+    expect(store.submitContribution).toHaveBeenCalledWith('c1');
+    vi.clearAllMocks();
+    vi.mocked(store.checkContribution).mockResolvedValueOnce({ passed: false, reasons: ['Add at least 4 items'] });
+    const g = cs({ data: d });
+    g.c().cs!.main(); await flush(10);
+    expect(store.submitContribution).not.toHaveBeenCalled();
+    expect(g.lastToast()).toBe('Add at least 4 items');
+  });
+  it('submits a saved upload without the check', async () => {
+    const h = cs({ data: data({ contributions: [contribution()] }) });
+    h.c().cs!.main(); await flush(10);
+    expect(store.checkContribution).not.toHaveBeenCalled();
+    expect(store.submitContribution).toHaveBeenCalledWith('c1');
   });
   it('opens a published piece in the library', () => {
     const d = data({ contributions: [contribution({ status: 'published', step: 4, learning_id: 'L45', published_at: '2026-10-03T09:00:00Z' })] });

@@ -2,6 +2,7 @@
 // The generic studio spine: the hub over all ten studios, the step bodies, build retry and View as (Task 1.2).
 // Podcast is marked available here (by overriding the data in this file only) to reach the generic path.
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import * as store from '../lib/contributionStore';
 import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initState, Logic } from '../model';
@@ -14,7 +15,8 @@ import { harness } from '../test/harness';
 import CreateScreen from './Create';
 import StudioBuild from './StudioBuild';
 
-vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.fn(), removeDraft: vi.fn(), submitContribution: vi.fn(), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(), removePolicy: vi.fn() }));
+vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.fn(), removeDraft: vi.fn(), submitContribution: vi.fn(), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(), removePolicy: vi.fn(),
+  checkContribution: vi.fn() }));
 vi.mock('../studioData', async (orig) => {
   const real = await orig<typeof import('../studioData')>();
   return { ...real, STUDIOS: real.STUDIOS.map((s) => (s.id === 'podcast' ? { ...s, available: true } : s)) };
@@ -98,6 +100,22 @@ describe('the steps', () => {
   });
 });
 
+describe('Check & send', () => {
+  it('keeps Send for review closed until the automatic check passes, and lists what it found', async () => {
+    vi.mocked(store.loadCreate).mockResolvedValue(data());
+    vi.mocked(store.saveDraft).mockResolvedValue('p1');
+    vi.mocked(store.checkContribution).mockResolvedValue({ passed: false, reasons: ['Add the items first'] });
+    render(atStep(5));
+    const send = screen.getByRole('button', { name: 'Send for review' }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    expect(screen.getByText('Saves your draft and checks it on the server. Send for review opens when it passes.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Run the automatic check' }));
+    expect(await screen.findByText('Add the items first')).toBeTruthy();
+    expect(store.checkContribution).toHaveBeenCalledWith('p1');
+    expect((screen.getByRole('button', { name: 'Send for review' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
 describe('View as', () => {
   it('hides every action in each step', () => {
     for (const [step, gone] of [[1, 'Two AI hosts'], [2, 'Add item'], [3, 'Short jingle'], [5, 'Send for review']] as const) {
@@ -107,6 +125,7 @@ describe('View as', () => {
     }
     render(atStep(5, true));
     expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Run the automatic check' })).toBeNull();
   });
   it('hides Open on the hub cards', () => {
     render(<Live readOnly state={{ create: data(), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);

@@ -9,7 +9,7 @@ import type { AppState } from './types';
 
 vi.mock('./lib/contributionStore', () => ({
   loadCreate: vi.fn(), saveDraft: vi.fn(async () => 'new1'), removeDraft: vi.fn(async () => {}), submitContribution: vi.fn(async () => 'review'),
-  decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(async () => {}), removePolicy: vi.fn(async () => {}),
+  checkContribution: vi.fn(async () => ({ passed: true, reasons: [] })), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(async () => {}), removePolicy: vi.fn(async () => {}),
   loadGrants: vi.fn(), addGrant: vi.fn(), removeGrant: vi.fn(), loadExperts: vi.fn(), setExpert: vi.fn(),
 }));
 vi.mock('./lib/learnerStore', () => ({
@@ -73,11 +73,12 @@ describe('the hub', () => {
 
 describe('rules with several combinations', () => {
   const two = data({ rules: [rule({ lines: ['Consulting'], formats: ['Podcast'] }), rule({ lines: ['Audit'], formats: ['Flash cards'] })] });
-  it('moves the draft to the line of the rule that allows the format, and can reach Send', () => {
+  it('moves the draft to the line of the rule that allows the format, and can reach Send', async () => {
     const h = open({ studio: { view: 'hub', step: 0 }, data: two, nw: { type: 'Podcast', line: 'Consulting', items: deck(2) } });
     flashCard(h).open();
     expect(h.state.nw).toMatchObject({ type: 'Flash cards', line: 'Audit' });
-    h.L().setState({ studio: { view: 'studio', step: 3 }, nw: { ...h.state.nw, items: deck(2) } });
+    h.L().setState({ studio: { view: 'studio', step: 3 }, nw: { ...h.state.nw, items: deck(4) } });
+    h.st().send.check(); await flush(10);
     expect(h.st().send.blocked).toBe(false);
     expect(h.c().nwAllowed).toBe(true);
   });
@@ -169,37 +170,85 @@ describe('Preview & test', () => {
 });
 
 describe('Check & send', () => {
-  const at = (nw: object = {}, o: object = {}) => open({ studio: { view: 'studio', step: 3 }, nw: { items: deck(2), ...nw }, ...o });
+  const at = (nw: object = {}, o: object = {}) => open({ studio: { view: 'studio', step: 3 }, nw: { items: deck(4), ...nw }, ...o });
+  const failing = (reasons: string[]) => vi.mocked(store.checkContribution).mockResolvedValueOnce({ passed: false, reasons });
   it('lists the automatic checks, with the client-name check from CLIENT_WORDS', () => {
     const ok = at();
-    expect(ok.st().send.checks.map((x) => x.text)).toEqual(expect.arrayContaining(['No client names found', '2 cards drafted from the bundle · check each one']));
-    expect(ok.st().send.blocked).toBe(false);
+    expect(ok.st().send.checks.map((x) => x.text)).toEqual(expect.arrayContaining(['No client names found', '4 cards drafted from the bundle · check each one']));
     const bad = at({ title: 'Delcroix rates' });
     expect(bad.st().send.checks.map((x) => x.text).join(' ')).toMatch(/looks like a client name/);
     expect(bad.st().send.blocked).toBe(true);
+  });
+  it('keeps Send for review closed until the automatic check has passed', () => {
+    const h = at();
+    expect(h.st().send.blocked).toBe(true);
+    expect(h.st().send.checkLabel).toBe('Run the automatic check');
+    expect(h.st().send.checkNote).toBe('Saves your draft and checks it on the server. Send for review opens when it passes.');
+  });
+  it('the check saves the draft with its studio, runs on the saved draft and opens Send', async () => {
+    const h = at();
+    h.st().send.check(); await flush(10);
+    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ type: 'Flash cards', studio: 'flash' }), null);
+    expect(store.checkContribution).toHaveBeenCalledWith('new1');
+    expect(store.submitContribution).not.toHaveBeenCalled();
+    expect(h.st().send.blocked).toBe(false);
+    expect(h.st().send.checkNote).toBe('The automatic check passed on this version.');
+    expect(h.state.studio.view).toBe('studio');
+  });
+  it('shows the reasons of a failed check with the shared problem list and keeps Send closed', async () => {
+    failing(['Add at least 4 items', '“Delcroix” looks like a client name · anonymise it']);
+    const h = at({ items: deck(2) });
+    h.st().send.check(); await flush(10);
+    expect(h.st().send.problems).toEqual(['Add at least 4 items', '“Delcroix” looks like a client name · anonymise it']);
+    expect(h.st().send.blocked).toBe(true);
+  });
+  it('a second check updates the same draft, never a new one', async () => {
+    const h = at();
+    h.st().send.check(); await flush(10);
+    h.st().send.check(); await flush(10);
+    expect(vi.mocked(store.saveDraft).mock.calls[1]).toEqual([expect.not.objectContaining({ studio: expect.anything() }), 'new1']);
+  });
+  it('an edit after the check closes Send again until it is re-run', async () => {
+    const h = at();
+    h.st().send.check(); await flush(10);
+    h.c().nwSetTitle({ target: { value: 'Another title' } } as never);
+    expect(h.st().send.blocked).toBe(true);
+    expect(h.st().send.problems).toEqual([]);
   });
   it('shows the review route and policy from the existing policy', () => {
     const h = at();
     expect(h.st().send.route.map((r) => r.name)).toEqual(['Peer reviewer 1 of 2', 'Peer reviewer 2 of 2', 'Subject-matter expert', 'Learning team']);
     expect(h.st().send.policyNote).toMatch(/^Review for this combination: /);
   });
-  it('sends for review through the same save and submit as the upload form, then returns to the hub', async () => {
+  it('sends the checked draft through the same save and submit as the upload form, checked again, then returns to the hub', async () => {
     const h = at();
+    h.st().send.check(); await flush(10);
     expect(h.st().send.label).toBe('Send for review');
     h.st().send.run(); await flush(10);
-    expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ type: 'Flash cards', items: [['Front 0', 'Back 0'], ['Front 1', 'Back 1']], ai_assisted: false }), null);
+    expect(store.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'Flash cards', items: deck(4).list, ai_assisted: false }), 'new1');
+    expect(store.checkContribution).toHaveBeenCalledTimes(2);
     expect(store.submitContribution).toHaveBeenCalledWith('new1');
     expect(h.state.createTab).toBe('mine');
     expect(h.state.studio).toEqual({ view: 'hub', step: 0 });
   });
-  it('saves AI-made items as AI-assisted', async () => {
-    const h = at({ items: deck(2, 'ai') });
+  it('does not submit when the check before submitting fails', async () => {
+    const h = at();
+    h.st().send.check(); await flush(10);
+    failing(['Not allowed by your creation rules; ask an admin']);
     h.st().send.run(); await flush(10);
+    expect(store.submitContribution).not.toHaveBeenCalled();
+    expect(h.lastToast()).toBe('Not allowed by your creation rules; ask an admin');
+  });
+  it('saves AI-made items as AI-assisted', async () => {
+    const h = at({ items: deck(4, 'ai') });
+    h.st().send.check(); await flush(10);
     expect(store.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ ai_assisted: true }), null);
   });
   it('refuses while viewing someone else', async () => {
     const h = at({}, { readOnly: true });
+    h.st().send.check(); await flush(10);
     h.st().send.run(); await flush(10);
     expect(store.saveDraft).not.toHaveBeenCalled();
+    expect(store.checkContribution).not.toHaveBeenCalled();
   });
 });

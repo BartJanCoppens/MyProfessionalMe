@@ -15,10 +15,10 @@ import {
   emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
 } from './logic/contribution';
 import type { Attrs, Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
-import { decideReview, loadCreate, removeDraft, removePolicy, saveDraft, savePolicy, submitContribution } from './lib/contributionStore';
+import { checkContribution, decideReview, loadCreate, removeDraft, removePolicy, saveDraft, savePolicy, submitContribution } from './lib/contributionStore';
 import type { DraftFields } from './lib/contributionStore';
 import { canComplete } from './lib/ai';
-import { HUB, studioVals } from './studioVals';
+import { HUB, studioOf, studioVals } from './studioVals';
 import type { AiRequest } from './lib/ai';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
@@ -57,6 +57,8 @@ const fieldsOf = (nw: NewDraft, bundles: string[]): DraftFields => {
     takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: aiAssisted(nw), bundle_ids: bundles,
     items: hasItems(nw.type) ? nw.items?.list ?? [] : null };
 };
+// The row to save: a new draft made in a studio says which (only on insert; the database keeps it).
+const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles) : { ...fieldsOf(nw, bundles), studio });
 const draftOf = (c: Contribution): NewDraft => ({ line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
   outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !hasItems(c.type), aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
   items: hasItems(c.type) ? { ...noItems(), list: itemsFromSaved(c.type, c.items), how: c.ai_assisted ? 'ai' : 'saved' } : noItems() });
@@ -136,6 +138,12 @@ function doneText(status: string, d: CreateData, id: string, again: boolean) {
   return (again ? 'Resubmitted · ' + names(who) + ' review' + (who.length > 1 ? '' : 's') + ' the new version' : 'Submitted · ' + names(who) + ' review' + (who.length > 1 ? '' : 's') + ' it first');
 }
 async function afterPublish(L: Logic, status: string) { if (status === 'published') await L.reloadContent(); }
+// A studio contribution passes the automatic check on what was saved, then is submitted (the database refuses it otherwise).
+async function submitChecked(id: string, studio: string | null | undefined) {
+  const r = studio ? await checkContribution(id) : null;
+  if (r && !r.passed) throw new Error(r.reasons[0]);
+  return submitContribution(id);
+}
 
 // Save the New form as a draft, or save and submit it. A draft that saved before a refused submit is edited next time, never duplicated.
 async function saveForm(L: Logic, submit: boolean) {
@@ -146,12 +154,12 @@ async function saveForm(L: Logic, submit: boolean) {
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
   if (submit && hasItems(nw.type) && !nw.items?.list.length) { L.say(addFirst(nw.type, 'generate them with AI or import a CSV')); return; }
   if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) }))) { L.say('Clear the open checks first'); return; }
-  const again = !!s.editing && s.create?.contributions.find((c) => c.id === s.editing)?.status === 'changes';
-  let id = s.editing;
+  const ed = s.editing ? s.create?.contributions.find((c) => c.id === s.editing) : null, again = ed?.status === 'changes', studio = studioOf(s);
+  let id = s.editing ?? (studio ? s.studio.check?.id : null) ?? null;
   L.setState({ createBusy: true });
   try {
-    id = await saveDraft(fieldsOf(nw, s.nwKb), id);
-    const status = submit ? await submitContribution(id) : 'draft', d = await reloaded(L), saved = id;
+    id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
+    const status = submit ? await submitChecked(id, studio ?? ed?.studio) : 'draft', d = await reloaded(L), saved = id;
     L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: saved, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], nwKbQ: '', revChecks: st.revChecks, studio: HUB }));
     L.say(doneText(status, d, saved, again));
     await afterPublish(L, status);
@@ -167,11 +175,28 @@ async function submitSaved(L: Logic, c: Contribution) {
   if (!mayCreate(L.state.create?.rules || [], attrsOf(c))) { L.say('Not allowed by your creation rules · ask an admin'); return; }
   L.setState({ createBusy: true });
   try {
-    const status = await submitContribution(c.id), d = await reloaded(L);
+    const status = await submitChecked(c.id, c.studio), d = await reloaded(L);
     L.setState({ create: d, createError: null, createBusy: false, contribSel: c.id });
     L.say(doneText(status, d, c.id, c.status === 'changes'));
     await afterPublish(L, status);
   } catch (err) { failed(L, err); }
+}
+
+// Check & send in a studio: save the draft (the same row on every check), then run the automatic check on it. The result
+// counts while the draft on screen is what was checked (key).
+async function runCheck(L: Logic) {
+  const s = L.state, nw = effective(s), studio = studioOf(s);
+  if (busy(L) || !studio) return;
+  if (!mayCreate(s.create?.rules || [], attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
+  const key = JSON.stringify(fieldsOf(nw, s.nwKb));
+  let id = s.studio.check?.id ?? null;
+  L.setState({ createBusy: true });
+  try {
+    id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
+    const r = await checkContribution(id), d = await reloaded(L), saved = id;
+    L.setState((st) => ({ create: d, createError: null, createBusy: false, studio: { ...st.studio, check: { id: saved, key, reasons: r.reasons } } }));
+    L.say(r.passed ? 'Automatic check passed · send it for review' : 'Saved as draft · fix what the check found');
+  } catch (err) { failed(L, err, id ? { studio: { ...L.state.studio, check: { id, key: '', reasons: [] } } } : {}); }
 }
 
 async function deleteDraft(L: Logic, c: Contribution) {
@@ -354,8 +379,9 @@ function createScreen(L: Logic) {
       + ' A requirement applies to every contribution it matches (same parts as creation rules); a contribution is routed by the strictest one when it is submitted, and with no review at all it is published on submit, after the content checks.',
   };
   // The Studios hub arranges what the form already computed (studioVals.ts); an edit always shows the form.
+  const chk = s.studio.check, checkReasons = chk && chk.key === JSON.stringify(fieldsOf(nw, s.nwKb)) ? chk.reasons : null;
   const studio = studioVals(L, { nw, setNw, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
-    routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft });
+    routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, checkReasons, runCheck: () => runCheck(L) });
   return { ...vm, studio, newView: s.editing ? 'form' as const : s.studio.view };
 }
 
