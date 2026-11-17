@@ -16,7 +16,7 @@ export default function TrajectoryEditor({ vm }: { vm: VM }) {
     <>
       <div style={{ ...card, padding: '14px 18px', display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 12.5, color: '#5a6058' }}>
         <span style={{ flex: '1 1 320px', textWrap: 'pretty' }}><span style={{ fontWeight: 600, color: '#1a1d18' }}>What a trajectory is · </span>An ordered set of learnings, evidence, a counsellor sign-off and an exam that ends in a credential. You map it to an audience and a stage, like any learning.</span>
-        <span style={{ flex: '1 1 320px', textWrap: 'pretty' }}><span style={{ fontWeight: 600, color: '#1a1d18' }}>Obligation · </span>Only business-line audiences can be mandatory or auto-enrolled; every other audience only gets a suggestion. A General or System Admin sets a trajectory with a mandatory map live.</span>
+        <span style={{ flex: '1 1 320px', textWrap: 'pretty' }}><span style={{ fontWeight: 600, color: '#1a1d18' }}>Obligation · </span>Only business-line, industry and technology audiences are auto-enrolled; ambition and profile audiences see a suggestion. Counsellors set who is in an industry or technology. A General or System Admin sets a trajectory with a mandatory map live.</span>
       </div>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <TrajectoryList vm={vm} />

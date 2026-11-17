@@ -6,7 +6,8 @@ import type { Credential, Enrolment } from './trajectory';
 import { levelsByDomain, stageIndex } from './learner';
 
 // trj: the person's certification enrolments and credentials (absent until loaded).
-export type Member = { id: string; name: string; stage: string | null; businessLine: string | null; data: LearnerData; trj?: { enrols: Record<string, Enrolment>; creds: Credential[] } };
+// trj and audiences are unset when that person's trajectory data or memberships did not load.
+export type Member = { id: string; name: string; stage: string | null; businessLine: string | null; data: LearnerData; trj?: { enrols: Record<string, Enrolment>; creds: Credential[] }; audiences?: string[] };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 

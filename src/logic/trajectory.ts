@@ -1,7 +1,9 @@
 // Certification trajectories: totals, progress, relevance, auto-enrolment, start month, credential expiry and the
 // proof rule for a submitted step. Pure rules. They mirror the database (supabase/migrations/*_trajectories.sql);
 // trajectory.sync.test.ts checks the proof rule against the migration. Months are UTC, year * 12 + month index.
+import { BLS } from '../data';
 import type { LearnState } from './learner';
+import { MEMBERSHIP_PATTERN } from './membership';
 
 export type StepKind = 'learn' | 'elect' | 'evidence' | 'check' | 'exam';
 export type TrjStep = { id: string; k: StepKind; lid?: string; opts?: string[]; pick?: number; title?: string; hours?: number; win: number; req: boolean; pre: string | null };
@@ -98,13 +100,18 @@ export function relevantMap(t: Trajectory, keys: string[], stage?: string | null
   return t.maps.find((m) => keys.includes(m[0]) && (stage == null || m[1] === stage));
 }
 
+// A person as the mandatory rule sees them: business line, career stage and industry and technology memberships.
+export type AudiencePerson = { line: string | null; stage: string | null; audiences: string[] };
+// Mirror of private.trajectory_maps_ok: business-line, ind: and tec: maps may be mandatory; amb: and pro: only advise.
+export const canBeMandatory = (aud: string): boolean => BLS.includes(aud) || MEMBERSHIP_PATTERN.test(aud);
 // Mirror of private.in_mandatory_audience on an auto trajectory, whatever its status: such a person cannot withdraw.
-export function inMandatoryAudience(t: Trajectory, person: { line: string | null; stage: string | null }): boolean {
-  return t.enrol === 'auto' && !!person.line && !!person.stage
-    && t.maps.some((m) => m[2] === 'mandatory' && m[0] === person.line && m[1] === person.stage);
+// A mandatory map at their stage binds them when its audience is their business line or one of their memberships.
+export function inMandatoryAudience(t: Trajectory, person: AudiencePerson): boolean {
+  return t.enrol === 'auto' && !!person.stage
+    && t.maps.some((m) => m[2] === 'mandatory' && m[1] === person.stage && ((!!person.line && m[0] === person.line) || person.audiences.includes(m[0])));
 }
 // The trajectory binds this person while it is live (the row is written at their first action).
-export const autoEnrolled = (t: Trajectory, person: { line: string | null; stage: string | null }): boolean => t.status === 'live' && inMandatoryAudience(t, person);
+export const autoEnrolled = (t: Trajectory, person: AudiencePerson): boolean => t.status === 'live' && inMandatoryAudience(t, person);
 
 export const monthOf = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth();
 // Mandatory auto-enrolment starts in the publication month (now when unpublished); everything else starts now.

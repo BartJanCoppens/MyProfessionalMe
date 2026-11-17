@@ -1,11 +1,11 @@
 // Certification trajectories in curriculum mapping (admin, design v4): the list, the editor, mapping, warnings and the
 // learner's-eye lane. Every edit updates AppState `trjs` at once and is saved shortly after (like the Knowledge library).
 import type { ChangeEvent } from 'react';
-import { AUD_INFO, BLS, LEARN, LEARN_BY, LEARN_META, LENSES, STAGES } from './data';
+import { AUD_INFO, LEARN, LEARN_BY, LEARN_META, LENSES, STAGES } from './data';
 import type { Opt } from './ds';
 import type { Logic } from './model';
 import { createTrajectory, saveTrajectorySoon } from './lib/trajectoryStore';
-import { totals } from './logic/trajectory';
+import { canBeMandatory, totals } from './logic/trajectory';
 import type { LearningRef, StepKind, Trajectory, TrjStep } from './logic/trajectory';
 import { addMap, addStep, blankTrajectory, earlierSteps, moveStep, removeStep, saveable } from './logic/trajectoryEdit';
 import { adminWarnings } from './logic/trajectoryWarnings';
@@ -123,7 +123,7 @@ export function trajectoryAdminVals(L: Logic) {
     };
   });
   const maps = t.maps.map((m, mi) => {
-    const canMand = BLS.includes(m[0]), pro = m[0].startsWith('pro:');
+    const canMand = canBeMandatory(m[0]), pro = m[0].startsWith('pro:');
     return {
       color: lensOf(m[0])?.[2] ?? '#d5dacf', aud: AUD_INFO[m[0]]?.name ?? m[0], stage: m[1], canMand, noMand: !canMand, ob: m[2],
       meta: (lensOf(m[0])?.[1] ?? '') + ' · reaches about ' + (AUD_INFO[m[0]] ? L.reachAt(m[0], m[1]) : 0) + ' people · '

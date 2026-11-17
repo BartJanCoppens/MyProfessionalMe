@@ -11,13 +11,14 @@ vi.mock('./lib/trajectoryStore', async (orig) => ({
   ...(await orig<object>()),
   requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), removeCredential: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(),
 }));
+vi.mock('./lib/membershipStore', () => ({ loadAudiences: vi.fn(async () => []) }));
 const m = vi.mocked(store);
 const boss = { id: 'c1', name: 'Casey Boss' };
 const step = (over: Partial<TrjStep> & Pick<TrjStep, 'id' | 'k'>): TrjStep => ({ win: 6, req: true, pre: null, ...over });
 const trj = (id: string, over: Partial<Trajectory> = {}): Trajectory => ({ ...blankTrajectory('Audit'), id, name: 'Trajectory ' + id, status: 'live', enrol: 'open', published_at: '2026-09-10T08:00:00Z', ...over });
 const START = 2026 * 12 + 9;
 const enrolled = (steps: Enrolment['steps'] = {}): Enrolment => ({ status: 'enrolled', start_month: START, steps });
-const mine = (enrols: Record<string, Enrolment>, creds: Credential[] = []): Partial<AppState> => ({ trjMine: { userId: 'u1', enrols, creds } });
+const mine = (enrols: Record<string, Enrolment>, creds: Credential[] = []): Partial<AppState> => ({ trjMine: { userId: 'u1', enrols, creds, audiences: [] } });
 const cred = (over: Partial<Credential> = {}): Credential => ({ id: 'c1', user_id: 'u1', name: 'Certified adviser', issuer: 'ITAA', earned_on: '2026-01-05', expires_on: null, link: '', ref: '', trajectory_id: null, status: 'confirmed', ...over });
 const ok = { error: null };
 
@@ -102,7 +103,7 @@ describe('starting and asking', () => {
     m.loadEnrolments.mockReturnValue(d.promise);
     const h = page(trj('T1'), mine({}));
     h.vm().tv!.primary!.run(); await flush();
-    h.L().setState({ trjMine: { userId: 'p2', enrols: {}, creds: [] } });
+    h.L().setState({ trjMine: { userId: 'p2', enrols: {}, creds: [], audiences: [] } });
     d.resolve({ T1: enrolled() }); await flush(8);
     expect(h.state.trjMine?.userId).toBe('p2');
   });
@@ -239,7 +240,7 @@ describe('View as is read-only', () => {
     expect(h.vm().credForm).toBeNull();
   });
   it('ignores data loaded for someone else', () => {
-    const h = page(t, { trjMine: { userId: 'someone-else', enrols: { T1: enrolled() }, creds: [cred()] } });
+    const h = page(t, { trjMine: { userId: 'someone-else', enrols: { T1: enrolled() }, creds: [cred()], audiences: [] } });
     expect(h.vm().wallet).toEqual([]);
     expect(h.vm().tv!.stLabel).toBe('Not started');
   });
@@ -359,5 +360,24 @@ describe('the practice exam', () => {
   });
   it('also links to a retired trajectory the person is enrolled in', () => {
     expect(at([withL61('T1', { status: 'retired' })], mine({ T1: enrolled() })).vm().det.ex!.hasTrj).toBe(true);
+  });
+});
+
+describe('industry and technology membership', () => {
+  const data = trj('T9', { enrol: 'auto', maps: [['tec:data', 'Consultant', 'mandatory']] });
+  const member = { trjMine: { userId: 'u1', enrols: {}, creds: [], audiences: ['tec:data'] } };
+  it('a mandatory tec: map enrols a member at its stage, labelled mandatory, with no way out', () => {
+    const v = page(data, member).vm();
+    expect(v.tv!.obLabel).toBe('Mandatory');
+    expect(v.tv!.stLabel).toMatch(/^Enrolled since/);
+    expect(v.tv!.callout).toMatch(/^Enrolled automatically: mandatory for Data & Azure at Consultant\./);
+    expect(v.tv!.secondary).toBeNull();
+    expect(v.libTrj[0].status).toMatch(/^Enrolled/);
+  });
+  it('binds nobody outside the audience: they may start it like an open one', () => {
+    expect(page(data, mine({})).vm().tv!.primary!.label).toBe('Start this trajectory');
+  });
+  it('a removed membership lets the person leave while no step is done', () => {
+    expect(page(data, mine({ T9: enrolled() })).vm().tv!.secondary!.label).toBe('Leave this trajectory');
   });
 });

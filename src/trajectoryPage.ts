@@ -1,7 +1,7 @@
 // View-model of the learner's trajectory page (design v4): the steps with their actions, progress, and the credential.
 // Actions render only when the subject is the signed-in person; View as shows the viewed person's progress and nothing to click.
 import { AUD_INFO } from './data';
-import { monthLabel, relevantMap, stepHours, stepProofProblem, totals, trajectoryProgress } from './logic/trajectory';
+import { canBeMandatory, monthLabel, relevantMap, stepHours, stepProofProblem, totals, trajectoryProgress } from './logic/trajectory';
 import type { StepProgress, Trajectory, TrjStep } from './logic/trajectory';
 import { canWithdraw, stepAction } from './logic/trajectoryLearner';
 import { STEP_KINDS, enrolLabel, fmtHours, stepTitle, validLabel } from './logic/trajectoryView';
@@ -9,7 +9,7 @@ import { requestTrajectory, submitTrajectoryStep, withdrawTrajectory } from './l
 import type { StepDraft } from './types';
 import { detailOf } from './fmtShared';
 import { READY_PCT } from './logic/formats';
-import { act, credentialEarned, enrolmentOf } from './trajectoryCtx';
+import { act, credentialEarned, enrolmentOf, keysOf } from './trajectoryCtx';
 import type { Ctx } from './trajectoryCtx';
 
 // The design's yearly hours budget: the app has no per-stage or per-line goal.
@@ -93,14 +93,14 @@ function buttons(c: Ctx, t: Trajectory): { primary: Btn | null; secondary: Btn |
 
 function callout(c: Ctx, t: Trajectory, pg: ReturnType<typeof trajectoryProgress>, status: string | undefined, start: number, binds: boolean): string {
   if (status === 'enrolled') {
-    const m = relevantMap(t, [c.L.bl()], c.person.stage), intro = binds && m ? 'Enrolled automatically: mandatory for ' + (AUD_INFO[m[0]]?.name ?? m[0]) + ' at ' + m[1] + '. ' : '';
+    const m = relevantMap(t, keysOf(c), c.person.stage), intro = binds && m ? 'Enrolled automatically: mandatory for ' + (AUD_INFO[m[0]]?.name ?? m[0]) + ' at ' + m[1] + '. ' : '';
     if (pg.complete) return credentialEarned(c, t) ? 'Every required step is done. The credential is in the wallet on My profile.' : 'All required steps are done.';
     if (pg.next >= 0) return intro + 'Next: ' + stepTitle(t.steps[pg.next], (id) => c.byId[id]?.title ?? '') + '. Aim for ' + monthLabel(start + (t.steps[pg.next].win || 1)) + '.';
     return intro + 'The open steps are with ' + c.boss + ' or waiting on a prerequisite.';
   }
   if (status === 'requested') return 'Waiting for ' + c.boss + ' to approve the start. It can begin once they approve.';
   if (c.ro) return 'Not started.';
-  const m = relevantMap(t, [c.L.bl()], c.person.stage) ?? relevantMap(t, [c.L.bl()]);
+  const m = relevantMap(t, keysOf(c), c.person.stage) ?? relevantMap(t, keysOf(c));
   if (!m) return 'This trajectory is for ' + (t.maps.map((x) => (AUD_INFO[x[0]]?.name ?? x[0]) + ' at ' + x[1]).join(', ') || 'nobody yet') + '. If it fits where you want to go, talk to ' + c.boss + ' first.';
   if (t.enrol === 'approval') return 'Open to you via ' + AUD_INFO[m[0]]?.name + '. ' + c.boss + ' approves the start.';
   return 'Open to you via ' + AUD_INFO[m[0]]?.name + '. Start whenever you like; it never counts toward readiness.';
@@ -109,9 +109,9 @@ function callout(c: Ctx, t: Trajectory, pg: ReturnType<typeof trajectoryProgress
 export function trajectoryPage(c: Ctx, t: Trajectory) {
   const e = enrolmentOf(c, t), enrolled = e?.status === 'enrolled', pg = trajectoryProgress(t, e, c.byId), tot = totals(t, c.byId);
   const start = e ? e.start_month : (c.now.getUTCFullYear() * 12 + c.now.getUTCMonth()), validity = t.valid_months ? validLabel(t.valid_months) : '';
-  const m = relevantMap(t, [c.L.bl()], c.person.stage) ?? relevantMap(t, [c.L.bl()]);
-  const mandatory = !!m && m[2] === 'mandatory' && AUD_INFO[m[0]]?.lens === 'bl';
-  const ob = m ? (mandatory ? ['neutral', 'Mandatory'] : m[2] === 'advised' && AUD_INFO[m[0]]?.lens === 'bl' ? ['blue', 'Advised'] : ['muted', 'Suggested']) : e ? ['green', 'Chosen by me'] : ['muted', 'Open'];
+  const m = relevantMap(t, keysOf(c), c.person.stage) ?? relevantMap(t, keysOf(c));
+  const mandatory = !!m && m[2] === 'mandatory' && canBeMandatory(m[0]);
+  const ob = m ? (mandatory ? ['neutral', 'Mandatory'] : m[2] === 'advised' && canBeMandatory(m[0]) ? ['blue', 'Advised'] : ['muted', 'Suggested']) : e ? ['green', 'Chosen by me'] : ['muted', 'Open'];
   const binds = enrolled && !c.enrols[t.id];
   return {
     name: t.name, issuer: t.issuer, cred: t.credential || 'Credential', obTone: ob[0], obLabel: ob[1],

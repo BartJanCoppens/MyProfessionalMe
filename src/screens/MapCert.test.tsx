@@ -28,7 +28,7 @@ const trj = (over: Partial<Trajectory> = {}): Trajectory => ({
   steps: [{ id: 'a', k: 'learn', lid: 'L1', win: 2, req: true, pre: null }, { id: 'b', k: 'learn', lid: 'L3', win: 6, req: true, pre: 'a' }], ...over,
 });
 const show = (state: Partial<AppState> = {}, enrols: Record<string, Enrolment> = { T1: enrolled }, creds: Credential[] = [], subject = person()) =>
-  render(<Live subject={subject} state={{ trjs: [trj()], trjMine: { userId: subject.id, enrols, creds }, ...state }} />);
+  render(<Live subject={subject} state={{ trjs: [trj()], trjMine: { userId: subject.id, enrols, creds, audiences: [] }, ...state }} />);
 const threads = (c: HTMLElement) => c.querySelectorAll('[data-cert="thread"]').length;
 const label = () => screen.queryByRole('button', { name: '◆ Tax certificate' });
 const chip = () => screen.getByRole('button', { name: /^Certifications/ });

@@ -4,7 +4,7 @@ import { blankTrajectory } from './trajectoryEdit';
 import { canWithdraw, credentialLook, dayLabel, effectiveEnrolment, stepAction } from './trajectoryLearner';
 
 const trj = (over: Partial<Trajectory> = {}): Trajectory => ({ ...blankTrajectory('Audit'), id: 'T1', status: 'live', published_at: '2026-09-10T08:00:00Z', ...over });
-const person = { line: 'Audit', stage: 'Consultant' };
+const person = { line: 'Audit', stage: 'Consultant', audiences: [] as string[] };
 const NOW = new Date('2026-11-17T10:00:00Z');
 const row = (over: Partial<Enrolment> = {}): Enrolment => ({ status: 'enrolled', start_month: 2026 * 12 + 9, steps: {}, ...over });
 const auto = trj({ enrol: 'auto', maps: [['Audit', 'Consultant', 'mandatory']] });
@@ -31,6 +31,12 @@ describe('canWithdraw', () => {
     expect(canWithdraw(trj(), undefined, person)).toBe(false);
     expect(canWithdraw(auto, row(), person)).toBe(false);
     expect(canWithdraw({ ...auto, status: 'retired' }, row(), person)).toBe(false);
+  });
+  it('binds a member of a mandatory tec: audience, and frees them once the membership is removed', () => {
+    const data = trj({ enrol: 'auto', maps: [['tec:data', 'Consultant', 'mandatory']] });
+    expect(canWithdraw(data, row(), { ...person, audiences: ['tec:data'] })).toBe(false);
+    expect(canWithdraw(data, row(), person)).toBe(true);
+    expect(effectiveEnrolment(data, undefined, { ...person, audiences: ['tec:data'] }, NOW)?.status).toBe('enrolled');
   });
 });
 

@@ -67,6 +67,14 @@ describe('the trajectory editor', () => {
     show([trajectory({ maps: [['amb:sust', 'Manager', 'advised']] })]);
     expect(screen.getByText('Suggested only')).toBeTruthy();
   });
+  it('offers mandatory for industry and technology maps, still suggested only for profiles', () => {
+    show([trajectory({ enrol: 'auto', maps: [['ind:energy', 'Manager', 'advised'], ['tec:data', 'Manager', 'mandatory'], ['pro:blue', 'Manager', 'advised']] })]);
+    expect(screen.getAllByRole('button', { name: 'Mandatory' })).toHaveLength(2);
+    expect(screen.getAllByText('Suggested only')).toHaveLength(1);
+    expect(screen.getAllByText(/Only business-line, industry and technology audiences are auto-enrolled; ambition and profile audiences see a suggestion\./)).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Mandatory' })[0]);
+    expect(current.trjs[0].maps[0]).toEqual(['ind:energy', 'Manager', 'mandatory']);
+  });
   it('disables Live for a Domain Admin on a trajectory with a mandatory map', () => {
     show([trajectory({ enrol: 'auto', maps: [['Audit', 'Manager', 'mandatory']] })], {}, domainAdmin(['Audit']));
     expect((screen.getByRole('button', { name: 'Live' }) as HTMLButtonElement).disabled).toBe(true);

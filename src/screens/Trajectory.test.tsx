@@ -35,7 +35,7 @@ const trj = (over: Partial<Trajectory> = {}): Trajectory => ({
   steps: [{ id: 'a', k: 'evidence', title: 'Describe your practice', win: 3, req: true, pre: null }, { id: 'b', k: 'exam', title: 'Final exam', hours: 2, win: 12, req: true, pre: 'a' }], ...over,
 });
 const show = (trjs: Trajectory[], subject: Subject = person({ counsellor: boss }), state: Partial<AppState> = {}) =>
-  render(<Live subject={subject} state={{ trjs, trjMine: { userId: subject.id, enrols, creds }, ...state }} />);
+  render(<Live subject={subject} state={{ trjs, trjMine: { userId: subject.id, enrols, creds, audiences: [] }, ...state }} />);
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
 const clicked = async (name: string | RegExp) => { await act(async () => { click(name); }); };
 const gone = (name: string | RegExp) => expect(screen.queryByRole('button', { name })).toBeNull();

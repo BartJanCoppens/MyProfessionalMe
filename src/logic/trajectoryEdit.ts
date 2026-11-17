@@ -1,6 +1,6 @@
 // Editing a trajectory in the admin screen: new trajectories, step ids, adding, moving and removing steps, mapping.
 // Pure: each function returns the new value. Step ids are s<number> and never change when steps move.
-import { BLS } from '../data';
+import { canBeMandatory } from './trajectory';
 import type { StepKind, Trajectory, TrjStep } from './trajectory';
 
 // Step ids are never derived from the current steps: an enrolment keeps its state by step id, so an id freed by a removed step
@@ -56,8 +56,9 @@ export function earlierSteps(steps: TrjStep[], id: string): TrjStep[] {
   return i < 0 ? [] : steps.slice(0, i);
 }
 
-// Mandatory only for a business-line audience on an auto-enrol trajectory; everything else is advised. null: already mapped.
+// Mandatory for a business-line, industry or technology audience on an auto-enrol trajectory; ambitions and profiles,
+// and every other trajectory, are advised. null: already mapped.
 export function addMap(t: Trajectory, aud: string, stage: string): Trajectory | null {
   if (t.maps.some((m) => m[0] === aud && m[1] === stage)) return null;
-  return { ...t, maps: t.maps.concat([[aud, stage, BLS.includes(aud) && t.enrol === 'auto' ? 'mandatory' : 'advised']]) };
+  return { ...t, maps: t.maps.concat([[aud, stage, canBeMandatory(aud) && t.enrol === 'auto' ? 'mandatory' : 'advised']]) };
 }

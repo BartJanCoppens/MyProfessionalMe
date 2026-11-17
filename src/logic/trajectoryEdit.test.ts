@@ -80,9 +80,12 @@ describe('earlierSteps', () => {
 });
 
 describe('addMap', () => {
-  it('is mandatory only for a business line on an auto-enrol trajectory', () => {
+  it('is mandatory for a business line, industry or technology on an auto-enrol trajectory', () => {
     expect(addMap(base([], { enrol: 'auto' }), 'Audit', 'Manager')!.maps).toEqual([['Audit', 'Manager', 'mandatory']]);
-    expect(addMap(base([], { enrol: 'auto' }), 'ind:energy', 'Manager')!.maps).toEqual([['ind:energy', 'Manager', 'advised']]);
+    expect(addMap(base([], { enrol: 'auto' }), 'ind:energy', 'Manager')!.maps).toEqual([['ind:energy', 'Manager', 'mandatory']]);
+    expect(addMap(base([], { enrol: 'auto' }), 'tec:data', 'Manager')!.maps).toEqual([['tec:data', 'Manager', 'mandatory']]);
+    expect(addMap(base([], { enrol: 'auto' }), 'amb:sust', 'Manager')!.maps).toEqual([['amb:sust', 'Manager', 'advised']]);
+    expect(addMap(base([], { enrol: 'auto' }), 'pro:blue', 'Manager')!.maps).toEqual([['pro:blue', 'Manager', 'advised']]);
     expect(addMap(base([], { enrol: 'open' }), 'Audit', 'Manager')!.maps).toEqual([['Audit', 'Manager', 'advised']]);
   });
   it('refuses a duplicate audience and stage', () => {

@@ -24,7 +24,8 @@ describe('adminWarnings', () => {
       steps: [{ id: 's1', k: 'learn', lid: 'a', win: 1, req: true, pre: null }, { id: 's2', k: 'exam', title: 'Exam', win: 2, req: true, pre: null }],
     };
     const w = adminWarnings(t, byId, 200);
-    expect(w).toContain('Only business-line audiences are auto-enrolled; people in other audiences see a suggestion.');
+    expect(w).toContain('Only business-line, industry and technology audiences are auto-enrolled; ambition and profile audiences see a suggestion.');
+    expect(adminWarnings({ ...t, maps: [['tec:data', 'senior', 'mandatory']] }, byId, 200).join(' ')).not.toMatch(/auto-enrolled/);
     expect(w).toContain('Mandatory for Audit: needs a System or General Admin to publish.');
     expect(w).toContain('Step 2 (exam) has no prerequisite, so people could book it before the learnings are done.');
     expect(w).toContain('Name the credential people earn.');

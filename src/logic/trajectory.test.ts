@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  autoEnrolled, credentialExpiry, monthLabel, relevantMap, startMonth, stepCpd, stepHours, totals, trajectoryProgress,
+  autoEnrolled, canBeMandatory, credentialExpiry, inMandatoryAudience, monthLabel, relevantMap, startMonth, stepCpd, stepHours, totals, trajectoryProgress,
   type Enrolment, type LearningRef, type Trajectory,
 } from './trajectory';
 
@@ -82,14 +82,27 @@ describe('relevance, auto-enrolment, start month and expiry', () => {
     expect(relevantMap(base, ['Tax & Legal'], 'junior')).toBeUndefined();
   });
   it('autoEnrolled mirrors private.in_mandatory_audience', () => {
-    const me = { line: 'Tax & Legal', stage: 'senior' };
+    const me = { line: 'Tax & Legal', stage: 'senior', audiences: [] };
     expect(autoEnrolled(base, me)).toBe(true);
-    expect(autoEnrolled(base, { line: 'Audit', stage: 'senior' })).toBe(false);
-    expect(autoEnrolled(base, { line: 'Tax & Legal', stage: 'junior' })).toBe(false);
-    expect(autoEnrolled(base, { line: null, stage: null })).toBe(false);
+    expect(autoEnrolled(base, { line: 'Audit', stage: 'senior', audiences: [] })).toBe(false);
+    expect(autoEnrolled(base, { line: 'Tax & Legal', stage: 'junior', audiences: [] })).toBe(false);
+    expect(autoEnrolled(base, { line: null, stage: null, audiences: [] })).toBe(false);
     expect(autoEnrolled({ ...base, enrol: 'open' }, me)).toBe(false);
     expect(autoEnrolled({ ...base, status: 'draft' }, me)).toBe(false);
     expect(autoEnrolled({ ...base, maps: [['Tax & Legal', 'senior', 'advised']] }, me)).toBe(false);
+  });
+  it('a mandatory ind:/tec: map binds the members of that audience at its stage', () => {
+    const data: Trajectory = { ...base, maps: [['tec:data', 'senior', 'mandatory']] };
+    expect(inMandatoryAudience(data, { line: 'Audit', stage: 'senior', audiences: ['tec:data'] })).toBe(true);
+    expect(inMandatoryAudience(data, { line: null, stage: 'senior', audiences: ['ind:energy', 'tec:data'] })).toBe(true);
+    expect(inMandatoryAudience(data, { line: 'Audit', stage: 'senior', audiences: ['tec:sap'] })).toBe(false);
+    expect(inMandatoryAudience(data, { line: 'Audit', stage: 'junior', audiences: ['tec:data'] })).toBe(false);
+    expect(inMandatoryAudience({ ...data, maps: [['tec:data', 'senior', 'advised']] }, { line: 'Audit', stage: 'senior', audiences: ['tec:data'] })).toBe(false);
+    expect(autoEnrolled({ ...data, status: 'draft' }, { line: 'Audit', stage: 'senior', audiences: ['tec:data'] })).toBe(false);
+  });
+  it('canBeMandatory: business lines, industries and technologies; never ambitions or profiles', () => {
+    expect(['Audit', 'Tax & Legal', 'ind:energy', 'tec:data'].map(canBeMandatory)).toEqual([true, true, true, true]);
+    expect(['amb:sust', 'pro:blue', 'Marketing', 'tec:Data'].map(canBeMandatory)).toEqual([false, false, false, false]);
   });
   it('startMonth: publication month for mandatory auto, else now (UTC)', () => {
     const now = new Date('2026-11-17T08:00:00Z');

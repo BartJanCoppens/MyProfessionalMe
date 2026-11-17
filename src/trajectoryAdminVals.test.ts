@@ -159,9 +159,9 @@ describe('mapping', () => {
     h.vm().tj!.addMap();
     expect(h.lastToast()).toBe('Choose an audience first');
   });
-  it('shows "Suggested only" for an ambition audience and offers mandatory only for business lines', () => {
-    const h = setup([T('T1', { maps: [['amb:sust', 'Manager', 'advised'], ['Audit', 'Manager', 'advised'], ['ind:energy', 'Manager', 'advised']] })]);
-    expect(h.vm().tj!.maps.map((m) => [m.canMand, m.noMand])).toEqual([[false, true], [true, false], [false, true]]);
+  it('shows "Suggested only" for ambition and profile audiences and offers mandatory for business lines, industries and technologies', () => {
+    const h = setup([T('T1', { maps: [['amb:sust', 'Manager', 'advised'], ['Audit', 'Manager', 'advised'], ['ind:energy', 'Manager', 'advised'], ['tec:data', 'Manager', 'advised'], ['pro:blue', 'Manager', 'advised']] })]);
+    expect(h.vm().tj!.maps.map((m) => [m.canMand, m.noMand])).toEqual([[false, true], [true, false], [true, false], [true, false], [false, true]]);
   });
   it('changes the obligation and removes a map', () => {
     const h = setup([T('T1', { maps: [['Audit', 'Manager', 'advised']] })]);
@@ -214,7 +214,7 @@ describe('warnings and the learner\'s eye', () => {
   it('shows the admin warnings', () => {
     const h = setup([T('T1', { enrol: 'auto', maps: [['amb:sust', 'Manager', 'advised']], credential: '' })]);
     const w = h.vm().tj!.warns.map((x) => x.text);
-    expect(w).toContain('Only business-line audiences are auto-enrolled; people in other audiences see a suggestion.');
+    expect(w).toContain('Only business-line, industry and technology audiences are auto-enrolled; ambition and profile audiences see a suggestion.');
     expect(w).toContain('Name the credential people earn.');
     expect(h.vm().tj!.hasWarn).toBe(true);
   });

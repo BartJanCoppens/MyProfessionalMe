@@ -1,11 +1,15 @@
 // The evidence rule of a submitted step exists twice: in stepProofProblem (TypeScript) and in submit_trajectory_step
 // (SQL). This test reads the migration and checks the SQL still holds the conditions the TypeScript rule encodes.
 import { describe, expect, it } from 'vitest';
-import { PROOF_LIMITS, stepProofProblem } from './trajectory';
+import { canBeMandatory, inMandatoryAudience, PROOF_LIMITS, stepProofProblem } from './trajectory';
+import type { Trajectory } from './trajectory';
+import { MEMBERSHIP_PATTERN } from './membership';
 
 const migrations = import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const sql = Object.entries(migrations).filter(([f]) => f.includes('_trajectories')).map(([, text]) => text).join('\n');
 const flat = sql.replace(/\s+/g, ' ');
+// The latest definitions of in_mandatory_audience and trajectory_maps_ok, and the audience_members check.
+const membership = Object.entries(migrations).filter(([f]) => f.includes('_audience_members')).map(([, text]) => text).join('\n').replace(/\s+/g, ' ');
 
 describe('step proof rule: TypeScript and the database agree', () => {
   it('SQL requires a link or number for an exam and a link or note for evidence', () => {
@@ -28,5 +32,22 @@ describe('step proof rule: TypeScript and the database agree', () => {
     expect(stepProofProblem('evidence', { link: 'ftp://x' })).not.toBeNull();
     expect(stepProofProblem('exam', { link: 'https://a.b/c' })).toBeNull();
     expect(stepProofProblem('evidence', { note: 'n'.repeat(PROOF_LIMITS.note + 1) })).not.toBeNull();
+  });
+});
+
+describe('who a mandatory map binds: TypeScript and the database agree', () => {
+  it('SQL allows mandatory on business lines, ind: and tec:, as canBeMandatory', () => {
+    expect(membership).toContain("(m ->> 2) = 'advised' or (m ->> 0) in ('Consulting', 'Audit', 'Tax & Legal') or (m ->> 0) ~ '^(ind|tec):[a-z]+$'");
+    expect(canBeMandatory('tec:data') && canBeMandatory('ind:energy') && canBeMandatory('Audit')).toBe(true);
+    expect(canBeMandatory('amb:sust') || canBeMandatory('pro:blue')).toBe(false);
+  });
+  it('SQL binds at the map stage through the business line or a membership, as inMandatoryAudience', () => {
+    expect(membership).toContain("m ->> 2 = 'mandatory' and m ->> 1 = p.career_stage::text and (m ->> 0 = p.business_line::text or exists (select 1 from public.audience_members a where a.user_id = p.id and a.audience = m ->> 0))");
+    const t = { enrol: 'auto', maps: [['tec:data', 'Consultant', 'mandatory']] } as unknown as Trajectory;
+    expect(inMandatoryAudience(t, { line: 'Audit', stage: 'Consultant', audiences: ['tec:data'] })).toBe(true);
+    expect(inMandatoryAudience(t, { line: 'Audit', stage: 'Consultant', audiences: [] })).toBe(false);
+  });
+  it('SQL checks the membership format with the same pattern', () => {
+    expect(membership).toContain("check (audience ~ '" + MEMBERSHIP_PATTERN.source + "')");
   });
 });

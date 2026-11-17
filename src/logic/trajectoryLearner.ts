@@ -1,10 +1,10 @@
 // The learner's side of a trajectory: who counts as enrolled, when a person may leave, which action a step offers and how
 // a credential looks in the wallet. Pure rules; withdraw mirrors withdraw_trajectory in the migration.
 import { autoEnrolled, inMandatoryAudience, monthLabel, startMonth } from './trajectory';
-import type { Credential, Enrolment, StepKind, StepState, Trajectory } from './trajectory';
+import type { AudiencePerson as Person, Credential, Enrolment, StepKind, StepState, Trajectory } from './trajectory';
 
-type Person = { line: string | null; stage: string | null };
-export type TrjMine = { userId: string; enrols: Record<string, Enrolment>; creds: Credential[] };
+// The subject's trajectory data: enrolments, credentials and industry and technology memberships.
+export type TrjMine = { userId: string; enrols: Record<string, Enrolment>; creds: Credential[]; audiences: string[] };
 
 // The stored row, or (a mandatory auto-enrolment) an enrolment that has no row until the person's first action.
 export function effectiveEnrolment(t: Trajectory, row: Enrolment | undefined, person: Person, now: Date): Enrolment | null {

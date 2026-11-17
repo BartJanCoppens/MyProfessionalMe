@@ -18,6 +18,7 @@ import { kbVals } from './kbVals';
 import { trajectoryAdminVals, trajectoryCount } from './trajectoryAdminVals';
 import { certMapVals } from './trajectoryMap';
 import { navScreen, trajectoryVals } from './trajectoryVals';
+import { audiencesOf } from './trajectoryCtx';
 import { personTrajectories, teamTrjVals } from './teamTrjVals';
 import { blankDraft, createVals } from './createVals';
 import { loadCreate } from './lib/contributionStore';
@@ -989,7 +990,7 @@ export class Logic {
       cpApply: () => { const n = cpOpsP.length; this.applyOps(cpOpsP, n + ' change' + (n > 1 ? 's' : '') + ' applied · publish to apply'); this.setState({ cpOpsP: null }); }, cpDrop: () => this.setState({ cpOpsP: null }),
       cpMode: this.aiLabel('curriculum_copilot'), readTag: rd ? (rd.ai ? 'AI reading' : 'Scripted reading') : '',
       cpPrompts: ['What do Energy seniors still miss?', 'Where does a learning arrive twice?', 'Draft a path for the Business developer ambition'].map((l) => ({ label: l, send: () => this.askCp(l) })),
-      pz: { ...pz, trjRows: personTrajectories(s.trjs, [P[4].bl || this.bl()], P[3]) },
+      pz: { ...pz, trjRows: personTrajectories(s.trjs, [P[4].bl || this.bl(), ...audiencesOf(this)], P[3]) },
       readAs: () => this.readAs(P, stk), readBusy: s.readBusy, readLabel: s.readBusy ? 'Reading the stack' : 'Read it as ' + P[1], read: rd || null, readHead: 'As ' + P[2] + ' would read it',
     };
   }
