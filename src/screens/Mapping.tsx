@@ -1,7 +1,8 @@
 import type { CSSProperties } from 'react';
-import { Banner, Button, ChatBubble, FilterChip, Hover, Input, LinkButton, PageTitle, SegmentedControl, StatusChip, Tag } from '../ds';
+import { Banner, Button, ChatBubble, FilterChip, Hover, Input, LinkButton, PageTitle, SegmentedControl, StatusChip, Tabs, Tag } from '../ds';
 import type { VM } from '../model';
 import { STAGES } from '../data';
+import TrajectoryEditor from './TrajectoryEditor';
 
 const card: CSSProperties = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' };
 const cardHead: CSSProperties = { padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#fafbf8' };
@@ -16,6 +17,18 @@ export default function AdminMappingScreen({ vm }: { vm: VM }) {
         <PageTitle title="Curriculum mapping" lead="Map learnings to the people they are for: a business line, an industry, a technology, an ambition or a personality profile. A person's path is the stack of every audience they belong to." />
         <Button onClick={vm.publish} disabled={vm.noPending}>Publish {vm.pendingLabel}</Button>
       </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <Tabs tabs={vm.mapModeTabs} value={vm.mapMode} onChange={vm.setMapMode} />
+        <span style={{ fontSize: 12, color: '#5a6058' }}>{vm.mapModeHint}</span>
+      </div>
+      {vm.isTrjMode ? <TrajectoryEditor vm={vm} /> : <LearningMapping vm={vm} />}
+    </>
+  );
+}
+
+function LearningMapping({ vm }: { vm: VM }) {
+  return (
+    <>
       <LensPicker vm={vm} />
       {/* Coverage and the learner's eye stack on the left; the copilot stays in view beside them. */}
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -75,9 +88,10 @@ function Coverage({ vm }: { vm: VM }) {
               </div>
               {cr.cells.map((cc) => (
                 <Hover key={cc.stage} onClick={cc.pick} title={cc.tip} hoverStyle={{ borderColor: '#1a1d18' }}
-                  style={{ height: 38, borderRadius: 5, background: cc.bg, border: '1px solid ' + cc.bd, boxShadow: cc.ring, color: cc.fg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  style={{ position: 'relative', height: 38, borderRadius: 5, background: cc.bg, border: '1px solid ' + cc.bd, boxShadow: cc.ring, color: cc.fg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                     cursor: 'pointer', fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, transition: 'box-shadow .15s' }}>
                   {cc.label}<span style={{ fontSize: 10, fontWeight: 500, opacity: 0.8 }}>{cc.sub}</span>
+                  {cc.hasTrj && <span style={{ position: 'absolute', top: 3, right: 5, fontSize: 10, fontWeight: 600, color: '#7a5000' }}>◆{cc.trjN}</span>}
                 </Hover>
               ))}
               <div style={{ textAlign: 'right' }}>

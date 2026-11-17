@@ -29,6 +29,7 @@ import { LEARN_BY } from './data';
 import { useTeam } from './lib/useTeam';
 import { loadCreate } from './lib/contributionStore';
 import { loadQueue } from './lib/recordStore';
+import { loadTrajectories } from './lib/trajectoryStore';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import type { Auth } from './lib/useAuth';
@@ -113,6 +114,12 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   useEffect(() => { logicRef.current = logic; });
   // AI: which uses answer through a connection (everyone); the AI connections page loads its data when it opens.
   useEffect(() => { refreshAiLive(logicRef.current); }, [me]);
+  // Certification trajectories load once per session (what this person may read: live ones, plus drafts for the admins of their line).
+  useEffect(() => {
+    let live = true;
+    loadTrajectories().then((trjs) => { if (live) setRaw((s) => ({ ...s, trjs })); }, (err) => { if (live) logicRef.current.say('Trajectories did not load · ' + (err as Error).message); });
+    return () => { live = false; };
+  }, [me]);
   useEffect(() => { if (state.screen === 'adminAi') loadAiPage(logicRef.current); }, [state.screen]);
   useEffect(() => {
     if (!state.media.playing) return;
