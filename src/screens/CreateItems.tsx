@@ -16,7 +16,7 @@ export function ItemPanel({ p }: { p: Panel }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 500 }}>Add the {p.noun}</div>
-          <div style={{ fontSize: 12, color: '#5a6058' }}>{p.lim}. Draft them from the picked bundles above, or import a CSV. You check each one before you submit.</div>
+          <div style={{ fontSize: 12, color: '#5a6058' }}>{p.lim}. Draft them from the picked bundles, or import a CSV. You check each one before you submit.</div>
         </div>
         <Button variant="dark" size="sm" onClick={p.draft} disabled={p.busy}>{p.draftLabel}</Button>
       </div>

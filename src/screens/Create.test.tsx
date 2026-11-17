@@ -48,13 +48,14 @@ describe('Create & share screen', () => {
   it('shows the line picker from the person\'s rules in New content', () => {
     render(<Live state={{ create: data() }} />);
     fireEvent.click(screen.getByRole('button', { name: 'New content' }));
+    fireEvent.click(screen.getByText('Upload something you already made →'));
     expect((screen.getByLabelText('Business line') as HTMLSelectElement).value).toBe('Consulting');
     expect(screen.getByText('Your creation rules: Consulting.')).toBeTruthy();
     expect(screen.getByText('Who will review it')).toBeTruthy();
   });
   it('imports a CSV into a flash card deck, shows the checklist line and enables submit', () => {
     const nw = { line: 'Consulting', aud: '', type: 'Flash cards', title: 'Rates', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One fact per card.', outline: [], sources: [], ai: false, aiNote: '' };
-    render(<Live state={{ create: data(), createTab: 'new', nw }} />);
+    render(<Live state={{ create: data(), createTab: 'new', nw, studio: { view: 'form', step: 0 } }} />);
     expect(screen.getByText('Generate with AI or import a CSV')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Submit for review' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('CSV lines'), { target: { value: 'What is the rate?,25 %\nbroken' } });
@@ -65,5 +66,25 @@ describe('Create & share screen', () => {
     expect((screen.getByRole('button', { name: 'Submit for review' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(screen.getByText('Generate with AI or import a CSV')).toBeTruthy();
+  });
+  it('opens New content on the Studios hub with one studio and walks through it without saving', () => {
+    const nw = { line: 'Consulting', aud: '', type: 'Flash cards', title: 'Rates', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One fact per card.', outline: [], sources: [], ai: false, aiNote: '' };
+    render(<Live state={{ create: data(), nw }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'New content' }));
+    expect(screen.getByText('Studios')).toBeTruthy();
+    expect(screen.getAllByText('Flash card & Exam Studio')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /Flash card & Exam Studio/ }));
+    ['Idea & sources', 'Draft', 'Preview & test', 'Check & send'].forEach((x) => expect(screen.getAllByText(x).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Draft' }));
+    fireEvent.change(screen.getByLabelText('CSV lines'), { target: { value: 'What is the rate?,25 %' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import CSV' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Preview & test' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Flip the card' }));
+    expect(screen.getAllByText('25 %').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Check & send' }));
+    expect(screen.getByRole('button', { name: 'Send for review' })).toBeTruthy();
+    expect(screen.getByText('Who will review it')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Flip the card')).toBeTruthy();
   });
 });

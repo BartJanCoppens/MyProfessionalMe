@@ -74,6 +74,7 @@ export function initState(cfg: Config): AppState {
     chatInput: '', chatBusy: false, proposal: null, chatFor: null, avatarEdit: null,
     chat: [],
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwKbQ: '', nwAiBusy: false,
+    studio: { view: 'hub', step: 0 },
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
     evDraft: null, decideNote: {}, queue: null, queueError: null, fbDraft: null, quiz: null, fmt: null, att: null,
     aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {},

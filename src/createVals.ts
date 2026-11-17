@@ -18,6 +18,7 @@ import type { Attrs, Check, Contribution, CreateData, Policy, Review, RuleParts 
 import { decideReview, loadCreate, removeDraft, removePolicy, saveDraft, savePolicy, submitContribution } from './lib/contributionStore';
 import type { DraftFields } from './lib/contributionStore';
 import { canComplete } from './lib/ai';
+import { HUB, studioVals } from './studioVals';
 import type { AiRequest } from './lib/ai';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
@@ -151,7 +152,7 @@ async function saveForm(L: Logic, submit: boolean) {
   try {
     id = await saveDraft(fieldsOf(nw, s.nwKb), id);
     const status = submit ? await submitContribution(id) : 'draft', d = await reloaded(L), saved = id;
-    L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: saved, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], nwKbQ: '', revChecks: st.revChecks }));
+    L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: saved, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], nwKbQ: '', revChecks: st.revChecks, studio: HUB }));
     L.say(doneText(status, d, saved, again));
     await afterPublish(L, status);
   } catch (err) { failed(L, err, { editing: id }); }
@@ -299,17 +300,17 @@ function createScreen(L: Logic) {
     .concat(isAdmin ? [{ value: 'rules', label: 'Review requirements' }] : []);
   const tab = (s.createTab === 'new' && !canCreate) || (s.createTab === 'rules' && !isAdmin) ? 'mine' : s.createTab;
 
-  return {
+  const vm = {
     loading: !s.create && !s.createError, error: s.createError, retry: () => L.reloadCreate(), busy: s.createBusy,
     readOnly: L.subject.readOnly, readOnlyNote: 'Create & share shows your own work, not ' + L.subject.name + '’s. Go back to yourself to create, submit or review.',
     lead: 'Make a reel, podcast, guide, case write-up, flash card deck or practice exam for your colleagues. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
     canCreate, noGrantText: 'You have no creation rights yet. Ask an admin for creation rights: a Domain Admin or General Admin gives you rules such as “Consulting or Tax & Legal · Podcast”.',
     myRules: d.rules.map((r) => ruleSentence(r)),
-    goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [], nwKbQ: '' }) : L.say('Ask an admin for creation rights first')),
+    goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [], nwKbQ: '', studio: HUB }) : L.say('Ask an admin for creation rights first')),
     // The full flow, as the design shows it. Peers come from the author's business line (the design said "same domain").
     reviewSteps: REVIEW_STAGES.map((n, k) => ({ n: String(k + 1), name: n, who: k === 1 ? 'Two colleagues in your line or the content\'s line · 5 working days' : REVIEW_WHO[k], bg: k === 4 ? '#86BC25' : '#1a1d18', fg: k === 4 ? '#10180a' : '#fff' })),
     tabs, tab, setTab: (v: string) => (v === 'new' && !canCreate ? L.say('Ask an admin for creation rights first') : v === 'rules' && !isAdmin ? undefined
-      : setState(v === 'new' && pristine ? { createTab: v, nw: fresh() } : { createTab: v })),
+      : setState(v === 'new' && pristine ? { createTab: v, nw: fresh(), studio: HUB } : { createTab: v })),
     tabMine: tab === 'mine', tabReview: tab === 'review', tabNew: tab === 'new', tabRules: tab === 'rules',
     contribList, cs, noMine: !mine.length, noMineText: canCreate ? 'Nothing yet. Make your first piece in New content.' : 'Nothing yet.',
     revList, rs, noRev: !mineRev.length, noRevText: 'No reviews for you yet. When a colleague submits, you may be asked as a peer, an expert or for quality and risk.',
@@ -336,7 +337,7 @@ function createScreen(L: Logic) {
     nwFileText: nw.type + ' · the file itself (video, audio or document) is attached later; this prototype stores the text only.',
     nwChecks: checks.map(dot), nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
-    nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: fresh(), nwKb: [], nwKbQ: '', createTab: 'mine' }),
+    nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: fresh(), nwKb: [], nwKbQ: '', createTab: 'mine', studio: HUB }),
     nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this combination needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement.' : '',
     // Review requirements
     policyRows, defaultPolicy: 'When no requirement matches: ' + policyLabel(policyFor([], null)) + '. When several match, the strictest counts.',
@@ -352,6 +353,10 @@ function createScreen(L: Logic) {
     rulesLead: (anyLine ? 'You can set review requirements for anything.' : 'You can set review requirements within ' + L.access.domains.join(', ') + '.')
       + ' A requirement applies to every contribution it matches (same parts as creation rules); a contribution is routed by the strictest one when it is submitted, and with no review at all it is published on submit, after the content checks.',
   };
+  // The Studios hub arranges what the form already computed (studioVals.ts); an edit always shows the form.
+  const studio = studioVals(L, { nw, setNw, allowedFormats: allowed.formats, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
+    routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft });
+  return { ...vm, studio, newView: s.editing ? 'form' as const : s.studio.view };
 }
 
 function dateLine(c: Contribution) {
