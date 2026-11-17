@@ -8,8 +8,9 @@ import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { noItems, validItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
+import { studioContent } from './logic/studioContent';
 import { studioById, studioFormats, tooFew, visibleSteps } from './logic/studios';
-import type { StudioDef } from './logic/studios';
+import type { StudioDef, StudioItem } from './logic/studios';
 import { STUDIOS } from './studioData';
 import { changeFormat, reachable } from './studioRules';
 import { BUILD_RUNNERS } from './studioRunners';
@@ -52,7 +53,10 @@ export function studioVals(L: Logic, src: StudioSrc) {
     if (note) { L.say(note); return; }
     const fs = formatsOf(d);
     const f = fs.includes(nw.type) ? nw.type : fs[0];
-    setNw((cur) => ({ ...changeFormat(cur, f, src.rules), ...(d.compact ? {} : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() }) }));
+    // Reopening the studio a saved draft was made in continues it; another studio starts a new piece in a new row.
+    const savedIn = nw.savedId ? L.state.create?.contributions.find((c) => c.id === nw.savedId)?.studio : null;
+    const keep = !!savedIn && savedIn === d.id, other = !!savedIn && savedIn !== d.id;
+    setNw((cur) => ({ ...changeFormat(cur, f, src.rules), ...(keep || d.compact ? {} : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() }), ...(other && { savedId: undefined }) }));
     set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined });
   };
   // What the Draft step still needs: a generic studio's item schema; Flash's cards or questions have their own shape, so only
@@ -80,6 +84,8 @@ export function studioVals(L: Logic, src: StudioSrc) {
     itemsLabel: LABELS[nw.items?.how ?? ''] ?? '',
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
+    // Any other studio previews the content publishing makes of its rows (studioContent), once they are valid.
+    content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioItem[], nw.shape ?? {}),
     // Send for review opens once the automatic check (check_contribution) passed on the draft on screen.
     send: { checks: src.checks, blocked: src.blocked || problems.length > 0 || !passed, problems: [...problems, ...reasons],
       route: src.route, routeEmpty: !src.route.length, policyNote: src.policyNote, routeWarn: src.routeWarn,

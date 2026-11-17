@@ -80,6 +80,17 @@ describe('steps', () => {
     expect(ids).not.toContain('L1');
     expect(ids).toContain('L2');
   });
+  it('tags a case that counts as trajectory evidence in the step and elective pickers', () => {
+    const was = LEARN_META.L2;
+    try {
+      LEARN_META.L2 = { line: null, status: 'published', content: { kind: 'case', brief: 'b', deliv: ['d'], rubric: ['r'], reviewer: 'Reviewed by your counsellor.', evidence: true } };
+      const h = setup([T('T1')]);
+      expect(h.vm().tj!.learnOptions.find((o) => o.value === 'L2')!.label).toMatch(/ · counts as trajectory evidence$/);
+      expect(h.vm().tj!.learnOptions.filter((o) => /evidence/.test(o.label)).map((o) => o.value)).toEqual(['L2']);
+      LEARN_META.L2 = { ...LEARN_META.L2, content: { kind: 'case', brief: 'b', deliv: ['d'], rubric: ['r'], reviewer: 'x', evidence: false } };
+      expect(h.vm().tj!.learnOptions.find((o) => o.value === 'L2')!.label).not.toMatch(/evidence/);
+    } finally { if (was) LEARN_META.L2 = was; else delete LEARN_META.L2; }
+  });
   it('moves a step up and down by id', () => {
     const h = setup([T('T1', { steps: [{ id: 's1', k: 'evidence', title: 'A', win: 1, req: true, pre: null }, { id: 's2', k: 'evidence', title: 'B', win: 1, req: true, pre: null }] })]);
     expect(h.vm().tj!.steps.map((s) => [s.noUp, s.noDown])).toEqual([[true, false], [false, true]]);

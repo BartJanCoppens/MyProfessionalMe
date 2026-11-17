@@ -8,7 +8,7 @@ vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupaba
 beforeEach(() => db.reset());
 
 const fields: DraftFields = { business_line: 'Consulting', audience: null, type: 'Flash cards', title: 'T', domain: 'reg', level: 2, audience_stage: 'Analyst', takeaway: 'x',
-  outline: '', sources: [], ai_assisted: false, bundle_ids: [], items: [['F', 'B']] };
+  outline: '', sources: [], ai_assisted: false, bundle_ids: [], items: [['F', 'B']], shape: null };
 
 describe('saving a draft', () => {
   it('says a format made in a studio is not made with the upload form, instead of the raw constraint', async () => {

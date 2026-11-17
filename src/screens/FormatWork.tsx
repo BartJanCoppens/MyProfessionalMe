@@ -13,7 +13,7 @@ const NumberedLine = ({ n, t }: { n: string; t: string }) => <div style={{ displ
 const Tick = ({ on, ro, toggle, children }: { on: boolean; ro: boolean; toggle: () => void; children: string }) =>
   ro ? <div style={{ fontSize: 13.5 }}>{on ? '✓' : '○'} {children}</div> : <Checkbox checked={on} onChange={toggle}>{children}</Checkbox>;
 
-function CasePanel({ ce }: { ce: NonNullable<Det['ce']> }) {
+export function CasePanel({ ce }: { ce: NonNullable<Det['ce']> }) {
   return (
     <Card title="The case" subtitle={ce.sub}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -74,7 +74,7 @@ function WebinarPanel({ wb }: { wb: NonNullable<Det['wb']> }) {
 // "Download PDF" prints just this card (the browser's Save as PDF); the rule hides the rest of the page while printing.
 const PRINT = '@media print { body * { visibility: hidden } .pm-print, .pm-print * { visibility: visible } .pm-print { position: absolute; left: 0; top: 0; width: 100% } }';
 
-function AidPanel({ ja }: { ja: NonNullable<Det['ja']> }) {
+export function AidPanel({ ja }: { ja: NonNullable<Det['ja']> }) {
   return (
     <div className="pm-print">
       <style>{PRINT}</style>

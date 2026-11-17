@@ -37,18 +37,28 @@ export function submittedEdit(s: AppState) {
   const ed = s.editing ? s.create?.contributions.find((c) => c.id === s.editing) : null;
   return ed && ed.status !== 'draft' ? ed : null;
 }
-const fieldsOf = (nw: NewDraft, bundles: string[]): DraftFields => {
+// The studio the draft on screen belongs to: the open studio, or the one the contribution being edited or continued was
+// made in; null for the upload form.
+const draftStudio = (s: AppState) => studioOf(s) ?? s.create?.contributions.find((c) => c.id === (s.editing ?? s.nw.savedId))?.studio ?? null;
+// The draft as a row. Items go with the card formats and with every studio draft (its rows), the "Shape it" answers with
+// a studio draft that has any; the upload form's other formats save neither.
+const fieldsOf = (nw: NewDraft, bundles: string[], studio: string | null): DraftFields => {
+  const shape = studio && nw.shape && Object.keys(nw.shape).length ? nw.shape : null;
   return { business_line: nw.line || null, audience: nw.aud || null, type: nw.type, title: nw.title.trim().slice(0, 120), domain: nw.dom, level: +nw.lvl, audience_stage: nw.stage,
     takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: aiAssisted(nw), bundle_ids: bundles,
-    items: hasItems(nw.type) ? nw.items?.list ?? [] : null };
+    items: hasItems(nw.type) || studio ? nw.items?.list ?? [] : null, shape };
 };
 // The row to save: a new draft made in a studio says which (only on insert; the database keeps it).
-const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles) : { ...fieldsOf(nw, bundles), studio });
+const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles, studio) : { ...fieldsOf(nw, bundles, studio), studio });
 // What a studio's automatic check was run on: the saved fields of the draft; a result counts while they are unchanged.
-export const checkKey = (nw: NewDraft, bundles: string[]) => JSON.stringify(fieldsOf(nw, bundles));
-export const draftOf = (c: Contribution): NewDraft => ({ line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
-  outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !hasItems(c.type), aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
-  items: hasItems(c.type) ? { ...noItems(), list: itemsFromSaved(c.type, c.items), how: c.ai_assisted ? 'ai' : 'saved' } : noItems() });
+export const checkKey = (nw: NewDraft, bundles: string[], studio: string | null) => JSON.stringify(fieldsOf(nw, bundles, studio));
+// A saved contribution back on screen, with its items (AI-assisted then means AI-made items) and its answers.
+export function draftOf(c: Contribution): NewDraft {
+  const list = itemsFromSaved(c.type, c.items), withItems = hasItems(c.type) || !!c.studio;
+  return { line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
+    outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !withItems, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
+    items: withItems ? { ...noItems(), list, how: c.ai_assisted ? 'ai' : 'saved' } : noItems(), ...(c.shape && { shape: c.shape }) };
+}
 
 // ---------- writes ----------
 
@@ -78,7 +88,7 @@ async function submitChecked(id: string, studio: string | null | undefined) {
 type Saved = { s: AppState; nw: NewDraft; studio: string | null; id: string };
 async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>) {
   if (busy(L)) return;
-  const s = L.state, nw = effective(s), rules = s.create?.rules || [], studio = studioOf(s);
+  const s = L.state, nw = effective(s), rules = s.create?.rules || [], studio = draftStudio(s);
   if (!rules.length) { L.say('Ask an admin for creation rights first'); return; }
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
   let id = s.editing ?? nw.savedId ?? null;
@@ -97,7 +107,7 @@ export async function saveForm(L: Logic, submit: boolean) {
   if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) }))) { L.say('Clear the open checks first'); return; }
   await saveThen(L, async ({ s, studio, id }) => {
     const ed = s.editing ? s.create?.contributions.find((c) => c.id === s.editing) : null;
-    const status = submit ? await submitChecked(id, studio ?? ed?.studio) : 'draft', d = await reloaded(L);
+    const status = submit ? await submitChecked(id, studio) : 'draft', d = await reloaded(L);
     L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: id, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], nwKbQ: '', revChecks: st.revChecks, studio: HUB }));
     L.say(doneText(status, d, id, ed?.status === 'changes'));
     await afterPublish(L, status);
@@ -124,8 +134,8 @@ export async function submitSaved(L: Logic, c: Contribution) {
 // screen is what was checked (checkKey).
 export async function runCheck(L: Logic) {
   if (!studioOf(L.state)) return;
-  await saveThen(L, async ({ s, nw, id }) => {
-    const r = await checkContribution(id), d = await reloaded(L), key = checkKey(nw, s.nwKb);
+  await saveThen(L, async ({ s, nw, studio, id }) => {
+    const r = await checkContribution(id), d = await reloaded(L), key = checkKey(nw, s.nwKb, studio);
     L.setState((st) => ({ create: d, createError: null, createBusy: false, nw: { ...st.nw, savedId: id }, studio: { ...st.studio, check: { key, reasons: r.reasons } } }));
     L.say(r.passed ? 'Automatic check passed · send it for review' : 'Saved as draft · fix what the check found');
   }, (id) => (st) => (id ? { nw: { ...st.nw, savedId: id } } : {}));

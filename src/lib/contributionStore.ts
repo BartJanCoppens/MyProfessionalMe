@@ -29,7 +29,7 @@ export async function loadCreate(userId: string): Promise<CreateData> {
   };
 }
 
-export type DraftFields = Pick<Contribution, 'business_line' | 'audience' | 'type' | 'title' | 'domain' | 'level' | 'audience_stage' | 'takeaway' | 'outline' | 'sources' | 'ai_assisted' | 'bundle_ids' | 'items'>
+export type DraftFields = Pick<Contribution, 'business_line' | 'audience' | 'type' | 'title' | 'domain' | 'level' | 'audience_stage' | 'takeaway' | 'outline' | 'sources' | 'ai_assisted' | 'bundle_ids' | 'items' | 'shape'>
   & { studio?: string }; // insert only: the database never lets the studio change
 
 // Creates a draft, or edits one (or one with changes requested). Returns its id.

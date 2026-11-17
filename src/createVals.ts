@@ -7,7 +7,7 @@ import type { Logic } from './model';
 import type { AppState } from './types';
 import { itemsPanel, viewItems } from './createItems';
 import type { SetNw } from './createItems';
-import { hasItems, itemsCheck, itemsFromSaved, itemsText, noItems } from './logic/items';
+import { hasItems, itemsCheck, itemsFromSaved, itemsText, noItems, noun } from './logic/items';
 import {
   CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
   emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
@@ -19,7 +19,7 @@ import {
 } from './createSave';
 import { bundleFinder, draftAi, usableBundles } from './createGrounding';
 import { changeFormat } from './studioRules';
-import { HUB, studioVals } from './studioVals';
+import { HUB, studioOf, studioVals } from './studioVals';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
 const ST: Record<string, [string, string, string]> = { published: ['accepted', 'Published', 'check'], review: ['submitted', 'In review', 'dot'], changes: ['clarification', 'Changes requested', 'dot'], draft: ['not-started', 'Draft', 'dot'] };
@@ -161,7 +161,7 @@ function createScreen(L: Logic) {
       + ' A requirement applies to every contribution it matches (same parts as creation rules); a contribution is routed by the strictest one when it is submitted, and with no review at all it is published on submit, after the content checks.',
   };
   // The Studios hub arranges what the form already computed (studioVals.ts); an edit always shows the form.
-  const chk = s.studio.check, checkReasons = chk && chk.key === checkKey(nw, s.nwKb) ? chk.reasons : null;
+  const chk = s.studio.check, checkReasons = chk && chk.key === checkKey(nw, s.nwKb, studioOf(s)) ? chk.reasons : null;
   const studio = studioVals(L, { nw, setNw, bundles: picked, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
     routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, checkReasons, runCheck: () => runCheck(L) });
   return { ...vm, studio, newView: s.editing ? 'form' as const : s.studio.view };
@@ -210,7 +210,7 @@ function reviewDetail(L: Logic, c: Contribution, r: Review, d: CreateData, now: 
     meta: 'By ' + c.author_name + ' · for ' + c.audience_stage + ' · ' + (open ? daysWaiting(c.submitted_at, now) : 'submitted ' + fmtDate(c.submitted_at)),
     takeaway: c.takeaway, outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft · check the cited sources' : '',
     ...viewItems(c, ' to check'),
-    fileNote: hasItems(c.type) ? 'Check each ' + (c.type === 'Flash cards' ? 'card' : 'question') + ' against the takeaway.'
+    fileNote: hasItems(c.type) || c.studio ? 'Check each ' + noun(c.type, 1) + ' against the takeaway.'
       : 'The ' + (c.type === 'Podcast' ? 'audio' : c.type === 'Reel' ? 'video' : 'document') + ' is attached later; review the takeaway and outline for now.',
     checks: contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(itemsFromSaved(c.type, c.items)) }).map(dot),
     open, closed: !open, bannerTone: r.verdict === 'approved' || c.status === 'published' ? 'success' : 'warning', doneText,

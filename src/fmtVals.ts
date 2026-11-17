@@ -15,10 +15,15 @@ import type { AidContent, CaseContent, StretchContent, WebinarContent } from './
 const numbered = (items: string[]) => items.map((t, k) => ({ n: k + 1 + '.', t }));
 const toggled = (list: number[], k: number) => (list.includes(k) ? list.filter((x) => x !== k) : [...list, k]).sort((a, b) => a - b);
 
+// The case panel's content, for the learner and for the studio preview.
+const caseView = (c: CaseContent, sub: string) => ({ sub, brief: c.brief, deliv: numbered(c.deliv), rubric: c.rubric.map((t) => ({ t })), reviewer: c.reviewer });
+// The Case Studio's preview: the case as learners read it, without the hand-in (that needs a learning and the evidence flow).
+export const casePreview = (c: CaseContent) => ({ ...caseView(c, 'Anonymised · learners share a link, not the file'), ro: true, handed: false, submitLabel: '', note: '', submit: () => {} });
+
 function caseVals(L: Logic, it: Item, c: CaseContent) {
   const handed = handedIn(it);
   return {
-    ro: L.subject.readOnly, sub: it.hoursLabel + ' · anonymised · share a link, not the file', brief: c.brief, deliv: numbered(c.deliv), rubric: c.rubric.map((t) => ({ t })), reviewer: c.reviewer,
+    ro: L.subject.readOnly, ...caseView(c, it.hoursLabel + ' · anonymised · share a link, not the file'),
     handed, submitLabel: it.state === 'accepted' ? 'Accepted' : handed ? 'Handed in' : 'Hand in',
     note: it.state === 'accepted' ? 'Reviewed and accepted.' : handed ? 'Sent to ' + L.counsellorFull() + ' for review.' : 'Add the link to your deliverable in the evidence below (no client names), then hand in.',
     submit: () => submit(L, it),
@@ -45,14 +50,21 @@ function webinarVals(L: Logic, it: Item, c: WebinarContent) {
   };
 }
 
+// The job aid panel over a list of ticks and where they go: the learner's progress (saved), or a studio preview's own
+// state (a play-test, never saved).
+export function aidView(c: AidContent, ticks: number[], setTicks: (next: number[]) => void, o: { ro: boolean; saved: boolean }) {
+  return {
+    ro: o.ro, sub: 'One page · ' + c.items.length + ' checks · ' + (o.saved ? 'tick them while you work; the ticks are saved with your progress' : 'tick them to try it'),
+    items: c.items.map((t, k) => ({ t, on: ticks.includes(k), toggle: () => setTicks(toggled(ticks, k)) })), count: countLabel(ticks.length, c.items.length, 'ticked'),
+    print: () => window.print(), reset: () => setTicks([]),
+  };
+}
+
+// Every item ticked completes the learning; clearing the ticks never undoes it.
 function aidVals(L: Logic, it: Item, c: AidContent) {
   const ticks = detailOf<'aid'>(L, it.id).ticks ?? [];
-  const tick = (k: number) => { const next = toggled(ticks, k); saveDetail(L, it, { ticks: next }, { complete: next.length === c.items.length, done: completedToast(it, 'Every item ticked') }); };
-  return {
-    ro: L.subject.readOnly, sub: 'One page · ' + c.items.length + ' checks · tick them while you work; the ticks are saved with your progress',
-    items: c.items.map((t, k) => ({ t, on: ticks.includes(k), toggle: () => tick(k) })), count: countLabel(ticks.length, c.items.length, 'ticked'),
-    print: () => window.print(), reset: () => saveDetail(L, it, { ticks: [] }),
-  };
+  return aidView(c, ticks, (next) => saveDetail(L, it, { ticks: next }, { complete: next.length > 0 && next.length === c.items.length, done: completedToast(it, 'Every item ticked') }),
+    { ro: L.subject.readOnly, saved: true });
 }
 
 export function fmtVals(L: Logic, it: Item) {

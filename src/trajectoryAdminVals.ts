@@ -5,6 +5,7 @@ import { AUD_INFO, LEARN, LEARN_BY, LEARN_META, LENSES, STAGES } from './data';
 import type { Opt } from './ds';
 import type { Logic } from './model';
 import { createTrajectory, saveTrajectorySoon } from './lib/trajectoryStore';
+import { countsAsEvidence } from './logic/studioContent';
 import { canBeMandatory, totals } from './logic/trajectory';
 import type { LearningRef, StepKind, Trajectory, TrjStep } from './logic/trajectory';
 import { addMap, addStep, blankTrajectory, earlierSteps, moveStep, removeStep, saveable } from './logic/trajectoryEdit';
@@ -63,6 +64,8 @@ const published = () => LEARN.filter((r) => (LEARN_META[r[0]]?.status ?? 'publis
 const learningRefs = (): Record<string, LearningRef> => Object.fromEntries(published().map((r) => [r[0], { hours: r[6], cpd: r[7], state: 'not-started' as const, pct: 0 }]));
 const titleOf = (id: string) => LEARN_BY[id]?.[1] ?? id;
 const learningLine = (id: string) => (LEARN_BY[id] ? LEARN_BY[id][4] + ' · ' + fmtHours(LEARN_BY[id][6]) : '');
+// A case its creator said can count as trajectory evidence says so where an admin picks a step (Case Studio, Task 2.1).
+const evidenceTag = (id: string) => (countsAsEvidence(LEARN_META[id]?.content) ? ' · counts as trajectory evidence' : '');
 const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud]?.lens);
 // An option list that also holds the value in use, so a stored value outside the usual choices still shows.
 const withCurrent = (options: { value: string; label: string }[], value: string, label = value) => (options.some((o) => o.value === value) ? options : [opt(value, label)].concat(options));
@@ -107,7 +110,7 @@ export function trajectoryAdminVals(L: Logic) {
     if (edit((x) => ({ ...x, steps: x.steps.concat([made]) }))) L.setState({ trjStep: made.id });
   };
   const used = new Set<string>(); t.steps.forEach((st) => { if (st.lid) used.add(st.lid); (st.opts || []).forEach((o) => used.add(o)); });
-  const learnChoices = (empty: string) => [opt('', empty)].concat(offerable.filter((r) => !used.has(r[0])).map((r) => opt(r[0], r[1] + ' · ' + fmtHours(r[6]))));
+  const learnChoices = (empty: string) => [opt('', empty)].concat(offerable.filter((r) => !used.has(r[0])).map((r) => opt(r[0], r[1] + ' · ' + fmtHours(r[6]) + evidenceTag(r[0]))));
   const tot = totals(t, byId), n = t.steps.length, setField = (key: 'name' | 'credential' | 'renewal' | 'cost' | 'issuer') => (e: Change) => edit((x) => ({ ...x, [key]: e.target.value }));
   const steps = t.steps.map((st, i) => {
     const K = STEP_KINDS[st.k], sel = s.trjStep === st.id, h = totals({ ...t, steps: [st] }, byId).tot, pre = st.pre ? t.steps.findIndex((x) => x.id === st.pre) : -1;
