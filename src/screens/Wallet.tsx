@@ -1,5 +1,5 @@
-// The credentials wallet in My profile (design v4): held and waiting credentials, what the person is working toward, and the
-// form for an external credential. Reads from VM only (walletVals.ts); no action in View as.
+// The credentials wallet in My profile (design v4): held and waiting credentials, what the person is working toward, the
+// form for an external credential and the renewal form. Reads from VM only (walletVals.ts); no action in View as.
 import { Button, Input, LinkButton, StatusChip } from '../ds';
 import type { VM } from '../model';
 
@@ -23,6 +23,25 @@ function CredentialForm({ f }: { f: Cf }) {
   );
 }
 
+type Rf = NonNullable<VM['renewForm']>;
+// Renewal of one credential: a link or number, the trajectory's renewal rule as the hint, and a new expiry for an external one.
+function RenewalForm({ f }: { f: Rf }) {
+  const field = (label: string, key: 'link' | 'ref' | 'expires', extra: { type?: string; placeholder?: string; max?: number } = {}) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 200px' }}>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: '#5a6058' }}>{label}</span>
+      <Input size="md" type={extra.type} placeholder={extra.placeholder} maxLength={extra.max} value={f[key]} onChange={(e) => f.set(key, e.target.value)} />
+    </label>
+  );
+  return (
+    <div style={{ borderTop: '1px solid #eef0ea', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, background: '#fafbf8' }}>
+      <div><div style={{ fontWeight: 600 }}>Renew “{f.name}”</div>{f.hint && <div style={small}>{f.hint}</div>}</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{field('Link to the new certificate', 'link', { placeholder: 'https://', max: 500 })}{field('or certificate number', 'ref', { max: 80 })}</div>
+      {f.needsExpiry ? <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{field('New expiry date', 'expires', { type: 'date' })}</div> : <div style={small}>{f.expiryNote}</div>}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><Button size="sm" onClick={f.submit}>Send renewal</Button><LinkButton tone="muted" onClick={f.cancel}>Cancel</LinkButton></div>
+    </div>
+  );
+}
+
 export default function Wallet({ vm }: { vm: VM }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' }}>
@@ -31,6 +50,7 @@ export default function Wallet({ vm }: { vm: VM }) {
         {vm.canAddCred && <Button size="sm" variant="secondary" onClick={vm.addCred}>+ Add an external credential</Button>}
       </div>
       {vm.credForm && <CredentialForm f={vm.credForm} />}
+      {vm.renewForm && <RenewalForm f={vm.renewForm} />}
       {vm.wallet.length === 0 && <div style={{ padding: '14px 18px', ...small }}>No credentials yet. They appear here when a certification trajectory ends in one, or when you add one you already hold.</div>}
       <div style={{ padding: vm.wallet.length ? '14px 18px' : 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 10 }}>
         {vm.wallet.map((wc) => (
@@ -43,6 +63,7 @@ export default function Wallet({ vm }: { vm: VM }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
               <StatusChip status={wc.st} label={wc.stLabel} />
               {/^https?:\/\//.test(wc.link) && <a href={wc.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: '#4c7a10' }}>Open certificate</a>}
+              {wc.renew && <Button size="sm" variant="secondary" onClick={wc.renew.run}>{wc.renew.label}</Button>}
               {wc.remove && <LinkButton tone="muted" onClick={wc.remove.run}>{wc.remove.label}</LinkButton>}
             </div>
           </div>

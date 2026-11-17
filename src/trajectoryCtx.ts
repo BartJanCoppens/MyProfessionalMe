@@ -4,7 +4,7 @@
 import { loadAudiences } from './lib/membershipStore';
 import { loadCredentials, loadDecisions, loadEnrolments } from './lib/trajectoryStore';
 import { audienceKeys } from './logic/membership';
-import { effectiveEnrolment } from './logic/trajectoryLearner';
+import { credentialHeld, effectiveEnrolment } from './logic/trajectoryLearner';
 import type { TrjMine } from './logic/trajectoryLearner';
 import type { Credential, Enrolment, Trajectory, TrjDecision } from './logic/trajectory';
 import type { Item, Logic } from './model';
@@ -36,11 +36,9 @@ export const enrolmentOf = (c: Ctx, t: Trajectory) => effectiveEnrolment(t, c.en
 // Live trajectories, plus any the person is enrolled in (a retired one still lets them finish).
 export const visibleTo = (c: Ctx) => c.L.state.trjs.filter((t) => t.status === 'live' || !!c.enrols[t.id]);
 
-// A confirmed, unexpired credential from this trajectory: the only proof that it ended in one (as on My team).
-export const credentialEarned = (c: Ctx, t: Trajectory) => {
-  const today = c.now.toISOString().slice(0, 10);
-  return c.creds.some((cr) => cr.trajectory_id === t.id && cr.status === 'confirmed' && (cr.expires_on == null || cr.expires_on >= today));
-};
+// A held (confirmed, not superseded, unexpired) credential from this trajectory: the only proof that it ended in one (as
+// on My team).
+export const credentialEarned = (c: Ctx, t: Trajectory) => c.creds.some((cr) => cr.trajectory_id === t.id && credentialHeld(cr, c.now));
 
 // current: whether the loaded data may still be written, given the state when it lands.
 export async function loadMine(L: Logic, current: (s: AppState) => boolean = () => true) {

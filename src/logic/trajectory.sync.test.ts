@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { canBeMandatory, inMandatoryAudience, PROOF_LIMITS, stepProofProblem } from './trajectory';
 import type { Trajectory } from './trajectory';
 import { MEMBERSHIP_PATTERN } from './membership';
+import { RENEW_DAYS } from './trajectoryLearner';
 
 const migrations = import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const sql = Object.entries(migrations).filter(([f]) => f.includes('_trajectories')).map(([, text]) => text).join('\n');
@@ -49,5 +50,14 @@ describe('who a mandatory map binds: TypeScript and the database agree', () => {
   });
   it('SQL checks the membership format with the same pattern', () => {
     expect(membership).toContain("check (audience ~ '" + MEMBERSHIP_PATTERN.source + "')");
+  });
+});
+
+describe('renewal window: TypeScript and the database agree', () => {
+  const renewal = Object.entries(migrations).filter(([f]) => f.includes('_credential_renewal')).map(([, text]) => text).join('\n').replace(/\s+/g, ' ');
+  it('submit_renewal opens RENEW_DAYS before expiry and requires the same proof rule', () => {
+    expect(renewal).toContain(`if c.expires_on > current_date + ${RENEW_DAYS} then`);
+    expect(renewal).toContain(`char_length(l) > ${PROOF_LIMITS.link} or l !~ '^https?://[^[:space:]]+$'`);
+    expect(renewal).toContain(`char_length(rf) > ${PROOF_LIMITS.ref}`);
   });
 });

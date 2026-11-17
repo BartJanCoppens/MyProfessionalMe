@@ -3,6 +3,7 @@ import * as store from './lib/trajectoryStore';
 import type { Credential, Enrolment, Trajectory, TrjStep } from './logic/trajectory';
 import type { Member } from './logic/team';
 import { blankTrajectory } from './logic/trajectoryEdit';
+import { dayLabel, renewedExpiry } from './logic/trajectoryLearner';
 import { personTrajectories, teamTrjVals } from './teamTrjVals';
 import { emptyData, flush, harness, person, stubWindow, withProgress } from './test/harness';
 
@@ -152,6 +153,41 @@ describe('waiting credentials', () => {
   it('counts an expired credential as not earned', () => {
     const tt = trj('T1', { steps: [step({ id: 's1', k: 'evidence', title: 'P' })] });
     const { v } = setup([kim({ T1: enrolled() }, [cred({ expires_on: '2020-01-01' })])], [tt]);
+    expect(v.teamTrj[0].stLabel).toBe('On track');
+  });
+});
+
+describe('renewals', () => {
+  const day = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  const label = (iso: string) => dayLabel(iso);
+  const old = cred({ id: 'c1', expires_on: day(10) });
+  const renewal = (over: Partial<Credential> = {}) => cred({ id: 'r1', status: 'waiting', renewal_of: 'c1', ref: 'N-2', expires_on: null, ...over });
+  it('lists a renewal as "Renewal" with the proof, the current expiry and the new one from the trajectory', async () => {
+    const { h, v } = setup([kim({}, [old, renewal()])], [trj('T1', { valid_months: 24 })]);
+    const next = renewedExpiry(new Date(), 24)!;
+    expect(v.approvals).toHaveLength(1);
+    expect(v.approvals[0]).toMatchObject({ kind: 'Renewal', approveLabel: 'Confirm', talk: null, proof: { link: '', note: '', ref: 'N-2' },
+      text: 'Certified · ITAA · expires ' + label(day(10)) + ' → new expiry on confirm: ' + label(next) });
+    v.approvals[0].approve!(); await flush();
+    expect(m.confirmCredential).toHaveBeenCalledWith('r1');
+    expect(h.toasts().at(-1)).toBe('Renewed · Kim\'s credential now runs to ' + label(next));
+  });
+  it('an external renewal takes the date the learner gave', () => {
+    const { v } = setup([kim({}, [{ ...old, trajectory_id: null }, renewal({ trajectory_id: null, expires_on: day(400) })])], [trj('T1')]);
+    expect(v.approvals[0].text).toBe('Certified · ITAA · expires ' + label(day(10)) + ' → new expiry on confirm: ' + label(day(400)));
+  });
+  it('says "from the trajectory" when the trajectory is not loaded, and the toast claims no date', async () => {
+    const { h, v } = setup([kim({}, [old, renewal()])], []);
+    expect(v.approvals[0].text).toMatch(/→ new expiry on confirm: from the trajectory$/);
+    v.approvals[0].approve!(); await flush();
+    expect(h.toasts().at(-1)).toBe('Renewed');
+  });
+  it('offers no Confirm in View as', () => {
+    expect(setup([kim({}, [old, renewal()])], [trj('T1')], person({ readOnly: true })).v.approvals[0].approve).toBeNull();
+  });
+  it('a superseded credential is not "earned" in the table', () => {
+    const tt = trj('T1', { steps: [step({ id: 's1', k: 'evidence', title: 'P' })] });
+    const { v } = setup([kim({ T1: enrolled() }, [cred({ superseded_at: '2026-11-17T10:00:00Z' })])], [tt]);
     expect(v.teamTrj[0].stLabel).toBe('On track');
   });
 });

@@ -22,6 +22,9 @@ export type TrjDecision = { trajectoryId: string; stepId: string | null; decisio
 export type Credential = {
   id: string; user_id: string; name: string; issuer: string; earned_on: string; expires_on: string | null; link: string; ref: string;
   trajectory_id: string | null; status: 'waiting' | 'confirmed';
+  // renewal_of: the credential a renewal replaces once confirmed; superseded_at: when a confirmed renewal replaced this
+  // one. Both null (or absent in tests) on an ordinary credential.
+  renewal_of?: string | null; superseded_at?: string | null;
 };
 // What a step needs to know about a library learning (an Item has these fields).
 export type LearningRef = { hours: number; cpd: number; state: LearnState; pct: number };

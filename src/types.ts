@@ -105,8 +105,8 @@ export type AppState = {
   // certification trajectories (admin): the tab, the trajectory and step being edited (step by id), and the audience and stage about to be mapped
   trjs: Trajectory[]; mapMode: 'learn' | 'traj'; trjSel: string | null; trjStep: string | null; trjAud: string; trjStage: string;
   // certification trajectories (learner): the page being viewed and where it was opened from, the subject's enrolments and credentials,
-  // the proof being typed per step (key subject|trajectory|step) and the external credential being added
-  trjView: string | null; trjOrigin: Screen; trjMine: TrjMine | null; trjLeave: string | null; stepDraft: Record<string, StepDraft>; credForm: CredDraft | null;
+  // the proof being typed per step (key subject|trajectory|step), the external credential being added and the renewal being typed
+  trjView: string | null; trjOrigin: Screen; trjMine: TrjMine | null; trjLeave: string | null; stepDraft: Record<string, StepDraft>; credForm: CredDraft | null; renewForm: RenewDraft | null;
   reads: Record<string, Read>; readBusy: boolean;
   // growth map: the domain zoomed into (domain key), or null for all domains
   zoom: string | null;
@@ -150,6 +150,8 @@ export type AppState = {
 
 export type StepDraft = { link: string; ref: string; note: string };
 export type CredDraft = { name: string; issuer: string; earned: string; expires: string; link: string; ref: string };
+// The renewal of credential `id`: a link or certificate number, and the new expiry (external credentials only).
+export type RenewDraft = { id: string; link: string; ref: string; expires: string };
 
 // The New content form. line and aud are '' for none; type is the format; lvl stays text for the select; outline and
 // sources come from Draft with AI.

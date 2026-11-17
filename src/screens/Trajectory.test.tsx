@@ -16,7 +16,7 @@ import Wallet from './Wallet';
 
 vi.mock('../lib/trajectoryStore', async (orig) => ({
   ...(await orig<object>()),
-  requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(), loadDecisions: vi.fn(),
+  requestTrajectory: vi.fn(), withdrawTrajectory: vi.fn(), submitTrajectoryStep: vi.fn(), addExternalCredential: vi.fn(), submitRenewal: vi.fn(), loadEnrolments: vi.fn(), loadCredentials: vi.fn(), loadDecisions: vi.fn(),
 }));
 const m = vi.mocked(store);
 const boss = { id: 'c1', name: 'Casey Boss' };
@@ -121,6 +121,22 @@ describe('the wallet', () => {
     await clicked('Add credential');
     expect(m.addExternalCredential).toHaveBeenCalledWith(expect.objectContaining({ name: 'IFRS diploma', issuer: 'ACCA', ref: 'D-9', expires_on: null }));
     expect(screen.getByText('IFRS diploma')).toBeTruthy();
+  });
+  it('renews a trajectory credential with a certificate number; the card then waits for the counsellor', async () => {
+    creds = [{ id: 'c1', user_id: 'u1', name: 'Certified adviser', issuer: 'ITAA', earned_on: '2025-01-05', expires_on: soon, link: '', ref: 'A1', trajectory_id: 'T1', status: 'confirmed' }];
+    m.submitRenewal.mockImplementation(async (id, p) => { creds.push({ ...creds[0], id: 'r1', status: 'waiting', renewal_of: id, ref: p.ref, expires_on: null }); return { error: null }; });
+    show([trj({ renewal: 'Every 2 years: 40 CPD hours' })], person({ counsellor: boss }));
+    click('Renew');
+    expect(screen.getByText('Every 2 years: 40 CPD hours')).toBeTruthy();
+    expect(screen.queryByLabelText('New expiry date')).toBeNull();
+    expect(screen.getByLabelText('Link to the new certificate').getAttribute('maxLength')).toBe('500');
+    fireEvent.change(screen.getByLabelText('or certificate number'), { target: { value: 'A2' } });
+    await clicked('Send renewal');
+    expect(m.submitRenewal).toHaveBeenCalledWith('c1', { link: '', ref: 'A2', expires: null });
+    expect(screen.getByText('Renewal waiting for Casey Boss')).toBeTruthy();
+    expect(screen.getAllByText('Certified adviser', { selector: 'div' })).toHaveLength(1);
+    gone('Renew');
+    expect(screen.getByRole('button', { name: 'Remove renewal' })).toBeTruthy();
   });
 });
 

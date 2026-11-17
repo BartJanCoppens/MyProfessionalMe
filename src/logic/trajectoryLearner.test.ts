@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Credential, Enrolment, Trajectory, TrjDecision } from './trajectory';
 import { blankTrajectory } from './trajectoryEdit';
-import { canWithdraw, credentialLook, dayLabel, effectiveEnrolment, stepAction, talkNote } from './trajectoryLearner';
+import { canRenew, canWithdraw, credentialHeld, credentialLook, dayLabel, effectiveEnrolment, renewedExpiry, RENEW_DAYS, stepAction, talkNote } from './trajectoryLearner';
 
 const trj = (over: Partial<Trajectory> = {}): Trajectory => ({ ...blankTrajectory('Audit'), id: 'T1', status: 'live', published_at: '2026-09-10T08:00:00Z', ...over });
 const person = { line: 'Audit', stage: 'Consultant', audiences: [] as string[] };
@@ -74,6 +74,33 @@ describe('credentialLook', () => {
   });
 });
 it('dayLabel', () => expect(dayLabel('2026-02-03')).toBe('3 Feb 2026'));
+
+describe('renewal', () => {
+  it('a confirmed credential with a waiting renewal says so', () => {
+    expect(credentialLook(cred({ expires_on: '2026-11-20' }), NOW, 'Sam', true)).toMatchObject({ label: 'Renewal waiting for Sam', status: 'submitted' });
+  });
+  it('opens 30 days before expiry and stays open after it, for a confirmed credential still in the wallet', () => {
+    expect(RENEW_DAYS).toBe(30);
+    expect(canRenew(cred({ expires_on: '2026-12-17' }), NOW)).toBe(true);
+    expect(canRenew(cred({ expires_on: '2026-12-18' }), NOW)).toBe(false);
+    expect(canRenew(cred({ expires_on: '2025-01-01' }), NOW)).toBe(true);
+    expect(canRenew(cred(), NOW)).toBe(false);
+    expect(canRenew(cred({ expires_on: '2026-12-01', status: 'waiting' }), NOW)).toBe(false);
+    expect(canRenew(cred({ expires_on: '2026-12-01', superseded_at: '2026-11-01T00:00:00Z' }), NOW)).toBe(false);
+  });
+  it('a credential is held while confirmed, not superseded and not expired', () => {
+    expect(credentialHeld(cred(), NOW)).toBe(true);
+    expect(credentialHeld(cred({ expires_on: '2026-11-17' }), NOW)).toBe(true);
+    expect(credentialHeld(cred({ expires_on: '2026-11-16' }), NOW)).toBe(false);
+    expect(credentialHeld(cred({ status: 'waiting' }), NOW)).toBe(false);
+    expect(credentialHeld(cred({ superseded_at: '2026-11-01T00:00:00Z' }), NOW)).toBe(false);
+  });
+  it('a trajectory renewal runs valid_months from today, clamped to the month end as in Postgres', () => {
+    expect(renewedExpiry(NOW, 24)).toBe('2028-11-17');
+    expect(renewedExpiry(new Date('2027-01-31T10:00:00Z'), 1)).toBe('2027-02-28');
+    expect(renewedExpiry(NOW, null)).toBeNull();
+  });
+});
 
 describe('talkNote: the latest "talk first" comment the learner sees', () => {
   const talk = (over: Partial<TrjDecision> = {}): TrjDecision => ({ trajectoryId: 'T1', stepId: 's1', decision: 'talk', comment: 'Add the client file, please.', byName: 'Casey Boss', at: '2026-11-10T09:00:00Z', ...over });

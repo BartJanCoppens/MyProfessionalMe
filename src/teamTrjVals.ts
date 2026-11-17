@@ -7,7 +7,7 @@ import type { Member } from './logic/team';
 import { COMMENT_MAX, COMMENT_MIN } from './logic/record';
 import { canBeMandatory, mapAtStage, totals, trajectoryProgress } from './logic/trajectory';
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjStep } from './logic/trajectory';
-import { effectiveEnrolment } from './logic/trajectoryLearner';
+import { credentialHeld, dayLabel, effectiveEnrolment, renewedExpiry } from './logic/trajectoryLearner';
 import { fmtHours, stepTitle } from './logic/trajectoryView';
 import type { Logic } from './model';
 
@@ -100,12 +100,26 @@ function approvalRow(L: Logic, w: Waiting, canDecide: boolean, reload: (id: stri
   };
 }
 
-function credentialRow(L: Logic, member: Member, c: Credential, canDecide: boolean, reload: (id: string) => Promise<void>) {
-  const key = member.id + '|cred|' + c.id, first = member.name.split(' ')[0];
+// A renewal: the current expiry, and the one confirming gives (the learner's date for an external credential, today +
+// valid_months for a trajectory one; undefined when the trajectory is not loaded, null when it does not expire).
+function renewalLine(L: Logic, member: Member, c: Credential, now: Date) {
+  const old = member.trj?.creds.find((x) => x.id === c.renewal_of), first = member.name.split(' ')[0];
+  const t = c.trajectory_id ? L.state.trjs.find((x) => x.id === c.trajectory_id) : undefined;
+  const next = !c.trajectory_id ? c.expires_on : t ? renewedExpiry(now, t.valid_months) : undefined;
+  const nextLabel = next === undefined ? 'from the trajectory' : next === null ? 'does not expire' : dayLabel(next);
   return {
-    key, userId: member.id, initials: initialsOf(member.name), name: member.name, trj: c.issuer, kind: 'Credential', text: c.name + ' · ' + c.issuer,
-    proof: { link: c.link, note: '', ref: c.ref }, approveLabel: 'Confirm', talkForm: null,
-    approve: canDecide ? decideRow(L, key, member.id, reload, () => confirmCredential(c.id), 'Confirmed · ' + first + '\'s credential is in their wallet') : null,
+    text: c.name + ' · ' + c.issuer + ' · ' + (old?.expires_on ? 'expires ' + dayLabel(old.expires_on) : 'current expiry unknown') + ' → new expiry on confirm: ' + nextLabel,
+    done: next === undefined ? 'Renewed' : 'Renewed · ' + first + '\'s credential ' + (next === null ? 'does not expire' : 'now runs to ' + dayLabel(next)),
+  };
+}
+
+function credentialRow(L: Logic, member: Member, c: Credential, canDecide: boolean, reload: (id: string) => Promise<void>, now: Date) {
+  const key = member.id + '|cred|' + c.id, first = member.name.split(' ')[0];
+  const renewal = c.renewal_of ? renewalLine(L, member, c, now) : null;
+  return {
+    key, userId: member.id, initials: initialsOf(member.name), name: member.name, trj: c.issuer, kind: renewal ? 'Renewal' : 'Credential',
+    text: renewal ? renewal.text : c.name + ' · ' + c.issuer, proof: { link: c.link, note: '', ref: c.ref }, approveLabel: 'Confirm', talkForm: null,
+    approve: canDecide ? decideRow(L, key, member.id, reload, () => confirmCredential(c.id), renewal ? renewal.done : 'Confirmed · ' + first + '\'s credential is in their wallet') : null,
     talk: null,
   };
 }
@@ -113,8 +127,7 @@ function credentialRow(L: Logic, member: Member, c: Credential, canDecide: boole
 function tableRow(member: Member, t: Trajectory, e: Enrolment, now: Date) {
   const lib = library(member.data.progress), pg = trajectoryProgress(t, e, lib);
   const submitted = t.steps.filter((st) => PROOF_KINDS.includes(st.k) && e.steps[st.id]?.state === 'submitted');
-  const today = now.toISOString().slice(0, 10);
-  const earned = !!member.trj?.creds.some((c) => c.trajectory_id === t.id && c.status === 'confirmed' && (c.expires_on == null || c.expires_on >= today));
+  const earned = !!member.trj?.creds.some((c) => c.trajectory_id === t.id && credentialHeld(c, now));
   const [st, stLabel] = earned ? ['accepted', 'Credential earned'] : submitted.some((s) => s.k === 'check' || s.k === 'exam') ? ['submitted', 'Needs sign-off']
     : e.status === 'requested' || submitted.length ? ['submitted', 'Needs approval'] : ['in-progress', 'On track'];
   const next = e.status === 'requested' ? 'Waiting for your approval' : pg.complete ? 'All required steps done' : pg.next >= 0 ? stepTitle(t.steps[pg.next], titleOf) : 'Nothing open';
@@ -128,7 +141,7 @@ export function teamTrjVals(L: Logic, members: Member[], reload: (userId: string
   const now = new Date(), canDecide = !L.subject.readOnly, trjs = L.state.trjs;
   const approvals = [
     ...members.flatMap((m) => waitingFor(m, trjs)).map((w) => approvalRow(L, w, canDecide, reload)),
-    ...members.flatMap((m) => (m.trj?.creds ?? []).filter((c) => c.status === 'waiting').map((c) => credentialRow(L, m, c, canDecide, reload))),
+    ...members.flatMap((m) => (m.trj?.creds ?? []).filter((c) => c.status === 'waiting').map((c) => credentialRow(L, m, c, canDecide, reload, now))),
   ];
   // A person whose trajectory data or memberships did not load is named, never computed without them.
   const notLoaded = members.filter((m) => !m.trj || !m.audiences).map((m) => m.name);

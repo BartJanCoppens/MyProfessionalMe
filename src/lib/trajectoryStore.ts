@@ -1,6 +1,7 @@
 // Certification trajectories, enrolments and credentials, in Supabase. Rows are parsed at the boundary: a trajectory
 // with malformed steps or maps is dropped with a console warning, never thrown. Learners write enrolments only through
-// the RPCs below (request, withdraw, submit); the counsellor decides through decide_trajectory and confirm_credential.
+// the RPCs below (request, withdraw, submit, submit_renewal); the counsellor decides through decide_trajectory and
+// confirm_credential.
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjDecision, TrjMap, TrjStep } from '../logic/trajectory';
 import { inOrder } from './contentStore';
 import { supabase } from './supabase';
@@ -10,7 +11,7 @@ export type ExternalCredential = { name: string; issuer: string; earned_on: stri
 type TrajectoryRow = Omit<Trajectory, 'steps' | 'maps'> & { steps: unknown; maps: unknown };
 type EnrolmentRow = { trajectory_id: string; status: Enrolment['status']; start_month: number; steps: unknown; asked_at: string | null; created_at: string | null };
 type DecisionRow = { trajectory_id: string; step_id: string | null; decision: TrjDecision['decision']; comment: string | null; decided_by_name: string | null; decided_at: string };
-type CredentialRow = Omit<Credential, 'link' | 'ref'> & { link: string | null; ref: string | null };
+type CredentialRow = Omit<Credential, 'link' | 'ref' | 'renewal_of' | 'superseded_at'> & { link: string | null; ref: string | null; renewal_of: string | null; superseded_at: string | null };
 type Failure = { message: string; code?: string };
 
 const TRAJECTORY_COLUMNS = 'id, name, issuer, credential, enrol, months, valid_months, renewal, cost, status, business_line, steps, maps, published_at';
@@ -72,7 +73,7 @@ export async function loadDecisions(userId: string): Promise<TrjDecision[]> {
 
 export async function loadCredentials(userId: string): Promise<Credential[]> {
   const { data, error } = await supabase.from('credentials')
-    .select('id, user_id, name, issuer, earned_on, expires_on, link, ref, trajectory_id, status').eq('user_id', userId).order('earned_on', { ascending: false });
+    .select('id, user_id, name, issuer, earned_on, expires_on, link, ref, trajectory_id, status, renewal_of, superseded_at').eq('user_id', userId).order('earned_on', { ascending: false });
   fail(error);
   return ((data || []) as CredentialRow[]).map((r) => ({ ...r, link: r.link ?? '', ref: r.ref ?? '' }));
 }
@@ -85,7 +86,14 @@ export async function addExternalCredential(c: ExternalCredential): Promise<{ er
   return { error: failure(error) };
 }
 
-// The owner removes their own credential while it waits for the counsellor (a confirmed one stays).
+// From 30 days before a confirmed credential's expiry (and after it): proof of renewal, waiting for the counsellor.
+// expires: the new expiry of an external credential; null for a trajectory credential (set at confirmation).
+export async function submitRenewal(credentialId: string, proof: { link: string; ref: string; expires: string | null }): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('submit_renewal', { p_credential: credentialId, p_link: proof.link.trim() || null, p_ref: proof.ref.trim() || null, p_expires: proof.expires || null });
+  return { error: failure(error, 'A renewal of this credential is already waiting.') };
+}
+
+// The owner removes their own credential (or renewal) while it waits for the counsellor (a confirmed one stays).
 export async function removeCredential(id: string): Promise<{ error: string | null }> {
   const { data, error } = await supabase.from('credentials').delete().eq('id', id).select('id');
   if (error) return { error: failure(error) };

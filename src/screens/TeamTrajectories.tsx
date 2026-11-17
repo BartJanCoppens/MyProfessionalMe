@@ -15,7 +15,7 @@ export default function TeamTrajectories({ v }: { v: Vals }) {
       <div style={{ ...box, overflow: 'hidden' }}>
         <div style={{ padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#fafbf8' }}>
           <div style={{ fontWeight: 600 }}>Waiting for you · {v.approvalCount}</div>
-          <div style={{ fontSize: 12, color: '#5a6058' }}>Requests to start a trajectory that needs your approval, and evidence that needs your sign-off.{!v.canDecide && ' You are viewing as someone else: decisions are made from your own account.'}</div>
+          <div style={{ fontSize: 12, color: '#5a6058' }}>Requests to start a trajectory that needs your approval, evidence that needs your sign-off, and credentials and renewals to confirm.{!v.canDecide && ' You are viewing as someone else: decisions are made from your own account.'}</div>
         </div>
         {v.approvals.map((a) => (
           <div key={a.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', padding: '12px 18px', borderBottom: '1px solid #eef0ea' }}>
