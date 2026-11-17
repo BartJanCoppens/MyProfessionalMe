@@ -14,7 +14,7 @@ export function adminWarnings(t: Trajectory, byId: Record<string, LearningRef | 
   t.maps.filter((m) => m[2] === 'mandatory').forEach((m) => warns.push('Mandatory for ' + m[0] + ': needs a System or General Admin to publish.'));
   t.steps.forEach((st, i) => {
     if (st.k === 'exam' && !st.pre && i > 0) warns.push('Step ' + (i + 1) + ' (exam) has no prerequisite, so people could book it before the learnings are done.');
-    if (learningIds(st).some((id) => !byId[id])) warns.push('Step ' + (i + 1) + ' points at a learning that is no longer in the library.');
+    if (learningIds(st).some((id) => !byId[id])) warns.push('Step ' + (i + 1) + ' points at a learning that is unpublished or no longer in the library.');
   });
   if (!t.steps.some((st) => st.k === 'exam')) warns.push('No exam or assessment step: add one before the credential.');
   const year1 = totals(t, byId).perYear[0];

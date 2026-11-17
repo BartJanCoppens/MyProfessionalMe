@@ -4,6 +4,7 @@ import type { ChangeEvent } from 'react';
 import * as store from './lib/trajectoryStore';
 import type { Trajectory } from './logic/trajectory';
 import { blankTrajectory } from './logic/trajectoryEdit';
+import { LEARN_META } from './data';
 import type { Access, AppState } from './types';
 import { domainAdmin, flush, generalAdmin, harness, stubWindow, systemAdmin } from './test/harness';
 
@@ -222,6 +223,21 @@ describe('warnings and the learner\'s eye', () => {
     expect(h.vm().tj!.warns[0].text).toBe('Not saved until it has a name and a credential.');
     expect(setup([T('T1', { name: '' })]).vm().tj!.warns[0].text).toBe('Not saved until it has a name and a credential.');
     expect(setup([T('T1')]).vm().tj!.warns.map((w) => w.text)).not.toContain('Not saved until it has a name and a credential.');
+  });
+  it('warns about a step whose learning is not published (draft or needs review)', () => {
+    const was = LEARN_META.L1;
+    try {
+      LEARN_META.L1 = { line: null, status: 'draft' };
+      expect(setup([T('T1')]).vm().tj!.warns.map((w) => w.text)).toContain('Step 1 points at a learning that is unpublished or no longer in the library.');
+      LEARN_META.L1 = { line: null, status: 'review' };
+      expect(setup([T('T1')]).vm().tj!.warns.map((w) => w.text)).toContain('Step 1 points at a learning that is unpublished or no longer in the library.');
+    } finally { if (was) LEARN_META.L1 = was; else delete LEARN_META.L1; }
+    expect(setup([T('T1')]).vm().tj!.warns.map((w) => w.text)).not.toContain('Step 1 points at a learning that is unpublished or no longer in the library.');
+  });
+  it('promises only what happens: the counsellor accepts the exam, the wallet shows "Renew by"', () => {
+    const tj = setup([T('T1', { issuer: 'ITAA', valid_months: 24, renewal: '20 CPD units a year' })]).vm().tj!;
+    expect(tj.credMeta).toBe('ITAA · awarded when the counsellor accepts the exam · valid 2 years');
+    expect(tj.renewMeta).toBe('20 CPD units a year · the wallet shows "Renew by" 30 days before expiry');
   });
   it('counts the same trajectories on the tab and in the list', () => {
     const h = setup([T('T1'), T('T2', { status: 'retired' })]);

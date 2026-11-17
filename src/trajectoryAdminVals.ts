@@ -36,6 +36,7 @@ function refusal(L: Logic, t: Trajectory): string | null {
 }
 
 // Applies one edit to a trajectory: refused when the database would refuse it, else shown now and saved soon. Returns the result.
+// `change` may run more than once (here and in the state updater), so build random or one-off values outside it.
 function patch(L: Logic, id: string, change: (t: Trajectory) => Trajectory | null): Trajectory | null {
   const cur = L.state.trjs.find((t) => t.id === id), next = cur && change(cur);
   if (!cur || !next) return null;
@@ -57,7 +58,9 @@ async function startNew(L: Logic) {
   } catch (err) { notSaved(L)((err as Error).message); } finally { creating = false; }
 }
 
-const learningRefs = (): Record<string, LearningRef> => Object.fromEntries(LEARN.map((r) => [r[0], { hours: r[6], cpd: r[7], state: 'not-started' as const, pct: 0 }]));
+// Published learnings only (what learners see), so a step on a draft or a learning in review is warned about.
+const published = () => LEARN.filter((r) => (LEARN_META[r[0]]?.status ?? 'published') === 'published');
+const learningRefs = (): Record<string, LearningRef> => Object.fromEntries(published().map((r) => [r[0], { hours: r[6], cpd: r[7], state: 'not-started' as const, pct: 0 }]));
 const titleOf = (id: string) => LEARN_BY[id]?.[1] ?? id;
 const learningLine = (id: string) => (LEARN_BY[id] ? LEARN_BY[id][4] + ' · ' + fmtHours(LEARN_BY[id][6]) : '');
 const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud]?.lens);
@@ -69,7 +72,7 @@ export function trajectoryAdminVals(L: Logic) {
   s.trjs.forEach((t) => LATEST.set(t.id, t));
   const t = visible.find((x) => x.id === s.trjSel) ?? visible[0] ?? null;
   const byId = learningRefs();
-  const offerable = LEARN.filter((r) => (LEARN_META[r[0]]?.status ?? 'published') === 'published');
+  const offerable = published();
   const list = visible.map((x) => {
     const tot = totals(x, byId), on = !!t && x.id === t.id;
     return {
@@ -143,8 +146,8 @@ export function trajectoryAdminVals(L: Logic) {
     stats: [{ label: 'Steps', value: String(n), sub: tot.req + ' required' }, { label: 'Study hours', value: fmtHours(tot.tot), sub: 'electives at their minimum' }, { label: 'CPD units', value: String(tot.cpd), sub: t.issuer },
       { label: 'Duration', value: t.months + ' months', sub: 'from enrolment' }, { label: 'Hours per year', value: ySplit, sub: 'what counts toward the ' + YEARLY_GOAL + ' h budget' }],
     steps, credTitle: t.credential || 'Name the credential above', hasRenew: !!t.valid_months,
-    credMeta: t.issuer + ' · awarded when every required step is done · ' + (t.valid_months ? 'valid ' + (t.valid_months === 12 ? '1 year' : validLabel(t.valid_months)) : 'does not expire'),
-    renewTitle: 'Every ' + (t.valid_months ? validLabel(t.valid_months) : ''), renewMeta: (t.renewal || 'Describe the renewal rule above') + ' · people get a reminder 60 days before expiry',
+    credMeta: t.issuer + ' · awarded when the counsellor accepts the exam · ' + (t.valid_months ? 'valid ' + (t.valid_months === 12 ? '1 year' : validLabel(t.valid_months)) : 'does not expire'),
+    renewTitle: 'Every ' + (t.valid_months ? validLabel(t.valid_months) : ''), renewMeta: (t.renewal || 'Describe the renewal rule above') + ' · the wallet shows "Renew by" 30 days before expiry',
     learnOptions: learnChoices('Learning from the library…'), addLearn: (e: Change) => { if (e.target.value) add({ k: 'learn', lid: e.target.value }); },
     addElect: () => add({ k: 'elect' }), addEvidence: () => add({ k: 'evidence' }), addCheck: () => add({ k: 'check' }), addExam: () => add({ k: 'exam' }),
     maps, noMaps: !maps.length,

@@ -36,6 +36,6 @@ describe('adminWarnings', () => {
   });
   it('warns about a step whose learning left the library', () => {
     const t = { ...good, steps: [{ id: 's1', k: 'learn' as const, lid: 'gone', win: 1, req: true, pre: null }, good.steps[1]] };
-    expect(adminWarnings(t, byId, 200)).toEqual(['Step 1 points at a learning that is no longer in the library.']);
+    expect(adminWarnings(t, byId, 200)).toEqual(['Step 1 points at a learning that is unpublished or no longer in the library.']);
   });
 });
