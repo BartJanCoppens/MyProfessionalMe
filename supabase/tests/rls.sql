@@ -1929,8 +1929,8 @@ with i as (insert into public.contributions (business_line, type, title, domain,
   insert into results (check_name, expected, actual) select 'SC a Job aid made in its studio keeps its rows', '1 rows', count(*)||' rows' from i;
 insert into public.contributions (business_line, type, title, domain, takeaway, items, studio, shape) values
  ('Consulting','Case exercise','T sc case','tech','Decide, do not list options.','[["Brief","Two companies merged on 1 October."],["Deliverable","A day-100 roadmap"],["Deliverable","Three decisions for the CFO"],["Criterion","Realistic sequencing"]]','case',
-  '{"Can it count as trajectory evidence?":"Yes","Who reviews it?":"A peer"}'),
- ('Consulting','Case exercise','T sc case no','tech','Decide.','[["Brief","A merger."],["Deliverable","A roadmap"],["Deliverable","Decisions"],["Criterion","Realism"]]','case','{"Can it count as trajectory evidence?":"No"}'),
+  '{"Can it count as trajectory evidence?":"Yes","How long should it take?":"A full day"}'),
+ ('Consulting','Case exercise','T sc case no','tech','Decide.','[["Brief","A merger."],["Deliverable","A roadmap"],["Deliverable","Decisions"],["Criterion","Realism"]]','case','{"Can it count as trajectory evidence?":"No","How long should it take?":"2 hours"}'),
  ('Consulting','Case exercise','T sc case unanswered','tech','Decide.','[["Brief","A merger."],["Deliverable","A roadmap"],["Deliverable","Decisions"],["Criterion","Realism"]]','case',null),
  ('Consulting','Job aid','T sc aid one field','prof','x','[["Before"],["Before","b"],["During","c"],["After","d"]]','aid',null),
  ('Consulting','Job aid','T sc aid blank text','prof','x','[["Before"," "],["Before","b"],["During","c"],["After","d"]]','aid',null),
@@ -1959,6 +1959,15 @@ do $$ begin
   begin insert into public.contributions (business_line, type, title, domain, takeaway, items, studio, shape) values ('Consulting','Job aid','T sc shape number','prof','x',null,'aid','{"Template?":1}');
     insert into results (check_name, expected, actual) values ('SC every answer is text', 'blocked: 23514', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('SC every answer is text', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, items, studio, shape) values ('Consulting','Job aid','T sc shape inner list','prof','x',null,'aid','{"Template?":["x"]}');
+    insert into results (check_name, expected, actual) values ('SC a list of texts is not an answer', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('SC a list of texts is not an answer', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, items, studio, shape) values ('Consulting','Job aid','T sc shape empty list','prof','x',null,'aid','{"Template?":[]}');
+    insert into results (check_name, expected, actual) values ('SC an empty list is not an answer', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('SC an empty list is not an answer', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, shape) values ('Consulting','Podcast','T sc plain answers','prof','x','{"Format?":"Solo talk"}');
+    insert into results (check_name, expected, actual) values ('SC a plain upload carries no answers', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('SC a plain upload carries no answers', 'blocked: 23514', 'blocked: '||sqlstate); end;
 end $$;
 insert into results (check_name, expected, actual) select 'SC a row without a text fails the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sc aid one field')), '|');
 insert into results (check_name, expected, actual) select 'SC a blank text fails the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sc aid blank text')), '|');
@@ -1971,6 +1980,18 @@ do $$ begin
   begin perform public.submit_contribution((select id from public.contributions where title = 'T sc aid one field'));
     insert into results (check_name, expected, actual) values ('SC malformed rows are not sent', 'blocked: P0001', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('SC malformed rows are not sent', 'blocked: P0001', 'blocked: '||sqlstate); end;
+end $$;
+insert into public.contributions (business_line, type, title, domain, takeaway, items, studio, shape) values
+ ('Consulting','Job aid','T sc aid answers','prof','x','[["Before","a"],["Before","b"],["During","c"],["After","d"]]','aid','{"When is it used?":"Before a meeting"}'),
+ ('Consulting','Job aid','T sc aid client answer','prof','x','[["Before","a"],["Before","b"],["During","c"],["After","d"]]','aid','{"When is it used?":"For Delcroix"}');
+insert into results (check_name, expected, actual) select 'SC a client name in an answer fails the check', '“Delcroix” looks like a client name · anonymise it',
+  array_to_string(public.check_contribution((select id from public.contributions where title = 'T sc aid client answer')), '|');
+insert into results (check_name, expected, actual) select 'SC answers with rows pass the check', '{}', public.check_contribution((select id from public.contributions where title = 'T sc aid answers'))::text;
+update public.contributions set shape = '{"When is it used?":"After a deliverable"}' where title = 'T sc aid answers';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T sc aid answers'));
+    insert into results (check_name, expected, actual) values ('SC answers changed after the check', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('SC answers changed after the check', 'blocked: P0001', 'blocked: '||sqlstate); end;
 end $$;
 insert into results (check_name, expected, actual) select 'SC a clean job aid passes the check and is published', '{}/published',
   public.check_contribution((select id from public.contributions where title = 'T sc aid'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T sc aid'));
@@ -1985,10 +2006,16 @@ insert into results (check_name, expected, actual) select 'SC the case becomes c
   l.content::text from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sc case';
 insert into results (check_name, expected, actual) select 'SC a case answered No does not count as evidence: published', '{}/published',
   public.check_contribution((select id from public.contributions where title = 'T sc case no'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T sc case no'));
+insert into results (check_name, expected, actual) select 'SC a case of a full day counts 8 hours', '8', l.hours::numeric::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sc case';
+insert into results (check_name, expected, actual) select 'SC a case of 2 hours counts 2 hours', '2', l.hours::numeric::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sc case no';
 insert into results (check_name, expected, actual) select 'SC a case answered No does not count as evidence', 'false', l.content ->> 'evidence'
   from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sc case no';
 insert into results (check_name, expected, actual) select 'SC an unanswered case does not count as evidence: published', '{}/published',
   public.check_contribution((select id from public.contributions where title = 'T sc case unanswered'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T sc case unanswered'));
+insert into results (check_name, expected, actual) select 'SC an unanswered case counts half a day', '4', l.hours::numeric::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sc case unanswered';
 insert into results (check_name, expected, actual) select 'SC an unanswered case does not count as evidence', 'false', l.content ->> 'evidence'
   from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sc case unanswered';
 with u as (update public.contributions set items = '[["Brief","changed"]]' where title = 'T sc case' returning 1)
@@ -1998,5 +2025,11 @@ with u as (update public.contributions set shape = '{"Can it count as trajectory
 with u as (update public.contributions set shape = '{"Template?":"Checklist"}' where title = 'T sc aid one field' returning 1)
   insert into results (check_name, expected, actual) select 'SC the author changes the answers of a draft', '1 rows', count(*)||' rows' from u;
 reset role;
+-- past RLS (as the table owner, with the author's id), the guard still keeps the answers of a published contribution
+do $$ begin
+  begin update public.contributions set shape = '{"Can it count as trajectory evidence?":"No"}' where title = 'T sc case';
+    insert into results (check_name, expected, actual) values ('SC the guard keeps the answers of a published case', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('SC the guard keeps the answers of a published case', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
