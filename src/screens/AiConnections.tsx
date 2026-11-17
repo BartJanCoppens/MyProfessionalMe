@@ -1,5 +1,6 @@
 // Administration · AI connections (System Admins): the providers' connections with their keys (shown as a hint only),
-// and every place the app uses AI with the connection and model that serve it. Reads only from the view-model (aiVals).
+// every place the app uses AI with the connection and model that serve it, and the stock voices (also General Admins,
+// who see that section only). Reads only from the view-model (aiVals, voiceVals).
 import { Banner, Button, Drawer, Field, Hover, Input, LinkButton, PageTitle, PillToggle, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
 
@@ -16,14 +17,14 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
         <PageTitle title="AI connections" lead={ai.lead} />
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {ai.summary && <span style={{ fontSize: 12.5, color: '#5a6058' }}>{ai.summary}</span>}
-          <Button onClick={ai.addConnection}>+ Add connection</Button>
+          {ai.system && <Button onClick={ai.addConnection}>+ Add connection</Button>}
         </div>
       </div>
       {ai.designNote && <Banner tone="info">{ai.designNote}</Banner>}
       {ai.error && <Banner tone="warning" actions={<Button size="sm" variant="secondary" onClick={ai.retry}>Try again</Button>}>{ai.error}</Banner>}
       {ai.loading && <div style={{ color: '#8b918a' }}>Loading the AI settings</div>}
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {ai.system && <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={caps}>Connections</div>
         {ai.noConnections && <div style={{ ...card, padding: '14px 16px', color: '#5a6058' }}>No connections yet. Add one with its key; then choose it for the uses below.</div>}
         {ai.connections.map((c) => (
@@ -54,9 +55,9 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
             </div>
           </div>
         ))}
-      </section>
+      </section>}
 
-      {ai.groups.map((g) => (
+      {ai.system && ai.groups.map((g) => (
         <section key={g.kind} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={caps}>{g.label}</div>
           <div style={{ ...card, overflowX: 'auto' }}>
@@ -90,7 +91,9 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
         </section>
       ))}
 
-      {ai.usageTop.length > 0 && (
+      <StockVoices v={ai.voices} />
+
+      {ai.system && ai.usageTop.length > 0 && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={caps}>Most AI calls</div>
           <div style={{ ...card, padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -101,11 +104,13 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
       )}
 
       {ai.form && <ConnectionDrawer f={ai.form} />}
+      {ai.voices.form && <VoiceDrawer f={ai.voices.form} />}
       {ai.useEdit && (
         <Drawer title={ai.useEdit.title} subtitle="The ai function always sends this instruction first; the app's own context follows it. A person who reaches the daily limit gets the scripted reply until tomorrow (UTC)." onClose={ai.useEdit.cancel} width={480}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Field label="Fixed instruction" hint={ai.useEdit.count}><Textarea minHeight={140} aria-label="Fixed instruction" value={ai.useEdit.preamble} onChange={ai.useEdit.setPreamble} /></Field>
             <Field label="Calls per person per day" hint="0 stops the use for everyone."><Input aria-label="Calls per person per day" inputMode="numeric" value={ai.useEdit.limit} onChange={ai.useEdit.setLimit} /></Field>
+            {ai.useEdit.hasChars && <Field label="Characters per person per day" hint="Spoken characters; empty for no character limit."><Input aria-label="Characters per person per day" inputMode="numeric" value={ai.useEdit.chars} onChange={ai.useEdit.setChars} /></Field>}
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <Button onClick={ai.useEdit.save} disabled={ai.useEdit.busy}>Save</Button>
               <LinkButton tone="muted" onClick={ai.useEdit.cancel}>Cancel</LinkButton>
@@ -129,6 +134,49 @@ function ConnectionDrawer({ f }: { f: NonNullable<AiVM['form']> }) {
         <Field label={f.keyLabel} hint={f.keyHint}><Input type="password" autoComplete="off" value={f.key} onChange={f.setKey} placeholder="Paste the API key" /></Field>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <Button onClick={f.save} disabled={f.busy}>Save</Button>
+          <LinkButton tone="muted" onClick={f.cancel}>Cancel</LinkButton>
+        </div>
+      </div>
+    </Drawer>
+  );
+}
+
+// The voices creators may choose for narration: a role as the name, never a person; deactivated, never deleted.
+function StockVoices({ v }: { v: AiVM['voices'] }) {
+  return (
+    <section aria-label="Stock voices" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div style={caps}>Stock voices</div>
+        <Button size="sm" variant="secondary" onClick={v.add}>+ Add voice</Button>
+      </div>
+      {v.hearNote && <div style={{ fontSize: 12, color: '#8b918a' }}>{v.hearNote}</div>}
+      {v.loading && <div style={{ color: '#8b918a' }}>Loading the stock voices</div>}
+      {v.empty && <div style={{ ...card, padding: '14px 16px', color: '#5a6058' }}>No stock voices yet. Add the ElevenLabs voices creators may choose.</div>}
+      {v.rows.map((r) => (
+        <div key={r.id} style={{ ...card, padding: '10px 16px', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>{r.name}</div>
+            <div style={{ fontSize: 12, color: '#5a6058', marginTop: 2 }}>{r.meta}</div>
+          </div>
+          <Tag tone={r.active ? 'green' : 'neutral'}>{r.state}</Tag>
+          {r.canHear && <Button size="sm" variant="secondary" onClick={r.hear} disabled={r.hearing}>{r.hearing ? 'Loading the sample' : 'Hear the voice'}</Button>}
+          <LinkButton tone={r.active ? 'muted' : 'link'} onClick={r.toggle}>{r.toggleLabel}</LinkButton>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function VoiceDrawer({ f }: { f: NonNullable<AiVM['voices']['form']> }) {
+  return (
+    <Drawer title="Add a stock voice" subtitle="Only stock voices from the ElevenLabs voice library: never a copy of a colleague's voice." onClose={f.cancel} width={480}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Field label="Name, as a role" hint="A role and a description, never a person's name."><Input aria-label="Name, as a role" value={f.name} onChange={f.setName} placeholder="e.g. Narrator · warm, 40s" /></Field>
+        <Field label="ElevenLabs voice id"><Input aria-label="ElevenLabs voice id" value={f.voice_id} onChange={f.setVoiceId} placeholder="from the ElevenLabs voice library" /></Field>
+        <Field label="Language"><Input aria-label="Language" value={f.language} onChange={f.setLanguage} placeholder="e.g. en or nl-BE" /></Field>
+        <Field label="Accent (optional)"><Input aria-label="Accent" value={f.accent} onChange={f.setAccent} placeholder="e.g. British" /></Field>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <Button onClick={f.save} disabled={f.busy}>Add voice</Button>
           <LinkButton tone="muted" onClick={f.cancel}>Cancel</LinkButton>
         </div>
       </div>

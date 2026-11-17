@@ -1,10 +1,11 @@
 // Providers per kind of use, the status of a use, and the connection form check (mirror the database rules).
 import { describe, expect, it } from 'vitest';
-import { AI_USE_KEYS, answersText, blankForm, fits, formFor, formProblem, providersFor, statusOfUse } from './ai';
+import { AI_USE_KEYS, answersText, blankForm, fits, formFor, formProblem, providersFor, STOCK_VOICE_ID, statusOfUse, stockVoiceProblem } from './ai';
+import { VOICE_ID } from '../../supabase/functions/voice/core.ts';
 import type { AiConnection, AiUse } from './ai';
 
 const conn = (over: Partial<AiConnection> = {}): AiConnection => ({ id: 'c1', name: 'Claude', provider: 'anthropic', base_url: null, default_model: 'claude-opus-5-5', region: 'global', key_hint: 'abcd', ...over });
-const aiUse = (over: Partial<AiUse> = {}): AiUse => ({ key: 'profile_chat', label: 'Talk it through', description: '', place: 'My profile', kind: 'text', waiting_for: null, admins_only: false, connection_id: 'c1', model: null, enabled: true, preamble: '', daily_limit: 50, ...over });
+const aiUse = (over: Partial<AiUse> = {}): AiUse => ({ key: 'profile_chat', label: 'Talk it through', description: '', place: 'My profile', kind: 'text', waiting_for: null, admins_only: false, connection_id: 'c1', model: null, enabled: true, preamble: '', daily_limit: 50, daily_chars: null, ...over });
 
 describe('providers', () => {
   it('fit a use by its kind, as in private.ai_provider_fits', () => {
@@ -32,6 +33,34 @@ describe('statusOfUse', () => {
   it('names the feature a waiting use needs, whatever its connection', () => {
     const s = statusOfUse(aiUse({ kind: 'voice', waiting_for: 'the avatar studio', connection_id: 'c2' }), [conn({ id: 'c2', provider: 'elevenlabs' })]);
     expect(s).toEqual({ live: false, chip: 'not-started', label: 'Waiting for the avatar studio', why: 'The connection is stored for when it is built.' });
+  });
+});
+
+describe('a voice use', () => {
+  const voice = aiUse({ key: 'studio_voice', kind: 'voice', connection_id: 'c2' });
+  it('is live on an ElevenLabs connection with a key, without a model (as public.ai_live_uses)', () => {
+    expect(statusOfUse(voice, [conn({ id: 'c2', name: 'Voices', provider: 'elevenlabs', default_model: null })])).toEqual({ live: true, chip: 'accepted', label: 'Live', why: 'Speaks through Voices · eleven_multilingual_v2 (default)' });
+    expect(statusOfUse(voice, [conn({ id: 'c2', name: 'Voices', provider: 'elevenlabs', default_model: 'eleven_turbo_v2_5' })]).why).toBe('Speaks through Voices · eleven_turbo_v2_5 (connection default)');
+  });
+  it('is not live on an "other" connection, which the voice function does not call', () => {
+    expect(statusOfUse(voice, [conn({ id: 'c2', provider: 'other' })])).toMatchObject({ live: false, label: 'Browser voice · only ElevenLabs speaks' });
+    expect(statusOfUse({ ...voice, connection_id: null }, []).label).toBe('Browser voice · no connection');
+    expect(statusOfUse({ ...voice, enabled: false }, [conn({ id: 'c2', provider: 'elevenlabs' })])).toMatchObject({ label: 'Off', why: 'Switched off: the studios offer the browser voice for a preview only.' });
+  });
+});
+
+describe('a stock voice', () => {
+  it('takes the voice ids stock_voices and the voice function take', () => {
+    expect(STOCK_VOICE_ID.source).toBe(VOICE_ID.source);
+    expect(migrations).toContain("voice_id ~ '" + STOCK_VOICE_ID.source + "'");
+  });
+  it('is named as a role, with an id and a language', () => {
+    const f = { name: 'Narrator · warm, 40s', voice_id: 'tVoiceWarm01', language: 'en', accent: '' };
+    expect(stockVoiceProblem(f)).toBeNull();
+    expect(stockVoiceProblem({ ...f, name: ' ' })).toBe('Name the voice as a role, e.g. Narrator · warm, 40s');
+    expect(stockVoiceProblem({ ...f, voice_id: 'a/b' })).toBe('The ElevenLabs voice id is letters, digits, - and _');
+    expect(stockVoiceProblem({ ...f, language: 'e' })).toBe('Give the language, e.g. en or nl-BE');
+    expect(stockVoiceProblem({ ...f, accent: 'x'.repeat(41) })).toBe('The accent is at most 40 characters');
   });
 });
 

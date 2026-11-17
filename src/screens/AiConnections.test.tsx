@@ -1,43 +1,49 @@
 // @vitest-environment jsdom
 // The AI connections screen over a live view-model: connections with key hints only, the key field that clears after
-// saving, the uses grouped by kind with status, connection, model and on/off, and the instruction-and-limit editor.
+// saving, the uses grouped by kind with status, connection, model and on/off, the instruction-and-limit editor, and the
+// stock voices (System and General Admins) with their add form, (de)activation and sample.
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initState, Logic } from '../model';
 import * as store from '../lib/aiStore';
-import { cfg, person, systemAdmin } from '../test/harness';
+import * as voice from '../lib/voice';
+import { cfg, generalAdmin, person, systemAdmin } from '../test/harness';
 import type { AppState } from '../types';
-import type { AiAdmin } from '../logic/ai';
+import type { AiAdmin, StockVoice } from '../logic/ai';
 import AiConnectionsScreen from './AiConnections';
 
 vi.mock('../lib/aiStore', () => ({
   loadAiAdmin: vi.fn(), loadLiveUses: vi.fn(async () => []), saveConnection: vi.fn(async () => 'c9'), setKey: vi.fn(async () => {}),
   deleteConnection: vi.fn(async () => {}), updateUse: vi.fn(async () => {}), testConnection: vi.fn(async () => ({ ok: true, model: 'claude-opus-5-5' })), askAi: vi.fn(),
+  loadStockVoices: vi.fn(async () => []), addStockVoice: vi.fn(async () => {}), setStockVoiceActive: vi.fn(async () => {}),
 }));
+vi.mock('../lib/voice', async (orig) => ({ ...(await orig<typeof import('../lib/voice')>()), hearStockVoice: vi.fn(async () => 'data:audio/mpeg;base64,AAA') }));
 
 const data = (): AiAdmin => ({
   connections: [{ id: 'c1', name: 'Claude', provider: 'anthropic', base_url: null, default_model: 'claude-opus-5-5', region: 'global', key_hint: 'abcd' }],
   uses: [
-    { key: 'profile_chat', label: 'Talk it through', description: 'Profile chat', place: 'My profile', kind: 'text', waiting_for: null, admins_only: false, connection_id: 'c1', model: null, enabled: true, preamble: 'Only discuss learning.', daily_limit: 50 },
-    { key: 'kb_answer', label: 'Test retrieval answer', description: 'Answers tests', place: 'Knowledge library', kind: 'text', waiting_for: null, admins_only: true, connection_id: null, model: null, enabled: true, preamble: '', daily_limit: 50 },
-    { key: 'avatar_video', label: 'Avatar video', description: 'Talking avatar', place: 'Library', kind: 'avatar', waiting_for: 'the avatar studio', admins_only: false, connection_id: null, model: null, enabled: true, preamble: '', daily_limit: 50 },
+    { key: 'profile_chat', label: 'Talk it through', description: 'Profile chat', place: 'My profile', kind: 'text', waiting_for: null, admins_only: false, connection_id: 'c1', model: null, enabled: true, preamble: 'Only discuss learning.', daily_limit: 50, daily_chars: null },
+    { key: 'kb_answer', label: 'Test retrieval answer', description: 'Answers tests', place: 'Knowledge library', kind: 'text', waiting_for: null, admins_only: true, connection_id: null, model: null, enabled: true, preamble: '', daily_limit: 50, daily_chars: null },
+    { key: 'avatar_video', label: 'Avatar video', description: 'Talking avatar', place: 'Library', kind: 'avatar', waiting_for: 'the avatar studio', admins_only: false, connection_id: null, model: null, enabled: true, preamble: '', daily_limit: 50, daily_chars: null },
+    { key: 'studio_voice', label: 'Studio voice-over', description: 'Reads narration', place: 'Create & share', kind: 'voice', waiting_for: null, admins_only: false, connection_id: null, model: null, enabled: false, preamble: '', daily_limit: 50, daily_chars: 30000 },
   ],
   usage: { uses: { profile_chat: { today: 2, week: 5 } }, top: [{ name: 'Robin Test', calls: 5 }] },
 });
 
+const VOICES: StockVoice[] = [{ id: 'v1', name: 'Narrator · warm, 40s', voice_id: 'tVoiceWarm01', language: 'en', accent: 'British', active: true }];
 let current: AppState;
-function Live() {
-  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'adminAi', aiAdmin: data() }));
+function Live({ access = systemAdmin(), live = [] as string[] }) {
+  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'adminAi', aiAdmin: access.isSystem ? data() : null, stockVoices: VOICES, aiLive: live }));
   useEffect(() => { current = st; });
   const refs = { toastTimer: { current: undefined }, drag: { current: null }, file: { current: null }, chat: { current: null } };
-  const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, refs, systemAdmin(), person(), async () => {}).renderVals();
+  const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, refs, access, person(), async () => {}).renderVals();
   return <>{vm.ai && <AiConnectionsScreen ai={vm.ai} />}{vm.toast && <div role="status">{vm.toast}</div>}</>;
 }
 const click = async (name: string | RegExp) => { await act(async () => { fireEvent.click(screen.getAllByRole('button', { name })[0]); }); };
 const row = (key: string) => document.querySelector('[data-use="' + key + '"]') as HTMLElement;
 
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(store.loadAiAdmin).mockResolvedValue(data()); });
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(store.loadAiAdmin).mockResolvedValue(data()); vi.mocked(store.loadStockVoices).mockResolvedValue(VOICES); });
 afterEach(cleanup);
 
 describe('the AI connections screen', () => {
@@ -45,7 +51,7 @@ describe('the AI connections screen', () => {
     render(<Live />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('AI connections');
     expect(screen.getByText('Key ····abcd')).toBeTruthy();
-    expect(screen.getByText('1 of 3 uses live · 1 connection')).toBeTruthy();
+    expect(screen.getByText('1 of 4 uses live · 1 connection')).toBeTruthy();
     expect(screen.getByText('Text and assistants')).toBeTruthy();
     expect(screen.getByText('Avatars')).toBeTruthy();
     expect(within(row('profile_chat')).getByText('Live')).toBeTruthy();
@@ -103,5 +109,47 @@ describe('the AI connections screen', () => {
     expect(screen.getByText('Remove it and its key?')).toBeTruthy();
     await click('Remove');
     expect(store.deleteConnection).toHaveBeenCalledWith('c1');
+  });
+});
+
+describe('the stock voices', () => {
+  it('lists the voices with their state, and offers a sample only while the voice is live', async () => {
+    const { unmount } = render(<Live />);
+    const section = screen.getByRole('region', { name: 'Stock voices' });
+    expect(within(section).getByText('Narrator · warm, 40s')).toBeTruthy();
+    expect(within(section).getByText('en · British · ElevenLabs id tVoiceWarm01')).toBeTruthy();
+    expect(within(section).getByText('Offered to creators')).toBeTruthy();
+    expect(within(section).queryByRole('button', { name: 'Hear the voice' })).toBeNull();
+    expect(within(section).getByText(/Hear the voices once Studio voice-over is live/)).toBeTruthy();
+    unmount();
+    vi.stubGlobal('Audio', vi.fn(function (this: { play: () => Promise<void> }) { this.play = async () => {}; }));
+    render(<Live live={['studio_voice']} />);
+    await click('Hear the voice');
+    expect(voice.hearStockVoice).toHaveBeenCalledWith('tVoiceWarm01');
+    vi.unstubAllGlobals();
+  });
+  it('adds a voice in the drawer and deactivates one', async () => {
+    render(<Live />);
+    await click('+ Add voice');
+    fireEvent.change(screen.getByLabelText('Name, as a role'), { target: { value: 'Coach · bright, 20s' } });
+    fireEvent.change(screen.getByLabelText('ElevenLabs voice id'), { target: { value: 'tVoiceBright3' } });
+    await click('Add voice');
+    expect(store.addStockVoice).toHaveBeenCalledWith({ name: 'Coach · bright, 20s', voice_id: 'tVoiceBright3', language: 'en', accent: '' });
+    await click('Deactivate');
+    expect(store.setStockVoiceActive).toHaveBeenCalledWith('v1', false);
+  });
+  it('shows a General Admin the stock voices only', () => {
+    render(<Live access={generalAdmin()} />);
+    expect(screen.getByRole('region', { name: 'Stock voices' })).toBeTruthy();
+    expect(screen.queryByText('Connections')).toBeNull();
+    expect(screen.queryByRole('button', { name: '+ Add connection' })).toBeNull();
+    expect(screen.queryByText('Text and assistants')).toBeNull();
+  });
+  it('edits a voice use\'s characters a day', async () => {
+    render(<Live />);
+    await act(async () => { fireEvent.click(within(row('studio_voice')).getByRole('button', { name: 'Instruction and limit' })); });
+    fireEvent.change(screen.getByLabelText('Characters per person per day'), { target: { value: '12000' } });
+    await click('Save');
+    expect(store.updateUse).toHaveBeenCalledWith('studio_voice', { preamble: '', daily_limit: 50, daily_chars: 12000 });
   });
 });

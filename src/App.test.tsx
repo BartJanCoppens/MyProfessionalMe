@@ -144,8 +144,8 @@ describe('the sidebar', () => {
     button('Sign out');
     expect(a.signOut).toHaveBeenCalled();
   });
-  it('shows AI connections to System Admins only, and sends anyone else who opens it from the URL to the map', async () => {
-    for (const acc of [{ isGeneral: true }, { domains: ['Audit'] }, {}]) {
+  it('shows AI connections to System and General Admins only, and sends anyone else who opens it from the URL to the map', async () => {
+    for (const acc of [{ domains: ['Audit'] }, {}]) {
       window.history.replaceState({}, '', '/?screen=adminAi');
       setup({ a: auth({}, acc) });
       expect(heading()).toEqual(['Your growth map']);
@@ -159,6 +159,14 @@ describe('the sidebar', () => {
     nav('AI connections');
     expect(heading()).toEqual(['AI connections']);
     expect(await screen.findByText('Key ····abcd')).toBeTruthy();
+    cleanup();
+    // A General Admin manages the stock voices there, and reads nothing of the connections.
+    db.calls.length = 0;
+    db.answer((c) => c.table === 'stock_voices' ? { data: [{ id: 'v1', name: 'Narrator · warm, 40s', voice_id: 'tVoiceWarm01', language: 'en', accent: null, active: true }] } : { data: [] });
+    setup({ a: auth({}, { isGeneral: true }) });
+    nav('AI connections');
+    expect(await screen.findByText('Narrator · warm, 40s')).toBeTruthy();
+    expect(db.on('ai_connections')).toHaveLength(0);
   });
   it('asks once which AI uses are live, for every signed-in person', async () => {
     db.answer((c) => ({ data: c.table === 'rpc:ai_live_uses' ? ['profile_chat'] : [] }));

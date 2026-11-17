@@ -8,11 +8,11 @@ import type { AiAdmin, AiConnection, AiUse } from './logic/ai';
 
 vi.mock('./lib/aiStore', () => ({
   loadAiAdmin: vi.fn(), loadLiveUses: vi.fn(async () => []), saveConnection: vi.fn(async () => 'c9'), setKey: vi.fn(async () => {}),
-  deleteConnection: vi.fn(async () => {}), updateUse: vi.fn(async () => {}), testConnection: vi.fn(), askAi: vi.fn(),
+  deleteConnection: vi.fn(async () => {}), updateUse: vi.fn(async () => {}), testConnection: vi.fn(), askAi: vi.fn(), loadStockVoices: vi.fn(async () => []),
 }));
 
 const conn = (over: Partial<AiConnection> = {}): AiConnection => ({ id: 'c1', name: 'Claude', provider: 'anthropic', base_url: null, default_model: 'claude-opus-5-5', region: 'global', key_hint: 'abcd', ...over });
-const aiUse = (over: Partial<AiUse> = {}): AiUse => ({ key: 'profile_chat', label: 'Talk it through', description: 'Profile chat', place: 'My profile', kind: 'text', waiting_for: null, admins_only: false, connection_id: 'c1', model: null, enabled: true, preamble: '', daily_limit: 50, ...over });
+const aiUse = (over: Partial<AiUse> = {}): AiUse => ({ key: 'profile_chat', label: 'Talk it through', description: 'Profile chat', place: 'My profile', kind: 'text', waiting_for: null, admins_only: false, connection_id: 'c1', model: null, enabled: true, preamble: '', daily_limit: 50, daily_chars: null, ...over });
 const admin = (): AiAdmin => ({
   connections: [conn(), conn({ id: 'c2', name: 'Voices', provider: 'elevenlabs', default_model: null, key_hint: null })],
   uses: [aiUse(), aiUse({ key: 'kb_answer', label: 'Test retrieval answer', connection_id: null, admins_only: true }), aiUse({ key: 'avatar_voice', label: 'Avatar voice', kind: 'voice', waiting_for: 'the avatar studio', connection_id: null })],
@@ -25,17 +25,18 @@ beforeEach(() => { stubWindow(); vi.clearAllMocks(); vi.mocked(store.loadAiAdmin
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('who sees the AI connections page', () => {
-  it('only a System Admin gets the nav item and the page', () => {
+  it('a System Admin gets the nav item and the whole page; a General Admin its stock voices only (voiceVals.test.ts)', () => {
     expect(page().vm()).toMatchObject({ showAi: true, navAi: true });
-    expect(page().vm().ai).not.toBeNull();
-    for (const access of [generalAdmin(), domainAdmin(['Audit']), member()]) {
+    expect(page().vm().ai).toMatchObject({ system: true });
+    expect(harness({ access: generalAdmin(), state: { screen: 'adminAi' } }).vm().ai).toMatchObject({ system: false });
+    for (const access of [domainAdmin(['Audit']), member()]) {
       const h = harness({ access, state: { screen: 'adminAi', aiAdmin: admin() } });
       expect(h.vm().showAi).toBe(false);
       expect(h.vm().ai).toBeNull();
     }
   });
   it('sends anyone else to the map', () => {
-    const h = harness({ access: generalAdmin() });
+    const h = harness({ access: domainAdmin(['Consulting']) });
     h.L().go('adminAi');
     expect(h.state.screen).toBe('map');
     const sa = page({ screen: 'map' });
@@ -67,7 +68,7 @@ describe('the connections list', () => {
   it('shows each connection with its key hint, never a key, and what it serves', () => {
     const [c1, c2] = page().vm().ai!.connections;
     expect(c1).toMatchObject({ name: 'Claude', provider: 'Anthropic (Claude)', meta: 'api.anthropic.com · default model claude-opus-5-5 · global', keyLabel: 'Key ····abcd', usedBy: 'Serves Talk it through', canTest: true });
-    expect(c2).toMatchObject({ keyLabel: 'No key stored', usedBy: 'Serves no use yet', canTest: false, testNote: 'Stored for later · the app does not call it yet' });
+    expect(c2).toMatchObject({ keyLabel: 'No key stored', usedBy: 'Serves no use yet', canTest: false, testNote: 'Check it by hearing a stock voice' });
     expect(page().vm().ai!.summary).toBe('1 of 3 uses live · 2 connections');
   });
   it('adds a connection, stores its key and clears the key field', async () => {
@@ -245,6 +246,22 @@ describe('guard rails on the page and in the app', () => {
     await h.vm().ai!.useEdit!.save(); await flush();
     expect(h.state.aiUseEdit).not.toBeNull();
     expect(h.lastToast()).toBe('Only a System Admin can change AI uses');
+  });
+  it('edits a voice use\'s daily characters too, and shows them in its usage line', async () => {
+    const studio = aiUse({ key: 'studio_voice', label: 'Studio voice-over', kind: 'voice', connection_id: 'c2', daily_chars: 30000 });
+    const h = page({ aiAdmin: { ...admin(), uses: [studio] } });
+    const u = h.vm().ai!.groups[0].uses[0];
+    expect(u.usageLine).toBe('0 calls today · 0 in 7 days · limit 50 a day per person · 30000 characters a day');
+    expect(h.vm().ai!.useEdit).toBeNull();
+    u.editInstruction();
+    const e = () => h.vm().ai!.useEdit!;
+    expect(e()).toMatchObject({ chars: '30000', hasChars: true });
+    e().setChars(ev('many'));
+    await e().save();
+    expect(h.lastToast()).toBe('The daily characters are a whole number from 0 to 10000000');
+    e().setChars(ev('20000'));
+    await e().save(); await flush();
+    expect(store.updateUse).toHaveBeenCalledWith('studio_voice', { preamble: '', daily_limit: 50, daily_chars: 20000 });
   });
   it('says when the daily limit is reached and gives the scripted reply', async () => {
     const msg = 'Daily AI limit reached (50 a day per person for this use); the scripted reply is used until tomorrow (UTC)';

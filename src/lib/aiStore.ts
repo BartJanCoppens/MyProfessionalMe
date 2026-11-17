@@ -1,7 +1,8 @@
 // AI connections in Supabase. Connection metadata and uses are System Admin only (RLS); a key goes in through
 // ai_set_key() into Vault and never comes back, only its last four characters. Answers come from the `ai` edge function.
+// Stock voices: System and General Admins add and (de)activate them; nobody deletes one (RLS).
 import { supabase } from './supabase';
-import type { AiAdmin, AiConnection, AiForm, AiUsage, AiUse } from '../logic/ai';
+import type { AiAdmin, AiConnection, AiForm, AiUsage, AiUse, StockVoice, StockVoiceForm } from '../logic/ai';
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 // Calls an AI edge function (`ai`, `voice`). Throws the function's own error message (e.g. "This AI use is not live …")
@@ -19,7 +20,7 @@ export async function invokeFunction<T>(name: 'ai' | 'voice', body: Record<strin
 export async function loadAiAdmin(): Promise<AiAdmin> {
   const [c, u, n] = await Promise.all([
     supabase.from('ai_connections').select('id, name, provider, base_url, default_model, region, key_hint, updated_at').order('name'),
-    supabase.from('ai_uses').select('key, label, description, place, kind, waiting_for, admins_only, connection_id, model, enabled, preamble, daily_limit').order('sort'),
+    supabase.from('ai_uses').select('key, label, description, place, kind, waiting_for, admins_only, connection_id, model, enabled, preamble, daily_limit, daily_chars').order('sort'),
     supabase.rpc('ai_usage_summary'),
   ]);
   fail(c.error || u.error || n.error);
@@ -57,10 +58,30 @@ export async function deleteConnection(id: string) {
   if (!(data as unknown[] | null)?.length) throw new Error('Only a System Admin can remove AI connections');
 }
 
-export async function updateUse(key: string, patch: Partial<Pick<AiUse, 'connection_id' | 'model' | 'enabled' | 'preamble' | 'daily_limit'>>) {
+export async function updateUse(key: string, patch: Partial<Pick<AiUse, 'connection_id' | 'model' | 'enabled' | 'preamble' | 'daily_limit' | 'daily_chars'>>) {
   const { data, error } = await supabase.from('ai_uses').update(patch).eq('key', key).select('key');
   fail(error);
   if (!(data as unknown[] | null)?.length) throw new Error('Only a System Admin can change AI uses');
+}
+
+// Admins read every voice; anyone else only the active ones (RLS).
+export async function loadStockVoices(): Promise<StockVoice[]> {
+  const { data, error } = await supabase.from('stock_voices').select('id, name, voice_id, language, accent, active').order('name');
+  fail(error);
+  return (data || []) as StockVoice[];
+}
+
+export async function addStockVoice(f: StockVoiceForm) {
+  const { data, error } = await supabase.from('stock_voices').insert({ ...f, accent: f.accent || null }).select('id');
+  if (error && /duplicate key|stock_voices_voice_id_key/i.test(error.message)) throw new Error('That ElevenLabs voice id is on the list already');
+  fail(error);
+  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can add stock voices');
+}
+
+export async function setStockVoiceActive(id: string, active: boolean) {
+  const { data, error } = await supabase.from('stock_voices').update({ active }).eq('id', id).select('id');
+  fail(error);
+  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can change stock voices');
 }
 
 export const testConnection = (id: string) => invokeFunction<{ ok: boolean; model?: string; error?: string }>('ai', { action: 'test', connection_id: id });

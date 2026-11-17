@@ -5,7 +5,7 @@ import type { Trajectory } from './logic/trajectory';
 import type { TrjMine } from './logic/trajectoryLearner';
 import type { QueueRow } from './lib/recordStore';
 import type { RosterRow } from './lib/attendanceStore';
-import type { AiAdmin, AiForm, AiUseEdit } from './logic/ai';
+import type { AiAdmin, AiForm, AiUseEdit, StockVoice, StockVoiceForm } from './logic/ai';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
 export type Learn = [string, string, string, number, string, string, number, number, string, string];
 // learning id, stage, obligation
@@ -153,6 +153,8 @@ export type AppState = {
   // The AI connections page (System Admin): its data, the connection form (with a typed key until it is saved) and test results.
   aiLive: string[]; aiOut: Record<string, 'ai' | 'scripted'>;
   aiAdmin: AiAdmin | null; aiError: string | null; aiBusy: boolean; aiForm: AiForm | null; aiConfirm: string | null; aiUseEdit: AiUseEdit | null; aiTests: Record<string, { ok: boolean | null; text: string }>;
+  // Stock voices (System and General Admins, same page): the list, the add form, and the voice whose sample is loading.
+  stockVoices: StockVoice[] | null; voiceForm: StockVoiceForm | null; voiceHearing: string | null;
 };
 
 export type StepDraft = { link: string; ref: string; note: string };

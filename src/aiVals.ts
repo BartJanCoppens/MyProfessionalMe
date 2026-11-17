@@ -1,10 +1,12 @@
-// AI connections view-model (Administration, System Admins only), split out of Logic.renderVals(). The data lives in
-// Supabase (src/lib/aiStore.ts) and is loaded into AppState when the page opens; keys go to Vault and never come back.
+// AI connections view-model (Administration), split out of Logic.renderVals(). System Admins see the whole page; a
+// General Admin its stock voices only (voiceVals.ts). The data lives in Supabase (src/lib/aiStore.ts) and is loaded into
+// AppState when the page opens; keys go to Vault and never come back.
 import type { ChangeEvent, FocusEvent, KeyboardEvent } from 'react';
 import type { Logic } from './model';
 import { answersText, blankForm, fits, formFor, formProblem, KIND_LABEL, KINDS, PREAMBLE_MAX, PROVIDER_KEYS, PROVIDERS, statusOfUse, aiUseEditProblem } from './logic/ai';
 import type { AiForm, AiProvider, AiUse } from './logic/ai';
-import { deleteConnection, loadAiAdmin, loadLiveUses, saveConnection, setKey, testConnection, updateUse } from './lib/aiStore';
+import { deleteConnection, loadAiAdmin, loadLiveUses, loadStockVoices, saveConnection, setKey, testConnection, updateUse } from './lib/aiStore';
+import { stockVoicesVals } from './voiceVals';
 
 type Field = ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
 const times = (n: number) => n + (n === 1 ? ' call' : ' calls');
@@ -14,14 +16,18 @@ export async function refreshAiLive(L: Logic) {
   try { const live = await loadLiveUses(); L.setState({ aiLive: live }); } catch { L.setState({ aiLive: [] }); }
 }
 
-// The page's data. Only a System Admin loads it (RLS returns nothing to anyone else).
+// The page's data: connections and uses for a System Admin (RLS returns nothing to anyone else), stock voices for System
+// and General Admins.
 export async function loadAiPage(L: Logic) {
-  if (!L.access.isSystem) return;
-  try { const d = await loadAiAdmin(); L.setState({ aiAdmin: d, aiError: null }); } catch (err) { L.setState({ aiError: (err as Error).message }); }
+  if (!L.access.isSystem && !L.access.isGeneral) return;
+  try {
+    const [d, voices] = await Promise.all([L.access.isSystem ? loadAiAdmin() : null, loadStockVoices()]);
+    L.setState({ ...(d ? { aiAdmin: d } : {}), stockVoices: voices, aiError: null });
+  } catch (err) { L.setState({ aiError: (err as Error).message }); }
 }
 
 // One write at a time; afterwards the page and the live list reload, so labels everywhere follow at once.
-async function write(L: Logic, fn: () => Promise<unknown>, done: string) {
+export async function write(L: Logic, fn: () => Promise<unknown>, done: string) {
   if (L.state.aiBusy) return false;
   L.setState({ aiBusy: true });
   let ok = true;
@@ -47,7 +53,8 @@ async function saveUseEdit(L: Logic) {
   const e = L.state.aiUseEdit; if (!e) return;
   const problem = aiUseEditProblem(e); if (problem) { L.say(problem); return; }
   const label = L.state.aiAdmin?.uses.find((u) => u.key === e.key)?.label || e.key;
-  if (await write(L, () => updateUse(e.key, { preamble: e.preamble.trim(), daily_limit: Number(e.limit) }), label + ' · instruction and daily limit saved')) L.setState({ aiUseEdit: null });
+  const chars = e.chars === null ? {} : { daily_chars: e.chars.trim() ? Number(e.chars) : null };
+  if (await write(L, () => updateUse(e.key, { preamble: e.preamble.trim(), daily_limit: Number(e.limit), ...chars }), label + ' · instruction and daily limit saved')) L.setState({ aiUseEdit: null });
 }
 
 async function test(L: Logic, id: string) {
@@ -60,7 +67,8 @@ async function test(L: Logic, id: string) {
 
 export function aiVals(L: Logic) {
   const s = L.state;
-  return { navAi: s.screen === 'adminAi', goAi: () => L.go('adminAi'), showAi: L.access.isSystem, ai: s.screen === 'adminAi' && L.access.isSystem ? aiScreen(L) : null };
+  const may = L.access.isSystem || !!L.access.isGeneral;
+  return { navAi: s.screen === 'adminAi', goAi: () => L.go('adminAi'), showAi: may, ai: s.screen === 'adminAi' && may ? aiScreen(L) : null };
 }
 
 function aiScreen(L: Logic) {
@@ -79,7 +87,8 @@ function aiScreen(L: Logic) {
       meta: [c.base_url || (c.provider === 'anthropic' ? 'api.anthropic.com' : ''), c.default_model ? 'default model ' + c.default_model : 'no default model', c.region || ''].filter(Boolean).join(' · '),
       keyLabel: c.key_hint ? 'Key ····' + c.key_hint : 'No key stored', hasKey: !!c.key_hint,
       usedBy: usedBy.length ? 'Serves ' + usedBy.join(', ') : 'Serves no use yet',
-      canTest: answersText(c.provider) && !!c.key_hint, testNote: answersText(c.provider) ? (c.key_hint ? '' : 'Store a key to test it') : 'Stored for later · the app does not call it yet',
+      canTest: answersText(c.provider) && !!c.key_hint,
+      testNote: answersText(c.provider) ? (c.key_hint ? '' : 'Store a key to test it') : c.provider === 'elevenlabs' ? 'Check it by hearing a stock voice' : 'Stored for later · the app does not call it yet',
       testing: t?.ok === null, testText: t ? t.text : '', testTone: !t || t.ok === null ? 'neutral' : t.ok ? 'green' : 'orange',
       test: () => test(L, c.id),
       edit: () => L.setState({ aiForm: formFor(c) }),
@@ -108,16 +117,18 @@ function aiScreen(L: Logic) {
         },
         modelKeyDown: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') e.currentTarget.blur(); },
         enabled: u.enabled, toggle: () => write(L, () => updateUse(u.key, { enabled: !u.enabled }), u.label + (u.enabled ? ' switched off' : ' switched on')),
-        usageLine: u.waiting_for ? '' : times(usage.uses[u.key]?.today || 0) + ' today · ' + (usage.uses[u.key]?.week || 0) + ' in 7 days · limit ' + u.daily_limit + ' a day per person',
+        usageLine: u.waiting_for ? '' : times(usage.uses[u.key]?.today || 0) + ' today · ' + (usage.uses[u.key]?.week || 0) + ' in 7 days · limit ' + u.daily_limit + ' a day per person' + (u.daily_chars != null ? ' · ' + u.daily_chars + ' characters a day' : ''),
         instruction: u.preamble ? 'Instruction: ' + (u.preamble.length > 90 ? u.preamble.slice(0, 88) + '…' : u.preamble) : 'No fixed instruction',
-        editInstruction: () => L.setState({ aiUseEdit: { key: u.key, preamble: u.preamble, limit: String(u.daily_limit) } }),
+        editInstruction: () => L.setState({ aiUseEdit: { key: u.key, preamble: u.preamble, limit: String(u.daily_limit), chars: u.kind === 'voice' ? String(u.daily_chars ?? '') : null } }),
       };
     }),
   })).filter((g) => g.uses.length);
 
+  const system = L.access.isSystem;
   return {
-    lead: 'Store the API keys of the AI providers and choose which connection serves each place the app uses AI. Keys go into the Supabase vault: nobody can read them back, only their last four characters. A use that is not live keeps its scripted reply, labelled as scripted.',
-    loading: !a && !s.aiError, error: s.aiError, retry: () => { L.setState({ aiError: null }); loadAiPage(L); }, busy: s.aiBusy,
+    system, voices: stockVoicesVals(L, write),
+    lead: !system ? 'The stock voices creators may choose for narration. Name each voice as a role, never as a person; a voice is deactivated, never deleted. A System Admin manages the connections and keys.' : 'Store the API keys of the AI providers and choose which connection serves each place the app uses AI. Keys go into the Supabase vault: nobody can read them back, only their last four characters. A use that is not live keeps its scripted reply, labelled as scripted.',
+    loading: system && !a && !s.aiError, error: s.aiError, retry: () => { L.setState({ aiError: null }); loadAiPage(L); }, busy: s.aiBusy,
     summary: a ? live.length + ' of ' + uses.length + ' uses live · ' + conns.length + ' connection' + (conns.length === 1 ? '' : 's') : '',
     designNote: typeof window !== 'undefined' && window.claude?.complete ? 'Inside Claude Design its own model answers first; these settings apply everywhere else.' : '',
     connections, noConnections: !!a && !conns.length,
@@ -127,6 +138,8 @@ function aiScreen(L: Logic) {
     useEdit: s.aiUseEdit ? {
       title: (uses.find((u) => u.key === s.aiUseEdit!.key)?.label || '') + ' · instruction and limit',
       preamble: s.aiUseEdit.preamble, limit: s.aiUseEdit.limit, count: s.aiUseEdit.preamble.length + ' of ' + PREAMBLE_MAX + ' characters',
+      chars: s.aiUseEdit.chars ?? '', hasChars: s.aiUseEdit.chars !== null,
+      setChars: (e: Field) => { const v = e.target.value; L.setState((st) => ({ aiUseEdit: st.aiUseEdit && { ...st.aiUseEdit, chars: v } })); },
       setPreamble: (e: Field) => { const v = e.target.value; L.setState((st) => ({ aiUseEdit: st.aiUseEdit && { ...st.aiUseEdit, preamble: v } })); },
       setLimit: (e: Field) => { const v = e.target.value; L.setState((st) => ({ aiUseEdit: st.aiUseEdit && { ...st.aiUseEdit, limit: v } })); },
       save: () => saveUseEdit(L), cancel: () => L.setState({ aiUseEdit: null }), busy: s.aiBusy,

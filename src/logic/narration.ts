@@ -7,7 +7,9 @@ import { CUE_MARK, NEXT_MARK, spoken } from '../../supabase/functions/_shared/na
 
 export { CUE_MARK, NEXT_MARK, spoken } from '../../supabase/functions/_shared/narrationText.ts';
 
-export type RunMark = { kind: 'next' | 'cue'; at: number };
+import type { Mark } from '../../supabase/functions/_shared/narrationText.ts';
+
+export type RunMark = Mark;
 // audio: a URL the browser can play (a signed URL of the stored file); none for a timed step.
 export type RunStep = { part: string; seconds: number; marks: RunMark[]; audio?: string };
 // A part of a narration (a slide, a chapter, a frame) with its words and, once voiced, its audio.
