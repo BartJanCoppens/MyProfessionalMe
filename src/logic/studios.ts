@@ -6,9 +6,13 @@ import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, isQuestion, rowFieldMax } from 
 import { isDrawing } from './motionSvg';
 import type { MotionDrawing } from './motionSvg';
 
-// steersAi: the answer only steers the AI draft (the studio says so); without it the answer changes what is published.
-export type StudioQuestion = [question: string, options: string[], steersAi?: boolean];
-export type ProduceRow = [label: string, options: string[], steersAi?: boolean];
+// steers: what the answer only steers, which the studio says under it (STEERS): the AI draft ('draft'), the next AI
+// draft (a Produce answer, after the Draft step: 'redraft') or the AI animation ('animation'). Without it the answer
+// changes what is published.
+export type Steers = 'draft' | 'redraft' | 'animation';
+export const STEERS: Record<Steers, string> = { draft: 'Steers the AI draft', redraft: 'Used when you draft again', animation: 'Steers the AI animation' };
+export type StudioQuestion = [question: string, options: string[], steers?: Steers];
+export type ProduceRow = [label: string, options: string[], steers?: Steers];
 export type BuildStep = string;
 export type StudioItem = [label: string, text: string] | [label: string, text: string, text2: string];
 // What a studio's items hold: its rows and, after them, the Explainer's three exam questions of its check or the

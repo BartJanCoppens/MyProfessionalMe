@@ -85,8 +85,8 @@ describe('the drawing in the item store', () => {
 describe('the Motion Studio offers only what it delivers', () => {
   it('is available; "What moves?", "Style" and "Pace" steer the AI drawing, "Length?" is published, "Sound?" is gone', () => {
     expect(def.available).toBe(true);
-    expect(def.qs).toEqual([['What moves?', ['A process flow', 'A data flow', 'A timeline'], true], [MOTION_LENGTH, ['20 s', '45 s', '90 s']]]);
-    expect(def.rows).toEqual([['Style', ['Boxes and arrows', 'Swimlanes'], true], ['Pace', ['Calm', 'Brisk'], true]]);
+    expect(def.qs).toEqual([['What moves?', ['A process flow', 'A data flow', 'A timeline'], 'draft'], [MOTION_LENGTH, ['20 s', '45 s', '90 s']]]);
+    expect(def.rows).toEqual([['Style', ['Boxes and arrows', 'Swimlanes'], 'animation'], ['Pace', ['Calm', 'Brisk'], 'animation']]);
     expect(def.build).toEqual(['Drawing the flow', 'Animating each stage', 'Writing the text alternative']);
   });
   it('completes by a mark: the end reached, or the text version read', () => {

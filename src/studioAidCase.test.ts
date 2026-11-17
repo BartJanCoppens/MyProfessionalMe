@@ -39,9 +39,11 @@ describe('the Shape and Produce steps', () => {
   it('says which questions only steer the AI draft; the ones that change the case do not', () => {
     const h = open({ studio: { view: 'studio', step: 0, id: 'case' }, nw: nwOf('Case exercise') });
     expect(h.st().shape.map((g) => [g.key, g.hint])).toEqual([['How long should it take?', ''], [EVIDENCE_QUESTION, '']]);
-    expect(h.st().produce.map((g) => [g.key, g.hint])).toEqual([['Names', 'Steers the AI draft']]);
+    // Produce comes after Draft: its answers are used when the creator drafts again.
+    expect(h.st().produce.map((g) => [g.key, g.hint])).toEqual([['Names', 'Used when you draft again']]);
     const a = open({ studio: { view: 'studio', step: 0, id: 'aid' } });
     expect(a.st().shape.every((g) => g.hint === 'Steers the AI draft')).toBe(true);
+    expect(a.st().produce.map((g) => [g.key, g.hint])).toEqual([['Template', 'Used when you draft again']]);
   });
 });
 

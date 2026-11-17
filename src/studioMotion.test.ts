@@ -61,6 +61,9 @@ describe('the Motion Studio\'s AI use', () => {
     expect(vi.mocked(aiStore.askAi).mock.calls[0][0]).toBe('studio_motion');
     expect(h.drawing()).toMatchObject({ svg: AI_SVG, made: 'ai' });
   });
+  it('says its Style and Pace steer the AI animation', () => {
+    expect(open().st().produce.map((g) => [g.key, g.hint])).toEqual([['Style', 'Steers the AI animation'], ['Pace', 'Steers the AI animation']]);
+  });
   it('is scripted when only the studio drafts (studio_draft) are switched on', async () => {
     const h = open({ uses: ['studio_draft'] });
     expect(h.st().motion).toMatchObject({ note: NO_AI });

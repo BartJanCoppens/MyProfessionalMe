@@ -11,8 +11,8 @@ import { itemRows, noItems } from './logic/items';
 import type { Item } from './logic/items';
 import { fitBuilt, startBuild } from './logic/studioBuild';
 import { AI_ONLY, studioProblems } from './logic/studioContent';
-import { questionsOf, stepsOf } from './logic/studios';
-import type { StudioDef, StudioEntry, StudioItem } from './logic/studios';
+import { STEERS, questionsOf, stepsOf } from './logic/studios';
+import type { Steers, StudioDef, StudioEntry, StudioItem } from './logic/studios';
 import { STOCK_LOOKS, STOCK_VOICES } from './studioData';
 import type { Chip } from './screens/ChipGroup';
 import { motionProduce } from './studioMotion';
@@ -21,10 +21,9 @@ import { BUILDS } from './studioRunners';
 type Field = 'shape' | 'produce' | 'cast';
 
 // A group of chips for one question: choosing stores the answer under the question (or row label) on the draft. A
-// question that only steers the AI draft says so (honest UI).
-const STEERS = 'Steers the AI draft';
-const choices = (nw: NewDraft, setNw: SetNw, field: Field, key: string, options: string[], steersAi = false, note = ''): { key: string; hint: string; chips: Chip[] } => ({
-  key, hint: steersAi ? STEERS : note, chips: options.map((o) => ({ key: o, label: o, on: nw[field]?.[key] === o, pick: () => setNw((cur) => ({ [field]: { ...cur[field], [key]: o } })) })),
+// question that only steers AI says what it steers (honest UI).
+const choices = (nw: NewDraft, setNw: SetNw, field: Field, key: string, options: string[], steers?: Steers, note = ''): { key: string; hint: string; chips: Chip[] } => ({
+  key, hint: steers ? STEERS[steers] : note, chips: options.map((o) => ({ key: o, label: o, on: nw[field]?.[key] === o, pick: () => setNw((cur) => ({ [field]: { ...cur[field], [key]: o } })) })),
 });
 
 // Which stock looks and voices a studio casts (no media yet: the picks are role labels and voice names).

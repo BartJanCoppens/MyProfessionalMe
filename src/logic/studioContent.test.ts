@@ -76,7 +76,7 @@ describe('studioContent', () => {
   });
   it('offers only answers the product delivers: every other question or row says it steers the AI draft', () => {
     const published = [LENGTH_QUESTION, EVIDENCE_QUESTION, END_QUESTION, MOTION_LENGTH];
-    STUDIOS.filter((d) => d.available && !d.compact).forEach((d) => [...d.qs, ...d.rows].forEach(([q, , steers]) => expect(steers || published.includes(q), d.id + ' · ' + q).toBe(true)));
+    STUDIOS.filter((d) => d.available && !d.compact).forEach((d) => [...d.qs, ...d.rows].forEach(([q, , steers]) => expect(!!steers || published.includes(q), d.id + ' · ' + q).toBe(true)));
     expect(studioById('case')!.rows.map((r) => r[0])).toEqual(['Names']);
     expect(studioById('aid')!.qs.map((q) => q[0])).toEqual(['Template?', 'When is it used?']);
     expect(studioById('aid')!.rows.map((r) => r[0])).toEqual(['Template']);
@@ -84,7 +84,7 @@ describe('studioContent', () => {
   it('keeps only the Explainer choices its panel delivers: depth steers the draft, the ending is published; no style, look or narration', () => {
     const d = studioById('explainer')!;
     expect(d.available).toBe(true);
-    expect(d.qs).toEqual([[DEPTH_QUESTION, ['Overview', 'With technical detail'], true], [END_QUESTION, [END_CHECK, END_SUMMARY, END_NONE]]]);
+    expect(d.qs).toEqual([[DEPTH_QUESTION, ['Overview', 'With technical detail'], 'draft'], [END_QUESTION, [END_CHECK, END_SUMMARY, END_NONE]]]);
     expect(d.rows).toEqual([]);
     expect(d.cast).toBeNull();
   });
