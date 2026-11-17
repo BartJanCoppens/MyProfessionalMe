@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { NEW_TYPES, REVIEW_STAGES, RUBRIC } from '../data';
 import {
-  CREATE_TYPES, TYPE_NAMES, DEFAULT_POLICY, PART_VALUES, allowedValues, attrsLabel, blockedTerm, checksPass, contentChecks, daysWaiting, emptyParts, fmtDate, isEmptyRule, mayCreate,
+  CREATE_TYPES, MAKEABLE_FORMATS, TYPE_NAMES, DEFAULT_POLICY, PART_VALUES, allowedValues, attrsLabel, blockedTerm, checksPass, contentChecks, daysWaiting, emptyParts, fmtDate, isEmptyRule, mayCreate,
   policyFor, policyLabel, reviewBadge, rubricComplete, ruleMatches, ruleProblem, ruleSentence, stageAt, stagesFor, stagesOf, togglePart, withinLines,
 } from './contribution';
 import type { Attrs, Contribution, CreateData, PolicyRow, Review, RuleParts } from './contribution';
@@ -181,7 +181,10 @@ describe('types', () => {
   });
   it('contribution formats, and so creation rules, add the formats the studios make', () => {
     expect(TYPE_NAMES).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Avatar', 'Flash cards', 'Practice exam', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise']);
-    expect(PART_VALUES.formats).toEqual(TYPE_NAMES);
+  });
+  it('creation rules offer only formats something can make today: the upload form and the studios that are available', () => {
+    expect(PART_VALUES.formats).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam']);
+    expect(MAKEABLE_FORMATS).toEqual(PART_VALUES.formats);
   });
 });
 

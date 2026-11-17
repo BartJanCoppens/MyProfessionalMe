@@ -37,6 +37,9 @@ export type CreateData = { contributions: Contribution[]; reviews: Review[]; rul
 // studios make (src/logic/items.test.ts checks the SQL lists).
 export const CREATE_TYPES = NEW_TYPES.filter((t) => t[0] !== 'Avatar');
 export const TYPE_NAMES = Array.from(new Set(NEW_TYPES.map((t) => t[0]).concat(STUDIOS.flatMap(studioFormats))));
+// The formats something can make today: the upload form's and those of the studios that are available. Creation rules, review
+// requirements and the new-content default offer only these; TYPE_NAMES stays the full list the database accepts.
+export const MAKEABLE_FORMATS = Array.from(new Set(CREATE_TYPES.map((t) => t[0]).concat(STUDIOS.filter((d) => d.available).flatMap(studioFormats))));
 export const DEFAULT_POLICY: Policy = { peers: 2, expert: true, quality: true };
 export const TITLE_MAX = 60;
 export const TAKE_MAX = 200;
@@ -45,7 +48,7 @@ export const domainName = (k: string) => (DOMAINS.find((d) => d[0] === k) || [k,
 export const audienceName = (k: string) => AUD_INFO[k]?.name || k;
 // Every value a part can hold, in display order.
 export const PART_VALUES: Record<Part, string[]> = {
-  lines: BLS.slice(), formats: TYPE_NAMES, domains: DOMAINS.map((d) => d[0]), audiences: AUDS.ind.concat(AUDS.tec).map((a) => a[0]),
+  lines: BLS.slice(), formats: MAKEABLE_FORMATS, domains: DOMAINS.map((d) => d[0]), audiences: AUDS.ind.concat(AUDS.tec).map((a) => a[0]),
 };
 export const PART_LABEL: Record<Part, string> = { lines: 'Business lines', formats: 'Formats', domains: 'Domains', audiences: 'Industries and technologies' };
 export const valueName = (part: Part, v: string) => (part === 'domains' ? domainName(v) : part === 'audiences' ? audienceName(v) : v);

@@ -6,7 +6,7 @@ import type { Logic } from './model';
 import type { AppState, NewDraft } from './types';
 import { addFirst } from './createItems';
 import { aiAssisted, hasItems, itemsFromSaved, itemsText, noItems } from './logic/items';
-import { attrsOf, checksPass, contentChecks, mayCreate, rubricComplete } from './logic/contribution';
+import { MAKEABLE_FORMATS, attrsOf, checksPass, contentChecks, mayCreate, rubricComplete } from './logic/contribution';
 import type { Attrs, Contribution, CreateData, Review, RuleParts } from './logic/contribution';
 import { checkContribution, decideReview, loadCreate, removeDraft, saveDraft, submitContribution } from './lib/contributionStore';
 import type { DraftFields } from './lib/contributionStore';
@@ -22,7 +22,7 @@ const without = <T,>(o: Record<string, T>, k: string) => { const n = { ...o }; d
 export function blankDraft(rules: RuleParts[] | null, myLine: string | null): NewDraft {
   const r = rules && rules[0];
   const line = !r ? myLine || '' : r.lines.length ? (myLine && r.lines.includes(myLine) ? myLine : r.lines[0]) : myLine || 'Consulting';
-  return { line, aud: r?.audiences[0] || '', type: r?.formats[0] || 'Reel', title: '', dom: r?.domains[0] || 'prof', lvl: '2', stage: 'Senior consultant', take: '',
+  return { line, aud: r?.audiences[0] || '', type: r?.formats.find((f) => MAKEABLE_FORMATS.includes(f)) ?? MAKEABLE_FORMATS[0], title: '', dom: r?.domains[0] || 'prof', lvl: '2', stage: 'Senior consultant', take: '',
     outline: [], sources: [], ai: false, aiNote: '', items: noItems() };
 }
 export const attrsOfDraft = (nw: NewDraft): Attrs => ({ line: nw.line || null, format: nw.type, domain: nw.dom, audience: nw.aud || null });

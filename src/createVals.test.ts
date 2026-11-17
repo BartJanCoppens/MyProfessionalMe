@@ -3,9 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from 'react';
 import * as store from './lib/contributionStore';
+import { blankDraft } from './createSave';
 import { draftFromPassages } from './createGrounding';
 import type { AskAi } from './createGrounding';
-import { TYPE_NAMES, emptyParts } from './logic/contribution';
+import { MAKEABLE_FORMATS, emptyParts } from './logic/contribution';
 import type { CreateData, PolicyRow, Rule, RuleParts } from './logic/contribution';
 import { contribution, review } from './test/contributions';
 import { domainAdmin, flush, harness, member, person, stubWindow, systemAdmin } from './test/harness';
@@ -49,8 +50,9 @@ describe('navigation', () => {
     expect(cs({ data: d, readOnly: true }).vm().reviewBadge).toBe(1);
   });
   it('lists every contribution format in the lead, from the format list', () => {
-    expect(cs().c().lead).toMatch(/^Make something for your colleagues: Reel, Podcast, .*, Job aid or Case exercise\. /);
-    TYPE_NAMES.forEach((f) => expect(cs().c().lead).toContain(f));
+    expect(cs().c().lead).toMatch(/^Make something for your colleagues: Reel, Podcast, Micro-guide, Case write-up, Flash cards or Practice exam\. /);
+    MAKEABLE_FORMATS.forEach((f) => expect(cs().c().lead).toContain(f));
+    ['Game', 'Slides', 'Job aid'].forEach((f) => expect(cs().c().lead).not.toContain(f));
   });
   it('shows loading until the data arrives, then an error with a retry', () => {
     const h = cs({ state: { create: null } });
@@ -374,6 +376,14 @@ describe('Review requirements (admins)', () => {
     expect(store.savePolicy).toHaveBeenCalledWith({ ...p, peers: 0 });
     h.c().policyRows[0].remove(); await flush(10);
     expect(store.removePolicy).toHaveBeenCalledWith(p.id);
+  });
+});
+
+describe('a fresh draft', () => {
+  it('starts with a format something can make, never one only a studio makes', () => {
+    expect(blankDraft([rule({ formats: ['Game'] })], null).type).toBe('Reel');
+    expect(blankDraft([rule({ formats: ['Game', 'Podcast'] })], null).type).toBe('Podcast');
+    expect(blankDraft([rule({})], null).type).toBe('Reel');
   });
 });
 

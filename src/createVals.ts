@@ -9,7 +9,7 @@ import { itemsPanel, viewItems } from './createItems';
 import type { SetNw } from './createItems';
 import { hasItems, itemsCheck, itemsFromSaved, itemsText, noItems } from './logic/items';
 import {
-  CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, ROLE_OF_STEP, TAKE_MAX, TYPE_NAMES, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
+  CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
   emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
 } from './logic/contribution';
 import type { Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
@@ -109,7 +109,7 @@ function createScreen(L: Logic) {
   const vm = {
     loading: !s.create && !s.createError, error: s.createError, retry: () => L.reloadCreate(), busy: s.createBusy,
     readOnly: L.subject.readOnly, readOnlyNote: 'Create & share shows your own work, not ' + L.subject.name + '’s. Go back to yourself to create, submit or review.',
-    lead: 'Make something for your colleagues: ' + TYPE_NAMES.slice(0, -1).join(', ') + ' or ' + TYPE_NAMES[TYPE_NAMES.length - 1] + '. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
+    lead: 'Make something for your colleagues: ' + MAKEABLE_FORMATS.slice(0, -1).join(', ') + ' or ' + MAKEABLE_FORMATS[MAKEABLE_FORMATS.length - 1] + '. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
     canCreate, noGrantText: 'You have no creation rights yet. Ask an admin for creation rights: a Domain Admin or General Admin gives you rules such as “Consulting or Tax & Legal · Podcast”.',
     myRules: d.rules.map((r) => ruleSentence(r)),
     goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [], nwKbQ: '', studio: HUB }) : L.say('Ask an admin for creation rights first')),

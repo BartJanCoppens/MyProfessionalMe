@@ -4,7 +4,10 @@
 import { supabase } from './supabase';
 import type { Contribution, CreateData, Policy, PolicyRow, Review, Rule, RuleParts } from '../logic/contribution';
 
-const fail = (error: { message: string } | null) => { if (error) throw new Error(/row-level security/.test(error.message) ? 'Not allowed · ask an admin' : error.message); };
+// The database's refusals, in words: row-level security, and a studio-only format saved without a studio (check 23514).
+const refusal = (e: { message: string; code?: string }) => /row-level security/.test(e.message) ? 'Not allowed · ask an admin'
+  : e.code === '23514' && /contributions_upload_formats/.test(e.message) ? 'This format is made in its studio, not with the upload form.' : e.message;
+const fail = (error: { message: string; code?: string } | null) => { if (error) throw new Error(refusal(error)); };
 
 // Everything Create & share shows the signed-in person. RLS returns more to a System Admin; keep what is theirs.
 export async function loadCreate(userId: string): Promise<CreateData> {
