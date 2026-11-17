@@ -78,7 +78,16 @@ Plan: `docs/superpowers/plans/2026-11-17-studios.md`. The owner reversed D1 ("pa
 - **Slow providers can hit the `ai` function's 30 s timeout** on large studio drafts. The answer is then the honest fallback: scripted rows labelled as scripted (Game has none and says so), never labelled AI. A production version would stream or run the draft in the background.
 
 **Shortcuts and production replacements (Phase 1).**
-- Non-Flash studios cannot save items until Phase 2: `items_check`, `items_ok` and publish accept only the Flash and exam shapes. Phase 2 Task 2.1 widens them with each studio.
-- `ROWS_MAX` (`src/logic/studios.ts`) and `ITEM_MAX` (items) are two row-limit tables; they merge in Phase 2.
+- Non-Flash studios could not save items in Phase 1. Done in Phase 2 Task 2.1 (below); the other studio formats still fail `items_ok` until their studio ships.
+- `ROWS_MAX` and `ITEM_MAX` were two row-limit tables. Merged in Task 2.1 into `ITEM_MAX` (by format), mirrored in `private.item_max`.
 - Label-style copies and hand-rolled chips remain in older screens (Membership, Mapping, TrajectoryEditor, Knowledge, FormatPanels, Map, AiConnections, Library, MapCert). They move to the shared pieces (`labelStyle.ts`, `ChipGroup.tsx`) when each screen is next touched.
 - Thin item schemas for slides, motion, explainer and aid; tightened when their studios are built.
+
+## Studios Phase 2, Task 2.1: Job Aid Studio and Case Studio
+
+- **"Shape it" answers are stored.** *What:* new column `contributions.shape` (jsonb object of text answers, 2000 characters at most), saved with every studio draft and read by publishing. *Why:* a case's "Can it count as trajectory evidence?" must reach `learnings.content`, and the next studios (Explainer style, depth and end; Motion length) need their answers the same way. *Alternative:* a boolean column for the one answer (refused: one column per question), or an answer row in the items (refused: it would show as an editable row). The check fingerprint does not include `shape`; the app re-checks when it changes, the database does not. Nothing in `shape` is published as text yet; a later studio that publishes an answer as text must check it (options or client names) first.
+- **A job aid line is "label · text".** *What:* each row becomes one checklist line, its moment first ("Before · Objectives agreed"). *Why:* `AidContent` is a flat list and the learner's panel is a flat checklist; the moment would otherwise be lost. *Alternative:* group by label in the panel (the design's studio preview does), which needs a new content field.
+- **A studio case is always "Reviewed by your counsellor."** *What:* the content's reviewer is fixed, whatever "Who reviews it?" says. *Why:* a learner hands a case in through the evidence flow, which goes to the counsellor; a peer reviewer of learner work does not exist (honest UI). *Open:* the question still steers the AI draft only; drop it or build peer review of evidence.
+- **Hours of a published case stay 0.25 h.** `publish_contribution` keeps its hours rule; "How long should it take?" is not used yet. *Production version:* map the answer to hours (2 h, 4 h, 8 h) in TS and SQL together.
+- **Only built studio formats pass `items_ok`.** Avatar, Reel, Podcast, Game, Slides, Animated flow and Interactive explainer rows are saved and capped but fail the check until their studio adds its content function, so nothing publishes without content.
+
