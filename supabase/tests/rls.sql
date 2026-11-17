@@ -1107,5 +1107,212 @@ reset role;
 insert into results (check_name, expected, actual) select 'FC nobody else changes detail on someone else''s row', '{"ticks": [0, 1, 2]}', coalesce(max(detail::text), 'none') from public.learner_learnings where user_id='00000000-0000-0000-0000-0000000000c1' and learning_id='L68';
 insert into results (check_name, expected, actual) select 'FC the faculty registers webinar attendance', 'accepted attended', coalesce(max(l.state), 'none')||' '||coalesce(max(d.verdict), 'none') from public.learner_learnings l left join public.learning_decisions d on d.user_id=l.user_id and d.learning_id=l.learning_id where l.user_id='00000000-0000-0000-0000-0000000000c2' and l.learning_id='L67';
 reset role;
+-- ---------- design v4: certification trajectories, enrolments and credentials ----------
+-- d1: Consulting learner with counsellor a6. a2 counsels a8 (someone else's counsellor), a1 is the Consulting Domain Admin,
+-- a4 the Audit Domain Admin, a7 a General Admin, a3 the Tax & Legal Domain Admin. T1 (auto, mandatory), T2 (approval)
+-- and T3 (open) are the seeds; TX1–TX3 are made here.
+select set_config('request.jwt.claims', '', true);
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000d1','t.trajectory@test.local');
+update public.profiles set business_line='Consulting', counsellor_id='00000000-0000-0000-0000-0000000000a6' where id='00000000-0000-0000-0000-0000000000d1';
+set local role authenticated;
+-- Consulting Domain Admin a1: drafts and advised trajectories of the own line; never a mandatory one live (D2)
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+  values ('TX1', 'T mandatory draft', 'T issuer', 'T credential', 'auto', 6, 'draft', 'Consulting', '[{"id":"s1","k":"check"},{"id":"s2","k":"exam"}]', '[["Consulting","Manager","mandatory"]]') returning 1)
+  insert into results (check_name, expected, actual) select 'TR Domain Admin adds a draft for the own line', '1 rows', count(*)||' rows' from i;
+with i as (insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+  values ('TX2', 'T advised live', 'T issuer', 'T credential', 'open', 6, 'live', 'Consulting', '[{"id":"s1","k":"learn","lid":"L1"},{"id":"s2","k":"exam"}]', '[["Consulting","Manager","advised"]]') returning 1)
+  insert into results (check_name, expected, actual) select 'TR Domain Admin publishes an advised trajectory of the own line', '1 rows', count(*)||' rows' from i;
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+  values ('TX3', 'T plain draft', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]');
+insert into results (check_name, expected, actual) select 'TR Domain Admin reads the own line''s drafts', '2', count(*)::text from public.trajectories where id in ('TX1', 'TX3');
+do $$ begin
+  begin insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+      values ('TX9', 'T other line', 'T', 'T', 'open', 6, 'draft', 'Audit', '[]', '[]');
+    insert into results (check_name, expected, actual) values ('TR Domain Admin adds a trajectory of another line', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR Domain Admin adds a trajectory of another line', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+      values ('TX9', 'T firm-wide', 'T', 'T', 'open', 6, 'draft', null, '[]', '[]');
+    insert into results (check_name, expected, actual) values ('TR Domain Admin adds a firm-wide trajectory', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR Domain Admin adds a firm-wide trajectory', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set status = 'live' where id = 'TX1';
+    insert into results (check_name, expected, actual) values ('TR Domain Admin publishes a mandatory trajectory (D2)', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR Domain Admin publishes a mandatory trajectory (D2)', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+      values ('TX9', 'T live mandatory', 'T', 'T', 'auto', 6, 'live', 'Consulting', '[]', '[["Consulting","Manager","mandatory"]]');
+    insert into results (check_name, expected, actual) values ('TR Domain Admin adds a live mandatory trajectory (D2)', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR Domain Admin adds a live mandatory trajectory (D2)', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["Consulting","Manager","mandatory"]]' where id = 'TX2';
+    insert into results (check_name, expected, actual) values ('TR Domain Admin makes a live trajectory mandatory (D2)', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR Domain Admin makes a live trajectory mandatory (D2)', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["amb:sust","Manager","mandatory"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR an ambition audience is mandatory', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR an ambition audience is mandatory', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["Consulting","Intern","advised"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR a map with an unknown stage', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a map with an unknown stage', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set maps = '[["Marketing","Manager","advised"]]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a map with an unknown audience', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set steps = '[{"id":"s1","k":"learn"},{"id":"s1","k":"exam"}]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR steps with a repeated id', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR steps with a repeated id', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectories set steps = '[{"id":"s1","k":"quiz"}]' where id = 'TX3';
+    insert into results (check_name, expected, actual) values ('TR a step of an unknown kind', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR a step of an unknown kind', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+-- Audit Domain Admin a4: not the Consulting drafts, no edits there
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR another line''s Domain Admin reads the drafts', '0', count(*)::text from public.trajectories where id in ('TX1', 'TX3');
+with u as (update public.trajectories set name = 'T renamed' where id = 'TX2' returning 1) insert into results (check_name, expected, actual) select 'TR another line''s Domain Admin edits', '0 rows', count(*)||' rows' from u;
+with d as (delete from public.trajectories where id = 'TX2' returning 1) insert into results (check_name, expected, actual) select 'TR another line''s Domain Admin removes', '0 rows', count(*)||' rows' from d;
+-- General Admin a7 publishes the mandatory one (D2)
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+with u as (update public.trajectories set status = 'live' where id = 'TX1' returning published_at) insert into results (check_name, expected, actual) select 'TR General Admin publishes a mandatory trajectory', '1 rows true', count(*)||' rows '||coalesce(bool_and(published_at is not null), false) from u;
+-- Consulting Domain Admin a1 can no longer touch the live mandatory one
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with u as (update public.trajectories set status = 'draft' where id = 'TX1' returning 1) insert into results (check_name, expected, actual) select 'TR Domain Admin takes back a live mandatory trajectory', '0 rows', count(*)||' rows' from u;
+
+-- learner d1: reads live trajectories, not drafts; starts through the functions only
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR learner reads the live seeds', 'T1 T2 T3', string_agg(id, ' ' order by id) from public.trajectories where id in ('T1', 'T2', 'T3');
+insert into results (check_name, expected, actual) select 'TR learner reads no draft', '0', count(*)::text from public.trajectories where id = 'TX3';
+insert into results (check_name, expected, actual) select 'TR learner starts an open trajectory', 'enrolled', public.request_trajectory('T3');
+insert into results (check_name, expected, actual) select 'TR learner asks to start an approval trajectory', 'requested', public.request_trajectory('T2');
+insert into results (check_name, expected, actual) select 'TR learner starts a Domain Admin''s open trajectory', 'enrolled', public.request_trajectory('TX2');
+do $$ begin
+  begin insert into public.trajectory_enrolments (user_id, trajectory_id, status, start_month) values ('00000000-0000-0000-0000-0000000000d1', 'TX1', 'enrolled', 24318);
+    insert into results (check_name, expected, actual) values ('TR learner writes an enrolment row directly', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner writes an enrolment row directly', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.trajectory_enrolments set status = 'enrolled' where trajectory_id = 'T2';
+    insert into results (check_name, expected, actual) values ('TR learner approves the own start request directly', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner approves the own start request directly', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.request_trajectory('TX3');
+    insert into results (check_name, expected, actual) values ('TR learner starts a draft', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner starts a draft', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_trajectory_step('T2', 's7');
+    insert into results (check_name, expected, actual) values ('TR learner submits a step before the start is approved', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner submits a step before the start is approved', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_trajectory_step('T3', 's5', 'done');
+    insert into results (check_name, expected, actual) values ('TR learner sets a check step to done', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner sets a check step to done', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_trajectory_step('T3', 's5', 'booked');
+    insert into results (check_name, expected, actual) values ('TR learner books a check step', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner books a check step', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_trajectory_step('T3', 's2');
+    insert into results (check_name, expected, actual) values ('TR learner submits a learning step', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner submits a learning step', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.submit_trajectory_step('T3', 's6');
+    insert into results (check_name, expected, actual) values ('TR learner submits an exam result without a link or number', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner submits an exam result without a link or number', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T2', null, 'approve');
+    insert into results (check_name, expected, actual) values ('TR learner approves the own start request', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner approves the own start request', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.withdraw_trajectory('T1');
+    insert into results (check_name, expected, actual) values ('TR learner leaves an auto-enrol trajectory', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner leaves an auto-enrol trajectory', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'TR learner asks for the sign-off', 'submitted', public.submit_trajectory_step('T3', 's5');
+-- D6: the first action on an auto-enrol trajectory writes the enrolled row
+insert into results (check_name, expected, actual) select 'TR learner sends evidence on an auto-enrol trajectory', 'submitted', public.submit_trajectory_step('T1', 's6', p_link => 'https://sharepoint.example/traineeship-log.pdf');
+insert into results (check_name, expected, actual) select 'TR learner''s rows', 'T1 enrolled, T2 requested, T3 enrolled, TX2 enrolled', string_agg(trajectory_id||' '||status, ', ' order by trajectory_id) from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1';
+-- a trajectory back in draft stays readable for the person enrolled in it, and only while they are
+reset role;
+update public.trajectories set status = 'draft' where id = 'TX2';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR learner reads a draft they are enrolled in', '1', count(*)::text from public.trajectories where id = 'TX2';
+select public.withdraw_trajectory('TX2');
+insert into results (check_name, expected, actual) select 'TR learner withdraws, the draft is gone', '0/0', (select count(*) from public.trajectory_enrolments where trajectory_id = 'TX2')||'/'||(select count(*) from public.trajectories where id = 'TX2');
+
+-- someone else's counsellor a2: reads nothing, decides nothing
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR someone else''s counsellor reads the enrolments', '0', count(*)::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1';
+do $$ begin
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's5', 'approve');
+    insert into results (check_name, expected, actual) values ('TR someone else''s counsellor signs off a step', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR someone else''s counsellor signs off a step', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+-- another line's Domain Admin a3 reads nothing
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR another line''s Domain Admin reads the enrolments', '0', count(*)::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1';
+-- the counsellor a6: approves the start, signs off the check, accepts the exam (D5: the credential appears)
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR counsellor reads the enrolments', '3', count(*)::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1';
+insert into results (check_name, expected, actual) select 'TR counsellor approves the start request', 'enrolled', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T2', null, 'approve');
+insert into results (check_name, expected, actual) select 'TR counsellor signs off the check step', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's5', 'approve');
+insert into results (check_name, expected, actual) select 'TR counsellor wants to talk about the evidence first', 'talk', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T1', 's6', 'talk');
+do $$ begin
+  begin perform public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's4', 'approve');
+    insert into results (check_name, expected, actual) values ('TR counsellor accepts a step never submitted', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR counsellor accepts a step never submitted', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'TR the steps after the decisions', 'T1 {} / T3 done', 'T1 '||(select steps::text from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T1')||' / T3 '||(select steps -> 's5' ->> 'state' from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1' and trajectory_id = 'T3');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR learner books the exam', 'booked', public.submit_trajectory_step('T3', 's6', 'booked');
+insert into results (check_name, expected, actual) select 'TR learner sends the exam result', 'submitted', public.submit_trajectory_step('T3', 's6', p_link => 'https://academy.example/cert/123', p_ref => 'CSRD-123');
+do $$ begin
+  begin perform public.submit_trajectory_step('T3', 's5');
+    insert into results (check_name, expected, actual) values ('TR learner reopens a signed-off step', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner reopens a signed-off step', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR counsellor accepts the exam', 'done', public.decide_trajectory('00000000-0000-0000-0000-0000000000d1', 'T3', 's6', 'approve');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR the exam ends in a confirmed credential (D5)', 'CSRD practitioner · internal academy|Internal academy|confirmed|T3|CSRD-123|true|true',
+  string_agg(name||'|'||issuer||'|'||status||'|'||trajectory_id||'|'||ref||'|'||(earned_on = current_date)||'|'||(expires_on = (current_date + interval '24 months')::date), ', ')
+  from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1';
+
+-- external credentials: the learner adds one waiting; only the counsellor or an admin confirms it
+with i as (insert into public.credentials (user_id, name, issuer, earned_on, link) values ('00000000-0000-0000-0000-0000000000d1', 'T Lean Six Sigma Yellow Belt', 'T issuer', '2025-06-01', 'https://cert.example/lssyb') returning status)
+  insert into results (check_name, expected, actual) select 'TR learner adds an external credential, waiting', 'waiting', max(status) from i;
+do $$ begin
+  begin insert into public.credentials (user_id, name, issuer, earned_on, link, status) values ('00000000-0000-0000-0000-0000000000d1', 'T self-confirmed', 'T', '2025-06-01', 'https://cert.example/x', 'confirmed');
+    insert into results (check_name, expected, actual) values ('TR learner adds a confirmed credential', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner adds a confirmed credential', 'blocked', 'blocked: '||sqlstate); end;
+  begin update public.credentials set status = 'confirmed' where user_id = '00000000-0000-0000-0000-0000000000d1';
+    insert into results (check_name, expected, actual) values ('TR learner confirms the own credential directly', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner confirms the own credential directly', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.confirm_credential((select id from public.credentials where name = 'T Lean Six Sigma Yellow Belt'));
+    insert into results (check_name, expected, actual) values ('TR learner confirms the own credential', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner confirms the own credential', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.credentials (user_id, name, issuer, earned_on, link) values ('00000000-0000-0000-0000-0000000000a2', 'T for someone else', 'T', '2025-06-01', 'https://cert.example/y');
+    insert into results (check_name, expected, actual) values ('TR learner adds a credential for someone else', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner adds a credential for someone else', 'blocked', 'blocked: '||sqlstate); end;
+  begin insert into public.credentials (user_id, name, issuer, earned_on) values ('00000000-0000-0000-0000-0000000000d1', 'T no proof', 'T', '2025-06-01');
+    insert into results (check_name, expected, actual) values ('TR learner adds a credential without a link or number', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR learner adds a credential without a link or number', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+select set_config('test.cred', (select id::text from public.credentials where name = 'T Lean Six Sigma Yellow Belt'), true);
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR someone else''s counsellor reads the credentials', '0', count(*)::text from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1';
+do $$ begin
+  begin perform public.confirm_credential(current_setting('test.cred')::uuid);
+    insert into results (check_name, expected, actual) values ('TR someone else''s counsellor confirms a credential', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR someone else''s counsellor confirms a credential', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR General Admin reads the enrolments and credentials', '3/2', (select count(*) from public.trajectory_enrolments where user_id = '00000000-0000-0000-0000-0000000000d1')||'/'||(select count(*) from public.credentials where user_id = '00000000-0000-0000-0000-0000000000d1');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a6","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TR counsellor confirms the external credential', 'confirmed', public.confirm_credential(current_setting('test.cred')::uuid);
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+do $$ begin
+  begin perform count(*) from public.trajectories; insert into results (check_name, expected, actual) values ('TR anon reads trajectories', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR anon reads trajectories', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform public.request_trajectory('T3'); insert into results (check_name, expected, actual) values ('TR anon starts a trajectory', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('TR anon starts a trajectory', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
+-- the seeds: steps s1… with prerequisites as step ids, every referenced learning in the catalogue, no mandatory ambition
+insert into results (check_name, expected, actual) select 'TR seeds T1–T3 with their step counts', 'T1 9 auto live, T2 8 approval live, T3 6 open live', string_agg(id||' '||jsonb_array_length(steps)||' '||enrol||' '||status, ', ' order by id) from public.trajectories where id in ('T1', 'T2', 'T3');
+insert into results (check_name, expected, actual) select 'TR seed prerequisites', 'T1 s7>s6 s9>s7, T2 s3>s1 s6>s3 s7>s3 s8>s7, T3 s4>s2 s5>s4 s6>s5',
+  string_agg(t.id||' '||p.pres, ', ' order by t.id) from public.trajectories t
+  cross join lateral (select string_agg((s ->> 'id')||'>'||(s ->> 'pre'), ' ' order by o) as pres from jsonb_array_elements(t.steps) with ordinality e(s, o) where s ->> 'pre' is not null) p
+  where t.id in ('T1', 'T2', 'T3');
+insert into results (check_name, expected, actual) select 'TR seed learnings all in the catalogue', '0', count(*)::text from public.trajectories t, jsonb_array_elements(t.steps) s,
+  lateral (select s ->> 'lid' as lid union all select jsonb_array_elements_text(coalesce(s -> 'opts', '[]'))) l
+  where t.id in ('T1', 'T2', 'T3') and l.lid is not null and not exists (select 1 from public.learnings where id = l.lid);
+insert into results (check_name, expected, actual) select 'TR seed maps', 'T1 Tax & Legal/Consultant/mandatory, T2 tec:data/Consultant/advised, T3 amb:sust/Senior consultant/advised', string_agg(id||' '||(maps -> 0 ->> 0)||'/'||(maps -> 0 ->> 1)||'/'||(maps -> 0 ->> 2), ', ' order by id) from public.trajectories where id in ('T1', 'T2', 'T3');
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
