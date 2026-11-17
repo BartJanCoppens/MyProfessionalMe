@@ -137,7 +137,20 @@ describe('completion per learning type (owner, 2 Nov 2026)', () => {
     expect(completionText('Avatar', 'Sam Coach')).toBe('After your practice session, three right answers in the evaluation quiz complete it. No acceptance needed.');
     expect(completionText('Certification', 'Sam Coach')).toBe('Log your hours and add your evidence; Sam Coach accepts the certification.');
     expect(completionText('Something new', 'Sam Coach')).toBe('Log your hours, then Sam Coach accepts the something new.');
-    expect(['E-learning', 'Classroom', 'Avatar', 'Podcast', 'Reel', 'Book'].map(completionTodo)).toEqual(['mark it as completed', 'give your feedback', 'take the evaluation quiz', 'listen to it', 'answer the question', '']);
+    expect(['E-learning', 'Classroom', 'Avatar', 'Podcast', 'Reel', 'Book'].map((f) => completionTodo(f))).toEqual(['mark it as completed', 'give your feedback', 'take the evaluation quiz', 'listen to it', 'answer the question', '']);
+  });
+  it('says what the panel needs for the four formats that complete in their panel, only when they have one', () => {
+    const four = ['Flash cards', 'Job aid', 'Practice exam', 'Teach-back'];
+    expect(four.map((f) => completionText(f, 'Sam Coach', true))).toEqual([
+      'Review every card once to complete it. It counts right away; no acceptance needed.',
+      'Tick every item to complete it. It counts right away; no acceptance needed.',
+      'Finish one round to complete it. It counts right away; no acceptance needed.',
+      'Send your explanation to complete it. It counts right away; no acceptance needed.',
+    ]);
+    expect(four.map((f) => completionTodo(f, true))).toEqual(['review every card once', 'tick every item', 'finish one round', 'send your explanation']);
+    expect(completionText('Flash cards', 'Sam Coach')).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
+    expect(completionTodo('Job aid')).toBe('mark it as completed');
+    expect(completionText('E-learning', 'Sam Coach', true)).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
   });
   it('labels attendance and a completion with feedback in the acceptance record', () => {
     const base: Decision = { learningId: 'L10', verdict: 'attended', comment: '', by: 'a1', byName: 'Pat Admin', at: '2026-11-02T10:00:00Z', evidence: NO_EVIDENCE };

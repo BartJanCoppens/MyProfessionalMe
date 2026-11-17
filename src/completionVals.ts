@@ -172,11 +172,11 @@ function attendanceVals(L: Logic, it: Item) {
 }
 
 export function completionVals(L: Logic, it: Item) {
-  const kind = completionOf(it.format), ro = L.subject.readOnly;
+  const kind = completionOf(it.format), ro = L.subject.readOnly, panel = !!LEARN_META[it.id]?.content;
   return {
     done: {
-      kind, note: completionText(it.format, L.counsellorFull()),
-      mark: kind === 'mark' && it.state !== 'accepted' && !LEARN_META[it.id]?.content ? { label: 'Mark as completed', disabled: ro, run: () => markCompleted(L, it) } : null,
+      kind, note: completionText(it.format, L.counsellorFull(), panel),
+      mark: kind === 'mark' && it.state !== 'accepted' && !panel ? { label: 'Mark as completed', disabled: ro, run: () => markCompleted(L, it) } : null,
       feedback: kind === 'feedback' ? feedbackVals(L, it) : null,
       quiz: kind === 'quiz' ? quizVals(L, it) : null,
       attendance: attendanceVals(L, it),

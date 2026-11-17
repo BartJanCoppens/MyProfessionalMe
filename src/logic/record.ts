@@ -40,9 +40,17 @@ export function feedbackProblem(rating: number | null | undefined, text: string)
   return null;
 }
 
+// The 'mark' formats whose content panel completes them (the mark button is hidden then): what the panel needs.
+const PANEL_TODO: Record<string, string> = {
+  'Flash cards': 'review every card once', 'Job aid': 'tick every item', 'Practice exam': 'finish one round', 'Teach-back': 'send your explanation',
+};
+const panelTodo = (format: string, panel: boolean) => (panel ? PANEL_TODO[format] : undefined);
+
 // What completes this format, in the learner's words (detail sidebar and help). accepter: the counsellor's full name.
-export function completionText(format: string, accepter: string): string {
-  const f = format.toLowerCase();
+// panel: the learning has its format's content panel.
+export function completionText(format: string, accepter: string, panel = false): string {
+  const f = format.toLowerCase(), todo = panelTodo(format, panel);
+  if (todo) return todo[0].toUpperCase() + todo.slice(1) + ' to complete it. It counts right away; no acceptance needed.';
   switch (completionOf(format)) {
     case 'media': return format === 'Podcast' ? 'Listening to 80% completes it. It counts right away; no acceptance needed.' : 'A right answer to the question completes it. It counts right away; no acceptance needed.';
     case 'mark': return 'Mark it as completed when you have finished the course. It counts right away; no acceptance needed.';
@@ -52,7 +60,9 @@ export function completionText(format: string, accepter: string): string {
   }
 }
 // What a self-completing format still needs once all hours are logged, for the toast and the state label.
-export function completionTodo(format: string): string {
+export function completionTodo(format: string, panel = false): string {
+  const todo = panelTodo(format, panel);
+  if (todo) return todo;
   switch (completionOf(format)) {
     case 'mark': return 'mark it as completed';
     case 'feedback': return 'give your feedback';

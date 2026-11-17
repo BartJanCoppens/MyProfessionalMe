@@ -3,7 +3,7 @@
 // General or System Admin decides through decide_learning(): from the learning's detail in View as, or from the
 // approvals queue, which belongs to the signed-in person whoever is being viewed.
 import type { ChangeEvent } from 'react';
-import { LEARN_BY } from './data';
+import { LEARN_BY, LEARN_META } from './data';
 import type { Item, Logic } from './model';
 import {
   COMMENT_MAX, COMMENT_MIN, LINKED_NOT_UPLOADED, NO_EVIDENCE, REFLECTION_MIN, SELF_COMPLETE, completionOf, completionText, completionTodo, decisionLine, decisionsFor, evidenceNeed, evidenceProblem, evidenceRule,
@@ -48,7 +48,7 @@ export function logHour(L: Logic, it: Item) {
     return;
   }
   if (completionOf(it.format) !== 'acceptance') {
-    L.persist(() => saveProgress(L.subject.id, it.id, { state: 'in-progress', pct: 100 }), 'All hours logged · ' + completionTodo(it.format) + ' to complete it');
+    L.persist(() => saveProgress(L.subject.id, it.id, { state: 'in-progress', pct: 100 }), 'All hours logged · ' + completionTodo(it.format, !!LEARN_META[it.id]?.content) + ' to complete it');
     return;
   }
   const ev = draftEvidence(L, it.id), need = fieldProblem(ev) ? null : evidenceNeed(it.format, ev);
@@ -63,7 +63,7 @@ export function logHour(L: Logic, it: Item) {
 // Submit (or resubmit) with the evidence typed so far; refused while the format's rule is not met.
 export function submit(L: Logic, it: Item) {
   if (L.readOnly()) return;
-  if (completionOf(it.format) !== 'acceptance') { L.say(completionText(it.format, L.counsellorFull())); return; }
+  if (completionOf(it.format) !== 'acceptance') { L.say(completionText(it.format, L.counsellorFull(), !!LEARN_META[it.id]?.content)); return; }
   const ev = draftEvidence(L, it.id), bad = evidenceProblem(it.format, ev);
   if (bad) { L.say(bad); return; }
   L.persist(() => saveProgress(L.subject.id, it.id, { state: 'submitted', pct: 100, ...changedEvidence(L, it.id) }),

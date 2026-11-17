@@ -234,7 +234,7 @@ export class Logic {
       id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
       isMedia: !!MD, mediaLine: MD ? format + ' · ' + MD.len + ' · ' + MD.by : '', isPeer, peerLine: isPeer ? 'Made by a colleague · peer-reviewed' : '',
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
-      stateLabel: changes ? 'Changes requested' : state === 'in-progress' ? (pct >= 100 && completionOf(format) !== 'acceptance' ? 'All hours logged · ' + completionTodo(format) : 'In progress · ' + pct + '%') : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
+      stateLabel: changes ? 'Changes requested' : state === 'in-progress' ? (pct >= 100 && completionOf(format) !== 'acceptance' ? 'All hours logged · ' + completionTodo(format, !!LEARN_META[id]?.content) : 'In progress · ' + pct + '%') : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
       dueLabel: hasDue ? 'Due ' + due : (m && m.si <= this.myStage() + 1 ? 'By ' + m.stage + ' stage' : ''), dueColor: hasDue ? (dueSoon ? '#9a3d0c' : '#7a5000') : '#8b918a',
       meta: source + ' · ' + hoursLabel + ' · ' + LEVELS[lvl - 1] + ' · L' + lvl + (cpd ? ' · ' + cpd + ' CPD' : ''),
@@ -518,7 +518,7 @@ export class Logic {
       canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || (d0.state === 'in-progress' && d0.pct < 100),
       canAsk: d0.state === 'in-progress' && completionOf(d0.format) === 'acceptance',
       // What completes this learning: the format's own rule, or acceptance by the counsellor.
-      approvalNote: completionOf(d0.format) !== 'acceptance' ? completionText(d0.format, this.counsellorFull()) : d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
+      approvalNote: completionOf(d0.format) !== 'acceptance' ? completionText(d0.format, this.counsellorFull(), !!LEARN_META[d0.id]?.content) : d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
       canAcceptIt: this.canAccept(d0.state), paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
       av: AVATARS[d0.id] ? (() => {
         const AV = AVATARS[d0.id]; const best = AV.skills.map((_sk, k) => Math.max(0, ...AV.attempts.map((a) => a[1][k])));

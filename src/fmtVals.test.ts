@@ -57,6 +57,31 @@ describe('panels need content', () => {
   });
 });
 
+describe('completion copy for the formats that complete in their panel', () => {
+  it('says what the panel needs, not "mark it as completed", when the learning has content', async () => {
+    const h = on('L60', { L60: ['in-progress', 100], L68: ['in-progress', 100] });
+    const vm = h.vm();
+    expect(vm.det.approvalNote).toBe('Review every card once to complete it. It counts right away; no acceptance needed.');
+    expect(vm.done.note).toBe('Review every card once to complete it. It counts right away; no acceptance needed.');
+    expect(vm.done.mark).toBeNull();
+    expect(vm.libItems.find((i) => i.id === 'L60')!.stateLabel).toBe('All hours logged · review every card once');
+    expect(vm.libItems.find((i) => i.id === 'L68')!.stateLabel).toBe('All hours logged · tick every item');
+    expect(on('L61').vm().done.note).toBe('Finish one round to complete it. It counts right away; no acceptance needed.');
+    expect(on('L65').vm().done.note).toBe('Send your explanation to complete it. It counts right away; no acceptance needed.');
+  });
+  it('tells the learner what is left when the last hour is logged', async () => {
+    const h = on('L68', { L68: ['in-progress', 0] });
+    h.vm().logHours();
+    await flush();
+    expect(h.lastToast()).toBe('All hours logged · tick every item to complete it');
+  });
+  it('keeps the mark text for a learning of these formats without content', () => {
+    const vm = on('L62').vm();
+    expect(vm.done.note).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
+    expect(vm.done.mark).not.toBeNull();
+  });
+});
+
 describe('flash cards', () => {
   it('states the real deck size, the cards that get completed', () => {
     expect(on('L60').vm().det.fl!.sub).toBe('3 cards · 3 due now · spaced repetition');
