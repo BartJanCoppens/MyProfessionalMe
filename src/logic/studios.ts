@@ -16,6 +16,8 @@ export type StudioItem = [label: string, text: string] | [label: string, text: s
 export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing;
 export const CHECK_SIZE = 3;
 export const stepsOf = (items: StudioEntry[]) => items.filter((i): i is StudioItem => Array.isArray(i));
+// The rows as {label, text}, trimmed: an explainer's steps and an Animated flow's stages.
+export const labelledRows = (items: StudioEntry[]) => stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() }));
 export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i));
 // What a studio's cast is: one stock look, two voices, one voice, or nothing to cast.
 export type StudioCast = 'look' | 'voices' | 'voice' | null;

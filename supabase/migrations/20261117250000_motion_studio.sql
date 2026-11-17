@@ -4,15 +4,16 @@
 -- items     An Animated flow's stages are [label, text] rows (rows_ok, as every studio), at most one fewer than its item
 --           cap, and after them exactly one drawing: {svg, alt, made}. The svg is the SMIL-animated drawing (it starts
 --           with <svg, at most 60,000 characters; the app sanitises it whenever it is drawn), alt its text alternative
---           (required, at most 2,000 characters) and made who animated it, 'ai' or 'scripted' (a plain layout that was
---           never animated is not sendable). Mirrored by isDrawing/SVG_MAX/ALT_MAX in src/logic/motionSvg.ts and
+--           (required, at most 2,000 characters), made who animated it, 'ai' or 'scripted' (a plain layout that was
+--           never animated is not sendable), and seconds the length it was built for (20, 45 or 90, from "Length?" at
+--           build time; the studio asks for a new build when "Length?" changes). Mirrored by isDrawing/SVG_MAX/ALT_MAX in src/logic/motionSvg.ts and
 --           motionProblems in src/logic/studioContent.ts. The drawing is part of the items, so the check fingerprint, the
 --           client-name scan (its text alternative and the drawing's text) and the guard's lock cover it unchanged.
--- content   private.motion_content: kind 'motion', the stages, the drawing, its text alternative, its length in seconds
---           from "Length?" (20, 45 or 90; 45 unanswered) and who made it (studioContent builds the same).
+-- content   private.motion_content: kind 'motion', the stages, the drawing, its text alternative, the length it was built
+--           for and who made it (studioContent builds the same).
 -- hours     A published Animated flow is a short media learning, like a reel (0.025 h).
 -- completion An Animated flow completes itself ('mark' in COMPLETION, src/logic/record.ts): its panel does it when the
---           learner plays it to the end or reads the text version.
+--           learner reaches the end or reads the text version.
 
 -- One drawing of an Animated flow.
 create function private.drawing_ok(e jsonb)
@@ -25,6 +26,7 @@ as $$
     else jsonb_typeof(e -> 'svg') is not distinct from 'string' and left(e ->> 'svg', 4) = '<svg' and char_length(e ->> 'svg') <= 60000
       and jsonb_typeof(e -> 'alt') is not distinct from 'string' and btrim(e ->> 'alt') <> '' and char_length(e ->> 'alt') <= 2000
       and jsonb_typeof(e -> 'made') is not distinct from 'string' and (e ->> 'made') in ('ai', 'scripted')
+      and jsonb_typeof(e -> 'seconds') is not distinct from 'number' and (e ->> 'seconds') in ('20', '45', '90')
   end;
 $$;
 
@@ -62,8 +64,8 @@ as $$
   end;
 $$;
 
--- An Animated flow: its stages in order, its drawing with the text alternative, its length and who made it.
-create function private.motion_content(p_items jsonb, p_shape jsonb)
+-- An Animated flow: its stages in order, its drawing with the text alternative, the length it was built for and who made it.
+create function private.motion_content(p_items jsonb)
 returns jsonb
 language sql
 immutable
@@ -73,7 +75,7 @@ as $$
       'stages', (select jsonb_agg(jsonb_build_object('label', btrim(x.e ->> 0), 'text', btrim(x.e ->> 1)) order by x.n)
                  from jsonb_array_elements(p_items) with ordinality as x(e, n) where jsonb_typeof(x.e) = 'array'),
       'svg', d.e ->> 'svg', 'alt', btrim(d.e ->> 'alt'),
-      'seconds', case p_shape ->> 'Length?' when '20 s' then 20 when '45 s' then 45 when '90 s' then 90 else 45 end,
+      'seconds', (d.e ->> 'seconds')::integer,
       'made', d.e ->> 'made')
   from (select e from jsonb_array_elements(p_items) e where jsonb_typeof(e) = 'object' limit 1) d;
 $$;
@@ -91,7 +93,7 @@ as $$
     when 'Job aid' then private.aid_content(p_items)
     when 'Case exercise' then private.case_content(p_items, p_shape)
     when 'Interactive explainer' then private.explainer_content(p_items, p_shape)
-    when 'Animated flow' then private.motion_content(p_items, p_shape)
+    when 'Animated flow' then private.motion_content(p_items)
   end;
 $$;
 
@@ -185,4 +187,4 @@ as $$
                  and format in ('Podcast', 'Reel', 'E-learning', 'Avatar', 'Classroom', 'Flash cards', 'Job aid', 'Practice exam', 'Teach-back', 'Webinar', 'Interactive explainer', 'Animated flow'));
 $$;
 
-revoke execute on function private.drawing_ok(jsonb), private.motion_ok(jsonb), private.motion_content(jsonb, jsonb) from public, anon, authenticated;
+revoke execute on function private.drawing_ok(jsonb), private.motion_ok(jsonb), private.motion_content(jsonb) from public, anon, authenticated;

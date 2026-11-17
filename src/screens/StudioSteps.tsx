@@ -38,12 +38,14 @@ export function DraftRows({ st }: { st: ST }) {
   );
 }
 
-// The Motion Studio's drawing: why it is scripted, who made it, its text alternative and building it again.
+// The Motion Studio's drawing: why it is scripted, who made it, the scripted flow as a choice after a failed AI step, its
+// text alternative and building it again.
 function MotionOutput({ m, readOnly }: { m: NonNullable<ST['motion']>; readOnly: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {m.note && <div style={{ fontSize: 12.5, color: '#5a6058' }}>{m.note}</div>}
       {m.made && <div style={{ fontSize: 12, fontWeight: 600, color: '#3f6a0a' }}>{m.made}</div>}
+      {m.scripted && !readOnly && <div><Button size="sm" variant="secondary" onClick={m.scripted.run}>{m.scripted.label}</Button></div>}
       {m.alt && (readOnly ? <div style={{ fontSize: 13 }}>{m.alt.value}</div> : (
         <>
           <Textarea value={m.alt.value} onChange={(e) => m.alt!.set(e.target.value)} aria-label="Text alternative · learners who cannot watch read this" />

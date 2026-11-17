@@ -80,10 +80,11 @@ describe('the text alternative and the drawing entry', () => {
     expect(textAlternative(Array.from({ length: 7 }, () => ({ label: 'x'.repeat(300), text: 'y'.repeat(600) }))).length).toBeLessThanOrEqual(ALT_MAX);
   });
   it('tells the drawing apart from the stage rows and exam questions', () => {
-    const d = { svg: ANIMATED, alt: 'A flow.', made: 'ai' as const };
+    const d = { svg: ANIMATED, alt: 'A flow.', made: 'ai' as const, seconds: 45 };
     expect(isDrawing(d)).toBe(true);
     expect(isDrawing({ ...d, made: 'magic' })).toBe(false);
     expect(isDrawing({ ...d, alt: 3 })).toBe(false);
+    expect(isDrawing({ ...d, seconds: undefined })).toBe(false);
     expect(isDrawing(['Order', 'x'])).toBe(false);
     expect(drawingOf([['Order', 'x'], d])).toBe(d);
     expect(drawingOf([['Order', 'x']])).toBeNull();

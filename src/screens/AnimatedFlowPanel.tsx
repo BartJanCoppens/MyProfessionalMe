@@ -3,7 +3,7 @@
 // (pauseAnimations, unpauseAnimations, setCurrentTime, as Horizon's HeldVisual does), the caption of the stage in focus,
 // and the text version one click away. With motion off it holds the last frame and shows the text version. It reads
 // the view-model (fmtMotion.ts); the clock is the only state it keeps.
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, Card, LinkButton } from '../ds';
 import type { FlowView } from '../fmtMotion';
@@ -16,7 +16,9 @@ const box: CSSProperties = { border: '1px solid #e1e5dc', borderRadius: 8, paddi
 
 // The drawing's clock: where it is, whether it runs, and the controls that move it.
 function useClock(fl: FlowView) {
-  const svg = useRef<SVGSVGElement>(null), timer = useRef<number | null>(null);
+  const svg = useRef<SVGSVGElement>(null), timer = useRef<number | null>(null), latest = useRef(fl);
+  // The end is told to the view-model of that moment (not of the click on Play), so a completion meanwhile is not repeated.
+  useEffect(() => { latest.current = fl; });
   const [t, setT] = useState(fl.still ? fl.seconds : 0), [playing, setPlaying] = useState(false);
   const halt = () => { if (timer.current !== null) window.clearInterval(timer.current); timer.current = null; };
   const seek = (v: number) => { svg.current?.setCurrentTime?.(v); setT(v); };
@@ -29,7 +31,7 @@ function useClock(fl: FlowView) {
     timer.current = window.setInterval(() => {
       const now = from + (Date.now() - since) / 1000;
       if (now < fl.seconds) { setT(now); return; }
-      pause(); seek(fl.seconds); fl.onEnd();
+      pause(); seek(fl.seconds); latest.current.onEnd();
     }, TICK_MS);
   };
   return { svg, t, playing, pause, play: () => play(t >= fl.seconds ? 0 : t), replay: () => play(0),

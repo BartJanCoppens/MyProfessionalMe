@@ -9,19 +9,20 @@ import { aiAssisted, itemRows, itemsFromSaved, itemsText, ITEM_MAX } from './ite
 import { ALT_MAX, SVG_MAX } from './motionSvg';
 import type { MotionDrawing } from './motionSvg';
 import { COMPLETION, completionTodo } from './record';
-import { ALT_NEEDED, BUILD_FIRST, MOTION_LENGTH, MOTION_SECONDS, motionProblems, motionSeconds, outputProblems, studioContent } from './studioContent';
+import { ALT_NEEDED, BUILD_FIRST, LENGTH_CHANGED, MOTION_LENGTH, MOTION_SECONDS, motionProblems, motionSeconds, outputProblems, studioContent } from './studioContent';
 import { itemsValid, questionsOf, stepsOf, studioById } from './studios';
 import type { StudioEntry, StudioItem } from './studios';
 
 const def = studioById('motion')!;
 const STAGES: StudioItem[] = [['Order', 'The customer orders. '], ['Deliver', 'Goods leave.'], ['Collect', 'Payment arrives.']];
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320"><rect width="9" height="9"><animate attributeName="opacity" dur="1s"/></rect></svg>';
-const DRAWN: MotionDrawing = { svg: SVG, alt: ' Three stages, order to cash. ', made: 'ai' };
+const DRAWN: MotionDrawing = { svg: SVG, alt: ' Three stages, order to cash. ', made: 'ai', seconds: 20 };
+const AT20 = { [MOTION_LENGTH]: '20 s' };
 const list = (d: Partial<MotionDrawing> | null = {}): StudioEntry[] => [...STAGES, ...(d ? [{ ...DRAWN, ...d } as MotionDrawing] : [])];
 
 describe('studioContent for an Animated flow', () => {
-  it('publishes the stages, the drawing, its text alternative, its length and who made it, as private.motion_content does', () => {
-    const c = studioContent('Animated flow', list(), { [MOTION_LENGTH]: '20 s' });
+  it('publishes the stages, the drawing, its text alternative, the length it was built for and who made it, as private.motion_content does', () => {
+    const c = studioContent('Animated flow', list(), AT20);
     expect(c).toEqual({ kind: 'motion', stages: [{ label: 'Order', text: 'The customer orders.' }, { label: 'Deliver', text: 'Goods leave.' }, { label: 'Collect', text: 'Payment arrives.' }],
       svg: SVG, alt: 'Three stages, order to cash.', seconds: 20, made: 'ai' });
     expect(parseFormatContent(c)).toEqual(c);
@@ -30,13 +31,15 @@ describe('studioContent for an Animated flow', () => {
     expect(def.qs.find((q) => q[0] === MOTION_LENGTH)![1]).toEqual(Object.keys(MOTION_SECONDS));
     expect([motionSeconds({ [MOTION_LENGTH]: '20 s' }), motionSeconds({ [MOTION_LENGTH]: '90 s' }), motionSeconds({}), motionSeconds({ [MOTION_LENGTH]: '3 h' })]).toEqual([20, 90, 45, 45]);
   });
-  it('has no content until the flow is animated: no drawing, or only the plain layout', () => {
-    expect(studioContent('Animated flow', list(null), {})).toBeNull();
-    expect(studioContent('Animated flow', list({ made: 'layout' }), {})).toBeNull();
-    expect(studioContent('Animated flow', list({ made: 'scripted' }), {})).toMatchObject({ made: 'scripted' });
+  it('has no content until the flow is animated for the chosen length: no drawing, only the plain layout, or built for another length', () => {
+    expect(studioContent('Animated flow', list(null), AT20)).toBeNull();
+    expect(studioContent('Animated flow', list({ made: 'layout' }), AT20)).toBeNull();
+    expect(studioContent('Animated flow', list({ made: 'scripted' }), AT20)).toMatchObject({ made: 'scripted', seconds: 20 });
+    expect(studioContent('Animated flow', list(), { [MOTION_LENGTH]: '90 s' })).toBeNull();
+    expect(studioContent('Animated flow', list({ seconds: 45 }), {})).toMatchObject({ seconds: 45 });
   });
   it('is read back only with a known maker and a length of 1 to 90 seconds', () => {
-    const c = studioContent('Animated flow', list(), {})!;
+    const c = studioContent('Animated flow', list(), AT20)!;
     expect(parseFormatContent({ ...c, made: 'layout' })).toBeNull();
     expect(parseFormatContent({ ...c, seconds: 91 })).toBeNull();
     expect(parseFormatContent({ ...c, seconds: 0 })).toBeNull();
@@ -44,14 +47,15 @@ describe('studioContent for an Animated flow', () => {
 });
 
 describe('what blocks sending an Animated flow', () => {
-  it('needs the animation built, and a text alternative', () => {
-    expect(motionProblems(list(null))).toEqual([BUILD_FIRST]);
-    expect(motionProblems(list({ made: 'layout' }))).toEqual([BUILD_FIRST]);
-    expect(motionProblems(list({ alt: '  ' }))).toEqual([ALT_NEEDED]);
-    expect(motionProblems(list({ alt: 'x'.repeat(ALT_MAX + 1) })).join(' ')).toMatch(/at most 2000/);
-    expect(motionProblems(list())).toEqual([]);
-    expect(outputProblems(def, list(null))).toEqual([BUILD_FIRST]);
-    expect(outputProblems(studioById('aid')!, [])).toEqual([]);
+  it('needs the animation built for the chosen length, and a text alternative', () => {
+    expect(motionProblems(list(null), AT20)).toEqual([BUILD_FIRST]);
+    expect(motionProblems(list({ made: 'layout' }), AT20)).toEqual([BUILD_FIRST]);
+    expect(motionProblems(list(), { [MOTION_LENGTH]: '90 s' })).toEqual([LENGTH_CHANGED]);
+    expect(motionProblems(list({ alt: '  ' }), AT20)).toEqual([ALT_NEEDED]);
+    expect(motionProblems(list({ alt: 'x'.repeat(ALT_MAX + 1) }), AT20).join(' ')).toMatch(/at most 2000/);
+    expect(motionProblems(list(), AT20)).toEqual([]);
+    expect(outputProblems(def, list(null), AT20)).toEqual([BUILD_FIRST]);
+    expect(outputProblems(studioById('aid')!, [], {})).toEqual([]);
   });
   it('keeps the drawing out of the Draft step\'s rules: the stages count, at most one place short of the items cap', () => {
     expect(itemsValid(def, list())).toEqual([]);
@@ -68,6 +72,7 @@ describe('the drawing in the item store', () => {
   it('is read back from a saved contribution, shown to reviewers, scanned for client names and makes it AI-assisted when AI drew it', () => {
     expect(itemsFromSaved('Animated flow', list())).toEqual(list());
     expect(itemsFromSaved('Animated flow', [...STAGES, { svg: SVG }])).toEqual([]);
+    expect(itemsFromSaved('Animated flow', [...STAGES, { ...DRAWN, seconds: '20' }])).toEqual([]);
     expect(itemRows('Animated flow', list()).pop()).toEqual({ front: 'Animation · Made with AI', back: DRAWN.alt });
     expect(itemsText(list())).toContain(DRAWN.alt);
     expect(itemsText(list())).toContain(SVG);
@@ -84,9 +89,9 @@ describe('the Motion Studio offers only what it delivers', () => {
     expect(def.rows).toEqual([['Style', ['Boxes and arrows', 'Swimlanes'], true], ['Pace', ['Calm', 'Brisk'], true]]);
     expect(def.build).toEqual(['Drawing the flow', 'Animating each stage', 'Writing the text alternative']);
   });
-  it('completes by a mark: played to the end, or the text version read', () => {
+  it('completes by a mark: the end reached, or the text version read', () => {
     expect(COMPLETION['Animated flow']).toBe('mark');
-    expect(completionTodo('Animated flow', true)).toBe('play it to the end, or read the text version');
+    expect(completionTodo('Animated flow', true)).toBe('reach the end, or read the text version');
   });
 });
 
@@ -100,13 +105,14 @@ function body(fn: string): string {
 }
 
 describe('the database repeats the Animated flow rules', () => {
-  it('private.drawing_ok: an <svg> of at most SVG_MAX characters, a text alternative of at most ALT_MAX, made by AI or scripted', () => {
+  it('private.drawing_ok: an <svg> of at most SVG_MAX characters, a text alternative of at most ALT_MAX, made by AI or scripted, built for a length of MOTION_SECONDS', () => {
     const b = body('private.drawing_ok');
     expect(b).toContain("left(e ->> 'svg', 4) = '<svg'");
     expect(b).toContain("char_length(e ->> 'svg') <= " + SVG_MAX);
     expect(b).toContain("btrim(e ->> 'alt') <> ''");
     expect(b).toContain("char_length(e ->> 'alt') <= " + ALT_MAX);
     expect(b).toContain("(e ->> 'made') in ('ai', 'scripted')");
+    expect(b).toContain("jsonb_typeof(e -> 'seconds') is not distinct from 'number' and (e ->> 'seconds') in (" + Object.values(MOTION_SECONDS).map((v) => "'" + v + "'").join(', ') + ')');
   });
   it('private.motion_ok: stage rows one short of the cap, and exactly one drawing', () => {
     const b = body('private.motion_ok');
@@ -115,12 +121,11 @@ describe('the database repeats the Animated flow rules', () => {
     expect(b).toContain('private.drawing_ok(e)');
     expect(body('private.items_ok')).toContain("when p_type = 'Animated flow' then private.motion_ok(p_items)");
   });
-  it('private.motion_content uses MOTION_SECONDS for "Length?", 45 when unanswered', () => {
+  it('private.motion_content publishes the length the drawing was built for', () => {
     const b = body('private.motion_content');
-    expect(b).toContain("p_shape ->> '" + MOTION_LENGTH + "'");
-    expect(Object.fromEntries(Array.from(b.matchAll(/when '([^']+)' then (\d+)/g), (m) => [m[1], +m[2]]))).toEqual(MOTION_SECONDS);
-    expect(b).toContain('else ' + motionSeconds({}) + ' end');
-    expect(body('private.contribution_content')).toContain("when 'Animated flow' then private.motion_content(p_items, p_shape)");
+    expect(b).toContain("'seconds', (d.e ->> 'seconds')::integer");
+    expect(b).not.toContain('p_shape');
+    expect(body('private.contribution_content')).toContain("when 'Animated flow' then private.motion_content(p_items)");
   });
   it('private.contribution_problems counts only the stages toward the minimum and names what an Animated flow lacks', () => {
     const p = body('private.contribution_problems');

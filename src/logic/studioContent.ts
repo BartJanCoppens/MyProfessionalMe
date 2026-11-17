@@ -4,7 +4,7 @@
 // learners will get. Pure.
 import type { FormatContent } from '../types';
 import { ALT_MAX, drawingOf } from './motionSvg';
-import { itemsValid, questionsOf, stepsOf } from './studios';
+import { itemsValid, labelledRows, questionsOf, stepsOf } from './studios';
 import type { StudioDef, StudioEntry, StudioItem } from './studios';
 
 // The Case Studio's question whose Yes makes a case count as trajectory evidence (stored as `evidence` on the content).
@@ -45,14 +45,21 @@ export const MOTION_SECONDS: Record<string, number> = { '20 s': 20, '45 s': 45, 
 export const motionSeconds = (shape: Record<string, string>) => MOTION_SECONDS[shape[MOTION_LENGTH]] ?? MOTION_SECONDS['45 s'];
 // What an Animated flow needs after its Draft step: the animated drawing and its text alternative (private.drawing_ok).
 export const BUILD_FIRST = 'Build the animation in Produce';
+export const LENGTH_CHANGED = 'The length changed after the animation was built: build it again in Produce';
 export const ALT_NEEDED = 'Write the text alternative in Produce: learners who cannot watch the animation read it';
-export function motionProblems(items: StudioEntry[]): string[] {
+// The drawing, when it is animated for the length chosen now (it is timed for the length it was built for).
+export const animatedFor = (items: StudioEntry[], shape: Record<string, string>) => {
+  const d = drawingOf(items);
+  return d && d.made !== 'layout' && d.seconds === motionSeconds(shape) ? d : null;
+};
+export function motionProblems(items: StudioEntry[], shape: Record<string, string>): string[] {
   const d = drawingOf(items);
   if (!d || d.made === 'layout') return [BUILD_FIRST];
+  if (!animatedFor(items, shape)) return [LENGTH_CHANGED];
   return !d.alt.trim() ? [ALT_NEEDED] : d.alt.length > ALT_MAX ? ['Keep the text alternative to at most ' + ALT_MAX + ' characters'] : [];
 }
 // What the Produce step still has to make before a studio piece can be sent (only the Motion Studio makes something there).
-export const outputProblems = (def: StudioDef, items: StudioEntry[]) => (def.format === 'Animated flow' ? motionProblems(items) : []);
+export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>) => (def.format === 'Animated flow' ? motionProblems(items, shape) : []);
 
 // Answers only Draft with AI can deliver (question to answers): offered only while it can run, with the reason otherwise;
 // an answer already chosen stays on screen, with the reason.
@@ -68,13 +75,12 @@ const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, stri
   'Interactive explainer': (items, shape) => {
     const end = explainerEnd(shape), check = questionsOf(items);
     return { kind: 'explainer', style: STEP_THROUGH, depth: answer(shape, DEPTH_QUESTION, DEPTHS, DEPTHS[0]), end,
-      steps: stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() })), ...(end === END_CHECK && check.length ? { check } : {}) };
+      steps: labelledRows(items), ...(end === END_CHECK && check.length ? { check } : {}) };
   },
-  // None until the drawing is animated.
+  // None until the drawing is animated for the chosen length; it plays for the length it was built for.
   'Animated flow': (items, shape) => {
-    const d = drawingOf(items);
-    return d && d.made !== 'layout' ? { kind: 'motion', stages: stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() })), svg: d.svg, alt: d.alt.trim(),
-      seconds: motionSeconds(shape), made: d.made } : null;
+    const d = animatedFor(items, shape);
+    return d && d.made !== 'layout' ? { kind: 'motion', stages: labelledRows(items), svg: d.svg, alt: d.alt.trim(), seconds: d.seconds, made: d.made } : null;
   },
 };
 

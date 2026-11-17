@@ -229,7 +229,7 @@ describe('the Motion Studio\'s Produce step', () => {
     expect(screen.getByRole('button', { name: 'Start building' })).toBeTruthy();
   });
   it('shows who made the animation, the text alternative to edit and a way to build it again', () => {
-    produce([{ svg: SVG, alt: 'Three stages.', made: 'ai' }]);
+    produce([{ svg: SVG, alt: 'Three stages.', made: 'ai', seconds: 45 }]);
     expect(screen.getByText('Made with AI')).toBeTruthy();
     const alt = screen.getByRole('textbox', { name: /Text alternative/ }) as HTMLTextAreaElement;
     expect(alt.value).toBe('Three stages.');
@@ -239,8 +239,18 @@ describe('the Motion Studio\'s Produce step', () => {
     expect(screen.queryByRole('textbox', { name: /Text alternative/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Start building' })).toBeTruthy();
   });
+  it('offers the scripted flow as a button after a failed AI step, and uses it only when pressed', () => {
+    render(<Live state={{ create: data(), createTab: 'new', studio: { view: 'studio', step: 3, id: 'motion' }, nw: { ...nw, type: 'Animated flow',
+      build: [{ name: 'Drawing the flow', status: 'done' }, { name: 'Animating each stage', status: 'failed', error: 'AI did not return a usable animation · retry this step' }, { name: 'Writing the text alternative', status: 'todo' }],
+      items: { list: [...stages, { svg: SVG, alt: '', made: 'layout', seconds: 45 }] as never, how: 'manual', problems: [], note: '' } } }} />);
+    expect(screen.getByText('Not animated yet')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Use the scripted flow instead' }));
+    expect(screen.getByText('Scripted · boxes and arrows')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Use the scripted flow instead' })).toBeNull();
+    expect((screen.getByRole('textbox', { name: /Text alternative/ }) as HTMLTextAreaElement).value).toMatch(/^An animated flow in 3 stages/);
+  });
   it('shows the text alternative as plain text in View as, with nothing to change', () => {
-    produce([{ svg: SVG, alt: 'Three stages.', made: 'scripted' }], true);
+    produce([{ svg: SVG, alt: 'Three stages.', made: 'scripted', seconds: 45 }], true);
     expect(screen.getByText('Three stages.')).toBeTruthy();
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Build it again' })).toBeNull();

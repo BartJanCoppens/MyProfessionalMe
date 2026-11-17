@@ -12,8 +12,9 @@ export const BUILD_IN_S = 2.5;
 const W = 640, H = 320, MARGIN = 16, GAP = 24, BOX_H = 76, FONT = 13;
 
 // 'layout': the scripted boxes and arrows before they are animated (the first build step); 'ai' and 'scripted' are animated.
+// seconds: the length it was built for ("Length?" then); another length needs a new build.
 export type Made = 'ai' | 'scripted' | 'layout';
-export type MotionDrawing = { svg: string; alt: string; made: Made };
+export type MotionDrawing = { svg: string; alt: string; made: Made; seconds: number };
 export type Stage = { label: string; text: string };
 const MADE: Made[] = ['ai', 'scripted', 'layout'];
 // Who made it, in words: AI-made output says so (studios rule), and so does scripted output.
@@ -21,7 +22,7 @@ export const MADE_LABEL: Record<Made, string> = { ai: 'Made with AI', scripted: 
 
 export const isDrawing = (v: unknown): v is MotionDrawing => {
   const x = v as Record<string, unknown> | null;
-  return !!x && typeof x === 'object' && !Array.isArray(x) && typeof x.svg === 'string' && typeof x.alt === 'string' && MADE.includes(x.made as Made);
+  return !!x && typeof x === 'object' && !Array.isArray(x) && typeof x.svg === 'string' && typeof x.alt === 'string' && MADE.includes(x.made as Made) && typeof x.seconds === 'number';
 };
 export const drawingOf = (items: readonly unknown[]): MotionDrawing | null => (items.find(isDrawing) as MotionDrawing | undefined) ?? null;
 

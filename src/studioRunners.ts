@@ -7,6 +7,6 @@ import { motionBuilt, motionRunner } from './studioMotion';
 import type { BuildCtx } from './studioMotion';
 
 export type { BuildCtx };
-export const BUILDS: Record<string, { runner: (ctx: BuildCtx) => BuildRunner; built: (items: StudioEntry[]) => number }> = {
+export const BUILDS: Record<string, { runner: (ctx: BuildCtx) => BuildRunner; built: (items: StudioEntry[], shape: Record<string, string>) => number }> = {
   motion: { runner: motionRunner, built: motionBuilt },
 };

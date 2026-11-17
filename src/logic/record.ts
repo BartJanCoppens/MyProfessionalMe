@@ -44,7 +44,7 @@ export function feedbackProblem(rating: number | null | undefined, text: string)
 const PANEL_TODO: Record<string, string> = {
   'Flash cards': 'review every card once', 'Job aid': 'tick every item', 'Practice exam': 'finish one round', 'Teach-back': 'send your explanation',
   'Interactive explainer': 'go through to the last step (and the check, if any)',
-  'Animated flow': 'play it to the end, or read the text version',
+  'Animated flow': 'reach the end, or read the text version',
 };
 const panelTodo = (format: string, panel: boolean) => (panel ? PANEL_TODO[format] : undefined);
 

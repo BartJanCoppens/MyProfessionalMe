@@ -12,9 +12,10 @@ import { MOTION_SYSTEM } from './logic/motionPrompt';
 import { MADE_LABEL, SVG_MAX, motionLayout, textAlternative } from './logic/motionSvg';
 import type { MotionDrawing } from './logic/motionSvg';
 import { retryStep, runBuild } from './logic/studioBuild';
-import { ALT_NEEDED, BUILD_FIRST, MOTION_LENGTH } from './logic/studioContent';
+import { ALT_NEEDED, BUILD_FIRST, LENGTH_CHANGED, MOTION_LENGTH } from './logic/studioContent';
 import type { StudioEntry, StudioItem } from './logic/studios';
 import { flush, harness, member, person, stubWindow } from './test/harness';
+import { SCRIPTED_INSTEAD } from './studioMotion';
 import type { NewDraft } from './types';
 
 vi.mock('./lib/contributionStore', () => ({
@@ -57,7 +58,7 @@ describe('building an Animated flow with AI', () => {
     const req = (h.complete.mock.calls[0] as unknown[])[0] as { system: string; messages: { content: string }[] };
     expect(req.system).toBe(MOTION_SYSTEM);
     expect(req.messages[0].content).toContain(motionLayout(STAGE_OBJ, 20, false));
-    expect(h.drawing()).toEqual({ svg: AI_SVG, alt: textAlternative(STAGE_OBJ), made: 'ai' });
+    expect(h.drawing()).toEqual({ svg: AI_SVG, alt: textAlternative(STAGE_OBJ), made: 'ai', seconds: 20 });
     expect(h.st().motion).toMatchObject({ made: MADE_LABEL.ai, note: '' });
     expect(h.st().content).toMatchObject({ kind: 'motion', svg: AI_SVG, seconds: 20, made: 'ai' });
     expect(aiAssisted(h.state.nw)).toBe(true);
@@ -80,6 +81,19 @@ describe('building an Animated flow with AI', () => {
     expect(h.statuses()).toEqual(['done', 'done', 'done']);
     expect(h.complete).toHaveBeenCalledTimes(2);
   });
+  it('offers the scripted flow instead, by choice and labelled, only after the AI step failed', async () => {
+    const h = open({ live: true, ai: async () => 'No.' });
+    expect(h.st().motion!.scripted).toBeNull();
+    await h.build();
+    expect(h.drawing()).toMatchObject({ made: 'layout' });
+    expect(h.st().motion!.scripted!.label).toBe(SCRIPTED_INSTEAD);
+    h.st().motion!.scripted!.run();
+    expect(h.drawing()).toEqual({ svg: motionLayout(STAGE_OBJ, 20, true), alt: textAlternative(STAGE_OBJ), made: 'scripted', seconds: 20 });
+    expect(h.statuses()).toEqual(['done', 'done', 'done']);
+    expect(h.st().motion!.made).toBe(MADE_LABEL.scripted);
+    expect(h.st().motion!.scripted).toBeNull();
+    expect(h.complete).toHaveBeenCalledTimes(1);
+  });
   it('refuses an oversized drawing', async () => {
     const h = open({ live: true, ai: async () => AI_SVG.replace('</svg>', '<rect width="1" height="1"/>'.repeat(SVG_MAX / 28) + '</svg>') });
     await h.build();
@@ -93,7 +107,7 @@ describe('building without AI', () => {
     expect(h.st().motion!.note).toBe('AI is not switched on, so the build animates a scripted flow of boxes and arrows from your stages.');
     await h.build();
     expect(h.statuses()).toEqual(['done', 'done', 'done']);
-    expect(h.drawing()).toEqual({ svg: motionLayout(STAGE_OBJ, 20, true), alt: textAlternative(STAGE_OBJ), made: 'scripted' });
+    expect(h.drawing()).toEqual({ svg: motionLayout(STAGE_OBJ, 20, true), alt: textAlternative(STAGE_OBJ), made: 'scripted', seconds: 20 });
     expect(h.st().motion!.made).toBe(MADE_LABEL.scripted);
     expect(aiAssisted(h.state.nw)).toBe(false);
     expect(h.st().content).toMatchObject({ kind: 'motion', made: 'scripted' });
@@ -101,7 +115,7 @@ describe('building without AI', () => {
 });
 
 describe('the text alternative and the stages', () => {
-  const built: MotionDrawing = { svg: AI_SVG, alt: 'Three stages.', made: 'ai' };
+  const built: MotionDrawing = { svg: AI_SVG, alt: 'Three stages.', made: 'ai', seconds: 20 };
   it('is edited in Produce; without one nothing is checked or sent', async () => {
     const h = open({ list: [...STAGES, built] });
     expect(h.statuses()).toEqual(['done', 'done', 'done']);
@@ -125,6 +139,28 @@ describe('the text alternative and the stages', () => {
     expect(h.drawing()).toBeUndefined();
     expect(h.statuses()).toEqual(['todo', 'todo', 'todo']);
     expect(h.st().send.problems).toEqual([BUILD_FIRST]);
+  });
+  it('is built for its length: changing "Length?" afterwards asks for a new build and shows no preview', async () => {
+    const h = open();
+    await h.build();
+    expect(h.st().content).toMatchObject({ seconds: 20 });
+    h.st().shape.find((g) => g.key === MOTION_LENGTH)!.chips.find((c) => c.label === '90 s')!.pick();
+    expect(h.statuses()).toEqual(['todo', 'todo', 'todo']);
+    expect(h.st().content).toBeNull();
+    expect(h.st().send.problems).toEqual([LENGTH_CHANGED]);
+    expect(h.st().previewNote).toBe(LENGTH_CHANGED);
+    await h.build();
+    expect(h.drawing()).toMatchObject({ seconds: 90, made: 'scripted' });
+    expect(h.st().content).toMatchObject({ seconds: 90 });
+    expect(h.st().send.problems).toEqual([]);
+  });
+  it('drops a drawing built for the old length rather than finish it for the new one', async () => {
+    const h = open();
+    const runner = h.st().buildRunner!, steps = h.st().build!.steps;
+    await runner(steps[0].name, 0);
+    h.st().shape.find((g) => g.key === MOTION_LENGTH)!.chips.find((c) => c.label === '90 s')!.pick();
+    await runner(steps[1].name, 1);
+    expect(h.drawing()).toMatchObject({ made: 'layout', seconds: 20 });
   });
   it('builds it again from the start on request', () => {
     const h = open({ list: [...STAGES, built] });

@@ -44,7 +44,7 @@ function offered(aiOn: boolean, q: string, options: string[], chosen: string | u
 // The build steps as stored on the draft, fitted to the studio's own output when it has a runner that makes one.
 function built(def: StudioDef, nw: NewDraft, list: StudioEntry[]) {
   const steps = nw.build ?? startBuild(def.build ?? []), b = BUILDS[def.id];
-  return b ? fitBuilt(steps, b.built(list)) : steps;
+  return b ? fitBuilt(steps, b.built(list, nw.shape ?? {})) : steps;
 }
 
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {

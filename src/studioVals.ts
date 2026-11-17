@@ -65,7 +65,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
   // the studio's minimum, worded as in the design ("Draft at least 4 items in step 2").
   const problems = !flash ? parts.problems : tooFew(def, items.length) ? ['Draft at least ' + def.min + ' items in step ' + (steps.indexOf('Draft') + 1)] : [];
   // What the Produce step still has to make (the Motion Studio's animation and its text alternative): blocks the check, not the Draft step.
-  const unsent = [...problems, ...outputProblems(def, (nw.items?.list ?? []) as StudioEntry[])];
+  const unsent = [...problems, ...outputProblems(def, (nw.items?.list ?? []) as StudioEntry[], nw.shape ?? {})];
   // Server reasons the checks above already show (a client name) are not listed twice.
   const reasons = (src.checkReasons ?? []).filter((r) => !src.checks.some((c) => c.text === r));
   const next = () => {

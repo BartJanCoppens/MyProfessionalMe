@@ -14,7 +14,8 @@ import * as learner from '../lib/learnerStore';
 import { emptyParts } from '../logic/contribution';
 import { MOTION_LENGTH } from '../logic/studioContent';
 import { initState, Logic } from '../model';
-import { cfg, harness, member, person } from '../test/harness';
+import { cfg, emptyData, harness, member, person } from '../test/harness';
+import type { LearnerData } from '../lib/learnerStore';
 import type { AppState, Learn } from '../types';
 import { DetailScreen } from './Library';
 import { Preview } from './studioPreviews';
@@ -39,17 +40,23 @@ afterAll(() => { LEARN.splice(LEARN.indexOf(ROW), 1); delete LEARN_BY.L994; dele
 const smil = { pause: vi.fn(), unpause: vi.fn(), at: vi.fn() };
 beforeEach(() => {
   vi.clearAllMocks();
+  saved = {};
+  vi.mocked(learner.saveProgress).mockImplementation(async (_u, id, patch) => { saved[id] = { state: patch.state ?? 'not-started', pct: patch.pct ?? 0, chosen: false, detail: patch.detail }; });
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
   Object.assign(window.SVGSVGElement.prototype, { pauseAnimations: smil.pause, unpauseAnimations: smil.unpause, setCurrentTime: smil.at });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+// What the saves wrote, read back on reload as the subject's progress (as useSubject does).
+let saved: LearnerData['progress'] = {};
 function Live({ config = {}, readOnly = false }: { config?: Partial<Config>; readOnly?: boolean }) {
   const conf = { ...cfg, motion: true, ...config };
   const [st, setSt] = useState<AppState>(() => ({ ...initState(conf), screen: 'detail', detailId: 'L994' }));
-  const subject = person({ readOnly });
+  const [data, setData] = useState<LearnerData>(emptyData);
+  const subject = person({ readOnly, data });
+  const reload = async () => setData({ ...emptyData(), progress: { ...saved } });
   const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), conf,
-    { toastTimer: { current: undefined }, drag: { current: null }, file: { current: null }, chat: { current: null } }, member(subject.id), subject, async () => {}, async () => {}).renderVals();
+    { toastTimer: { current: undefined }, drag: { current: null }, file: { current: null }, chat: { current: null } }, member(subject.id), subject, reload, async () => {}).renderVals();
   return <DetailScreen vm={vm} />;
 }
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
@@ -106,6 +113,16 @@ describe('the learner\'s Animated flow', () => {
     click('Done reading');
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L994', { state: 'accepted', pct: 100, detail: { read: true } });
   });
+  it('reading the text version while it plays completes it once: reaching the end afterwards writes nothing more', async () => {
+    vi.useFakeTimers();
+    render(<Live />);
+    click('Play');
+    click('Show the text version');
+    await act(async () => { click('Done reading'); });
+    act(() => { vi.advanceTimersByTime(21000); });
+    expect(learner.saveProgress).toHaveBeenCalledTimes(1);
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L994', { state: 'accepted', pct: 100, detail: { read: true } });
+  });
   it('with ?motion=off shows the last frame, paused, and the text version, without a player', () => {
     render(<Live config={{ motion: false }} />);
     expect(smil.pause).toHaveBeenCalled();
@@ -140,7 +157,7 @@ describe('the Motion Studio preview', () => {
     const h = harness({ access: member('u1'), subject: person(), config: { motion: true }, state: { screen: 'create', createTab: 'new', nwKb: [], studio: { view: 'studio', step: 4, id: 'motion' },
       create: { contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 },
       nw: { line: 'Consulting', aud: '', type: 'Animated flow', title: 'T', dom: 'corp', lvl: '1', stage: 'Analyst', take: 'x', outline: [], sources: [], ai: false, aiNote: '', shape: { [MOTION_LENGTH]: '20 s' },
-        items: { list: [['Order', 'a'], ['Deliver', 'b'], ['Collect', 'c'], { svg, alt: 'Three stages.', made: 'scripted' }] as never, how: 'manual', problems: [], note: '' } } } });
+        items: { list: [['Order', 'a'], ['Deliver', 'b'], ['Collect', 'c'], { svg, alt: 'Three stages.', made: 'scripted', seconds: 20 }] as never, how: 'manual', problems: [], note: '' } } } });
     render(<Preview kind="motion" c={h.vm().create!} />);
     expect(screen.getByText(/play-test/i)).toBeTruthy();
     expect(screen.getByText('3 stages · 20 s · Scripted · boxes and arrows')).toBeTruthy();
