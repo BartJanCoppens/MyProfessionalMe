@@ -19,7 +19,7 @@ export function Hub({ c }: { c: CS }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,340px))', gap: 12 }}>
         {st.cards.map((k) => (
-          <button key={k.name} type="button" onClick={k.open} aria-disabled={k.disabled} style={{ appearance: 'none', font: 'inherit', textAlign: 'left', cursor: k.disabled ? 'not-allowed' : 'pointer', background: '#fff',
+          <button key={k.name} type="button" onClick={k.open} disabled={k.disabled} style={{ appearance: 'none', font: 'inherit', textAlign: 'left', cursor: k.disabled ? 'not-allowed' : 'pointer', background: '#fff',
             border: '1px solid #e1e5dc', borderRadius: 6, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, color: k.disabled ? '#8b918a' : '#1a1d18' }}>
             <span style={{ fontWeight: 600, fontSize: 15 }}>{k.name}</span>
             <span style={{ fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' }}>{k.tag}</span>

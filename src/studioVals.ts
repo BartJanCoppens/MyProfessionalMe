@@ -9,6 +9,8 @@ import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { aiAssisted, noItems, validItems } from './logic/items';
 import type { Item } from './logic/items';
+import { mayCreate } from './logic/contribution';
+import type { RuleParts } from './logic/contribution';
 
 export const STUDIO_FORMATS = ['Flash cards', 'Practice exam'];
 export const STUDIO_STEPS = ['Idea & sources', 'Draft', 'Preview & test', 'Check & send'];
@@ -19,21 +21,37 @@ const LABELS: Record<string, string> = { ai: 'Made with AI', scripted: 'Scripted
 
 // What createVals already computed for the form; the studio only arranges it.
 export type StudioSrc = {
-  nw: NewDraft; setNw: SetNw; allowedFormats: string[]; canCreate: boolean; busy: boolean;
+  nw: NewDraft; setNw: SetNw; rules: RuleParts[]; canCreate: boolean; busy: boolean;
   checks: { text: string; dot: string; fg: string }[]; blocked: boolean; route: { n: string; name: string; role: string }[]; policyNote: string; routeWarn: string;
   submitLabel: string; submit: () => void; saveDraft: () => void;
 };
 
+// The draft's line, audience and domain for a format: unchanged when a rule already allows the combination, else those
+// of the first rule that allows the format (the picker-less studio could never fix a mismatch itself).
+function fit(rules: RuleParts[], nw: NewDraft, format: string): Partial<NewDraft> {
+  const attrs = (d: Partial<NewDraft>) => ({ line: (d.line ?? nw.line) || null, format, domain: d.dom ?? nw.dom, audience: (d.aud ?? nw.aud) || null });
+  if (mayCreate(rules, attrs({}))) return {};
+  for (const r of rules.filter((x) => !x.formats.length || x.formats.includes(format))) {
+    const d: Partial<NewDraft> = { line: r.lines.length ? r.lines[0] : nw.line, aud: r.audiences[0] ?? '', dom: r.domains.length ? r.domains[0] : nw.dom };
+    if (mayCreate(rules, attrs(d))) return d;
+  }
+  return {};
+}
+// A format is offered when some rule allows it with a combination the studio can reach.
+const reachable = (rules: RuleParts[], nw: NewDraft, f: string) => mayCreate(rules, { line: nw.line || null, format: f, domain: nw.dom, audience: nw.aud || null })
+  || rules.some((r) => (!r.formats.length || r.formats.includes(f)) && mayCreate(rules, { line: r.lines[0] ?? nw.line, format: f, domain: r.domains[0] ?? nw.dom, audience: r.audiences[0] ?? null }));
+
 export function studioVals(L: Logic, src: StudioSrc) {
   const { nw, setNw } = src, { step } = L.state.studio;
-  const formats = STUDIO_FORMATS.filter((f) => src.allowedFormats.includes(f));
+  const formats = STUDIO_FORMATS.filter((f) => reachable(src.rules, nw, f));
   const set = (p: Partial<StudioState>) => L.setState((s) => ({ studio: { ...s.studio, ...p } }));
   const items = validItems(nw.type, nw.items?.list ?? []);
-  const pick = (f: string) => (L.state.nwAiBusy ? L.say('Wait for the draft to finish') : setNw((cur) => (cur.type === f ? {} : { type: f, items: noItems() })));
+  const pick = (f: string) => (L.state.nwAiBusy ? L.say('Wait for the draft to finish') : setNw((cur) => (cur.type === f ? {} : { type: f, items: noItems(), ...fit(src.rules, cur, f) })));
   const open = () => {
     if (!src.canCreate) { L.say('Ask an admin for creation rights first'); return; }
     if (!formats.length) { L.say('Not in your creation rules'); return; }
-    if (!STUDIO_FORMATS.includes(nw.type)) setNw({ type: formats[0], items: noItems() });
+    const f = formats.includes(nw.type) ? nw.type : formats[0];
+    setNw((cur) => ({ ...(cur.type === f ? {} : { type: f, items: noItems() }), ...fit(src.rules, cur, f) }));
     set({ view: 'studio', step: 0 });
   };
   const next = () => {

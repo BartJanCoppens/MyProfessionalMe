@@ -354,7 +354,7 @@ function createScreen(L: Logic) {
       + ' A requirement applies to every contribution it matches (same parts as creation rules); a contribution is routed by the strictest one when it is submitted, and with no review at all it is published on submit, after the content checks.',
   };
   // The Studios hub arranges what the form already computed (studioVals.ts); an edit always shows the form.
-  const studio = studioVals(L, { nw, setNw, allowedFormats: allowed.formats, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
+  const studio = studioVals(L, { nw, setNw, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
     routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft });
   return { ...vm, studio, newView: s.editing ? 'form' as const : s.studio.view };
 }

@@ -69,6 +69,29 @@ describe('the hub', () => {
   });
 });
 
+describe('rules with several combinations', () => {
+  const two = data({ rules: [rule({ lines: ['Consulting'], formats: ['Podcast'] }), rule({ lines: ['Audit'], formats: ['Flash cards'] })] });
+  it('moves the draft to the line of the rule that allows the format, and can reach Send', () => {
+    const h = open({ studio: { view: 'hub', step: 0 }, data: two, nw: { type: 'Podcast', line: 'Consulting', items: deck(2) } });
+    h.st().cards[0].open();
+    expect(h.state.nw).toMatchObject({ type: 'Flash cards', line: 'Audit' });
+    h.L().setState({ studio: { view: 'studio', step: 3 }, nw: { ...h.state.nw, items: deck(2) } });
+    expect(h.st().send.blocked).toBe(false);
+    expect(h.c().nwAllowed).toBe(true);
+  });
+  it('re-fits the draft when a format is picked', () => {
+    const rules = data({ rules: [rule({ lines: ['Consulting'], formats: ['Practice exam'] }), rule({ lines: ['Audit'], formats: ['Flash cards'] })] });
+    const h = open({ data: rules, nw: { type: 'Practice exam', line: 'Consulting' } });
+    h.st().formats.find((f) => f.label === 'Flash cards')!.pick();
+    expect(h.state.nw).toMatchObject({ type: 'Flash cards', line: 'Audit' });
+  });
+  it('disables the card natively when the only rule is another format', () => {
+    const h = open({ studio: { view: 'hub', step: 0 }, data: data({ rules: [rule({ lines: ['Consulting'], formats: ['Podcast'] })] }) });
+    expect(h.st().cards[0].disabled).toBe(true);
+    expect(h.st().formats).toEqual([]);
+  });
+});
+
 describe('the steps', () => {
   it('has four steps: Shape it is folded into the first, Produce is dropped', () => {
     expect(open().st().steps).toEqual(['Idea & sources', 'Draft', 'Preview & test', 'Check & send']);
