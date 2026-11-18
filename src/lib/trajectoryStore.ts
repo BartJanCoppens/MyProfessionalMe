@@ -2,6 +2,7 @@
 // with malformed steps or maps is dropped with a console warning, never thrown. Learners write enrolments only through
 // the RPCs below (request, withdraw, submit, submit_renewal); the counsellor decides through decide_trajectory and
 // confirm_credential.
+import { STEP_KIND_NAMES } from '../logic/trajectory';
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjDecision, TrjMap, TrjStep } from '../logic/trajectory';
 import { isObject } from '../logic/values';
 import { inOrder } from './contentStore';
@@ -18,8 +19,7 @@ type CredentialRow = Omit<Credential, 'link' | 'ref' | 'renewal_of' | 'supersede
 type Failure = { message: string; code?: string };
 
 export const TRAJECTORY_COLUMNS = 'id, name, issuer, credential, enrol, months, valid_months, renewal, cost, status, business_line, steps, maps, published_at';
-const KINDS = ['learn', 'elect', 'evidence', 'check', 'exam'];
-const stepOk = (s: unknown) => isObject(s) && typeof s.id === 'string' && s.id.trim() !== '' && typeof s.k === 'string' && KINDS.includes(s.k);
+const stepOk = (s: unknown) => isObject(s) && typeof s.id === 'string' && s.id.trim() !== '' && typeof s.k === 'string' && (STEP_KIND_NAMES as readonly string[]).includes(s.k);
 const mapOk = (m: unknown) => Array.isArray(m) && m.length === 3 && typeof m[0] === 'string' && typeof m[1] === 'string' && (m[2] === 'mandatory' || m[2] === 'advised');
 const entryOk = (e: unknown) => isObject(e) && ['submitted', 'booked', 'done'].includes(e.state as string);
 

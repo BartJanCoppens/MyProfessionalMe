@@ -1,7 +1,7 @@
 // What the admin trajectory editor shows for a trajectory: labels, step lines and the learner's-eye stones (the design's wording).
 import type { StepKind, Trajectory, TrjStep } from './trajectory';
 
-export const STEP_KINDS: Record<StepKind, [string, string]> = { learn: ['Learning', 'muted'], elect: ['Electives', 'info'], evidence: ['Evidence', 'source'], check: ['Sign-off', 'bundle'], exam: ['Exam', 'green'] };
+export const STEP_KINDS: Record<StepKind, [string, string]> = { learn: ['Learning', 'muted'], elect: ['Electives', 'info'], evidence: ['Evidence', 'source'], check: ['Sign-off', 'bundle'], exam: ['Exam', 'green'], make: ['Being made', 'muted'] };
 export const ENROL: [Trajectory['enrol'], string][] = [['auto', 'Auto-enrol'], ['open', 'Open opt-in'], ['approval', 'Counsellor approval']];
 export const ISSUERS = ['ITAA', 'ACCA', 'IBR-IRE', 'Microsoft', 'Internal academy', 'Other'];
 

@@ -20,7 +20,7 @@ const mod = (id: string): PlanModule => ({ id, title: 'M ' + id, depth: 'foundat
 const record = (over: Partial<PlanRecord['plan']> = {}): PlanRecord => ({ trajectoryId: 'T1', plan: { ...emptyPlan(), ...over }, messages: [], bundleIds: [], updatedAt: null });
 const bundle = (): Bundle => ({ id: 'b1', name: 'VAT guide', desc: 'Rates', owner: 'Tax', tags: [], access: 'all', status: 'live', usedBy: 1, sources: [], chunks: [], line: 'Audit' } as unknown as Bundle);
 const setup = (state: Partial<AppState> = {}) => harness({ subject: person({ id: 'u1' }), access: systemAdmin('u1'), config: { liveAssistant: true }, state: { trjs: [T1], trjSel: 'T1', ...state } });
-const open = { open: true, say: '', focus: null, editing: null, kbq: '', confirm: false };
+const open = { open: true, say: '', focus: null, editing: null, kbq: '', confirm: false, applying: false };
 
 beforeEach(() => { load.mockReset(); save.mockReset(); });
 

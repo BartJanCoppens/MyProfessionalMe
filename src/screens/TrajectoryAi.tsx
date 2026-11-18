@@ -6,6 +6,7 @@ import AiMadeTag from './AiMadeTag';
 import { BundlePicker } from './CreateParts';
 import { Problems } from './CreateShared';
 import { label } from './labelStyle';
+import PlanApply from './PlanApply';
 import PlanModules from './PlanModules';
 import PlanSources from './PlanSources';
 
@@ -69,6 +70,7 @@ export default function TrajectoryAi({ tai }: { tai: Tai }) {
           <Brief tai={tai} />
           <PlanModules tai={tai} />
           <Problems list={tai.problems} />
+          {tai.canEdit && <PlanApply a={tai.apply} />}
           {tai.canEdit && (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               {tai.startOver.confirm ? (

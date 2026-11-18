@@ -41,7 +41,7 @@ const brief: PlanBrief = { goal: 'Prepare advisers', credential: 'Certified advi
 const record = (over: Partial<PlanRecord> = {}): PlanRecord => ({ trajectoryId: 'T1', plan: emptyPlan(), messages: [], bundleIds: [], updatedAt: null, ...over });
 const source = (): PlanSource => ({ id: 's1', trajectoryId: 'T1', name: 'syllabus.pdf', path: 'u/s1/syllabus.pdf', pages: 4, passages: [[4, 'The exam covers VAT.']], chars: 1, flags: [], addedBy: 'u1', addedAt: '' });
 const show = (plans: Record<string, TrjPlanState> = { T1: { record: record(), sources: [] } }, state: Partial<AppState> = {}, readOnly = false) =>
-  render(<Live readOnly={readOnly} state={{ trjs: [T1, T2], trjSel: 'T1', aiLive: ['trajectory_ai'], trjPanel: { open: true, say: '', focus: null, editing: null, kbq: '', confirm: false }, trjPlans: plans, ...state }} />);
+  render(<Live readOnly={readOnly} state={{ trjs: [T1, T2], trjSel: 'T1', aiLive: ['trajectory_ai'], trjPanel: { open: true, say: '', focus: null, editing: null, kbq: '', confirm: false, applying: false }, trjPlans: plans, ...state }} />);
 const answer = (over: Record<string, unknown> = {}) => ({ text: JSON.stringify({ reply: 'Here is a plan.', questions: [], brief: null, modules: null, ...over }), cut: false });
 const type = (text: string) => fireEvent.change(screen.getByLabelText('Message to the AI'), { target: { value: text } });
 const planned = (...modules: PlanModule[]) => ({ T1: { record: record({ plan: { ...emptyPlan(), brief, modules } }), sources: [source()] } });

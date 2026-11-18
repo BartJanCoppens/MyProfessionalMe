@@ -1,7 +1,7 @@
 // The certification layer on the growth map (design v4): threads, rings and credential diamonds on the constellation,
 // one polygon per trajectory on the radar, a lane per trajectory on the road, and the dock rows. Pure geometry and wording.
 // An entry is one of the viewed person's enrolled trajectories with its progress; `open` shows its page.
-import { monthLabel, trajectoryProgress } from './trajectory';
+import { isRequired, monthLabel, trajectoryProgress } from './trajectory';
 import type { Enrolment, Trajectory } from './trajectory';
 import { STEP_KINDS, stepTitle } from './trajectoryView';
 import type { TitleOf } from './trajectoryView';
@@ -76,7 +76,7 @@ export function certRoadLanes(entries: CertEntry[], titleOf: TitleOf, counsellor
         : r.state === 'booked' || (r.state === 'submitted' && st.k === 'exam') ? 'booked' : r.state === 'submitted' ? 'with ' + counsellor : 'by ' + monthLabel(due);
       const late = due - ROAD_START >= 12 && (r.locked || r.state !== 'open') ? ' · ' + monthLabel(due) : '';
       cells[quarterOf(due)].items.push({ id: t.id + ':' + st.id, av: false, avInit: '', title: stepTitle(st, titleOf), onClick: open, sub: STEP_KINDS[st.k][0] + ' · ' + when + late,
-        ringCss: st.req || st.k === 'exam' ? '2px solid #e0a100' : '1.5px dashed #e0a100' });
+        ringCss: isRequired(st, e) ? '2px solid #e0a100' : '1.5px dashed #e0a100' });
     });
     const credAt = e.start_month + t.months;
     cells[quarterOf(credAt)].items.push({ id: t.id + ':credential', av: false, avInit: '', title: '◆ ' + (t.credential || t.name), sub: 'Credential · ' + monthLabel(credAt), ringCss: '2px solid #7a5000', onClick: open });

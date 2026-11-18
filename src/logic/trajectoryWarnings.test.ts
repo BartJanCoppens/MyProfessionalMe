@@ -39,4 +39,12 @@ describe('adminWarnings', () => {
     const t = { ...good, steps: [{ id: 's1', k: 'learn' as const, lid: 'gone', win: 1, req: true, pre: null }, good.steps[1]] };
     expect(adminWarnings(t, byId, 200)).toEqual(['Step 1 points at a learning that is unpublished or no longer in the library.']);
   });
+  it('says how many steps are being made, and what happens when their material is published', () => {
+    const make = { id: 'm1', k: 'make' as const, title: 'Flash cards', fmt: 'Flash cards', hours: 1, win: 3, req: true, pre: null };
+    const one = { ...good, steps: [make, ...good.steps] };
+    expect(adminWarnings(one, byId, 200)).toContain('1 step is being made · learners see it as Being made · when its material is published it links and becomes required');
+    const two = { ...good, steps: [make, { ...make, id: 'm2' }, ...good.steps] };
+    expect(adminWarnings(two, byId, 200)).toContain('2 steps are being made · learners see them as Being made · when their material is published each links and becomes required');
+    expect(adminWarnings(good, byId, 200).join(' ')).not.toMatch(/being made/);
+  });
 });

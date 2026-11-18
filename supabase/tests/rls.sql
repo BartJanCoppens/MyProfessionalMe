@@ -4007,6 +4007,56 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
 select pg_temp.gr_blocked('TP a signed-in user cannot execute plan_trajectory_allowed', $q$select public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a7', 'TP2')$q$, 'blocked: 42501');
 reset role;
+-- Task 7.4: a placeholder (make) step links to its material once published, in the database
+reset role;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+insert into public.learnings (id, title, domain, level, format, hours, status) values ('LM1', 'T made learning', 'prof', 2, 'Micro-guide', 0.5, 'published');
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway) values ('Consulting', 'Micro-guide', 'T made contribution', 'prof', 'x') returning id)
+  select set_config('test.tm_c1', (select id::text from i), true);
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway) values ('Consulting', 'Micro-guide', 'T made in review', 'prof', 'x') returning id)
+  select set_config('test.tm_c2', (select id::text from i), true);
+update public.contributions set status = 'review', step = 1 where id = current_setting('test.tm_c2')::uuid;
+set local request.jwt.claims = '';
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps) values ('TM1', 'T make draft', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with u as (update public.trajectories set steps = '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}]' where id = 'TM1' returning 1)
+  insert into results (check_name, expected, actual) select 'TM a make step is accepted', '1 rows', count(*)||' rows' from u;
+select pg_temp.gr_blocked('TM a make step with a cid that is no uuid is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","title":"x","fmt":"Flash cards","cid":"abc","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TM a make step with an upper-case cid is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","title":"x","fmt":"Flash cards","cid":"00000000-0000-0000-0000-00000000000A","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TM a make step without a title is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","fmt":"Flash cards","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TM an unknown step kind is still refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"zzz","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
+-- a contribution in review does not link
+select set_config('test.tm_steps', format('[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx","cid":"%s"},{"id":"m2","k":"make","title":"Second","fmt":"Flash cards","hours":1,"win":4,"req":true,"pre":"m1","from":"p:my","cid":"%s"}]', current_setting('test.tm_c1'), current_setting('test.tm_c2')), true);
+update public.trajectories set steps = current_setting('test.tm_steps')::jsonb where id = 'TM1';
+insert into results (check_name, expected, actual) select 'TM a make step whose contribution is not published stays make', 'make/make', (steps -> 0 ->> 'k')||'/'||(steps -> 1 ->> 'k') from public.trajectories where id = 'TM1';
+reset role;
+-- publishing the contribution links the step
+update public.contributions set status = 'published', step = 4, learning_id = 'LM1', published_at = now() where id = current_setting('test.tm_c1')::uuid;
+insert into results (check_name, expected, actual) select 'TM publishing the contribution turns the step into learn with its learning, keeping id, win, req, pre and from', 'learn/LM1/m1/3/true/p:mx',
+  (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid')||'/'||(steps -> 0 ->> 'id')||'/'||(steps -> 0 ->> 'win')||'/'||(steps -> 0 ->> 'req')||'/'||(steps -> 0 ->> 'from') from public.trajectories where id = 'TM1';
+insert into results (check_name, expected, actual) select 'TM ... drops cid, fmt, title and hours, and records when it was linked', 'false/false/false/false/true',
+  ((steps -> 0) ? 'cid')::text||'/'||((steps -> 0) ? 'fmt')::text||'/'||((steps -> 0) ? 'title')::text||'/'||((steps -> 0) ? 'hours')::text||'/'||((steps -> 0) ? 'linked_at')::text from public.trajectories where id = 'TM1';
+insert into results (check_name, expected, actual) select 'TM ... and the other step, whose contribution is in review, stays make', 'make', steps -> 1 ->> 'k' from public.trajectories where id = 'TM1';
+-- a stale save from an open editor still sends the make step: stored as learn
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select set_config('test.tm_steps', format('[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx","cid":"%s"}]', current_setting('test.tm_c1')), true);
+update public.trajectories set steps = current_setting('test.tm_steps')::jsonb where id = 'TM1';
+insert into results (check_name, expected, actual) select 'TM an update that sends the stale make step stores learn', 'learn/LM1', (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid') from public.trajectories where id = 'TM1';
+-- learners: the make step shows on a live trajectory, and cannot be submitted
+reset role;
+set local request.jwt.claims = '';
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps) values
+  ('TM2', 'T make live', 'T issuer', 'T credential', 'open', 6, 'live', 'Consulting', '[{"id":"m1","k":"make","title":"Being made","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null},{"id":"e1","k":"evidence","title":"Evidence","hours":0,"win":4,"req":true,"pre":null}]', '[]');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+select public.request_trajectory('TM2');
+insert into results (check_name, expected, actual) select 'TM a learner reads the make step of a live trajectory', 'make', steps -> 0 ->> 'k' from public.trajectories where id = 'TM2';
+select pg_temp.gr_blocked('TM a make step cannot be submitted', $q$select public.submit_trajectory_step('TM2', 'm1')$q$, 'blocked');
+select pg_temp.gr_blocked('TM authenticated cannot execute link_made_steps', $q$select private.link_made_steps()$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TM authenticated cannot execute relink_trajectories', $q$select private.relink_trajectories()$q$, 'blocked: 42501');
+reset role;
 -- the trajectory goes: plan and sources go with it
 reset role;
 set local request.jwt.claims = '';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   autoEnrolled, canBeMandatory, credentialExpiry, inMandatoryAudience, mapAtStage, monthLabel, relevantMap, startMonth, stepCpd, stepHours, totals, trajectoryProgress,
-  type Enrolment, type LearningRef, type Trajectory,
+  isRequired, type Enrolment, type LearningRef, type Trajectory,
 } from './trajectory';
 
 const L = (hours: number, cpd: number, state: LearningRef['state'] = 'not-started', pct = 0): LearningRef => ({ hours, cpd, state, pct });
@@ -124,5 +124,48 @@ describe('relevance, auto-enrolment, start month and expiry', () => {
     expect(credentialExpiry(2026 * 12 + 2, 36)).toBe(2029 * 12 + 2);
     expect(credentialExpiry(2026 * 12 + 2, null)).toBeNull();
     expect(monthLabel(2026 * 12 + 8)).toBe('Sep 2026');
+  });
+});
+
+describe('make steps (a placeholder for material that is being made)', () => {
+  const make = { id: 'm1', k: 'make' as const, title: 'Flash cards', fmt: 'Flash cards', hours: 6, win: 6, req: true, pre: null, from: 'p:x' };
+  const t = { ...base, steps: [{ ...base.steps[0] }, make, base.steps[3]].map((st) => (st.id === 's4' ? { ...st, pre: null } : st)) };
+  it('is never required, is missing and open, and is never next', () => {
+    const pg = trajectoryProgress(t, enrol(), byId);
+    expect(pg.reqN).toBe(2);
+    expect(pg.steps[1]).toMatchObject({ state: 'open', missing: true, locked: false });
+    expect(pg.next).toBe(0);
+    expect(trajectoryProgress(t, enrol(), { ...byId, a: L(10, 4, 'accepted', 100) }).next).not.toBe(1);
+  });
+  it('is complete with only it undone, and totals counts its hours but not as required', () => {
+    const pg = trajectoryProgress({ ...t, steps: [{ ...t.steps[0], id: 's1' }, make] }, enrol({ s1: { state: 'done' } }), { ...byId, a: L(10, 4, 'accepted', 100) });
+    expect(pg.complete).toBe(true);
+    expect(pg.next).toBe(-1);
+    expect(totals(t, byId)).toMatchObject({ tot: 10 + 6 + 3, req: 2 });
+  });
+});
+
+describe('a linked placeholder is required for new enrolments only', () => {
+  const linked = { id: 's9', k: 'learn' as const, lid: 'b', win: 6, req: true, pre: null, from: 'p:x', linked_at: '2026-06-10T12:00:00+00:00' };
+  const t = { ...base, steps: [linked] };
+  const row = (created_at: string | null | undefined): Enrolment => ({ ...enrol(), created_at });
+  it('counts as optional for someone whose enrolment began before it was linked', () => {
+    const pg = trajectoryProgress(t, row('2026-06-10T11:59:59.999+00:00'), byId);
+    expect(pg.reqN).toBe(0);
+    expect(trajectoryProgress(t, row('2026-06-10T12:00:00Z'), byId).reqN).toBe(1);
+    expect(trajectoryProgress(t, row('2026-07-01T00:00:00+00:00'), byId).reqN).toBe(1);
+  });
+  it('is required when the enrolment has no start time, or there is no enrolment, or it was never linked later', () => {
+    expect(trajectoryProgress(t, row(undefined), byId).reqN).toBe(1);
+    expect(trajectoryProgress(t, null, byId).reqN).toBe(1);
+    expect(trajectoryProgress({ ...base, steps: [{ ...linked, linked_at: undefined }] }, row('2020-01-01T00:00:00Z'), byId).reqN).toBe(1);
+  });
+  it('lets an optional step be done without holding up completion, and an undone one does not block', () => {
+    const early = row('2026-01-01T00:00:00Z');
+    const two = { ...base, steps: [linked, { id: 's1', k: 'evidence' as const, title: 'E', win: 3, req: true, pre: null }] };
+    const pg = trajectoryProgress(two, { ...early, steps: { s1: { state: 'done' } } }, byId);
+    expect(pg.complete).toBe(true);
+    expect(isRequired(linked, early)).toBe(false);
+    expect(isRequired({ ...linked, k: 'exam' }, early)).toBe(true);
   });
 });

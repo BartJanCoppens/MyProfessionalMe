@@ -8,7 +8,7 @@ import { createTrajectory, saveTrajectorySoon } from './lib/trajectoryStore';
 import { trajectoryDeleteVals } from './trajectoryDelete';
 import { countsAsEvidence } from './logic/studioContent';
 import { canBeMandatory, totals } from './logic/trajectory';
-import type { LearningRef, StepKind, Trajectory, TrjStep } from './logic/trajectory';
+import type { LearningRef, Trajectory, TrjStep } from './logic/trajectory';
 import { addMap, addStep, blankTrajectory, earlierSteps, moveStep, removeStep, saveable } from './logic/trajectoryEdit';
 import { adminWarnings } from './logic/trajectoryWarnings';
 import { ENROL, ISSUERS, STEP_KINDS, enrolLabel, fmtHours, statusLabel, stepTitle, stones, validLabel } from './logic/trajectoryView';
@@ -44,7 +44,7 @@ export function refusal(L: Logic, t: Trajectory): string | null {
 
 // Applies one edit to a trajectory: refused when the database would refuse it, else shown now and saved soon. Returns the result.
 // `change` may run more than once (here and in the state updater), so build random or one-off values outside it.
-function patch(L: Logic, id: string, change: (t: Trajectory) => Trajectory | null): Trajectory | null {
+export function patch(L: Logic, id: string, change: (t: Trajectory) => Trajectory | null): Trajectory | null {
   const cur = L.state.trjs.find((t) => t.id === id), next = cur && change(cur);
   if (!cur || !next) return null;
   const why = refusal(L, cur) || refusal(L, next);
@@ -85,7 +85,7 @@ export function trajectoryAdminVals(L: Logic) {
   const list = visible.map((x) => {
     const tot = totals(x, byId), on = !!t && x.id === t.id;
     return {
-      id: x.id, name: x.name, on, pick: () => L.setState((st) => ({ trjSel: x.id, trjStep: null, trjPanel: { ...st.trjPanel, focus: null, editing: null, confirm: false } })), bg: on ? '#f6f9ef' : '#fff', bar: on ? 'inset 3px 0 0 #86BC25' : 'none',
+      id: x.id, name: x.name, on, pick: () => L.setState((st) => ({ trjSel: x.id, trjStep: null, trjPanel: { ...st.trjPanel, focus: null, editing: null, confirm: false, applying: false } })), bg: on ? '#f6f9ef' : '#fff', bar: on ? 'inset 3px 0 0 #86BC25' : 'none',
       meta: [x.issuer, x.steps.length + ' steps', fmtHours(tot.tot) + (tot.cpd ? ' · ' + tot.cpd + ' CPD units' : ''), x.months + ' months'].filter(Boolean).join(' · '),
       st: x.status === 'live' ? 'accepted' : x.status === 'retired' ? 'na' : 'not-started', stLabel: statusLabel(x.status), enrolLabel: enrolLabel(x.enrol),
       auds: x.maps.length ? x.maps.map((m) => ({ color: lensOf(m[0])?.[2] ?? '#d5dacf', label: (AUD_INFO[m[0]]?.name ?? m[0]) + ' · ' + m[1] + ' · ' + (m[2] === 'mandatory' ? 'mandatory' : 'suggested') })) : [{ color: '#d5dacf', label: 'Not mapped yet' }],
@@ -111,7 +111,7 @@ export function trajectoryAdminVals(L: Logic) {
   const edit = (change: (x: Trajectory) => Trajectory | null) => patch(L, t.id, change);
   const editStep = (id: string, change: (x: TrjStep) => TrjStep) => edit((x) => ({ ...x, steps: x.steps.map((st) => (st.id === id ? change(st) : st)) }));
   // The new step is made once (its id is random), so the state, the save and the selection all carry the same id.
-  const add = (what: { k: StepKind; lid?: string }) => {
+  const add = (what: Parameters<typeof addStep>[1]) => {
     const made = addStep(t.steps, what, t.months)[t.steps.length];
     if (edit((x) => ({ ...x, steps: x.steps.concat([made]) }))) L.setState({ trjStep: made.id });
   };
@@ -122,7 +122,8 @@ export function trajectoryAdminVals(L: Logic) {
     const K = STEP_KINDS[st.k], sel = s.trjStep === st.id, h = totals({ ...t, steps: [st] }, byId).tot, pre = st.pre ? t.steps.findIndex((x) => x.id === st.pre) : -1;
     return {
       id: st.id, n: String(i + 1), kind: K[0], tone: K[1], title: stepTitle(st, titleOf),
-      meta: [st.lid && LEARN_BY[st.lid] ? LEARN_BY[st.lid][4] + ' · ' + LEARN_BY[st.lid][5] : null, h ? fmtHours(h) + (st.k === 'elect' ? ' at least' : '') : st.k === 'evidence' ? 'Logged on the job' : st.k === 'check' ? 'No study hours' : null,
+      meta: [st.lid && LEARN_BY[st.lid] ? LEARN_BY[st.lid][4] + ' · ' + LEARN_BY[st.lid][5] : st.k === 'make' ? 'To create · ' + (st.fmt ?? '') : null,
+        h ? (st.k === 'make' ? 'about ' + fmtHours(h) + ' (a proposal)' : fmtHours(h) + (st.k === 'elect' ? ' at least' : '')) : st.k === 'evidence' ? 'Logged on the job' : st.k === 'check' ? 'No study hours' : null,
         'by month ' + (st.win || 1), pre >= 0 ? 'after step ' + (pre + 1) : null, st.req || st.k === 'exam' ? null : 'optional'].filter(Boolean).join(' · '),
       dotBg: st.k === 'exam' ? '#1a1d18' : sel ? '#86BC25' : '#fff', dotFg: st.k === 'exam' ? '#fff' : '#1a1d18', dotBd: st.req || st.k === 'exam' ? '1.5px solid #1a1d18' : '1.5px dashed #8b918a',
       bd: sel ? '#1a1d18' : '#e1e5dc', ring: sel ? '0 0 0 3px rgba(134,188,37,.45)' : 'none', pick: () => L.setState({ trjStep: sel ? null : st.id }),
@@ -176,7 +177,7 @@ export function trajectoryAdminVals(L: Logic) {
   };
   const sx = t.steps.find((st) => st.id === s.trjStep), si = sx ? t.steps.indexOf(sx) : -1;
   const tse = sx ? {
-    open: true, n: String(si + 1), kind: STEP_KINDS[sx.k][0], isLearn: sx.k === 'learn', isText: sx.k === 'evidence' || sx.k === 'check' || sx.k === 'exam', isElect: sx.k === 'elect', isExam: sx.k === 'exam', canReq: sx.k !== 'exam', req: !!sx.req,
+    open: true, n: String(si + 1), kind: STEP_KINDS[sx.k][0], isLearn: sx.k === 'learn', isText: sx.k === 'evidence' || sx.k === 'check' || sx.k === 'exam' || sx.k === 'make', isMake: sx.k === 'make', isElect: sx.k === 'elect', isExam: sx.k === 'exam', canReq: sx.k !== 'exam', req: !!sx.req,
     learnInfo: sx.k === 'learn' && LEARN_BY[sx.lid ?? ''] ? LEARN_BY[sx.lid ?? ''][1] + ' · ' + LEARN_BY[sx.lid ?? ''][4] + ' · ' + LEARN_BY[sx.lid ?? ''][5] + ' · ' + fmtHours(LEARN_BY[sx.lid ?? ''][6]) + (LEARN_BY[sx.lid ?? ''][7] ? ' · ' + LEARN_BY[sx.lid ?? ''][7] + ' CPD units' : '') : '',
     title: sx.title || '', setTitle: (e: Change) => editStep(sx.id, (x) => ({ ...x, title: e.target.value })),
     hours: String(sx.hours || 0), hourOptions: withCurrent(base.trjHourOptions, String(sx.hours || 0), fmtHours(sx.hours || 0)), setHours: (e: Change) => editStep(sx.id, (x) => ({ ...x, hours: Number(e.target.value) })),

@@ -39,9 +39,10 @@ function ModuleCard({ m }: { m: Card }) {
   return (
     <li style={box}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 600 }}>{m.n}. {m.title}</span>{m.accepted && <Tag tone="success">Accepted</Tag>}
+        <span style={{ fontWeight: 600 }}>{m.n}. {m.title}</span>{m.accepted && <Tag tone="success">Accepted</Tag>}{m.applied && <Tag tone="info">Applied</Tag>}
       </div>
       <div style={{ fontSize: 12, color: '#5a6058' }}>{m.depthLabel} · {m.hoursLabel}</div>
+      {m.applied && <div style={{ fontSize: 12, color: '#5a6058' }}>Applied to the trajectory · later edits here do not change its steps</div>}
       {m.goals.length > 0 && <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>{m.goals.map((g) => <li key={g}>{g}</li>)}</ul>}
       {m.material.map((x) => <div key={x.text} style={{ fontSize: 12.5 }}><span style={{ fontWeight: 500 }}>{x.text}</span>{x.reason && <span style={{ color: '#5a6058' }}>{' · ' + x.reason}</span>}</div>)}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>

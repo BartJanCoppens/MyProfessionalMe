@@ -3,7 +3,9 @@
 import type { ChangeEvent } from 'react';
 import type { Logic } from './model';
 import { LEARN_BY, LEARN_META } from './data';
+import { isApplied } from './logic/planApply';
 import { liveIndex } from './logic/planPool';
+import type { Trajectory } from './logic/trajectory';
 import { fmtHours } from './logic/trajectoryView';
 import { DEPTHS, refKey } from './logic/trajectoryPlan';
 import type { CitedSource, ModuleSuggestion, PlanMaterial, PlanModule, PlanSource, TrajectoryPlan } from './logic/trajectoryPlan';
@@ -26,12 +28,12 @@ export function citationViews(L: Logic, sources: PlanSource[], cited: CitedSourc
   });
 }
 
-export function moduleCards(L: Logic, id: string, plan: TrajectoryPlan, sources: PlanSource[], canEdit: boolean) {
-  const open = L.state.trjPanel.editing;
+export function moduleCards(L: Logic, t: Trajectory, plan: TrajectoryPlan, sources: PlanSource[], canEdit: boolean) {
+  const open = L.state.trjPanel.editing, id = t.id;
   return plan.modules.map((m: PlanModule, i) => {
     const cites = citationViews(L, sources, m.sources);
     return {
-      id: m.id, n: i + 1, title: m.title, goals: m.goals, accepted: m.accepted, depth: m.depth, hours: m.hours, depthLabel: depthName(m.depth) + ' · a proposal', hoursLabel: hoursLabel(m.hours),
+      id: m.id, n: i + 1, applied: isApplied(t, m.id), title: m.title, goals: m.goals, accepted: m.accepted, depth: m.depth, hours: m.hours, depthLabel: depthName(m.depth) + ' · a proposal', hoursLabel: hoursLabel(m.hours),
       material: m.material.map((x) => ({ text: materialText(x), reason: x.reason })), sources: cites, noSource: cites.every((c) => c.gone),
       suggestion: m.suggestion ? suggestionView(m.suggestion) : null, applySuggestion: () => applyCard(L, id, m.id), dismissSuggestion: () => dismissCard(L, id, m.id),
       checks: m.checks.map((k) => CHECK_WORDS[k]).join(' · '), noUp: i === 0, noDown: i === plan.modules.length - 1, editing: open === m.id, canEdit,

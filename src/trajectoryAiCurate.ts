@@ -30,7 +30,7 @@ export const editing = (L: Logic, moduleId: string | null) => panel(L, { editing
 export async function startOver(L: Logic, id: string): Promise<void> {
   if (L.state.trjAi.busy || L.readOnly()) return;
   if (!L.state.trjPanel.confirm) return panel(L, { confirm: true });
-  panel(L, { confirm: false, focus: null, editing: null });
+  panel(L, { confirm: false, applying: false, focus: null, editing: null });
   L.setState((s) => ({ trjAi: { ...s.trjAi, busy: 'reset', error: null } }));
   try {
     const record = L.latest().state.trjPlans[id]?.record;

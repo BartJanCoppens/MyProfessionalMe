@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The learner's trajectories as seen on screen: library cards, the trajectory page, the wallet, and what View as hides.
 // The store is a small in-memory stand-in, so a click goes through the real view-model, write and reload.
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect, useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initState, Logic } from '../model';
@@ -101,6 +101,32 @@ describe('the steps', () => {
     fireEvent.change(screen.getByLabelText('or certificate number'), { target: { value: 'ITAA-77' } });
     await clicked('Submit the result');
     expect(m.submitTrajectoryStep).toHaveBeenLastCalledWith('T1', 'b', 'submitted', { link: '', ref: 'ITAA-77', note: '' });
+  });
+});
+
+describe('a step whose material is being made, and one linked after the person started', () => {
+  const make: Trajectory['steps'][number] = { id: 'm', k: 'make', title: 'Flash cards', fmt: 'Flash cards', hours: 6, win: 6, req: true, pre: null, from: 'p:x' };
+  const row = (li: HTMLElement) => within(li.closest('li') as HTMLElement);
+  it('reads "Being made · Flash cards" with no button, and does not hold the trajectory up', () => {
+    enrols.T1 = { status: 'enrolled', start_month: START, steps: { a: { state: 'done' }, b: { state: 'done' } } };
+    show([trj({ steps: [make, ...trj().steps] })], person({ counsellor: boss }), { screen: 'trajectory', trjView: 'T1' });
+    const item = screen.getByText('Flash cards').closest('li') as HTMLElement;
+    expect(item.textContent).toMatch(/Being made.*Flash cards/);
+    expect(within(item).queryByRole('button')).toBeNull();
+    expect(item.textContent).toContain('optional');
+    expect(screen.getByText('2 of 2')).toBeTruthy();
+  });
+  it('a linked step is optional for someone who enrolled before it, required for someone who enrols after, and says so', () => {
+    const linked = { id: 'l', k: 'evidence' as const, title: 'Added later', win: 5, req: true, pre: null, from: 'p:y', linked_at: '2026-11-10T10:00:00+00:00' };
+    enrols.T1 = { status: 'enrolled', start_month: START, steps: {}, created_at: '2026-11-01T10:00:00+00:00' };
+    const { unmount } = show([trj({ steps: [...trj().steps.slice(0, 1), linked, trj().steps[1]] })], person({ counsellor: boss }), { screen: 'trajectory', trjView: 'T1' });
+    expect(row(screen.getByText('Added later')).getByText(/optional · added after you started/)).toBeTruthy();
+    expect(screen.getByText('0 of 2')).toBeTruthy();
+    unmount();
+    enrols.T1 = { status: 'enrolled', start_month: START, steps: {}, created_at: '2026-11-12T10:00:00+00:00' };
+    show([trj({ steps: [...trj().steps.slice(0, 1), linked, trj().steps[1]] })], person({ counsellor: boss }), { screen: 'trajectory', trjView: 'T1' });
+    expect(row(screen.getByText('Added later')).queryByText(/optional/)).toBeNull();
+    expect(screen.getByText('0 of 3')).toBeTruthy();
   });
 });
 

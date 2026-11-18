@@ -5,8 +5,16 @@ import { BLS } from '../data';
 import type { LearnState } from './learner';
 import { MEMBERSHIP_PATTERN } from './membership';
 
-export type StepKind = 'learn' | 'elect' | 'evidence' | 'check' | 'exam';
-export type TrjStep = { id: string; k: StepKind; lid?: string; opts?: string[]; pick?: number; title?: string; hours?: number; win: number; req: boolean; pre: string | null };
+// The step kinds, the one list (the store reads it, trajectory.sync.test.ts compares it with the database's). make: a placeholder for material
+// that is being made (only Apply creates one).
+export const STEP_KIND_NAMES = ['learn', 'elect', 'evidence', 'check', 'exam', 'make'] as const;
+export type StepKind = (typeof STEP_KIND_NAMES)[number];
+// from: 'p:<plan module id>' on a step Apply made. A make step has fmt (a studio format) and cid (the contribution drafted for it). linked_at: when
+// the database turned a make step into a learn step (see isRequired).
+export type TrjStep = {
+  id: string; k: StepKind; lid?: string; opts?: string[]; pick?: number; title?: string; hours?: number; win: number; req: boolean; pre: string | null;
+  fmt?: string; cid?: string; from?: string; linked_at?: string;
+};
 // [audience, career stage, obligation]. Audience: a business line, or ind:/tec:/amb:/pro:<key>.
 export type TrjMap = [string, string, 'mandatory' | 'advised'];
 export type Trajectory = {
@@ -33,7 +41,14 @@ type Library = Record<string, LearningRef | undefined>;
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const cheapest = (values: number[], n: number) => sum(values.slice().sort((a, b) => a - b).slice(0, n));
 const pickOf = (st: TrjStep) => st.pick || 1;
-const isRequired = (st: TrjStep) => st.req || st.k === 'exam';
+// Required for this person. An exam always is; a make step never is (it is being made). A step whose material was linked after the person's
+// enrolment began is optional for them (their progress is not set back); people who enrol later, or whose start time is unknown, have it as set.
+export function isRequired(st: TrjStep, e?: Enrolment | null): boolean {
+  if (st.k === 'exam') return true;
+  if (!st.req || st.k === 'make') return false;
+  const linked = st.linked_at ? Date.parse(st.linked_at) : NaN, began = e?.created_at ? Date.parse(e.created_at) : NaN;
+  return !(linked > began);
+}
 
 // Study hours of a step: a learning's hours, an elect step's cheapest `pick` options, else the step's own hours.
 export function stepHours(st: TrjStep, byId: Library): number {
@@ -81,6 +96,7 @@ function electState(st: TrjStep, byId: Library): Raw {
 function rawState(st: TrjStep, e: Enrolment | null, byId: Library): Raw {
   if (st.k === 'learn') return learnState(byId[st.lid ?? '']);
   if (st.k === 'elect') return electState(st, byId);
+  if (st.k === 'make') return { state: 'open', pct: 0, missing: true };
   return { state: e?.steps[st.id]?.state ?? 'open', pct: 0, missing: false };
 }
 
@@ -91,10 +107,10 @@ export function trajectoryProgress(t: Trajectory, e: Enrolment | null, byId: Lib
   const raw = new Map(t.steps.map((st) => [st.id, rawState(st, e, byId)]));
   const steps: StepProgress[] = t.steps.map((st) => {
     const r = raw.get(st.id)!, pre = st.pre ? raw.get(st.pre) : undefined;
-    const preOptionalMissing = !!pre && pre.missing && !isRequired(t.steps.find((x) => x.id === st.pre)!);
+    const preOptionalMissing = !!pre && pre.missing && !isRequired(t.steps.find((x) => x.id === st.pre)!, e);
     return { id: st.id, state: r.state, pct: r.pct, missing: r.missing, locked: r.state !== 'done' && !!pre && pre.state !== 'done' && !preOptionalMissing };
   });
-  const required = t.steps.map((st, i) => (isRequired(st) ? i : -1)).filter((i) => i >= 0);
+  const required = t.steps.map((st, i) => (isRequired(st, e) ? i : -1)).filter((i) => i >= 0);
   const reqDone = required.filter((i) => steps[i].state === 'done').length;
   return {
     steps, reqN: required.length, reqDone, complete: required.length > 0 && reqDone === required.length,

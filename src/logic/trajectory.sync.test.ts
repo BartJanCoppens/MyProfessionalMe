@@ -1,7 +1,7 @@
 // The evidence rule of a submitted step exists twice: in stepProofProblem (TypeScript) and in submit_trajectory_step
 // (SQL). This test reads the migration and checks the SQL still holds the conditions the TypeScript rule encodes.
 import { describe, expect, it } from 'vitest';
-import { canBeMandatory, inMandatoryAudience, PROOF_LIMITS, stepProofProblem } from './trajectory';
+import { canBeMandatory, inMandatoryAudience, isRequired, PROOF_LIMITS, STEP_KIND_NAMES, stepProofProblem } from './trajectory';
 import type { Trajectory } from './trajectory';
 import { MEMBERSHIP_PATTERN } from './membership';
 import { RENEW_DAYS } from './trajectoryLearner';
@@ -88,5 +88,30 @@ describe('delete rule: the migration holds the owner rule', () => {
   });
   it('the editor\'s list of used ids is the same helper, for the trajectories the caller may write', () => {
     expect(del).toContain('select t.id from public.trajectories t where private.can_write_trajectory(t.business_line, t.status, t.maps) and private.trajectory_in_use(t.id)');
+  });
+});
+
+// Apply's placeholder steps (migration *_plan_steps): the kinds, the make rule, the link, and the moment that makes a linked step optional for earlier enrolments.
+describe('placeholder steps: TypeScript and the database agree', () => {
+  const steps = Object.entries(migrations).filter(([f]) => f.includes('_plan_steps')).map(([, text]) => text).join('\n').replace(/\s+/g, ' ');
+  it('the step kinds are the same list, make included', () => {
+    const listed = /\(s ->> 'k'\) in \(([^)]*)\)/.exec(steps)![1].split(',').map((x) => x.trim().replace(/'/g, ''));
+    expect(listed).toEqual([...STEP_KIND_NAMES]);
+    expect(STEP_KIND_NAMES).toContain('make');
+  });
+  it('a make step needs a title of 1 to 120 characters, a fmt, and a cid that is absent or a lower-case uuid', () => {
+    expect(steps).toContain("char_length(s ->> 'title') between 1 and 120");
+    expect(steps).toContain("jsonb_typeof(s -> 'fmt') = 'string'");
+    expect(steps).toContain("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
+  });
+  it('linking keeps id, win, req, pre and from, drops cid, fmt, title and hours, and records linked_at', () => {
+    expect(steps).toContain("(s.v - 'cid' - 'fmt' - 'title' - 'hours') || jsonb_build_object('k', 'learn', 'lid', l.learning_id, 'linked_at', now())");
+    expect(steps).toContain('before insert or update of steps on public.trajectories');
+    expect(steps).toContain('after update of learning_id on public.contributions');
+  });
+  it('TypeScript: a step linked after an enrolment began is optional for it, as the stored linked_at says', () => {
+    const linked = { id: 's', k: 'learn' as const, lid: 'x', win: 1, req: true, pre: null, linked_at: '2026-06-10T12:00:00+00:00' };
+    expect(isRequired(linked, { status: 'enrolled', start_month: 0, steps: {}, created_at: '2026-06-01T00:00:00+00:00' })).toBe(false);
+    expect(isRequired(linked, { status: 'enrolled', start_month: 0, steps: {}, created_at: '2026-06-11T00:00:00+00:00' })).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 // View-model of the learner's trajectory page (design v4): the steps with their actions, progress, and the credential.
 // Actions render only when the subject is the signed-in person; View as shows the viewed person's progress and nothing to click.
 import { AUD_INFO } from './data';
-import { canBeMandatory, mapAtStage, monthLabel, relevantMap, stepHours, stepProofProblem, totals, trajectoryProgress } from './logic/trajectory';
+import { canBeMandatory, isRequired, mapAtStage, monthLabel, relevantMap, stepHours, stepProofProblem, totals, trajectoryProgress } from './logic/trajectory';
 import type { Enrolment, StepProgress, Trajectory, TrjStep } from './logic/trajectory';
 import { canWithdraw, stepAction, talkNote } from './logic/trajectoryLearner';
 import { STEP_KINDS, enrolLabel, fmtHours, stepTitle, validLabel } from './logic/trajectoryView';
@@ -57,14 +57,16 @@ function stepAct(c: Ctx, t: Trajectory, st: TrjStep, p: StepProgress, enrolled: 
 
 function stepVm(c: Ctx, t: Trajectory, i: number, p: StepProgress, enrolled: boolean, next: number, start: number, e: Enrolment | null) {
   const st = t.steps[i], [kind, tone] = STEP_KINDS[st.k], it = st.lid ? c.byId[st.lid] : undefined, h = stepHours(st, c.byId), isNext = enrolled && i === next;
-  const chip: [string, string] = p.missing ? ['na', 'No longer in the library'] : p.locked ? ['na', 'Locked']
+  const chip: [string, string] = st.k === 'make' ? ['na', 'Not available yet'] : p.missing ? ['na', 'No longer in the library'] : p.locked ? ['na', 'Locked']
     : p.state === 'submitted' ? ['submitted', 'With ' + c.boss] : p.state === 'booked' ? ['in-progress', 'Booked']
     : p.state === 'progress' ? ['in-progress', 'In progress' + (p.pct ? ' · ' + p.pct + '%' : '')] : [STATE_CHIP[p.state], p.state === 'done' ? 'Done' : isNext ? 'Next' : 'To do'];
-  const required = st.req || st.k === 'exam', done = p.state === 'done';
+  const required = isRequired(st, e), done = p.state === 'done';
+  // A step set as required that this person was enrolled before its material was linked: optional for them, and said so.
+  const optional = !required ? (st.req && st.k !== 'make' ? 'optional · added after you started' : 'optional') : null;
   return {
     id: st.id, mark: done ? '✓' : String(i + 1), kind, tone, st: chip[0], stLabel: chip[1],
     title: stepTitle(st, (id) => c.byId[id]?.title ?? 'A learning that is no longer in the library'),
-    meta: [it ? it.format + ' · ' + it.source : null, h ? fmtHours(h) + (st.k === 'elect' ? ' at least' : '') : null, 'target ' + monthLabel(start + (st.win || 1)), st.k === 'exam' ? examHint(c, t) || null : null, required ? null : 'optional'].filter(Boolean).join(' · '),
+    meta: [it ? it.format + ' · ' + it.source : null, h ? fmtHours(h) + (st.k === 'elect' ? ' at least' : '') : null, 'target ' + monthLabel(start + (st.win || 1)), st.k === 'exam' ? examHint(c, t) || null : null, optional].filter(Boolean).join(' · '),
     cBg: done ? '#86BC25' : isNext ? '#1a1d18' : '#fff', cFg: done ? '#10180a' : isNext ? '#fff' : '#1a1d18', cBd: required ? '1.5px solid #1a1d18' : '1.5px dashed #8b918a',
     lineBg: done ? '#86BC25' : '#e1e5dc', bg: isNext ? '#fbfdf6' : '#fff', op: p.locked ? 0.7 : 1,
     lockText: p.locked ? 'Unlocks when step ' + (t.steps.findIndex((x) => x.id === st.pre) + 1) + ' is done.' : '',

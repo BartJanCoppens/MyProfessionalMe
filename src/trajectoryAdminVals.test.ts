@@ -373,3 +373,15 @@ describe('deleting a trajectory that was never used', () => {
     expect(store.deleteTrajectory).not.toHaveBeenCalled();
   });
 });
+
+describe('a step whose material is being made', () => {
+  const make = { id: 'm1', k: 'make' as const, title: 'Flash cards', fmt: 'Flash cards', hours: 6, win: 6, req: true, pre: null, from: 'p:x' };
+  it('reads "Being made · title · about 6 h (a proposal)" and its drawer says it is not counted until published', () => {
+    const h = setup([T('T1', { steps: [make] })], systemAdmin(), { trjStep: 'm1' });
+    const row = h.vm().tj!.steps[0];
+    expect([row.kind, row.title].join(' · ')).toBe('Being made · Flash cards');
+    expect(row.meta).toContain('about 6 h (a proposal)');
+    expect(row.meta).toContain('To create · Flash cards');
+    expect(h.vm().tse).toMatchObject({ isMake: true, isText: true, kind: 'Being made' });
+  });
+});

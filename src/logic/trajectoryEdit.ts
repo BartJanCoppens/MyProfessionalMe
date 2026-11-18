@@ -24,12 +24,14 @@ export function blankTrajectory(line: string | null): Trajectory {
   };
 }
 
-type NewStep = { k: StepKind; lid?: string };
+// A make step only comes from Apply.
+type EditorKind = Exclude<StepKind, 'make'>;
+type NewStep = { k: EditorKind; lid?: string };
 // The design's defaults: the window of the last step; a sign-off and an exam wait for the step before them.
 export function addStep(steps: TrjStep[], what: NewStep, months: number): TrjStep[] {
   const win = steps.length ? steps[steps.length - 1].win || 1 : 1, last = steps.length ? steps[steps.length - 1].id : null, id = nextStepId(steps);
   const base = { id, win, req: true, pre: null };
-  const made: Record<StepKind, TrjStep> = {
+  const made: Record<EditorKind, TrjStep> = {
     learn: { ...base, k: 'learn', lid: what.lid },
     elect: { ...base, k: 'elect', opts: [], pick: 1 },
     evidence: { ...base, k: 'evidence', title: 'Describe the evidence', hours: 0 },
