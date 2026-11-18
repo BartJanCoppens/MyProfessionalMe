@@ -4,7 +4,8 @@
 // contribution's folder, its length and where its ⟨next⟩ and ⟨cue⟩ marks fall. Mirrored by private.voice_ok in
 // supabase/migrations/20261117310000_podcast_studio.sql (slidesContent.test.ts and podcastContent.test.ts compare the limits).
 import type { RunMark } from './narration';
-import { VOICE_ID } from '../../supabase/functions/_shared/voiceRules.ts';
+import { CLIP_SECONDS_MAX, VOICE_ID } from '../../supabase/functions/_shared/voiceRules.ts';
+export { CLIP_SECONDS_MAX };
 import { MEDIA_PATH } from './mediaFiles';
 
 // voice: the stock voice's provider id; one voice for each speaker (boundClips), one for the whole deck of slides.
@@ -12,7 +13,6 @@ export type Clip = { slide: number; text: string; voice: string; path: string; s
 export type VoiceItem = { kind: 'voice'; clips: Clip[] };
 
 export const CLIPS_MAX = 49; // one per part (private.item_max('Podcast') less the place the voice-over takes: at most that many turns)
-export const CLIP_SECONDS_MAX = 180;
 export const CLIP_MARKS_MAX = 50;
 export const CLIP_TEXT_MAX = 600;
 const CLIP_KEYS = ['slide', 'text', 'voice', 'path', 'seconds', 'marks'];

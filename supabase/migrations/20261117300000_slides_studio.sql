@@ -21,14 +21,16 @@
 -- completion 'media' (COMPLETION in src/logic/record.ts): the learner completes it by playing it to the end;
 --           private.is_self_complete lists it.
 
--- Text trimmed of spaces, tabs and line ends, as JavaScript's trim() does for the single-line inputs of the studios.
+-- Text trimmed of exactly the characters JavaScript's trim() strips (tab, line feed, vertical tab, form feed, carriage return, space,
+-- no-break space, Ogham space mark, the en to hair spaces, line and paragraph separators, narrow no-break space, medium
+-- mathematical space, ideographic space and the byte order mark), so the studios' TypeScript and SQL read the same text.
 create function private.trimmed(p_text text)
 returns text
 language sql
 immutable
 set search_path = ''
 as $$
-  select btrim(p_text, E' \t\r\n');
+  select btrim(p_text, E'\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff');
 $$;
 
 -- How many words a talk-over speaks: the text without the ⟨next⟩ and ⟨cue⟩ marks (spoken in src/logic/narration.ts).

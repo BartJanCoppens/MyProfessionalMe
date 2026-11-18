@@ -4,3 +4,6 @@
 export const VOICE_USE = 'studio_voice';
 export const VOICE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 export const VOICE_MODEL = 'eleven_multilingual_v2';
+// The longest stored clip, in seconds: the function refuses audio of 0 s or more than this, so a stored clip is always one
+// the clip model accepts (src/logic/voiceItem.ts, private.voice_ok), and one bad clip cannot make a whole voice-over invalid.
+export const CLIP_SECONDS_MAX = 180;

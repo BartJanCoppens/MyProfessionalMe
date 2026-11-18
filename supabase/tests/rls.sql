@@ -2312,8 +2312,8 @@ end $$;
 -- ElevenLabs connection with a key. ai_count_call keeps a daily character limit per use as well as the call limit.
 -- public.can_write_media: the media write rule, which the voice function asks before it calls ElevenLabs.
 reset role;
-insert into results (check_name, expected, actual) select 'VO studio_voice is seeded: voice, off, 30000 characters a day', 'voice/false/30000',
-  kind||'/'||enabled||'/'||daily_chars from public.ai_uses where key = 'studio_voice';
+insert into results (check_name, expected, actual) select 'VO studio_voice is seeded: voice, off, 300 calls and 30000 characters a day', 'voice/false/300/30000',
+  kind||'/'||enabled||'/'||daily_limit||'/'||daily_chars from public.ai_uses where key = 'studio_voice';
 insert into results (check_name, expected, actual) select 'VO text uses keep no character limit', '0', count(*)::text from public.ai_uses where kind = 'text' and daily_chars is not null;
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e8','t.voicega@test.local'), ('00000000-0000-0000-0000-0000000000e9','t.voicemember@test.local');
 insert into public.user_roles (user_id, role) values ('00000000-0000-0000-0000-0000000000e8','general_admin');
@@ -2673,5 +2673,13 @@ end $$;
 reset role;
 insert into results (check_name, expected, actual) select 'SL the pace: 14 spoken words at 140 a minute is 6 s, a short line 2 s, marks are not words', '6/2/6',
   round(private.own_seconds('A steering committee exists to take decisions ⟨next⟩ not to receive updates ⟨cue⟩ every single week.'))||'/'||round(private.own_seconds('Hi.'))||'/'||round(private.own_seconds('⟨next⟩ one two three ⟨cue⟩ four five six seven eight nine ten eleven twelve ⟨next⟩ thirteen fourteen .'));
+-- trimmed strips what JavaScript's trim() strips (no-break and other Unicode spaces too), nothing else (src/logic/podcastContent.test.ts)
+insert into results (check_name, expected, actual) select 'SL private.trimmed strips no-break, ideographic and BOM spaces like trim(), and keeps an inner one', 'a b/a/',
+  private.trimmed(E'\u00a0\u3000a b\ufeff\u2028')||'/'||private.trimmed(E'\u2009a\u202f')||'/'||private.trimmed(E' \u00a0\t');
+-- the one chapter-label predicate
+insert into results (check_name, expected, actual) select 'PD is_chapter accepts "Chapter 1 · 0:00" and refuses lookalikes', 'true/false/false/false/false',
+  private.is_chapter('Chapter 1 · 0:00')||'/'||private.is_chapter('Chapter 1 · 0:60')||'/'||private.is_chapter('Chapter 1 · 0:00 ')||'/'||private.is_chapter('Host')||'/'||private.is_chapter(null);
+-- the older voice-over use is the Reel Studio's alone
+insert into results (check_name, expected, actual) select 'VO media_voice is narrowed to reels', 'Reel voice-over/the Reel Studio', label||'/'||waiting_for from public.ai_uses where key = 'media_voice';
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

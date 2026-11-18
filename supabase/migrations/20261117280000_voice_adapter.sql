@@ -7,7 +7,7 @@
 --                         rename and deactivate on the AI connections page; every signed-in person reads the active ones.
 -- ai_uses.daily_chars     characters per person per day for a use (null: no character limit; text uses keep calls only).
 -- ai_count_call()         as before (20261102093739), and refuses a call that would pass the use's daily characters.
--- studio_voice            the studios' voice use: kind voice, off by default, 30,000 characters a day per person.
+-- studio_voice            the studios' voice use: kind voice, off by default, 300 calls and 30,000 characters a day per person.
 -- ai_live_uses()          as before, and a voice use is live on an ElevenLabs connection with a key (no model needed:
 --                         the function uses ElevenLabs' multilingual model unless the use or connection names one).
 -- public.can_write_media  the media write rule (private.can_write_media, 20261117270000) for the signed-in caller, so the
@@ -68,8 +68,11 @@ end $$;
 
 -- Off by default: until a System Admin chooses an ElevenLabs connection and switches it on, a studio offers the browser
 -- voice for preview only, labelled "Browser voice · not saved".
-insert into public.ai_uses (key, sort, kind, label, place, description, waiting_for, admins_only, enabled, preamble, daily_chars) values
- ('studio_voice', 105, 'voice', 'Studio voice-over', 'Create & share · Slides and Podcast studios', 'Reads a creator''s narration aloud in a stock voice (ElevenLabs) and stores the audio with their draft. At most 5,000 characters per call.', null, false, false, '', 30000);
+insert into public.ai_uses (key, sort, kind, label, place, description, waiting_for, admins_only, enabled, preamble, daily_limit, daily_chars) values
+ ('studio_voice', 105, 'voice', 'Studio voice-over', 'Create & share · Slides and Podcast studios', 'Reads a creator''s narration aloud in a stock voice (ElevenLabs) and stores the audio with their draft. At most 5,000 characters per call.', null, false, false, '', 300, 30000);
+
+-- Podcasts are voiced through studio_voice now: the older voice-over use is the Reel Studio's alone (Phase 5), still waiting for it.
+update public.ai_uses set label = 'Reel voice-over', place = 'Create & share · Reel Studio', description = 'Reads a peer''s script aloud for a reel.', waiting_for = 'the Reel Studio' where key = 'media_voice';
 
 -- As before (20261102092324), plus voice uses on an ElevenLabs connection with a key.
 create or replace function public.ai_live_uses()

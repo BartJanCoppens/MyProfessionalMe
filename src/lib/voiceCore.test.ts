@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AI_HEADER, ELEVENLABS, markTimes, readSpeak, sampleResponse, speakResponse, ttsRequest, VOICE_LIMITS, voiceFileName } from '../../supabase/functions/voice/core.ts';
 import type { SampleDeps, SpeakDeps } from '../../supabase/functions/voice/core.ts';
 import { MEDIA_KINDS, MEDIA_PATH } from '../logic/mediaFiles';
+import { CLIP_SECONDS_MAX } from '../logic/voiceItem';
 
 const KEY = 'xi-secret-key-4321';
 const UID = '0f8fad5b-d9cb-469f-a165-70867728950e', CID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -148,6 +149,20 @@ describe('speakResponse', () => {
     expect((await speakResponse(ask(), d)).status).toBe(502);
     expect(d.uploads).toHaveLength(0);
     expect(VOICE_LIMITS.audioBytes).toBe(MEDIA_KINDS.mp3.maxBytes);
+  });
+  it('refuses audio without timing (0 s) or longer than a clip may be, and stores nothing', async () => {
+    const noTiming = deps({ fetch: ok({ audio_base64: b64('mp3-bytes') }) });
+    const r1 = await speakResponse(ask(), noTiming);
+    expect(r1.status).toBe(502);
+    expect((await body(r1)).error).toMatch(/no timing/);
+    const long = deps({ fetch: ok({ audio_base64: b64('mp3'), alignment: { character_start_times_seconds: [0], character_end_times_seconds: [CLIP_SECONDS_MAX + 1] } }) });
+    const r2 = await speakResponse(ask(), long);
+    expect(r2.status).toBe(502);
+    expect((await body(r2)).error).toMatch(/longer than 180 seconds/);
+    expect(noTiming.uploads).toEqual([]);
+    expect(long.uploads).toEqual([]);
+    const edge = deps({ fetch: ok({ audio_base64: b64('mp3'), alignment: { character_start_times_seconds: [0], character_end_times_seconds: [CLIP_SECONDS_MAX] } }) });
+    expect((await speakResponse(ask(), edge)).status).toBe(200);
   });
   it('answers the store\'s refusal when the upload fails', async () => {
     const r = await speakResponse(ask(), deps({ upload: async () => 'new row violates row-level security policy' }));

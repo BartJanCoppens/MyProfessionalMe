@@ -6,7 +6,7 @@
 import { fail, scrub } from '../_shared/aiGuard.ts';
 import { CUE_MARK, NEXT_MARK, spoken } from '../_shared/narrationText.ts';
 import type { Mark } from '../_shared/narrationText.ts';
-import { VOICE_ID, VOICE_USE } from '../_shared/voiceRules.ts';
+import { CLIP_SECONDS_MAX, VOICE_ID, VOICE_USE } from '../_shared/voiceRules.ts';
 
 export { VOICE_ID, VOICE_USE };
 export const ELEVENLABS = 'https://api.elevenlabs.io';
@@ -137,6 +137,10 @@ export async function speakResponse(body: unknown, d: SpeakDeps): Promise<Respon
   const starts: number[] = Array.isArray(a.character_start_times_seconds) ? a.character_start_times_seconds : [];
   const ends: number[] = Array.isArray(a.character_end_times_seconds) ? a.character_end_times_seconds : [];
   const seconds = ends.length ? +ends[ends.length - 1] : 0;
+  if (!(seconds > 0) || seconds > CLIP_SECONDS_MAX) {
+    done(false);
+    return fail(502, seconds > 0 ? 'The voice ran longer than ' + CLIP_SECONDS_MAX + ' seconds · split the narration' : 'ElevenLabs sent no timing for the audio · try again');
+  }
   const refused = await d.upload(path, fromBase64(b64));
   if (refused) { done(false); return fail(/row-level security|unauthorized/i.test(refused) ? 403 : 500, 'The audio could not be stored: ' + refused); }
   done(true);

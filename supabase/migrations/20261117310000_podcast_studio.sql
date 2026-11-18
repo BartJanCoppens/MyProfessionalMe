@@ -108,7 +108,17 @@ as $$
   select private.clip_for(p_items, p_slide, private.rows_of(p_items) -> p_slide ->> 2);
 $$;
 
--- 5. The script. Chapter rows are labelled "Chapter N · m:ss" (N and the minutes up to 3 digits).
+-- 5. The script. Chapter rows are labelled "Chapter N · m:ss" (N and the minutes up to 3 digits). The one place that says
+-- what a chapter label looks like (CHAPTER and isChapter in src/logic/podcastContent.ts).
+create function private.is_chapter(p_label text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(p_label ~ '^Chapter [0-9]{1,3} · [0-9]{1,3}:[0-5][0-9]$', false);
+$$;
+
 create function private.script_ok(p_rows jsonb)
 returns boolean
 language sql
@@ -116,17 +126,20 @@ immutable
 set search_path = ''
 as $$
   with r as (
-    select x.n, x.e ->> 0 as label, x.e ->> 1 as body, regexp_match(x.e ->> 0, '^Chapter ([0-9]{1,3}) · ([0-9]{1,3}):([0-5][0-9])$') as m
+    select x.n, x.e ->> 0 as label, x.e ->> 1 as body, private.is_chapter(x.e ->> 0) as chapter
     from jsonb_array_elements(p_rows) with ordinality as x(e, n)),
-  c as (select n, m[1]::integer as num, m[2]::integer * 60 + m[3]::integer as secs, row_number() over (order by n) as k from r where m is not null)
-  select coalesce((select m is not null from r where n = 1), false)
-    and not exists (select 1 from r where m is null and label not in ('Host', 'Guest', 'Co-host'))
+  -- a chapter label is "Chapter N · m:ss": N is its second word, m:ss its fourth
+  c as (select n, split_part(label, ' ', 2)::integer as num,
+               split_part(split_part(label, ' ', 4), ':', 1)::integer * 60 + split_part(split_part(label, ' ', 4), ':', 2)::integer as secs,
+               row_number() over (order by n) as k from r where chapter)
+  select coalesce((select chapter from r where n = 1), false)
+    and not exists (select 1 from r where not chapter and label not in ('Host', 'Guest', 'Co-host'))
     and not exists (select 1 from c where num <> k)
     and coalesce((select secs from c where k = 1), -1) = 0
     and not exists (select 1 from c a join c b on b.k = a.k + 1 where b.secs <= a.secs)
-    and not exists (select 1 from r a where a.m is not null and not exists (select 1 from r b where b.n = a.n + 1 and b.m is null))
-    and not exists (select 1 from r where m is null and coalesce(private.spoken_words(body), 0) < 1)
-    and (select count(distinct label) from r where m is null) <= 2;
+    and not exists (select 1 from r a where a.chapter and not exists (select 1 from r b where b.n = a.n + 1 and not b.chapter))
+    and not exists (select 1 from r where not chapter and coalesce(private.spoken_words(body), 0) < 1)
+    and (select count(distinct label) from r where not chapter) <= 2;
 $$;
 
 -- A script's items: its rows (one place short of the cap) with the script rules, and at most one voice-over item.
@@ -152,9 +165,9 @@ set search_path = ''
 as $$
   select coalesce(jsonb_agg(jsonb_build_object('speaker', r.label, 'text', private.trimmed(r.body), 'chapter', r.ch) order by r.n), '[]'::jsonb)
   from (select x.n, x.e ->> 0 as label, x.e ->> 1 as body,
-               count(*) filter (where (x.e ->> 0) ~ '^Chapter [0-9]{1,3} · [0-9]{1,3}:[0-5][0-9]$') over (order by x.n) as ch
+               count(*) filter (where private.is_chapter(x.e ->> 0)) over (order by x.n) as ch
         from jsonb_array_elements(private.rows_of(p_items)) with ordinality as x(e, n)) r
-  where r.label !~ '^Chapter [0-9]{1,3} · [0-9]{1,3}:[0-5][0-9]$';
+  where not private.is_chapter(r.label);
 $$;
 
 create function private.turn_clip(p_items jsonb, p_turn integer)
@@ -205,7 +218,7 @@ as $$
     'chapters', (select jsonb_agg(jsonb_build_object('title', private.trimmed(r.e ->> 1), 'turn', f.first,
                    'start', round(coalesce((select sum((private.turn_clip(p_items, t.k::integer) ->> 'seconds')::numeric) from generate_series(0, f.first - 1) as t(k)), 0))::integer) order by r.n)
                  from (select x.e, x.n, row_number() over (order by x.n) as ch from jsonb_array_elements(private.rows_of(p_items)) with ordinality as x(e, n)
-                       where (x.e ->> 0) ~ '^Chapter [0-9]{1,3} · [0-9]{1,3}:[0-5][0-9]$') r,
+                       where private.is_chapter(x.e ->> 0)) r,
                  lateral (select count(*)::integer as first from jsonb_array_elements(private.podcast_turns(p_items)) t where (t ->> 'chapter')::integer < r.ch) f),
     'turns', (select jsonb_agg(jsonb_build_object('speaker', t.e ->> 'speaker', 'text', t.e ->> 'text',
                    'audio', jsonb_build_object('path', private.turn_clip(p_items, t.n::integer - 1) ->> 'path', 'seconds', private.turn_clip(p_items, t.n::integer - 1) -> 'seconds',
@@ -257,9 +270,9 @@ as $$
   end;
 $$;
 
--- Whether any of these voice-over files is outside the contribution's own folder (<author>/<contribution>/) or not in Storage: the
--- one check Slides and Podcast share.
-create function private.voice_files_missing(p_author uuid, p_contribution uuid, p_paths text[])
+-- Whether any of these media files (a .horizon file, voice-over clips) is outside the contribution's own folder
+-- (<author>/<contribution>/) or not in Storage: the one check Presentation, Slides and Podcast share.
+create function private.media_files_missing(p_author uuid, p_contribution uuid, p_paths text[])
 returns boolean
 language sql
 stable
@@ -282,7 +295,6 @@ declare
   v_min integer := private.studio_min_items(c.studio, c.type);
   v_term text;
   v_check boolean;
-  v_path text;
   v_speakers text[];
 begin
   if char_length(btrim(c.title)) not between 1 and 60 then
@@ -304,9 +316,7 @@ begin
     p := array_append(p, format('Add at least %s items', v_min));
   end if;
   if c.type = 'Presentation' and private.items_ok(c.type, c.items) then
-    v_path := c.items -> 0 ->> 'path';
-    if split_part(v_path, '/', 1) <> c.author_id::text or split_part(v_path, '/', 2) <> c.id::text
-       or not exists (select 1 from storage.objects o where o.bucket_id = 'media' and o.name = v_path) then
+    if private.media_files_missing(c.author_id, c.id, array[c.items -> 0 ->> 'path']) then
       p := array_append(p, 'The .horizon file is not there · add it again');
     end if;
   end if;
@@ -318,7 +328,7 @@ begin
       p := array_append(p, 'The talk runs longer than 15 minutes: shorten the talk-over or cut slides');
     end if;
     -- every voice-over file the slides use must be in the contribution's own folder and in Storage
-    if private.slides_voiced(c.items, c.shape) and private.voice_files_missing(c.author_id, c.id,
+    if private.slides_voiced(c.items, c.shape) and private.media_files_missing(c.author_id, c.id,
         array(select private.slide_clip(c.items, n) ->> 'path' from generate_series(0, jsonb_array_length(private.rows_of(c.items)) - 1) n)) then
       p := array_append(p, 'A voice-over file is not there · voice the slides again');
     end if;
@@ -335,7 +345,7 @@ begin
       p := array_append(p, 'The episode runs longer than 30 minutes: shorten the script');
     end if;
     -- every voice-over file the episode uses must be in the contribution's own folder and in Storage
-    if private.podcast_voiced(c.items) and private.voice_files_missing(c.author_id, c.id,
+    if private.podcast_voiced(c.items) and private.media_files_missing(c.author_id, c.id,
         array(select private.turn_clip(c.items, n) ->> 'path' from generate_series(0, jsonb_array_length(private.podcast_turns(c.items)) - 1) n)) then
       p := array_append(p, 'A voice-over file is not there · voice the episode again');
     end if;
@@ -397,5 +407,5 @@ $$;
 
 drop function private.horizon_hours(numeric);
 
-revoke execute on function private.media_hours(numeric), private.clip_for(jsonb, integer, text), private.script_ok(jsonb), private.podcast_ok(jsonb), private.podcast_turns(jsonb),
-  private.turn_clip(jsonb, integer), private.voice_files_missing(uuid, uuid, text[]), private.podcast_voiced(jsonb), private.podcast_seconds(jsonb), private.podcast_content(jsonb) from public, anon, authenticated;
+revoke execute on function private.media_hours(numeric), private.clip_for(jsonb, integer, text), private.is_chapter(text), private.script_ok(jsonb), private.podcast_ok(jsonb), private.podcast_turns(jsonb),
+  private.turn_clip(jsonb, integer), private.media_files_missing(uuid, uuid, text[]), private.podcast_voiced(jsonb), private.podcast_seconds(jsonb), private.podcast_content(jsonb) from public, anon, authenticated;

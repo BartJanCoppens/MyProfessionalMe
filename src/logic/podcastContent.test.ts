@@ -4,7 +4,7 @@
 // the SQL that repeats these rules.
 import { describe, expect, it } from 'vitest';
 import { parseFormatContent } from '../lib/contentStore';
-import { latestMatch } from '../test/migrations';
+import { latestMatch, migrationText } from '../test/migrations';
 import { STUDIOS } from '../studioData';
 import { mediaHours } from './horizonItem';
 import { ITEM_MAX } from './items';
@@ -212,13 +212,31 @@ describe('the one player: stored turns, or the chapters of an episode that has n
 describe('the SQL repeats these rules', () => {
   const fn = (name: string) => latestMatch(new RegExp('create (?:or replace )?function private\\.' + name + '\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$'))[1];
   it('the chapter label, the speakers, the caps and the 30 minutes', () => {
-    expect(fn('script_ok')).toContain('^Chapter ([0-9]{1,3}) · ([0-9]{1,3}):([0-5][0-9])$');
+    expect(fn('is_chapter')).toContain("~ '^Chapter [0-9]{1,3} · [0-9]{1,3}:[0-5][0-9]$'");
     expect(CHAPTER.source).toBe('^Chapter (\\d{1,3}) · (\\d{1,3}):([0-5]\\d)$');
     expect(fn('script_ok')).toContain("('Host', 'Guest', 'Co-host')");
     expect(latestMatch(/\('Podcast', (\d+)\)/)[1]).toBe(String(ITEM_MAX.Podcast));
     expect(latestMatch(/podcast_seconds\([^)]*\) > (\d+)/)[1]).toBe(String(PODCAST_MAX_SECONDS));
     expect(fn('voice_ok')).toContain('between 1 and ' + CLIPS_MAX);
     expect(fn('voice_ok')).toContain('between 0 and ' + (CLIPS_MAX - 1));
+  });
+  it('the chapter pattern is written once in the SQL, as private.is_chapter; the other places call it', () => {
+    const sql = migrationText('20261117310000_podcast_studio.sql');
+    expect(sql.match(/Chapter \[0-9\]/g)).toHaveLength(1);
+    expect(sql.match(/private\.is_chapter\(/g)!.length).toBeGreaterThanOrEqual(4);
+  });
+  it('trims exactly what JavaScript trim() trims, no-break and other Unicode spaces included', () => {
+    const set = [...fn('trimmed').matchAll(/\\u([0-9a-f]{4})/g)].map((m) => parseInt(m[1], 16));
+    const js: number[] = [];
+    for (let c = 0; c < 0x10000; c++) if (String.fromCharCode(c).trim() === '') js.push(c);
+    expect(set).toEqual(js);
+    expect('\u00a0a b\u3000'.trim()).toBe('a b');
+  });
+  it('Presentation, Slides and Podcast share one media-file check', () => {
+    const sql = migrationText('20261117310000_podcast_studio.sql');
+    expect(sql).not.toContain('voice_files_missing');
+    expect(sql.match(/storage\.objects/g)).toHaveLength(1);
+    expect(sql.match(/private\.media_files_missing\(c\.author_id/g)).toHaveLength(3);
   });
   it('a studio episode counts its hours through media_hours; a v3 podcast keeps 0.5 h; the old name is gone', () => {
     const publish = latestMatch(/create (?:or replace )?function private\.publish_contribution\([\s\S]*?\n\$\$;/)[0];
