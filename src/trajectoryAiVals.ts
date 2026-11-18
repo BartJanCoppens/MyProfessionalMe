@@ -10,6 +10,7 @@ import type { Dropped, PlanBrief, PlanMessage } from './logic/trajectoryPlan';
 import { plural } from './logic/values';
 import { moduleCards } from './trajectoryAiCards';
 import { applyVals } from './trajectoryApply';
+import { draftAllVals } from './trajectoryMadeVals';
 import { askAbout, startOver } from './trajectoryAiCurate';
 import { pickBundle, sourcesPanel } from './trajectoryAiSources';
 import { sendToPlan, OFF_TEXT, TRAJECTORY_AI } from './trajectoryAiSend';
@@ -54,7 +55,7 @@ export function trajectoryAiVals(L: Logic) {
       send: () => { sendToPlan(L, id, s.trjPanel.say, 'talk', s.trjPanel.focus); }, propose: () => { sendToPlan(L, id, s.trjPanel.say, 'propose', null); }, canPropose: !!plan.brief,
       focusTitle: titleOf(s.trjPanel.focus), clearFocus: () => askAbout(L, null),
       brief: plan.brief ? BRIEF_LABELS.flatMap(([k, label]) => (plan.brief![k] === null || plan.brief![k] === '' ? [] : [{ label, value: String(plan.brief![k]) }])) : null,
-      modules: moduleCards(L, t, plan, state?.sources ?? [], canEdit), problems: planProblems(plan), apply: applyVals(L, t, plan),
+      modules: moduleCards(L, t, plan, state?.sources ?? [], canEdit), problems: planProblems(plan), apply: applyVals(L, t, plan), draftAll: draftAllVals(L, t),
       finalExam: fe ? { title: fe.title, hoursLabel: 'about ' + fmtHours(fe.hours) + ' · a proposal', reason: fe.reason } : null,
       sources: { ...sourcesPanel(L, id), error: null }, picker, // one error line for the whole panel (trjAi.error), shown by the panel
       startOver: { confirm: s.trjPanel.confirm, run: () => { startOver(L, id); }, cancel: () => L.setState((st) => ({ trjPanel: { ...st.trjPanel, confirm: false } })) },

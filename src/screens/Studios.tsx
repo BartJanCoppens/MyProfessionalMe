@@ -86,6 +86,7 @@ export function Studio({ c }: { c: CS }) {
         <LinkButton tone="muted" onClick={st.toHub}>{st.backLabel}</LinkButton>
         <span style={{ fontWeight: 600, fontSize: 16 }}>{st.studioName}</span>
       </div>
+      {st.banner && <div role="note" style={{ fontSize: 12.5, color: '#3d423b', background: '#f3f5f0', border: '1px solid #e1e5dc', borderRadius: 6, padding: '8px 12px' }}>{st.banner}</div>}
       <Stepper steps={st.steps} current={st.step} />
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 560px', minWidth: 0, background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '18px 20px', ...col, gap: 16 }}>

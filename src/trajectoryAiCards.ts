@@ -9,6 +9,7 @@ import type { Trajectory } from './logic/trajectory';
 import { fmtHours } from './logic/trajectoryView';
 import { DEPTHS, refKey } from './logic/trajectoryPlan';
 import type { CitedSource, ModuleSuggestion, PlanMaterial, PlanModule, PlanSource, TrajectoryPlan } from './logic/trajectoryPlan';
+import { madeOfModule } from './trajectoryMadeVals';
 import { acceptCard, applyCard, askAbout, depthFrom, dismissCard, editCard, editing, goalsOf, moveCard, openSource, removeCard } from './trajectoryAiCurate';
 
 const CHECK_WORDS = { evidence: 'evidence', signoff: 'counsellor sign-off' } as const;
@@ -34,7 +35,7 @@ export function moduleCards(L: Logic, t: Trajectory, plan: TrajectoryPlan, sourc
     const cites = citationViews(L, sources, m.sources);
     return {
       id: m.id, n: i + 1, applied: isApplied(t, m.id), title: m.title, goals: m.goals, accepted: m.accepted, depth: m.depth, hours: m.hours, depthLabel: depthName(m.depth) + ' · a proposal', hoursLabel: hoursLabel(m.hours),
-      material: m.material.map((x) => ({ text: materialText(x), reason: x.reason })), sources: cites, noSource: cites.every((c) => c.gone),
+      material: m.material.map((x) => ({ text: materialText(x), reason: x.reason })), made: madeOfModule(L, t, m.id), sources: cites, noSource: cites.every((c) => c.gone),
       suggestion: m.suggestion ? suggestionView(m.suggestion) : null, applySuggestion: () => applyCard(L, id, m.id), dismissSuggestion: () => dismissCard(L, id, m.id),
       checks: m.checks.map((k) => CHECK_WORDS[k]).join(' · '), noUp: i === 0, noDown: i === plan.modules.length - 1, editing: open === m.id, canEdit,
       accept: () => acceptCard(L, id, m.id, !m.accepted), up: () => moveCard(L, id, m.id, -1), down: () => moveCard(L, id, m.id, 1), remove: () => removeCard(L, id, m.id),

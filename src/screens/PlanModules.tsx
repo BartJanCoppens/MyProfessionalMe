@@ -5,6 +5,7 @@ import { Button, Field, Input, LinkButton, Select, Tag, Textarea } from '../ds';
 import type { Tai } from '../trajectoryAiVals';
 import { label } from './labelStyle';
 import { MoveButtons } from './MoveButtons';
+import { DraftAll, MadeActions } from './PlanMade';
 
 type Card = Tai['modules'][number];
 const box = { border: '1px solid #e1e5dc', borderRadius: 6, background: '#fff', padding: '10px 12px', display: 'flex', flexDirection: 'column' as const, gap: 6 };
@@ -45,6 +46,7 @@ function ModuleCard({ m }: { m: Card }) {
       {m.applied && <div style={{ fontSize: 12, color: '#5a6058' }}>Applied to the trajectory · later edits here do not change its steps</div>}
       {m.goals.length > 0 && <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>{m.goals.map((g) => <li key={g}>{g}</li>)}</ul>}
       {m.material.map((x) => <div key={x.text} style={{ fontSize: 12.5 }}><span style={{ fontWeight: 500 }}>{x.text}</span>{x.reason && <span style={{ color: '#5a6058' }}>{' · ' + x.reason}</span>}</div>)}
+      {m.made.map((x) => <div key={x.key} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}><span>Being made · {x.text}</span><MadeActions made={x} /></div>)}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <span style={label}>Sources</span>
         {m.noSource && <span style={{ fontSize: 12, color: '#7a5000' }}>No source yet</span>}
@@ -80,6 +82,7 @@ export default function PlanModules({ tai }: { tai: Tai }) {
       <span style={label}>Modules · {tai.modules.length}</span>
       {!tai.modules.length && <div style={{ fontSize: 12, color: '#8b918a' }}>No modules yet. Answer the AI&apos;s questions, then ask it to propose the plan.</div>}
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>{tai.modules.map((m) => <ModuleCard key={m.id} m={m} />)}</ol>
+      {tai.draftAll && <DraftAll draft={tai.draftAll} />}
       {fe && <div style={box}><div style={{ fontWeight: 600 }}>Final exam · {fe.title}</div><div style={{ fontSize: 12, color: '#5a6058' }}>{fe.hoursLabel} · {fe.reason}</div></div>}
     </div>
   );

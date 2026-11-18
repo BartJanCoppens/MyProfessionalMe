@@ -120,6 +120,11 @@ describe('openStudioFor', () => {
     expect(ask).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(ask.mock.calls[0][1])).toContain('Learning goals');
   });
+  it('says in the studio where the draft comes from, and to check every item', async () => {
+    const h = setup();
+    await openStudioFor(h.L(), 'T1', 'm1');
+    expect(h.vm().create!.studio.banner).toBe('From the trajectory VAT track · module VAT cards · goals, depth and 1 cited source are filled in · check every item');
+  });
   it('opens another studio at its own Draft step', async () => {
     const h = setup();
     await openStudioFor(h.L(), 'T1', 'm2');

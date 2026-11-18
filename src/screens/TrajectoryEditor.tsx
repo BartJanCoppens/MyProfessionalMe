@@ -6,6 +6,7 @@ import type { VM } from '../model';
 import { TrajectoryAudiences, TrajectoryLane } from './TrajectoryMapping';
 import TrajectoryAi from './TrajectoryAi';
 import { MoveButtons } from './MoveButtons';
+import { MadeActions } from './PlanMade';
 import { iconButton } from './labelStyle';
 
 const card: CSSProperties = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' };
@@ -189,6 +190,7 @@ function StepEditor({ vm }: { vm: VM }) {
       )}
       {se.canReq && <Checkbox checked={se.req} onChange={se.toggleReq}>Required to earn the credential</Checkbox>}
       {se.isMake && <div style={{ fontSize: 12, color: '#5a6058' }}>Not counted for learners until its material is published. Then it links to that learning and becomes required, for people who enrol after that. The sign-off and exam after it wait for that material; mark it optional or remove it to unblock them.</div>}
+      {se.made && <MadeActions made={se.made} />}
       {se.isExam && <div style={{ fontSize: 12, color: '#5a6058' }}>An exam is always required. Set “Only after” so nobody books it before the learnings are done.</div>}
     </div>
   );

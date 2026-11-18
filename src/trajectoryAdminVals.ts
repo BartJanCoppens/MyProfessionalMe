@@ -11,6 +11,7 @@ import { canBeMandatory, totals } from './logic/trajectory';
 import type { LearningRef, Trajectory, TrjStep } from './logic/trajectory';
 import { addMap, addStep, blankTrajectory, earlierSteps, moveStep, removeStep, saveable } from './logic/trajectoryEdit';
 import { adminWarnings } from './logic/trajectoryWarnings';
+import { madeVals } from './trajectoryMadeVals';
 import { ENROL, ISSUERS, STEP_KINDS, enrolLabel, fmtHours, statusLabel, stepTitle, stones, validLabel } from './logic/trajectoryView';
 
 type Change = ChangeEvent<HTMLInputElement | HTMLSelectElement>;
@@ -124,7 +125,7 @@ export function trajectoryAdminVals(L: Logic) {
       id: st.id, n: String(i + 1), kind: K[0], tone: K[1], title: stepTitle(st, titleOf),
       meta: [st.lid && LEARN_BY[st.lid] ? LEARN_BY[st.lid][4] + ' · ' + LEARN_BY[st.lid][5] : st.k === 'make' ? 'To create · ' + (st.fmt ?? '') : null,
         h ? (st.k === 'make' ? 'about ' + fmtHours(h) + ' (a proposal)' : fmtHours(h) + (st.k === 'elect' ? ' at least' : '')) : st.k === 'evidence' ? 'Logged on the job' : st.k === 'check' ? 'No study hours' : null,
-        'by month ' + (st.win || 1), pre >= 0 ? 'after step ' + (pre + 1) : null, st.req || st.k === 'exam' ? null : 'optional'].filter(Boolean).join(' · '),
+        st.k === 'make' ? madeVals(L, t, st).status : null, 'by month ' + (st.win || 1), pre >= 0 ? 'after step ' + (pre + 1) : null, st.req || st.k === 'exam' ? null : 'optional'].filter(Boolean).join(' · '),
       dotBg: st.k === 'exam' ? '#1a1d18' : sel ? '#86BC25' : '#fff', dotFg: st.k === 'exam' ? '#fff' : '#1a1d18', dotBd: st.req || st.k === 'exam' ? '1.5px solid #1a1d18' : '1.5px dashed #8b918a',
       bd: sel ? '#1a1d18' : '#e1e5dc', ring: sel ? '0 0 0 3px rgba(134,188,37,.45)' : 'none', pick: () => L.setState({ trjStep: sel ? null : st.id }),
       up: () => edit((x) => ({ ...x, steps: moveStep(x.steps, st.id, -1) })), down: () => edit((x) => ({ ...x, steps: moveStep(x.steps, st.id, 1) })),
@@ -177,7 +178,7 @@ export function trajectoryAdminVals(L: Logic) {
   };
   const sx = t.steps.find((st) => st.id === s.trjStep), si = sx ? t.steps.indexOf(sx) : -1;
   const tse = sx ? {
-    open: true, n: String(si + 1), kind: STEP_KINDS[sx.k][0], isLearn: sx.k === 'learn', isText: sx.k === 'evidence' || sx.k === 'check' || sx.k === 'exam' || sx.k === 'make', isMake: sx.k === 'make', isElect: sx.k === 'elect', isExam: sx.k === 'exam', canReq: sx.k !== 'exam', req: !!sx.req,
+    open: true, n: String(si + 1), kind: STEP_KINDS[sx.k][0], isLearn: sx.k === 'learn', isText: sx.k === 'evidence' || sx.k === 'check' || sx.k === 'exam' || sx.k === 'make', isMake: sx.k === 'make', made: sx.k === 'make' ? madeVals(L, t, sx) : null, isElect: sx.k === 'elect', isExam: sx.k === 'exam', canReq: sx.k !== 'exam', req: !!sx.req,
     learnInfo: sx.k === 'learn' && LEARN_BY[sx.lid ?? ''] ? LEARN_BY[sx.lid ?? ''][1] + ' · ' + LEARN_BY[sx.lid ?? ''][4] + ' · ' + LEARN_BY[sx.lid ?? ''][5] + ' · ' + fmtHours(LEARN_BY[sx.lid ?? ''][6]) + (LEARN_BY[sx.lid ?? ''][7] ? ' · ' + LEARN_BY[sx.lid ?? ''][7] + ' CPD units' : '') : '',
     title: sx.title || '', setTitle: (e: Change) => editStep(sx.id, (x) => ({ ...x, title: e.target.value })),
     hours: String(sx.hours || 0), hourOptions: withCurrent(base.trjHourOptions, String(sx.hours || 0), fmtHours(sx.hours || 0)), setHours: (e: Change) => editStep(sx.id, (x) => ({ ...x, hours: Number(e.target.value) })),
