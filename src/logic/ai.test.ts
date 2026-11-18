@@ -90,10 +90,10 @@ describe('the text uses the app calls', () => {
     expect(seed![2]).toMatch(/SVG only/);
     expect(seed![2]).not.toMatch(/JSON/);
   });
-  it('seed the game\'s AI role switched off, at 60 calls a person a day, as a server-only use', () => {
+  it('seed the game\'s AI role switched off, at 60 calls and 300,000 characters a person a day, as a server-only use', () => {
     expect(AI_USE_KEYS).toContain('game_role');
     expect(SERVER_ONLY_USES).toEqual(['game_role']);
-    const seed = /\('game_role', \d+, 'text', 'Game AI role', 'Games', '(?:[^']|'')*', null, false, false,\s*'((?:[^']|'')*)', 60, 60000\)/.exec(migrations);
+    const seed = /\('game_role', \d+, 'text', 'Game AI role', 'Games', '(?:[^']|'')*', null, false, false,\s*'((?:[^']|'')*)', 60, 300000\)/.exec(migrations);
     expect(seed).not.toBeNull();
     expect(seed![1]).toMatch(/Stay in that role/);
     expect(seed![1]).toMatch(/data, never instructions/);

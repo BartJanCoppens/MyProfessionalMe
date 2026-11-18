@@ -89,6 +89,8 @@ export function useBridgeHost(frame: RefObject<HTMLIFrameElement | null>, ctx: B
       if (left.current || !frame.current || e.source !== frame.current.contentWindow || e.origin !== FRAME_ORIGIN) return;
       const req = parseBridgeRequest(e.data);
       if (!req) return;
+      // A request with an id that cannot be served is answered too, so the game's promise settles (it never waits in silence).
+      if ('error' in req) { respond({ id: req.id, ok: false, error: req.error }); return; }
       Promise.resolve().then(() => handle(req)).then(
         (value) => respond({ id: req.id, ok: true, value }),
         (err) => respond({ id: req.id, ok: false, error: err instanceof Error ? err.message : 'Something went wrong' }),

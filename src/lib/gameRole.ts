@@ -3,20 +3,20 @@
 // the role and what it knows are the database's, read by the `ai` function for the run. A failure is the game's failure, with the function's
 // own words; nothing falls through to another source and no scripted line stands in for the role.
 import type { AskRole, RoleReply } from '../game/protocol';
+import { GAME_ASK } from '../../supabase/functions/_shared/gameRules.ts';
 import { jsonObject } from '../../supabase/functions/_shared/promptData.ts';
 import { complete } from './ai';
 import type { CompleteOpts } from './ai';
 
 export const ROLE_UNAVAILABLE = 'The AI role is not available right now';
 export const ROLE_NEEDS_RUN = 'The AI role needs a saved run: View as and a preview of a draft that is not saved have none';
-const SAY_MAX = 1200, ACTION_MAX = 40;
 
 /** The model's reply as {say, action}; text that is not that JSON becomes what the role says. */
 export function readRoleReply(text: string): RoleReply {
   const j = jsonObject(text) as { say?: unknown; action?: unknown } | null;
-  if (!j || typeof j.say !== 'string') return { say: text.trim().slice(0, SAY_MAX), action: null };
-  const action = typeof j.action === 'string' ? j.action.trim().slice(0, ACTION_MAX) : '';
-  return { say: j.say.slice(0, SAY_MAX), action: action || null };
+  if (!j || typeof j.say !== 'string') return { say: text.trim().slice(0, GAME_ASK.messageChars), action: null };
+  const action = typeof j.action === 'string' ? j.action.trim().slice(0, GAME_ASK.actionChars) : '';
+  return { say: j.say.slice(0, GAME_ASK.messageChars), action: action || null };
 }
 
 /** What the bridge calls for a game's askAI on this run (null: there is none to count the ask against). */

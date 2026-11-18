@@ -10,5 +10,9 @@ export function roleOf(items: readonly unknown[]): { about: string; knows: strin
   return row ? { about: String(row[1] ?? '').trim(), knows: String(row[2] ?? '').trim() } : null;
 }
 
-/** What the bridge accepts of a game's askAI and the `ai` function accepts of the request: messages, characters in one, characters of state (one copy for both). */
-export const GAME_ASK = { messages: 20, messageChars: 1000, stateChars: 4000 };
+/**
+ * What the bridge accepts of a game's askAI and the `ai` function accepts of the request, and what the role may answer (one copy for all):
+ * messages, characters in one message (a reply of the role is echoed back as a turn, so its cap is this one), characters of state, characters of
+ * the role's action word.
+ */
+export const GAME_ASK = { messages: 20, messageChars: 1200, stateChars: 4000, actionChars: 40 };

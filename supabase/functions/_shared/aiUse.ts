@@ -8,7 +8,7 @@ import type { Provider } from './aiGuard.ts';
 
 type Admin = SupabaseContext['supabaseAdmin'];
 export type Conn = { id: string; provider: Provider; base_url: string | null; default_model: string | null };
-export type UseRow = { kind: string; admins_only: boolean; model: string | null; preamble: string; daily_limit: number; connection: Conn | null };
+export type UseRow = { kind: string; admins_only: boolean; model: string | null; preamble: string; daily_limit: number; daily_chars: number | null; connection: Conn | null };
 
 export { fail };
 
@@ -25,7 +25,7 @@ export async function isLive(admin: Admin, use: string): Promise<boolean | null>
 }
 
 export async function readUse(admin: Admin, use: string): Promise<UseRow | null> {
-  const { data } = await admin.from('ai_uses').select('kind, admins_only, model, preamble, daily_limit, connection:ai_connections(id, provider, base_url, default_model)')
+  const { data } = await admin.from('ai_uses').select('kind, admins_only, model, preamble, daily_limit, daily_chars, connection:ai_connections(id, provider, base_url, default_model)')
     .eq('key', use).maybeSingle<UseRow>();
   return data || null;
 }

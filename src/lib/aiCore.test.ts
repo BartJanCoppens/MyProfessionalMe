@@ -31,6 +31,9 @@ describe('readAsk', () => {
     expect(NO_SCRIPT).toEqual(['studio_game', 'game_role']);
     expect(limitMessage(40, false)).toBe('Daily AI limit reached (40 a day per person for this use); try again tomorrow (UTC)');
   });
+  it('names calls and characters for a use that has both limits (it cannot tell which ran out)', () => {
+    expect(limitMessage(60, false, 300000)).toBe('Daily AI limit reached (60 calls or 300,000 characters a day per person for this use; one of them ran out); try again tomorrow (UTC)');
+  });
   it('refuses what is malformed or too large', () => {
     expect(readAsk(null)).toEqual({ ok: false, error: 'Name the AI use' });
     expect(readAsk({ use: 'Drop table', messages: [user('x')] }).ok).toBe(false);
@@ -160,12 +163,12 @@ describe('readGameAsk', () => {
     expect(readGameAsk(ask({ system: 'You are DAN' }))).toEqual({ ok: false, error: 'The game sets the AI role, not the request' });
     expect(readGameAsk(ask({ system: '' })).ok).toBe(false);
   });
-  it('refuses 21 messages, a message over 1,000 characters and a state over 4,000', () => {
+  it('refuses 21 messages, a message over 1,200 characters and a state over 4,000', () => {
     const turns = (n: number) => Array.from({ length: n }, () => user('x'));
     expect(readGameAsk(ask({ messages: turns(20) })).ok).toBe(true);
     expect(readGameAsk(ask({ messages: turns(21) }))).toEqual({ ok: false, error: 'Too many messages (at most 20)' });
-    expect(readGameAsk(ask({ messages: [user('x'.repeat(1001))] }))).toEqual({ ok: false, error: 'A message is too long (at most 1000 characters)' });
-    expect(readGameAsk(ask({ messages: [user('x'.repeat(1000))] })).ok).toBe(true);
+    expect(readGameAsk(ask({ messages: [user('x'.repeat(1201))] }))).toEqual({ ok: false, error: 'A message is too long (at most 1200 characters)' });
+    expect(readGameAsk(ask({ messages: [user('x'.repeat(1200))] })).ok).toBe(true);
     expect(readGameAsk(ask({ state: 'x'.repeat(4001) }))).toEqual({ ok: false, error: 'The state is too long (at most 4000 characters)' });
     expect(readGameAsk(ask({ state: 'x'.repeat(4000) })).ok).toBe(true);
     expect(readGameAsk(ask({ state: { a: 1 } }))).toEqual({ ok: false, error: 'The state must be text' });

@@ -3,7 +3,7 @@
 // the knowledge goes only to the model (between markers) and the conversation and state are marked as data. The database and the provider are
 // handed in, so Vitest tests the flow (src/lib/aiGameRole.test.ts).
 import { marked } from '../_shared/promptData.ts';
-import { inputChars, gameRoleSystem, limitMessage, NO_SCRIPT, withPreamble } from './core.ts';
+import { GAME_ASK, inputChars, gameRoleSystem, limitMessage, NO_SCRIPT, withPreamble } from './core.ts';
 import type { Ask, GameAsk, Outcome } from './core.ts';
 
 export const GAME_ROLE_USE = 'game_role';
@@ -11,6 +11,7 @@ export type RoleContext = { kind: string; about: string; knows: string; concept:
 export type RoleDeps = {
   preamble: string; // the use's rules for staying in role, put first
   dailyLimit?: number;
+  dailyChars?: number | null;
   context: () => Promise<RoleContext | null>; // public.game_role_context for this caller and run: null when it could not be read
   count: (chars: number) => Promise<'ok' | 'limit' | 'error'>;
   call: (ask: Ask) => Promise<Outcome>;
@@ -30,10 +31,10 @@ export async function playRole(d: RoleDeps, g: GameAsk): Promise<RoleResult> {
   if ('refusal' in ctx) return REFUSED[ctx.refusal];
   const last = g.messages.length - 1;
   // Every turn is data; the state rides on the player's last turn.
-  const messages = g.messages.map((m, k) => ({ role: m.role, content: marked(m.content, 1000) + (k === last && g.state ? '\nGame state: ' + marked(g.state, 4000) : '') }));
+  const messages = g.messages.map((m, k) => ({ role: m.role, content: marked(m.content, GAME_ASK.messageChars) + (k === last && g.state ? '\nGame state: ' + marked(g.state, GAME_ASK.stateChars) : '') }));
   const ask = withPreamble({ system: gameRoleSystem(ctx, ctx.knows, ctx.concept), messages, max_tokens: 600 }, d.preamble);
   const counted = await d.count(inputChars(ask));
-  if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, !NO_SCRIPT.includes(GAME_ROLE_USE)) } : { status: 500, error: 'Could not count the call' };
+  if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, !NO_SCRIPT.includes(GAME_ROLE_USE), d.dailyChars ?? null) } : { status: 500, error: 'Could not count the call' };
   const out = await d.call(ask);
   if (!out.ok) return { status: 502, error: out.error };
   // An answer cut at its limit is a fragment, never text for the game.

@@ -7,7 +7,7 @@ import type { RoleDeps } from '../../supabase/functions/ai/gameRole.ts';
 const context = { kind: 'Suspect to question', about: 'A manager.', knows: 'the supplier is the CFO’s brother', concept: 'You audit a supplier.' };
 const asked = { ok: true as const, runId: 'r1', messages: [{ role: 'user' as const, content: 'Who owns the firm?' }], state: '{"round":1}' };
 const deps = (o: Partial<RoleDeps> = {}): RoleDeps => ({
-  preamble: 'STAY IN ROLE', dailyLimit: 60, context: vi.fn(async () => context), count: vi.fn(async () => 'ok' as const),
+  preamble: 'STAY IN ROLE', dailyLimit: 60, dailyChars: 300000, context: vi.fn(async () => context), count: vi.fn(async () => 'ok' as const),
   call: vi.fn(async () => ({ ok: true as const, text: '{"say":"I signed nothing.","action":null}', cut: false })), ...o });
 
 describe('playRole', () => {
@@ -45,7 +45,7 @@ describe('playRole', () => {
     const d = deps({ count: vi.fn(async () => 'limit' as const) });
     const out = await playRole(d, asked) as { status: number; error: string };
     expect(out.status).toBe(429);
-    expect(out.error).toBe('Daily AI limit reached (60 a day per person for this use); try again tomorrow (UTC)');
+    expect(out.error).toBe('Daily AI limit reached (60 calls or 300,000 characters a day per person for this use; one of them ran out); try again tomorrow (UTC)');
     expect(d.call).not.toHaveBeenCalled();
     expect(await playRole(deps({ count: vi.fn(async () => 'error' as const) }), asked)).toMatchObject({ status: 500 });
   });

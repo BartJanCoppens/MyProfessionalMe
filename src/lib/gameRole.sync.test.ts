@@ -23,9 +23,9 @@ describe('game_role_context and the ai function', () => {
     expect(sql).toContain('r.user_id is distinct from p_user');
     expect(sql).toContain('r.finished_at is not null');
   });
-  it('seeds the use the function counts under, at 60 a day', () => {
+  it('seeds the use the function counts under, at 60 a day, 300,000 characters', () => {
     expect(sql).toContain(`('${GAME_ROLE_USE}', 60, 'text'`);
-    expect(sql).toMatch(/, 60, 60000\);/);
+    expect(sql).toMatch(/, 60, 300000\);/);
     expect(sql).toContain("play-tester''s own limit");
   });
 });

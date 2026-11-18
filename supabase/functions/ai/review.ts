@@ -13,6 +13,7 @@ export type Verdict = { passed: boolean; reasons: string[] };
 export type ReviewDeps = {
   preamble: string; // the use's house rules, put first
   dailyLimit?: number;
+  dailyChars?: number | null;
   load: () => Promise<ReviewLoad | null>; // public.game_review_input: null unless the caller is the author of a built game they may still edit
   count: (chars: number) => Promise<'ok' | 'limit' | 'error'>;
   call: (ask: Ask) => Promise<Outcome>;
@@ -25,7 +26,7 @@ export async function reviewGame(d: ReviewDeps): Promise<ReviewResult> {
   if (!game) return { status: 404, error: 'That game is not yours to review, or it is not built yet' };
   const ask = withPreamble(reviewRequest(game), d.preamble);
   const counted = await d.count(inputChars(ask));
-  if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, !NO_SCRIPT.includes(GAME_USE)) } : { status: 500, error: 'Could not count the call' };
+  if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, !NO_SCRIPT.includes(GAME_USE), d.dailyChars ?? null) } : { status: 500, error: 'Could not count the call' };
   const out = await d.call(ask);
   if (!out.ok) return { status: 502, error: out.error };
   const verdict = out.cut ? null : readVerdict(out.text);

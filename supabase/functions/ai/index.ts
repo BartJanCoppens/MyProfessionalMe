@@ -71,7 +71,7 @@ async function review({ admin, body, callerId, roles, started }: Call): Promise<
   if (opened instanceof Response) return opened;
   const { use, target } = opened, contribution = String(body.contribution_id || '');
   const out = await reviewGame({
-    preamble: use.preamble, dailyLimit: use.daily_limit,
+    preamble: use.preamble, dailyLimit: use.daily_limit, dailyChars: use.daily_chars,
     load: async () => ((await admin.rpc('game_review_input', { p_user: callerId, p_contribution: contribution })).data as ReviewLoad | null) ?? null,
     count: (chars) => countCall(admin, callerId, GAME_USE, chars),
     call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_USE].timeoutMs),
@@ -89,7 +89,7 @@ async function gameRole({ admin, body, callerId, roles, started }: Call): Promis
   if (opened instanceof Response) return opened;
   const { use, target } = opened;
   const out = await playRole({
-    preamble: use.preamble, dailyLimit: use.daily_limit,
+    preamble: use.preamble, dailyLimit: use.daily_limit, dailyChars: use.daily_chars,
     context: async () => ((await admin.rpc('game_role_context', { p_user: callerId, p_run: g.runId })).data as RoleContext | null) ?? null,
     count: (chars) => countCall(admin, callerId, GAME_ROLE_USE, chars),
     call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_ROLE_USE]?.timeoutMs),
@@ -108,7 +108,7 @@ async function answer({ admin, body, callerId, roles, started }: Call): Promise<
   const ask = withPreamble(r.ask, use.preamble);
   // Counted before the call, atomically; beyond the limit nothing is counted and nothing is sent.
   const counted = await countCall(admin, callerId, r.use, inputChars(ask));
-  if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit, !NO_SCRIPT.includes(r.use))) : fail(500, 'Could not count the call');
+  if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit, !NO_SCRIPT.includes(r.use), use.daily_chars)) : fail(500, 'Could not count the call');
   const key = await connectionKey(admin, use.connection!.id);
   if (!key) return fail(409, 'The connection has no key');
   const out = await callProvider(targetOf(use, key), ask, fetch, USE_LIMITS[r.use]?.timeoutMs);

@@ -59,9 +59,10 @@ describe('GameFrame', () => {
     expect(await send(ask('getData'), undefined, 'https://evil.example')).toBeUndefined();
   });
 
-  it('gives no answer to a message that does not parse', async () => {
+  it('gives no answer to a message with no usable id, and an error to an unknown request that has one', async () => {
     const { send } = setup();
-    expect(await send({ source: 'mpme-game', id: 1, type: 'navigate' })).toBeUndefined();
+    expect(await send({ source: 'mpme-game', type: 'ready' })).toBeUndefined();
+    expect(await send({ source: 'mpme-game', id: 1, type: 'navigate' })).toMatchObject({ ok: false, error: 'Unknown request' });
   });
 
   it('shows LEFT_MESSAGE on a second load and answers nothing after', async () => {
@@ -144,6 +145,21 @@ describe('GameFrame', () => {
     const { send } = setup({ askAI });
     expect(await send(ask('askAI', { messages: [{ role: 'player', text: 'hi' }], state: { s: 1 } }))).toMatchObject({ ok: true, value: reply });
     expect(askAI).toHaveBeenCalledWith({ messages: [{ role: 'player', text: 'hi' }], state: { s: 1 } });
+  });
+
+  it('answers a malformed request that has an id with an error, so the game never waits in silence', async () => {
+    const { send } = setup({ askAI: vi.fn(async () => ({ say: 'x', action: null })) });
+    expect(await send(ask('askAI', { messages: [{ role: 'ai', text: 'hi' }], state: {} }))).toMatchObject({ ok: false, error: expect.stringContaining('start and end with the player') });
+    expect(await send(ask('submitScore', { score: 66.6 }))).toMatchObject({ ok: false, error: expect.stringContaining('whole number') });
+  });
+
+  it('takes a role reply of 1,200 characters back as the next turn', async () => {
+    const long = 'y'.repeat(1200);
+    const askAI = vi.fn(async () => ({ say: long, action: null }));
+    const { send } = setup({ askAI });
+    const messages = [{ role: 'player', text: 'hi' }, { role: 'ai', text: long }, { role: 'player', text: 'and then?' }];
+    expect(await send(ask('askAI', { messages, state: null }))).toMatchObject({ ok: true });
+    expect(askAI).toHaveBeenCalledWith({ messages, state: null });
   });
 
   it('limits askAI to 30 calls per run: the 31st is refused before it reaches the platform', async () => {
