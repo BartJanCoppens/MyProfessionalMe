@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, has, op } from '../test/fakeSupabase';
 import { emptyPlan } from '../logic/trajectoryPlan';
 import type { PlanRecord } from '../logic/trajectoryPlan';
-import { loadPlan, removePlanFiles, removePlanSource, savePlanSoon, startOver } from './planStore';
+import { addPlanSourceRow, loadPlan, removePlanFiles, removePlanSource, savePlanSoon, setPlanSourcePath, startOver } from './planStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 
@@ -156,5 +156,29 @@ describe('removePlanSource', () => {
   it('says so when the row delete is refused', async () => {
     db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? (c.steps[0][0] === 'select' ? { path: null } : []) : [] }));
     await expect(removePlanSource('s1')).rejects.toThrow('Not removed · only an editor of this trajectory can remove a source');
+  });
+});
+
+describe('addPlanSourceRow and setPlanSourcePath', () => {
+  const fresh = { trajectoryId: 'T1', name: 'syllabus.pdf', pages: 2, passages: [[1, 'Exam 1']] as [number, string][], chars: 6, flags: ['cut_text'] };
+  it('inserts only the granted columns and returns the parsed source', async () => {
+    db.answer(() => ({ data: sourceRow({ path: null, flags: ['cut_text'] }) }));
+    const out = await addPlanSourceRow(fresh);
+    const [row] = db.on('trajectory_plan_sources')[0].steps[0][1] as [Record<string, unknown>];
+    expect(Object.keys(row).sort()).toEqual(['chars', 'flags', 'name', 'pages', 'passages', 'trajectory_id']);
+    expect(out).toMatchObject({ id: 's1', path: null, flags: ['cut_text'], addedBy: 'u' });
+  });
+  it('says the limit of 10 in words when the database refuses an 11th', async () => {
+    db.answer(() => ({ error: { message: 'A trajectory holds at most 10 sources', code: '23514' } as { message: string } }));
+    await expect(addPlanSourceRow(fresh)).rejects.toThrow('At most 10 sources per trajectory');
+  });
+  it('sets the path of the uploader\'s own row, and says when nothing was changed', async () => {
+    db.answer(() => ({ data: [{ id: 's1' }] }));
+    await setPlanSourcePath('s1', 'u/s1/a.pdf');
+    const call = db.on('trajectory_plan_sources')[0];
+    expect(call.steps[0][1][0]).toEqual({ path: 'u/s1/a.pdf' });
+    expect(has(call, 'eq', 'id', 's1')).toBe(true);
+    db.answer(() => ({ data: [] }));
+    await expect(setPlanSourcePath('s1', 'u/s1/a.pdf')).rejects.toThrow('only the person who added the source');
   });
 });

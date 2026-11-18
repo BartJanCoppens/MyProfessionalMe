@@ -43,9 +43,11 @@ function parseSource(r: SourceRow): PlanSource | null {
   return { id: r.id, trajectoryId: r.trajectory_id, name: r.name, path: r.path, pages: r.pages, passages: r.passages as [number, string][], chars: r.chars, flags: r.flags ?? [], addedBy: r.added_by, addedAt: r.added_at };
 }
 
+const SOURCE_LIMIT = 'At most 10 sources per trajectory';
 const refused = 'Not saved · you can only plan trajectories of your own business line';
 function fail(error: Failure | null) {
   if (!error) return;
+  if (/at most 10 sources/.test(error.message)) throw new Error(SOURCE_LIMIT);
   throw new Error(error.code === '42501' && /row-level security|permission denied/.test(error.message) ? refused : error.message);
 }
 
@@ -99,4 +101,21 @@ export async function removePlanSource(sourceId: string): Promise<void> {
   const gone = await supabase.from('trajectory_plan_sources').delete().eq('id', sourceId).select('id');
   fail(gone.error);
   if (!(gone.data as unknown[] | null)?.length) throw new Error('Not removed · only an editor of this trajectory can remove a source');
+}
+
+// A document read into passages becomes a source row (the database stamps who and when, and holds the limit of 10); its file comes after.
+export type NewPlanSource = { trajectoryId: string; name: string; pages: number; passages: [number, string][]; chars: number; flags: string[] };
+export async function addPlanSourceRow(s: NewPlanSource): Promise<PlanSource> {
+  const { data, error } = await supabase.from('trajectory_plan_sources')
+    .insert({ trajectory_id: s.trajectoryId, name: s.name, pages: s.pages, passages: s.passages, chars: s.chars, flags: s.flags }).select(SOURCE_COLUMNS).single();
+  fail(error);
+  const source = parseSource(data as SourceRow);
+  if (!source) throw new Error('The source was saved but could not be read back');
+  return source;
+}
+// The uploader records where the original file is.
+export async function setPlanSourcePath(sourceId: string, path: string): Promise<void> {
+  const { data, error } = await supabase.from('trajectory_plan_sources').update({ path }).eq('id', sourceId).select('id');
+  fail(error);
+  if (!(data as unknown[] | null)?.length) throw new Error('Not saved · only the person who added the source can set its file');
 }
