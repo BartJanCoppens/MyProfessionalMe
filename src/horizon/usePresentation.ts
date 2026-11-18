@@ -27,7 +27,7 @@ export function usePresentation(deck: Deck, o: { still: boolean; onLast?: () => 
   const move: Move | null = !prev ? null : o.still || prev.levelKey !== step.levelKey ? { kind: 'fade' }
     : { kind: 'fly', from: centre(prev.frame), to: centre(step.frame), seconds: flightSeconds(level), pull: pullOf(level, far) };
   return {
-    route, step, index, move, arrival: String(at.arrival), cues,
+    route, step, index, move, arrival: String(at.arrival), cues, still: o.still,
     first: index === 0, last: index === route.length - 1, place: 'Slide ' + (index + 1) + ' of ' + route.length,
     next: () => go(index + 1), previous: () => go(index - 1),
     show: (id: string) => go(route.findIndex((s) => s.frame.id === id)),

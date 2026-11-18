@@ -29,6 +29,19 @@ describe('a slide', () => {
   });
 });
 
+describe('motion', () => {
+  const big = { id: 'n', x: 0, y: 0, next: [], title: 'One number', body: '', viz: { type: 'counter' as const, items: [{ label: 'Beds', value: 42 }] } };
+  const theme = readDeck(garden).theme;
+  it('holds a slide\'s visuals at their end with motion off or at Slide animation Low: a big number does not count up', () => {
+    render(<SlideFace f={big} n="01" theme={theme} media={{}} live={{ run: '1', cue: 0 }} hold />);
+    expect(screen.getByText('42')).toBeTruthy();
+  });
+  it('counts a big number up on the slide in focus otherwise', () => {
+    render(<SlideFace f={big} n="01" theme={theme} media={{}} live={{ run: '1', cue: 0 }} />);
+    expect(screen.queryByText('42')).toBeNull();
+  });
+});
+
 describe('a hostile file (Review Focus 6)', () => {
   const deck = readDeck(JSON.stringify(crafted));
   it('draws a custom SVG only after the sanitiser: no script, no handler, no outside load', () => {

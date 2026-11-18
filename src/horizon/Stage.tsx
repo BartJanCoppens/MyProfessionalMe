@@ -2,7 +2,8 @@
 // the camera flies to the slide in focus (a 2D flight with Horizon's easing, pulling back on long flights at the
 // presentation's World animation level), or, for a fade (motion off, or into or out of a section), the slide alone
 // fades in, as Horizon's FlatStage does. Only the slide in focus plays its visuals and speaks, once the camera has
-// arrived; at Slide animation High it builds in (SlideBuild.tsx). Horizon's 3D worlds are not part of the player.
+// arrived; at Slide animation High it builds in (SlideBuild.tsx); at Low, or with motion off, its visuals stand still at
+// their end. Horizon's 3D worlds are not part of the player.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { EYE, FLIGHT_EASING, slideMotion } from './motion';
@@ -48,8 +49,9 @@ export function Stage({ deck, p }: { deck: Deck; p: Presentation }) {
     return () => window.clearTimeout(t);
   }, [p.arrival]);
   const here = arrived === p.arrival, live = here ? { run: p.arrival, cue: p.cues } : null, build = slideMotion(deck.theme) === 'high' && m?.kind === 'fly';
+  const hold = p.still || slideMotion(deck.theme) === 'low';
   const faceOf = (g: Frame, i: number, on: boolean) => {
-    const face = <SlideFace f={g} n={num(i)} theme={deck.theme} media={deck.media} live={on ? live : null} build={on && build} />;
+    const face = <SlideFace f={g} n={num(i)} theme={deck.theme} media={deck.media} live={on ? live : null} build={on && build} hold={hold} />;
     return on && build ? <BuildIn run={here ? 'build' : 'hold'} seed={g.id} at={p.arrival}>{face}</BuildIn> : face;
   };
   const room: CSSProperties = { position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden', borderRadius: 8, ...canvasLook(deck.theme) };

@@ -64,11 +64,11 @@ function Shape({ o }: { o: SlideObject }) {
   );
 }
 
-function Body({ o, media, live }: { o: SlideObject; media: Record<string, string>; live: Live }) {
+function Body({ o, media, live, hold }: { o: SlideObject; media: Record<string, string>; live: Live; hold?: boolean }) {
   switch (o.kind) {
     case 'text': return <div style={textCss(o, 'left')}>{o.text}</div>;
     case 'picture': return o.image ? <img src={o.image} alt={o.alt || ''} draggable={false} style={{ ...fill, objectFit: 'fill' }} /> : null;
-    case 'chart': return o.viz ? <div style={{ ...fill, display: 'flex', alignItems: 'center' }}><HeldVisual run={live ? 'play' : 'still'}><Visual key={vizKey(o.viz) + (live?.run ?? '')} v={o.viz} /></HeldVisual></div> : null;
+    case 'chart': return o.viz ? <div style={{ ...fill, display: 'flex', alignItems: 'center' }}><HeldVisual run={live && !hold ? 'play' : 'still'}><Visual key={vizKey(o.viz) + (live?.run ?? '')} v={o.viz} still={hold} /></HeldVisual></div> : null;
     case 'animation': return <Animation o={o} />;
     case 'case': return <Case o={o} />;
     case 'avatar': return <AvatarSpeaker o={o} url={o.avatar!.clip ? media[o.avatar!.clip.media] ?? null : null} run={live?.run} cue={live?.cue ?? 0} />;
@@ -76,7 +76,7 @@ function Body({ o, media, live }: { o: SlideObject; media: Record<string, string
   }
 }
 
-export function SlideObjects({ objects, media, live }: { objects: SlideObject[]; media: Record<string, string>; live: Live }) {
+export function SlideObjects({ objects, media, live, hold }: { objects: SlideObject[]; media: Record<string, string>; live: Live; hold?: boolean }) {
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
       {objects.map((o) => {
@@ -85,7 +85,7 @@ export function SlideObjects({ objects, media, live }: { objects: SlideObject[];
           <div key={o.id} data-object={o.id} data-kind={o.kind} data-shape={o.kind === 'shape' ? o.shape : undefined} aria-label={o.kind === 'text' ? undefined : describe(o)}
             style={{ position: 'absolute', left: o.x, top: o.y, width: Math.max(isLine(o) ? 1 : 0, o.w), ...(auto ? { minHeight: o.h } : { height: Math.max(isLine(o) ? 1 : 0, o.h) }),
               ...(turnable && o.rotate ? { transform: `rotate(${o.rotate}deg)` } : {}), pointerEvents: o.kind === 'avatar' ? 'auto' : 'none' }}>
-            <Body o={o} media={media} live={live} />
+            <Body o={o} media={media} live={live} hold={hold} />
           </div>
         );
       })}

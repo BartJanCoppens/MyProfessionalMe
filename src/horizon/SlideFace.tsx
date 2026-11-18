@@ -78,9 +78,10 @@ function SectionFace({ f, n }: { f: Frame; n: string }) {
   );
 }
 
-type Props = { f: Frame; n: string; theme: Theme; media: Record<string, string>; live?: Live; build?: boolean };
+// hold: its visuals stand still at their end (motion off, or Slide animation Low), even in focus.
+type Props = { f: Frame; n: string; theme: Theme; media: Record<string, string>; live?: Live; build?: boolean; hold?: boolean };
 
-function PlainFace({ f, n, media, live = null, build }: Props) {
+function PlainFace({ f, n, media, live = null, build, hold }: Props) {
   const g = geometry(f), blank = resolveLayout(f) === 'blank', slot = g.visual && (f.viz || f.image) ? fitVisual(g.visual) : null;
   return (
     <>
@@ -103,13 +104,13 @@ function PlainFace({ f, n, media, live = null, build }: Props) {
       )}
       {slot && (f.viz
         ? <div data-visual="" style={{ position: 'absolute', left: slot.x, top: slot.y, width: slot.w, height: slot.h, display: 'flex', alignItems: 'center' }}>
-            <HeldVisual run={live ? 'play' : 'still'}><Visual key={vizKey(f.viz) + (live?.run ?? '')} v={f.viz} /></HeldVisual>
+            <HeldVisual run={live && !hold ? 'play' : 'still'}><Visual key={vizKey(f.viz) + (live?.run ?? '')} v={f.viz} still={hold} /></HeldVisual>
           </div>
         : <div data-visual="" style={{ position: 'absolute', left: g.visual!.x, top: g.visual!.y, width: g.visual!.w, height: g.visual!.h, display: 'flex', alignItems: 'center', justifyContent: 'center', mixBlendMode: f.imageBlend ? 'lighten' : undefined }}>
             <img src={f.image!} alt={f.imageAlt || ''} draggable={false} style={{ display: 'block', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 'var(--radius-md)' }} />
           </div>)}
       {g.caption && <LayoutText t={g.caption} n={n} f={f} role="caption" />}
-      {!!f.objects?.length && <SlideObjects objects={f.objects} media={media} live={live} />}
+      {!!f.objects?.length && <SlideObjects objects={f.objects} media={media} live={live} hold={hold} />}
     </>
   );
 }
