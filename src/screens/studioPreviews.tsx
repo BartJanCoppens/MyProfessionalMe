@@ -64,9 +64,10 @@ const PodcastTry = ({ content }: { content: PodcastContent }) =>
   <PodcastPanel pc={podcastView(content, { ro: false, done: false, onEnd: () => {} })} />;
 
 // The learner's reel; the answer to its check lives in this preview only, and playing or answering completes nothing.
-function ReelTry({ content }: { content: ReelContent }) {
+// `drafted`: its rows were AI-drafted; voiced or drafted, the panel carries "Made with AI".
+function ReelTry({ content, drafted }: { content: ReelContent; drafted: boolean }) {
   const [answer, setAnswer] = useState<number | undefined>();
-  return <ReelPanel rl={reelView(content, { ro: false, done: false, takeaway: null, answer, pick: setAnswer, onEnd: () => {} })} />;
+  return <ReelPanel rl={reelView(content, { ro: false, done: false, takeaway: null, answer, pick: setAnswer, onEnd: () => {}, ai: drafted || content.made === 'ai' })} />;
 }
 
 // The learner's game as a play-test: a saved contribution plays on a test run (never counted), an unsaved preview on none; the
@@ -76,7 +77,7 @@ const GameTry = ({ content, contributionId, ai }: { content: GameContent; contri
 
 // A studio piece's content and what its learner panel needs: the case's hours, whether motion is off and, for a saved
 // contribution, its id (a game's play-test is recorded against it); ai: whether the AI role can answer (a game's play-test asks it).
-export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean; contributionId?: string; ai?: GameOpts['ai'] };
+export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean; contributionId?: string; ai?: GameOpts['ai']; drafted?: boolean };
 export const GAME_PLAYTEST = 'Play-test · not saved, never counts as progress';
 export const REEL_PREVIEW = 'Preview · music is added in the final cut · not saved, never counts as progress';
 
@@ -93,7 +94,7 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
       {content.kind === 'slides' && <SlidesTry content={content} still={t.still} />}
       {content.kind === 'podcast' && <PodcastTry content={content} />}
       {content.kind === 'game' && <GameTry content={content} contributionId={t.contributionId ?? null} ai={t.ai} />}
-      {content.kind === 'reel' && <ReelTry content={content} />}
+      {content.kind === 'reel' && <ReelTry content={content} drafted={!!t.drafted} />}
     </>
   );
 }
@@ -106,7 +107,7 @@ function Learner({ c }: { c: CS }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={note}>{content.kind === 'game' ? GAME_PLAYTEST : content.kind === 'reel' && !content.video ? REEL_PREVIEW : 'A play-test, as learners will see it: nothing is saved or counted.'}</div>
       {content.kind === 'game' && c.studio.reviewNote && <div role="status" style={{ ...note, color: '#7a5000' }}>{c.studio.reviewNote}</div>}
-      <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still, contributionId: c.nw.savedId, ai: c.studio.ai }} />
+      <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still, contributionId: c.nw.savedId, ai: c.studio.ai, drafted: c.studio.drafted }} />
       {content.kind === 'slides' && !c.readOnly && <SlidesVideo content={content} title={c.nw.title} />}
     </div>
   );
@@ -119,6 +120,7 @@ export function SavedContent({ t }: { t: LearnerTry | null }) {
     <div style={{ padding: '12px 20px', borderBottom: '1px solid #eef0ea', display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={label}>As learners will see it</div>
       <div style={note}>Try it: nothing is saved or counted.</div>
+      {t.content.kind === 'reel' && t.content.video && <div style={note}>Check the video itself: the app can't verify what it shows</div>}
       <LearnerPanel key={t.key} t={t} />
     </div>
   );

@@ -8,6 +8,7 @@ import { reelView, seededReel } from '../fmtReel';
 import type { ReelOpts } from '../fmtReel';
 import type { ReelContent, ReelMedia } from '../types';
 import ReelPanel from './ReelPanel';
+import { SavedContent } from './studioPreviews';
 
 vi.mock('../lib/mediaStore', () => ({ mediaUrl: vi.fn(async (p: string) => 'blob:' + p.split('/').pop()) }));
 
@@ -82,7 +83,7 @@ describe('a studio reel', () => {
   });
   it('says Square video for 1:1 and shows the takeaway only when there is one', async () => {
     await panel(studio({ size: '1080x1080' }), opts({ takeaway: 'Check it.' }));
-    expect(screen.getByText('Square video · 0:52 · Made with AI')).toBeTruthy();
+    expect(screen.getByText('Square video · 0:52')).toBeTruthy();
     expect(screen.getByText('Check it.')).toBeTruthy();
   });
 });
@@ -92,5 +93,30 @@ describe('the check', () => {
     const o = await panel(studio());
     fireEvent.click(screen.getByRole('button', { name: '15%' }));
     expect(o.pick).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('Made with AI, through the one AiMadeTag (M5)', () => {
+  it('is shown on the panel when the reel was voiced or its rows were AI-drafted, and nowhere twice', async () => {
+    await panel(studio({ made: 'scripted' }), opts({ ai: true }));
+    expect(screen.getAllByText('Made with AI')).toHaveLength(1);
+    cleanup();
+    await panel(studio({ made: 'scripted' }), opts({ ai: false }));
+    expect(screen.queryByText('Made with AI')).toBeNull();
+  });
+  it('is shown in the review view for an AI-drafted text-only reel and for a voiced one, with the reviewer note about the video', async () => {
+    render(<SavedContent t={{ key: 'c1', content: studio({ made: 'scripted' }), hours: 0, still: false, drafted: true }} />);
+    await act(async () => {});
+    expect(screen.getAllByText('Made with AI')).toHaveLength(1);
+    expect(screen.getByText("Check the video itself: the app can't verify what it shows")).toBeTruthy();
+    cleanup();
+    render(<SavedContent t={{ key: 'c2', content: studio({ made: 'ai' }), hours: 0, still: false }} />);
+    await act(async () => {});
+    expect(screen.getAllByText('Made with AI')).toHaveLength(1);
+    cleanup();
+    render(<SavedContent t={{ key: 'c3', content: studio({ made: 'scripted', video: null }), hours: 0, still: false }} />);
+    await act(async () => {});
+    expect(screen.queryByText('Made with AI')).toBeNull();
+    expect(screen.queryByText(/Check the video itself/)).toBeNull();
   });
 });

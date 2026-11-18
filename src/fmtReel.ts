@@ -20,13 +20,14 @@ export const seededReel = (M: ReelMedia): ReelContent => {
 };
 
 // answer: the option picked, by its written place; pick: choosing one; takeaway: the one sentence to keep, when there is one.
-export type ReelOpts = PlayedOpts & { answer: number | undefined; pick: (written: number) => void; takeaway: string | null };
+export type ReelOpts = PlayedOpts & { answer: number | undefined; pick: (written: number) => void; takeaway: string | null; ai?: boolean }; // ai: the panel carries the AiMadeTag (not on the learner's page, whose header has it)
 
 export function reelView(c: ReelContent, o: ReelOpts) {
   const { q, opts, a } = c.check, shift = q.length % opts.length, right = o.answer === a;
   return {
     rc: c, plan: cutPlanOf(c), cues: reelCues(c), paths: c.video ? [c.video.path] : [], takeaway: o.takeaway, q,
-    sub: (c.video ? (c.size === '720x1280' ? 'Vertical' : 'Square') + ' video · ' + fmtTime(c.seconds) : 'Captions only · no video') + (c.made === 'ai' ? ' · Made with AI' : ''),
+    sub: (c.video ? (c.size === '720x1280' ? 'Vertical' : 'Square') + ' video · ' + fmtTime(c.seconds) : 'Captions only · no video'),
+    ai: !!o.ai,
     opts: opts.map((_, i) => {
       const k = (i + shift) % opts.length, picked = o.answer === k, ok = k === a;
       return { label: opts[k], bd: picked ? (ok ? '#86BC25' : '#9a2b22') : '#d5dacf', bg: picked ? (ok ? '#fbfdf6' : '#fff6f5') : '#fff', pick: () => o.pick(k) };

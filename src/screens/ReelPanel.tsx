@@ -8,6 +8,7 @@ import type { CSSProperties } from 'react';
 import { Hover } from '../ds';
 import type { ReelView } from '../fmtReel';
 import { toVtt } from '../logic/captions';
+import AiMadeTag from './AiMadeTag';
 import { AudioGate } from './AudioGate';
 import ReelCanvas from './ReelCanvas';
 import StepPlayer from './StepPlayer';
@@ -19,10 +20,13 @@ export default function ReelPanel({ rl }: { rl: ReelView }) {
   return (
     <AudioGate title="Watch" subtitle={rl.sub} note={rl.note} paths={rl.paths} loading="Loading the reel" failed="The reel could not be opened">
       {(urls) => (
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div style={{ flex: '0 1 300px', minWidth: 0 }}>{rl.rc.video ? <Video key={urls[0]} rl={rl} url={urls[0]} /> : <Scenes rl={rl} />}</div>
-          <Below rl={rl} />
-        </div>
+        <>
+          <div style={{ marginBottom: 8 }}><AiMadeTag on={rl.ai} /></div>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <div style={{ flex: '0 1 300px', minWidth: 0 }}>{rl.rc.video ? <Video key={urls[0]} rl={rl} url={urls[0]} /> : <Scenes rl={rl} />}</div>
+            <Below rl={rl} />
+          </div>
+        </>
       )}
     </AudioGate>
   );

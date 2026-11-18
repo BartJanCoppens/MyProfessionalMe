@@ -6,7 +6,7 @@ import type { Logic } from './model';
 import type { AppState, Bundle, ExamQuestion, NewDraft, StudioState } from './types';
 import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
-import { noItems, validItems } from './logic/items';
+import { aiAssisted, noItems, validItems } from './logic/items';
 import { voiceOn } from './lib/voice';
 import type { WithFile } from './studioDraft';
 import type { RuleParts } from './logic/contribution';
@@ -104,6 +104,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     reviewNote: parts.game?.problem ?? '',
     // Why there is nothing to preview yet.
     still: stillMotion(L), // the Animated flow's preview holds its last frame with motion off
+    drafted: aiAssisted(nw), // the rows were AI-drafted: a reel's panel says "Made with AI"
     ai: L.aiOpts(), // a game's play-test asks the AI role only while it is live
     previewNote: parts.problems.length ? 'Fix the items in the Draft step first; the preview shows them as learners will.' : unsent[0] ?? '',
     // Send for review opens once the automatic check (check_contribution) passed on the draft on screen.
