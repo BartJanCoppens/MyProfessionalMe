@@ -4,6 +4,7 @@
 // produce rows, a stock look and no build runner yet.
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as store from '../lib/contributionStore';
+import * as avatars from '../lib/avatarStore';
 import { studioById } from '../logic/studios';
 import type { StudioRow } from '../logic/items';
 import { useRef, useState } from 'react';
@@ -17,14 +18,16 @@ import type { BuildStepState } from '../logic/studioBuild';
 import { harness } from '../test/harness';
 import CreateScreen from './Create';
 import StudioBuild from './StudioBuild';
+import { Preview } from './studioPreviews';
 
+vi.mock('../lib/avatarStore', () => ({ startAvatarRun: vi.fn(async () => 'run-1'), sayToCharacter: vi.fn(), endAvatarRun: vi.fn(), scoreAvatarRun: vi.fn(), shareAvatarRun: vi.fn(), withdrawAvatarRun: vi.fn(), myAvatarRuns: vi.fn(async () => []) }));
 vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.fn(), removeDraft: vi.fn(), submitContribution: vi.fn(), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(), removePolicy: vi.fn(),
   checkContribution: vi.fn() }));
 
-function Live({ state, readOnly = false }: { state: Partial<AppState>; readOnly?: boolean }) {
-  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'create', ...state }));
+function Live({ state, readOnly = false, ai = false }: { state: Partial<AppState>; readOnly?: boolean; ai?: boolean }) {
+  const config = ai ? { ...cfg, liveAssistant: true } : cfg, [st, setSt] = useState<AppState>(() => ({ ...initState(config), screen: 'create', ...state }));
   const toastTimer = useRef<number | undefined>(undefined), drag = useRef<string | null>(null), file = useRef<HTMLInputElement | null>(null), chat = useRef<HTMLDivElement | null>(null);
-  const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, member('u1'), person({ readOnly }), async () => {}).renderVals();
+  const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), config, { toastTimer, drag, file, chat }, member('u1'), person({ readOnly }), async () => {}).renderVals();
   return <>{vm.create && <CreateScreen c={vm.create} />}{vm.toast && <div role="status">{vm.toast}</div>}</>;
 }
 const rule = (formats: string[]) => ({ id: 1, user_id: 'u1', lines: ['Consulting'], formats, domains: [], audiences: [] });
@@ -43,14 +46,13 @@ beforeEach(() => { window.scrollTo = vi.fn() as unknown as typeof window.scrollT
 afterEach(cleanup);
 
 describe('the hub', () => {
-  it('lists all ten studios; unbuilt ones are greyed with "Coming in a later release"', () => {
+  it('lists all ten studios, every one of them built', () => {
     render(<Live state={{ create: data(), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
     ['Avatar Studio', 'Reel Studio', 'Podcast Studio', 'Game Studio', 'Slides Studio', 'Motion Studio', 'Explainer Studio', 'Job Aid Studio', 'Flash card & Exam Studio', 'Case Studio']
       .forEach((n) => expect(screen.getByRole('button', { name: new RegExp(n) })).toBeTruthy());
-    expect(card(/Avatar Studio/).disabled).toBe(true);
-    expect(card(/Avatar Studio/).textContent).toContain('Coming in a later release');
+    expect(card(/Avatar Studio/).disabled).toBe(false);
     expect(card(/Flash card & Exam Studio/).disabled).toBe(false);
-    expect(screen.getAllByText('Coming in a later release')).toHaveLength(1);
+    expect(screen.queryByText('Coming in a later release')).toBeNull();
   });
   it('greys an available studio the creation rules do not allow, with the reason', () => {
     render(<Live state={{ create: data(['Flash cards']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
@@ -104,7 +106,7 @@ describe('the steps', () => {
     expect(screen.queryByRole('button', { name: 'Warm · Flemish English' })).toBeNull();
   });
   it('says a preview comes with the studio when its kind is not registered', () => {
-    render(<Live state={{ create: data(), createTab: 'new', nw, studio: { view: 'studio', step: 4, id: 'avatar' } }} />);
+    render(<Preview kind="nope" c={{} as never} />);
     expect(screen.getByText('Preview comes with this studio')).toBeTruthy();
   });
 });
@@ -257,5 +259,36 @@ describe('the Motion Studio\'s Produce step', () => {
     expect(screen.getByText('Three stages.')).toBeTruthy();
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Build it again' })).toBeNull();
+  });
+});
+
+describe('the Avatar Studio', () => {
+  const avatarNw = (extra: Partial<AppState['nw']> = {}) => ({ ...nw, type: 'Avatar', title: 'Selling an HR system', dom: 'prof', lvl: '3', shape: { 'Who does the learner talk to?': 'A client executive', 'How is it scored?': 'Practice only', 'How long is a run?': '5 minutes' },
+    produce: { Language: 'English', Difficulty: 'Realistic' }, cast: { Look: 'l1' }, items: { list: studioById('avatar')!.items.map((r) => [...r]) as StudioRow[], how: 'manual' as const, problems: [], note: '' }, ...extra });
+  const at = (step: number, extra: Partial<AppState['nw']> = {}, ai = true) => <Live ai={ai} state={{ create: data(), createTab: 'new', nw: avatarNw(extra), stockLooks: looks, aiLive: ['avatar_conversation'], studio: { view: 'studio', step, id: 'avatar' } }} />;
+  it('offers the two scoring options (no self-assessment), the run, and captions the AI-steering questions', () => {
+    render(at(1));
+    expect(screen.getByRole('button', { name: 'AI scores, counsellor confirms' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Practice only' })).toBeTruthy();
+    expect(screen.queryByText(/Self-assessment/)).toBeNull();
+    expect(screen.getAllByText('Steers the AI draft')).toHaveLength(2); // who the learner talks to, what makes it hard
+  });
+  it('captions Difficulty "Steers the character", and has no Feedback row', () => {
+    render(at(3));
+    expect(screen.getByText('Steers the character')).toBeTruthy();
+    expect(screen.queryByText('Feedback')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tough' })).toBeTruthy();
+  });
+  it('previews a saved draft as a practice run on a test run, never counted', async () => {
+    render(at(4, { savedId: 'c-1' }));
+    expect(screen.getByText('Practice run · never saved to your progress, never counts')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Start a practice run' }));
+    await waitFor(() => expect(avatars.startAvatarRun).toHaveBeenCalledWith({ contributionId: 'c-1' }));
+  });
+  it('says to save an unsaved draft before it can be practised with', () => {
+    render(at(4));
+    expect(screen.getByText('Save the draft to practise with it')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start a practice run' })).toBeNull();
+    expect(avatars.startAvatarRun).not.toHaveBeenCalled();
   });
 });

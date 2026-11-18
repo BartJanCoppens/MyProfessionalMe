@@ -4,14 +4,14 @@ import type { StudioDef } from './logic/studios';
 
 export const STUDIO_STEPS = ['Idea & sources', 'Shape it', 'Draft', 'Produce', 'Preview & test', 'Check & send'];
 export const STUDIOS: StudioDef[] = [
- { id: 'avatar', name: 'Avatar Studio', out: 'Avatar', format: 'Avatar', available: false, compact: false, glyph: 'AV', time: 'about 20 min', dom: 'prof', lvl: 3, min: 6, cast: 'look', pv: 'avatar',
+ { id: 'avatar', name: 'Avatar Studio', out: 'Avatar', format: 'Avatar', available: true, compact: false, glyph: 'AV', time: 'about 20 min', dom: 'prof', lvl: 3, min: 6, cast: 'look', pv: 'avatar',
    tag: 'A talking AI character people practise a hard conversation with',
    idea: 'A sceptical HR director questions the business case for a new HR system', title: 'Selling an HR system to a sceptical HR director',
    qs: [['Who does the learner talk to?', ['A client executive', 'A colleague or junior', 'A regulator or auditor', 'A supplier'], 'draft'], ['What makes it hard?', ['Pushes back on cost', 'Emotional', 'Holds back information', 'Short of time'], 'draft'],
      ['How is it scored?', [...SCORINGS]], ['How long is a run?', RUN_MINUTES.map((m) => m + ' minutes')]],
    items: [['Persona', 'An HR director at a mid-sized manufacturer, 22 years in HR, wary of consultants.'], ['Situation', 'You present the business case for replacing three HR systems with one. She has ten minutes before her next meeting.'], ['Opening line', 'I have read your deck. Convince me this is not another IT project that HR ends up paying for.'], ['Reveals if asked', 'The current payroll vendor contract ends in 14 months.'], ['Hides unless probed', 'Two works-council members already oppose the change.'], ['Learning point · 30 %', 'Asks about her concerns before defending the numbers'], ['Learning point · 40 %', 'Links the case to her goals, not to IT savings'], ['Learning point · 30 %', 'Agrees a concrete next step before time runs out'],
      ['Quiz 1', 'She says your numbers look too optimistic. What do you do first?', 'Ask which assumption worries her most · Defend the numbers again · Offer a discount'], ['Quiz 2', 'How do you link the case to her goals?', 'Tie each benefit to a goal she named · List every IT saving · Skip to the price'], ['Quiz 3', 'Her time is nearly up. How do you close?', 'Agree one concrete next step and a date · Promise a follow-up deck · Thank her and leave']],
-   rows: [['Language', Object.keys(LANGUAGES)], ['Difficulty', [...DIFFICULTIES]]], build: null, savesProduce: true,
+   rows: [['Language', Object.keys(LANGUAGES)], ['Difficulty', [...DIFFICULTIES], 'character']], build: null, savesProduce: true,
    columns: ['Character row, Learning point · N % or Quiz N', 'What it says, or the quiz question', 'Quiz options · the right one first, split by " · "'] },
  { id: 'reel', name: 'Reel Studio', out: 'Reel', format: 'Reel', available: true, compact: false, glyph: '▶', time: 'about 15 min', dom: 'prof', lvl: 2, min: 3, cast: 'look', pv: 'reel',
    tag: 'A video of up to 90 seconds with one takeaway, cut in your browser',

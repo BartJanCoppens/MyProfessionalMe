@@ -12,11 +12,11 @@ import * as content from '../lib/contentStore';
 import * as learner from '../lib/learnerStore';
 import * as record from '../lib/recordStore';
 import * as attendance from '../lib/attendanceStore';
-import { AVATAR_QUIZ, AVATARS, LEARN_BY } from '../data';
+import { AVATAR_QUIZ, AVATARS, LEARN, LEARN_BY, LEARN_META } from '../data';
 import type { Subject } from '../lib/useSubject';
 import type { Member } from '../logic/team';
 import { cfg, emptyData, person, systemAdmin, withProgress } from '../test/harness';
-import type { Access, AppState, Project, Test } from '../types';
+import type { Access, AppState, Learn, Project, Test } from '../types';
 import MapScreen from './Map';
 import { DetailScreen, LibraryScreen } from './Library';
 import ProfileScreen from './Profile';
@@ -190,6 +190,21 @@ describe('the learning detail screen', () => {
     click(Q[0].opts[Q[0].a]);
     await act(async () => { click('Check my answers'); });
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L38', { state: 'accepted', pct: 100 });
+  });
+  it('a studio avatar with Avatar practice off says so, and its three right quiz answers still complete it', async () => {
+    const row: Learn = ['L961', 'Selling to a sceptic', 'prof', 3, 'Avatar', 'Peer contribution', 0.25, 0, '', ''];
+    const quiz = [0, 1, 2].map((i) => ({ q: 'Question ' + i + '?', opts: ['Right ' + i, 'Wrong ' + i + 'a', 'Wrong ' + i + 'b'], a: 0 as const }));
+    LEARN.push(row); LEARN_BY.L961 = row;
+    LEARN_META.L961 = { line: null, status: 'published', aiMade: true, content: { kind: 'avatar', persona: 'A sceptic.', situation: 'You pitch.', opening: 'Convince me.', points: [{ id: 'lp-1', text: 'Asks first', weight: 100 }], quiz,
+      look: null, voice: null, language: 'English', difficulty: 'Realistic', minutes: 10, scoring: 'AI scores, counsellor confirms', counterpart: 'A client executive', made: 'ai' } };
+    try {
+      detail('L961');
+      expect(screen.getByText('Practice needs AI: a System Admin switches on Avatar practice')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Start a practice run' })).toBeNull();
+      quiz.forEach((q) => click(q.opts[0]));
+      await act(async () => { click('Check my answers'); });
+      expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L961', { state: 'accepted', pct: 100 });
+    } finally { LEARN.splice(LEARN.indexOf(row), 1); delete LEARN_BY.L961; delete LEARN_META.L961; }
   });
   it('lets an admin register classroom attendance from the detail', async () => {
     vi.mocked(attendance.loadRoster).mockResolvedValue([{ userId: 'p2', name: 'Kim Learner', line: 'Consulting', state: 'not-started' }, { userId: 'p3', name: 'Ali Member', line: 'Consulting', state: 'accepted' }]);

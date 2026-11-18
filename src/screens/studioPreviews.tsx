@@ -10,6 +10,7 @@ import type { GameOpts } from '../fmtGame';
 import { flowView } from '../fmtMotion';
 import type { ExplainerState } from '../fmtExplainer';
 import { NEW_ROUND } from '../fmtRound';
+import { avatarView } from '../fmtAvatar';
 import { aidView, casePreview } from '../fmtVals';
 import { caseHours } from '../logic/studioContent';
 import type { VM } from '../model';
@@ -17,8 +18,10 @@ import { horizonView } from '../fmtHorizon';
 import { podcastView } from '../fmtPodcast';
 import { reelView } from '../fmtReel';
 import { slidesView } from '../fmtSlides';
-import type { AidContent, ExplainerContent, FormatContent, GameContent, HorizonContent, MotionContent, PodcastContent, ReelContent, SlidesContent } from '../types';
+import type { StockLook } from '../logic/stockLooks';
+import type { AidContent, AvatarContent, ExplainerContent, FormatContent, GameContent, HorizonContent, MotionContent, PodcastContent, ReelContent, SlidesContent } from '../types';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
+import AvatarPanel from './AvatarPanel';
 import GamePanel from './GamePanel';
 import ExplainerPanel from './ExplainerPanel';
 import PodcastPanel from './PodcastPanel';
@@ -28,6 +31,7 @@ import SlidesPanel from './SlidesPanel';
 import SlidesVideo from './SlidesVideo';
 import { AidPanel, CasePanel } from './FormatWork';
 import { label } from './labelStyle';
+import { Tag } from '../ds';
 import StudioPlayTest from './StudioPlayTest';
 
 type CS = NonNullable<VM['create']>;
@@ -75,9 +79,18 @@ function ReelTry({ content, drafted }: { content: ReelContent; drafted: boolean 
 const GameTry = ({ content, contributionId, ai }: { content: GameContent; contributionId: string | null; ai?: GameOpts['ai'] }) =>
   <GamePanel gm={gameView(content, { ro: false, learningId: null, contributionId, player: 'Player', accepter: 'your counsellor', ai })} />;
 
+// The learner's avatar as a practice run: a saved draft practises on a test run (never counted, never shared), an unsaved one says to save it first.
+export const AVATAR_PREVIEW = 'Practice run · never saved to your progress, never counts';
+const AvatarTry = ({ content, contributionId, ai, looks }: { content: AvatarContent; contributionId: string | null; ai?: GameOpts['ai']; looks?: StockLook[] | null }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div><Tag tone="amber">Practice run</Tag></div>
+    <AvatarPanel av={avatarView(content, { ro: false, learningId: null, contributionId, counsellor: 'your counsellor', ai: ai ?? { enabled: true, live: [] }, looks })} />
+  </div>
+);
+
 // A studio piece's content and what its learner panel needs: the case's hours, whether motion is off and, for a saved
-// contribution, its id (a game's play-test is recorded against it); ai: whether the AI role can answer (a game's play-test asks it).
-export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean; contributionId?: string; ai?: GameOpts['ai']; drafted?: boolean };
+// contribution, its id (a game's or an avatar's play-test is recorded against it); ai: whether the AI role can answer (a game's play-test asks it); looks: the stock looks (an avatar's video).
+export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean; contributionId?: string; ai?: GameOpts['ai']; drafted?: boolean; looks?: StockLook[] | null };
 export const GAME_PLAYTEST = 'Play-test · not saved, never counts as progress';
 export const REEL_PREVIEW = 'Preview · music is added in the final cut · not saved, never counts as progress';
 
@@ -95,6 +108,7 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
       {content.kind === 'podcast' && <PodcastTry content={content} />}
       {content.kind === 'game' && <GameTry content={content} contributionId={t.contributionId ?? null} ai={t.ai} />}
       {content.kind === 'reel' && <ReelTry content={content} drafted={!!t.drafted} />}
+      {content.kind === 'avatar' && <AvatarTry content={content} contributionId={t.contributionId ?? null} ai={t.ai} looks={t.looks} />}
     </>
   );
 }
@@ -105,9 +119,9 @@ function Learner({ c }: { c: CS }) {
   if (!content) return <div style={note}>{c.studio.previewNote}</div>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={note}>{content.kind === 'game' ? GAME_PLAYTEST : content.kind === 'reel' && !content.video ? REEL_PREVIEW : 'A play-test, as learners will see it: nothing is saved or counted.'}</div>
+      <div style={note}>{content.kind === 'game' ? GAME_PLAYTEST : content.kind === 'avatar' ? AVATAR_PREVIEW : content.kind === 'reel' && !content.video ? REEL_PREVIEW : 'A play-test, as learners will see it: nothing is saved or counted.'}</div>
       {content.kind === 'game' && c.studio.reviewNote && <div role="status" style={{ ...note, color: '#7a5000' }}>{c.studio.reviewNote}</div>}
-      <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still, contributionId: c.nw.savedId, ai: c.studio.ai, drafted: c.studio.drafted }} />
+      <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still, contributionId: c.nw.savedId, ai: c.studio.ai, drafted: c.studio.drafted, looks: c.studio.looks }} />
       {content.kind === 'slides' && !c.readOnly && <SlidesVideo content={content} title={c.nw.title} />}
     </div>
   );
@@ -136,6 +150,7 @@ const PREVIEWS: Record<string, (p: { c: CS }) => ReactNode> = {
   podcast: ({ c }) => <Learner c={c} />,
   game: ({ c }) => <Learner c={c} />,
   reel: ({ c }) => <Learner c={c} />,
+  avatar: ({ c }) => <Learner c={c} />,
 };
 
 export function Preview({ kind, c }: { kind: string; c: CS }) {

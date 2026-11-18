@@ -78,7 +78,7 @@ describe('studioContent', () => {
     expect([caseHours({ [LENGTH_QUESTION]: '2 hours' }), caseHours({ [LENGTH_QUESTION]: 'Half a day' }), caseHours({ [LENGTH_QUESTION]: 'A full day' }), caseHours({})]).toEqual([2, 4, 8, 4]);
   });
   it('offers only answers the product delivers: every other question or row says it steers the AI draft', () => {
-    const published = [LENGTH_QUESTION, EVIDENCE_QUESTION, END_QUESTION, MOTION_LENGTH, PRESENTER, TEMPLATE, TRANSITIONS, FORMAT_QUESTION, ROLE_QUESTION, LEADERBOARD_QUESTION, 'Format', 'Captions', 'Music'];
+    const published = [LENGTH_QUESTION, EVIDENCE_QUESTION, END_QUESTION, MOTION_LENGTH, PRESENTER, TEMPLATE, TRANSITIONS, FORMAT_QUESTION, ROLE_QUESTION, LEADERBOARD_QUESTION, 'Format', 'Captions', 'Music', 'How is it scored?', 'How long is a run?', 'Language'];
     STUDIOS.filter((d) => d.available && !d.compact).forEach((d) => [...d.qs, ...d.rows].forEach(([q, , steers]) => expect(!!steers || published.includes(q), d.id + ' · ' + q).toBe(true)));
     expect(studioById('case')!.rows.map((r) => r[0])).toEqual(['Names']);
     expect(studioById('aid')!.qs.map((q) => q[0])).toEqual(['Template?', 'When is it used?']);
@@ -142,7 +142,7 @@ describe('the database repeats these rules', () => {
     const b = body('private.items_ok');
     expect(b).toContain("when p_type = 'Flash cards' then private.rows_ok(p_items, private.item_max(p_type), 2)");
     const rows = /when p_type in \(([^)]*)\) then private\.rows_ok\(p_items, private\.item_max\(p_type\), 3\)/.exec(b);
-    expect(quoted(rows![1])).toEqual(STUDIOS.filter((d) => d.available && !d.compact && !['explainer', 'motion', 'slides', 'podcast', 'game', 'reel'].includes(d.id)).map((d) => d.format));
+    expect(quoted(rows![1])).toEqual(STUDIOS.filter((d) => d.available && !d.compact && !['avatar', 'explainer', 'motion', 'slides', 'podcast', 'game', 'reel'].includes(d.id)).map((d) => d.format));
     expect(b).toContain("when p_type = 'Practice exam' then jsonb_array_length(p_items) between 1 and private.item_max(p_type) and not exists (select 1 from jsonb_array_elements(p_items) e where not private.question_ok(e))");
     expect(b).toContain("when p_type = 'Interactive explainer' then private.explainer_ok(p_items)");
     expect(quoted(/\(e ->> 0\) not in \(([^)]*)\)/.exec(b)![1])).toEqual(CASE_LABELS);

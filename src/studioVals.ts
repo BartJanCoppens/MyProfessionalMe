@@ -99,7 +99,8 @@ export function studioVals(L: Logic, src: StudioSrc) {
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
     // Any other studio previews the content publishing makes of its rows (studioContent), once they are valid.
-    content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioEntry[], nw.shape ?? {}, { looks: L.state.stockLooks ?? [], draft: { produce: nw.produce, cast: nw.cast } }),
+    content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioEntry[], nw.shape ?? {}, { looks: L.state.stockLooks ?? [], voices: L.state.stockVoices ?? [], draft: { produce: nw.produce, cast: nw.cast } }),
+    looks: L.state.stockLooks, // an avatar's preview says whether its look has live video
     // A game's preview says so when the server's verdict on it is missing, failed or out of date.
     reviewNote: parts.game?.problem ?? '',
     // Why there is nothing to preview yet.

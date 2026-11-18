@@ -20,10 +20,10 @@ import { avatarRows } from './avatarContent';
 import { reelRows } from './reelContent';
 
 // steers: what the answer only steers, which the studio says under it (STEERS): the AI draft ('draft'), the next AI
-// draft (a Produce answer, after the Draft step: 'redraft') or the AI animation ('animation'). Without it the answer
+// draft (a Produce answer, after the Draft step: 'redraft'), the AI animation ('animation') or the AI character ('character'). Without it the answer
 // changes what is published.
-export type Steers = 'draft' | 'redraft' | 'animation' | 'build';
-export const STEERS: Record<Steers, string> = { draft: 'Steers the AI draft', redraft: 'Used when you draft again', animation: 'Steers the AI animation', build: 'Steers the AI build' };
+export type Steers = 'draft' | 'redraft' | 'animation' | 'build' | 'character';
+export const STEERS: Record<Steers, string> = { draft: 'Steers the AI draft', redraft: 'Used when you draft again', animation: 'Steers the AI animation', build: 'Steers the AI build', character: 'Steers the character' };
 export type StudioQuestion = [question: string, options: string[], steers?: Steers];
 export type ProduceRow = [label: string, options: string[], steers?: Steers];
 export type BuildStep = string;

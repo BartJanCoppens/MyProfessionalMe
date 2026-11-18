@@ -12,6 +12,7 @@ import type { Attrs, Contribution, CreateData, Review, RuleParts } from './logic
 import { checkContribution, decideReview, loadCreate, removeDraft, saveDraft, submitContribution } from './lib/contributionStore';
 import type { DraftFields } from './lib/contributionStore';
 import { latestDraft, sameDraft } from './studioDraft';
+import { QUESTIONS } from './logic/avatarContent';
 import { studioById } from './logic/studios';
 import { changeFormat, uploadFormat } from './studioRules';
 import { HUB, studioOf } from './studioVals';
@@ -59,12 +60,22 @@ export const fieldsOf = (nw: NewDraft, bundles: string[], studio: string | null)
 const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles, studio) : { ...fieldsOf(nw, bundles, studio), studio });
 // What a studio's automatic check was run on: the saved fields of the draft; a result counts while they are unchanged.
 export const checkKey = (nw: NewDraft, bundles: string[], studio: string | null) => JSON.stringify(fieldsOf(nw, bundles, studio));
+// A saved draft's answers back on the step stores: a studio that keeps its Produce answers and cast inside the shape (savesProduce) has them read out of it again, so the Produce
+// pickers show the saved choices (fieldsOf puts them back).
+const SAVED_CAST = [QUESTIONS.look, QUESTIONS.voice];
+function answersOf(c: Contribution): Pick<NewDraft, 'shape' | 'produce' | 'cast'> {
+  const def = c.studio ? studioById(c.studio) : null, shape = c.shape;
+  if (!shape) return {};
+  if (!def?.savesProduce) return { shape };
+  const produce = def.rows.map((r) => r[0]), pick = (keys: string[]) => Object.fromEntries(Object.entries(shape).filter(([k]) => keys.includes(k)));
+  return { shape: Object.fromEntries(Object.entries(shape).filter(([k]) => !produce.includes(k) && !SAVED_CAST.includes(k))), produce: pick(produce), cast: pick(SAVED_CAST) };
+}
 // A saved contribution back on screen, with its items (AI-assisted then means AI-made items) and its answers.
 export function draftOf(c: Contribution): NewDraft {
   const list = itemsFromSaved(c.type, c.items), withItems = carriesItems(c.type, c.studio);
   return { line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
     outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !withItems, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
-    items: withItems ? { ...noItems(), list, how: c.ai_assisted ? 'ai' : 'saved' } : noItems(), ...(c.shape && { shape: c.shape }) };
+    items: withItems ? { ...noItems(), list, how: c.ai_assisted ? 'ai' : 'saved' } : noItems(), ...answersOf(c) };
 }
 
 // ---------- writes ----------

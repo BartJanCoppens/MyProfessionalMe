@@ -22,6 +22,7 @@ import type { Steers, StudioDef, StudioEntry, StudioItem } from './logic/studios
 import { lookOf } from './logic/stockLooks';
 import { portraitUrl } from './reel/portraits';
 import type { Chip } from './screens/ChipGroup';
+import { avatarCast } from './studioAvatar';
 import { gameProduce } from './studioGame';
 import { motionProduce } from './studioMotion';
 import { podcastProduce, castKey, dropSpeakerVoice, speakerVoiceName } from './studioPodcast';
@@ -88,7 +89,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
   return {
     shape: def.qs.map(([q, options, steers]) => { const o = offered(on, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers, PRODUCE_NOTES[def.id + ':' + row])),
-    cast: castPickers(L, def, nw).map((p) => ('speaker' in p ? voiceChoice(L, nw, setNw, p.key, p.options, p.note, speakerVoiceName(L, nw, p.speaker), (cur, id) => dropSpeakerVoice(cur, p.speaker, id))
+    cast: def.id === 'avatar' ? avatarCast(L, nw, setNw, (options) => lookChoice(L, nw, setNw, 'Look', options, L.state.stockLooks && !options.length ? NO_STOCK_LOOKS : '')) : castPickers(L, def, nw).map((p) => ('speaker' in p ? voiceChoice(L, nw, setNw, p.key, p.options, p.note, speakerVoiceName(L, nw, p.speaker), (cur, id) => dropSpeakerVoice(cur, p.speaker, id))
       : p.key === 'Voice' ? voiceChoice(L, nw, setNw, p.key, p.options, 'note' in p ? p.note : '', def.id === 'reel' ? reelVoiceName(L, nw) : deckVoiceName(L, nw), dropOtherVoices) : lookChoice(L, nw, setNw, p.key, p.options, p.note))),
     rows: stepsOf(list).map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
       edit: (f: 0 | 1 | 2, v: string) => change((rows, q) => [...rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x)), ...q]),

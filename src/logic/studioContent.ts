@@ -3,6 +3,8 @@
 // private.explainer_content, private.motion_content); the studio's preview uses this so the creator tries exactly what
 // learners will get. Pure.
 import type { FormatContent } from '../types';
+import { avatarContent } from './avatarContent';
+import type { StockVoice } from './ai';
 import { ROLE_QUESTION, gameContent, gameProblems } from './gameContent';
 import { GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
 import type { GameReviewStatus } from './gameContent';
@@ -81,9 +83,11 @@ export const AI_ONLY: Record<string, { options: string[]; why: string; needs: 'd
 };
 
 const texts = (items: StudioItem[], label: string) => items.filter((i) => i[0] === label).map((i) => i[1].trim());
-// What a builder may need besides the rows and answers: the stock looks (a reel joins its look) and, for a reel not cut yet, the Produce answers it previews from.
-export type ContentExtra = { looks?: StockLook[]; draft?: { produce?: Record<string, string>; cast?: Record<string, string> } };
+// What a builder may need besides the rows and answers: the stock looks (a reel joins its look), the stock voices (an avatar's voice) and, for a draft not saved yet, the Produce answers
+// and cast it previews from (an avatar's look and voice are Produce answers too, and the saved draft keeps them in its shape).
+export type ContentExtra = { looks?: StockLook[]; voices?: StockVoice[]; draft?: { produce?: Record<string, string>; cast?: Record<string, string> } };
 const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, string>, extra?: ContentExtra) => FormatContent | null> = {
+  Avatar: (items, shape, x) => avatarContent(items, { ...shape, ...x?.draft?.produce, ...x?.draft?.cast }, x?.looks ?? [], x?.voices ?? []),
   Slides: slidesContent,
   Reel: (items, shape, x) => reelContent(items, shape, x?.looks ?? [], x?.draft),
   Podcast: (items) => podcastContent(items),
