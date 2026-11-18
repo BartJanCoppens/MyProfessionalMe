@@ -66,7 +66,7 @@ export function viewItems(c: Contribution, suffix: string, still: boolean) {
   const content = list.find(isHorizonItem) ?? (def && !itemsValid(def, list as StudioEntry[]).length ? studioContent(c.type, list as StudioEntry[], c.shape ?? {}) : null);
   return { itemsHead: list.length ? countText(c.type, list.length) + suffix : '', itemRows: itemRows(c.type, list),
     answersHead: answers.length ? 'Studio answers' : '', answerRows: answers.map(([q, a]) => ({ front: q, back: a })),
-    asLearner: content && { key: c.id, content, hours: caseHours(c.shape ?? {}), still } };
+    asLearner: content && { key: c.id, contributionId: c.id, content, hours: caseHours(c.shape ?? {}), still } };
 }
 // The refusal when a card or exam has no items yet; `then` says where to get them.
 export const addFirst = (type: string, then: string) => 'Add the ' + noun(type) + ' first · ' + then;

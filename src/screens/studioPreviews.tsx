@@ -1,10 +1,11 @@
 // The preview step's registry: one preview per studio kind (StudioDef.pv). Flash plays its cards or questions; a studio
-// whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow, Slides, Podcast) shows that format's own
+// whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow, Slides, Podcast, Game) shows that format's own
 // learner panel over studioContent. A preview is a play-test: never saved, never counted as progress. The same panels
 // show a saved studio contribution to its author and its reviewers (SavedContent), and a Presentation's file.
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { explainerView } from '../fmtExplainer';
+import { gameView } from '../fmtGame';
 import { flowView } from '../fmtMotion';
 import type { ExplainerState } from '../fmtExplainer';
 import { NEW_ROUND } from '../fmtRound';
@@ -14,8 +15,9 @@ import type { VM } from '../model';
 import { horizonView } from '../fmtHorizon';
 import { podcastView } from '../fmtPodcast';
 import { slidesView } from '../fmtSlides';
-import type { AidContent, ExplainerContent, FormatContent, HorizonContent, MotionContent, PodcastContent, SlidesContent } from '../types';
+import type { AidContent, ExplainerContent, FormatContent, GameContent, HorizonContent, MotionContent, PodcastContent, SlidesContent } from '../types';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
+import GamePanel from './GamePanel';
 import ExplainerPanel from './ExplainerPanel';
 import PodcastPanel from './PodcastPanel';
 import PresentationPanel from './PresentationPanel';
@@ -57,8 +59,14 @@ const SlidesTry = ({ content, still }: { content: SlidesContent; still: boolean 
 const PodcastTry = ({ content }: { content: PodcastContent }) =>
   <PodcastPanel pc={podcastView(content, { ro: false, done: false, onEnd: () => {} })} />;
 
-// A studio piece's content and what its learner panel needs: the case's hours and whether motion is off.
-export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean };
+// The learner's game as a play-test: a saved contribution plays on a test run (never counted), an unsaved preview on none; the
+// name a game sees is "Player".
+const GameTry = ({ content, contributionId }: { content: GameContent; contributionId: string | null }) =>
+  <GamePanel gm={gameView(content, { ro: false, learningId: null, contributionId, player: 'Player', accepter: 'your counsellor' })} />;
+
+// A studio piece's content and what its learner panel needs: the case's hours, whether motion is off and, for a saved
+// contribution, its id (a game's play-test is recorded against it).
+export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean; contributionId?: string };
 
 // The format's own learner panel over the content, as a play-test: its state lives here only.
 function LearnerPanel({ t }: { t: LearnerTry }) {
@@ -72,6 +80,7 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
       {content.kind === 'horizon' && <DeckTry content={content} still={t.still} />}
       {content.kind === 'slides' && <SlidesTry content={content} still={t.still} />}
       {content.kind === 'podcast' && <PodcastTry content={content} />}
+      {content.kind === 'game' && <GameTry content={content} contributionId={t.contributionId ?? null} />}
     </>
   );
 }
