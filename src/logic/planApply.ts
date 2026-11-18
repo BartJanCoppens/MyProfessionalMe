@@ -69,8 +69,9 @@ function applyModule(r: Run, m: PlanModule, win: number, from: string): void {
   }
 }
 
-// stamp: on a live trajectory, the moment of Apply. Steps that can be required carry it as linked_at, so people already enrolled see them as optional
-// (isRequired), as for a placeholder once linked. A make step is not stamped (the database stamps it when it links); the exam is always required.
+// stamp: on a live trajectory, the moment of Apply. Every step but the exam carries it as linked_at, so people already enrolled see them as optional
+// (isRequired), as for a placeholder once linked. A make step is stamped too (it never blocks people already enrolled; it blocks new enrollees until its
+// material is published, and the database restamps it when it links, later than this); the exam is always required.
 export function applyPlan(t: Trajectory, p: TrajectoryPlan, ids: string[], used: Used, stamp?: string): Applied {
   const queue = ids.slice(), titles = new Set([...used.titles].map(norm)), fresh: TrjStep[] = [], skipped: Skipped[] = [];
   const run: Run = {
@@ -81,7 +82,7 @@ export function applyPlan(t: Trajectory, p: TrajectoryPlan, ids: string[], used:
     add: (draft) => {
       const id = queue.shift();
       if (!id) throw new Error('Apply was given too few step ids');
-      const step = { ...draft, id, ...(stamp && draft.k !== 'make' && draft.k !== 'exam' ? { linked_at: stamp } : {}) } as TrjStep;
+      const step = { ...draft, id, ...(stamp && draft.k !== 'exam' ? { linked_at: stamp } : {}) } as TrjStep;
       fresh.push(step);
       if (step.title) titles.add(norm(step.title));
       return step;

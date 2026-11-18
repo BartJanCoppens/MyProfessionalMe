@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   autoEnrolled, canBeMandatory, credentialExpiry, inMandatoryAudience, mapAtStage, monthLabel, relevantMap, startMonth, stepCpd, stepHours, totals, trajectoryProgress,
-  isRequired, type Enrolment, type LearningRef, type Trajectory,
+  isRequired, optionalByLink, type Enrolment, type LearningRef, type Trajectory,
 } from './trajectory';
 
 const L = (hours: number, cpd: number, state: LearningRef['state'] = 'not-started', pct = 0): LearningRef => ({ hours, cpd, state, pct });
@@ -209,5 +209,25 @@ describe('what a step added after the enrolment does to the lock', () => {
     const pg = trajectoryProgress(t, at(late, { o1: { state: 'done' } }), byId);
     expect(pg.steps.map((x) => x.locked)).toEqual([false, false, true]);
     expect(pg.reqN).toBe(3);
+  });
+});
+
+describe('a placeholder Apply added to a live trajectory', () => {
+  const stamp = '2026-11-18T10:00:00+00:00';
+  const chain: Trajectory = { ...base, steps: [
+    { id: 'm1', k: 'make', title: 'Flash cards', fmt: 'Flash cards', hours: 6, win: 6, req: true, pre: null, from: 'p:x', linked_at: stamp },
+    { id: 'c1', k: 'check', title: 'Sign-off', win: 6, req: true, pre: 'm1', from: 'p:x', linked_at: stamp },
+    { id: 'x1', k: 'exam', title: 'Exam', hours: 2, win: 12, req: true, pre: 'c1' }] };
+  const at = (created_at: string): Enrolment => ({ ...enrol(), created_at });
+  it('is optional from Apply for people already enrolled: it never blocks their sign-off or exam', () => {
+    const pg = trajectoryProgress(chain, at('2026-11-01T00:00:00+00:00'), byId);
+    expect(pg.steps.map((x) => x.locked)).toEqual([false, false, false]);
+    expect(pg.reqN).toBe(1);
+    expect(optionalByLink(chain.steps[0], at('2026-11-01T00:00:00+00:00'))).toBe(true);
+  });
+  it('still blocks the people it is required for (new enrollees) until its material is published', () => {
+    const pg = trajectoryProgress(chain, at('2026-11-19T00:00:00+00:00'), byId);
+    expect(pg.steps.map((x) => x.locked)).toEqual([false, true, true]);
+    expect(trajectoryProgress(chain, null, byId).steps.map((x) => x.locked)).toEqual([false, true, true]);
   });
 });

@@ -127,10 +127,10 @@ describe('applyPlan on a trajectory that already has an exam', () => {
 });
 
 describe('applyPlan on a live trajectory (a stamp)', () => {
-  it('stamps the steps that can be required with the moment, so people already enrolled see them optional; not a make step, not the exam', () => {
+  it('stamps every step but the exam with the moment (a make step too), so people already enrolled see them optional', () => {
     const stamp = '2026-11-18T10:00:00.000Z';
     const r = apply(noExam(), full, idsFor(), stamp);
-    expect(r.steps.map((s) => [s.k, s.linked_at])).toEqual([['learn', stamp], ['make', undefined], ['check', stamp], ['evidence', stamp], ['exam', undefined]]);
+    expect(r.steps.map((s) => [s.k, s.linked_at])).toEqual([['learn', stamp], ['make', stamp], ['check', stamp], ['evidence', stamp], ['exam', undefined]]);
     expect(apply(noExam(), full).steps.some((s) => s.linked_at)).toBe(false);
   });
 });

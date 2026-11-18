@@ -47,9 +47,10 @@ export function isRequired(st: TrjStep, e?: Enrolment | null): boolean {
   if (st.k === 'exam') return true;
   return st.req && st.k !== 'make' && !optionalByLink(st, e);
 }
-// Set as required but linked (or added on a live trajectory) after this enrolment began: optional for it, and skipped by the lock.
+// Set as required but linked (or added on a live trajectory, a placeholder included) after this enrolment began: optional for it, and skipped by the lock.
+// A placeholder not stamped (draft trajectory) or added before the enrolment began still blocks what follows until its material is published.
 export function optionalByLink(st: TrjStep, e?: Enrolment | null): boolean {
-  if (st.k === 'exam' || st.k === 'make' || !st.req) return false;
+  if (st.k === 'exam' || !st.req) return false;
   return (st.linked_at ? Date.parse(st.linked_at) : NaN) > (e?.created_at ? Date.parse(e.created_at) : NaN);
 }
 
