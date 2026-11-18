@@ -11,7 +11,7 @@ import { reviewGame } from './lib/aiStore';
 import { loadGameReview } from './lib/gameStore';
 import { MAX_PARTS, joinContinuation } from './logic/continuation';
 import { GAME_FILE_MAX, scanGameFiles } from './logic/gameScan';
-import { gameData, gameOf, reviewProblem, roleAnswer, NO_ROLE } from './logic/gameContent';
+import { gameData, gameOf, reviewBasis, reviewProblem, roleAnswer, shownReview, NO_ROLE } from './logic/gameContent';
 import type { GameItem } from './logic/gameContent';
 import { logicRequest, screensRequest } from './logic/gamePrompt';
 import type { GameBrief } from './logic/gamePrompt';
@@ -62,21 +62,31 @@ function putGame(setNw: SetNw, files: GameItem['files'], role: string) {
 
 // How many build steps the draft shows done: none without a built game, the screens, the logic, and the review once this session
 // read a passed verdict for these files (the server holds it; a reloaded draft shows the logic done until the review step runs again).
-export function gameBuilt(list: StudioEntry[], _shape: Record<string, string>, nw?: NewDraft): number {
+export function gameBuilt(list: StudioEntry[], shape: Record<string, string>, nw?: NewDraft): number {
   const game = gameOf(list);
   if (!game) return 0;
   if (!game.files['game.js']) return 2;
-  return nw?.gameReview?.passed && nw.gameReview.current ? 4 : 3;
+  const review = nw && shownReview({ ...nw, shape, items: { ...(nw.items ?? noItems()), list: list as Item[] } });
+  return review?.passed && review.current ? 4 : 3;
 }
 
 // Saves the game with the draft, then has the server review it: a passed verdict it already holds for these files is reused.
-async function reviewed(ctx: BuildCtx, list: StudioEntry[]) {
+// The rows as they are now (edited during a long build), else the ones the build started with: the save must not overwrite them.
+async function currentRows(setNw: SetNw, fallback: StudioEntry[]): Promise<StudioEntry[]> {
+  let rows: StudioEntry[] | null = null;
+  setNw((cur) => { rows = stepsOf(listOf(cur)); return {}; });
+  for (let i = 0; i < 5 && !rows; i++) await new Promise((r) => setTimeout(r, 0));
+  return rows ?? fallback;
+}
+
+async function reviewed(ctx: BuildCtx, game: GameItem) {
+  const list = [...await currentRows(ctx.setNw, stepsOf(listOf(ctx.nw))), game];
   let id = '';
   const saved = await ctx.withFile(async (i) => { id = i; return list as Item[]; }, 'Saved as draft · the game is stored with it', ctx.nw.items?.how ?? '');
   if (!saved) throw new Error('The game could not be saved · try again');
   const held = await loadGameReview(id);
   const status = held?.current && held.passed ? held : { ...(await reviewGame(id)), current: true };
-  ctx.setNw({ gameReview: status });
+  ctx.setNw({ gameReview: status, gameReviewFor: reviewBasis(ctx.nw.title, list, ctx.nw.shape ?? {}) });
   if (!status.passed) throw new Error(status.reasons[0] ?? 'The house-rules check did not pass');
 }
 
@@ -106,10 +116,11 @@ export function gameRunner(ctx: BuildCtx): BuildRunner {
     },
     async () => {
       // The review runs on the server: inside Claude Design alone there is no connection to run it on.
-      if (!L.state.aiLive.includes(USE)) throw new Error(NO_AI);
+      const live = L.aiOpts();
+      if (!live.enabled || !live.live.includes(USE)) throw new Error(NO_AI);
       have();
       if (!files['game.js']) throw new Error('Write the game logic first');
-      await reviewed(ctx, [...stepsOf(listOf(nw)), { kind: 'game', files: { ...files }, for: { role } } as GameItem]);
+      await reviewed(ctx, { kind: 'game', files: { ...files }, for: { role } });
     },
   ];
   return async (_name, index) => {
@@ -120,9 +131,10 @@ export function gameRunner(ctx: BuildCtx): BuildRunner {
 
 // The Produce step's part for the game: who made the code, why it cannot be built, what the server said of the review, and building again.
 export function gameProduce(L: Logic, nw: NewDraft, setNw: SetNw) {
-  const built = !!gameOf(listOf(nw));
+  const built = !!gameOf(listOf(nw)), review = shownReview(nw), problem = review === undefined ? '' : reviewProblem(review)[0] ?? '';
   return {
-    made: built ? madeLabel('ai') : '', note: L.aiCan(USE) ? '' : NO_AI, review: nw.gameReview === undefined ? '' : reviewProblem(nw.gameReview)[0] ?? 'The house-rules check passed on this version',
-    restart: () => setNw((cur) => ({ items: { ...(cur.items ?? noItems()), list: stepsOf(listOf(cur)) as Item[] }, build: undefined, gameReview: undefined })),
+    // problem: what is wrong with the verdict ('' when passed or not known), the one reading the Produce line and the preview note share.
+    problem, made: built ? madeLabel('ai') : '', note: L.aiCan(USE) ? '' : NO_AI, review: review === undefined ? '' : problem || 'The house-rules check passed on this version',
+    restart: () => setNw((cur) => ({ items: { ...(cur.items ?? noItems()), list: stepsOf(listOf(cur)) as Item[] }, build: undefined, gameReview: undefined, gameReviewFor: undefined })),
   };
 }

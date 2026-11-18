@@ -191,7 +191,9 @@ export type NewDraft = { line: string; aud: string; type: string; title: string;
   // A new draft (blankDraft) has none.
   savedId?: string;
   // The server's house-rules verdict on the built game, as this session last read it: undefined not known, null none yet (studioGame.ts).
-  gameReview?: GameReviewStatus | null };
+  gameReview?: GameReviewStatus | null;
+  // What that verdict was for (reviewBasis): an edit of the title, rows or answers it read makes it stale on screen, as the server's hash will say.
+  gameReviewFor?: string };
 
 // Knowledge library: retrieval models and bundles
 export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };

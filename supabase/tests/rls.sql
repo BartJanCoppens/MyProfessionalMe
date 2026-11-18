@@ -816,6 +816,12 @@ with u as (update public.ai_uses set connection_id = current_setting('test.ai1')
 with u as (update public.ai_uses set connection_id = current_setting('test.ai2')::uuid, model = 'voice-1' where key = 'avatar_voice' returning 1) insert into results (check_name, expected, actual) select 'AI SA sets a voice connection on a voice use', '1 rows', count(*)||' rows' from u;
 insert into results (check_name, expected, actual) select 'AI configured text use is live', 'true', ('profile_chat' = any(public.ai_live_uses()))::text;
 insert into results (check_name, expected, actual) select 'AI waiting voice use is not live', 'false', ('avatar_voice' = any(public.ai_live_uses()))::text;
+insert into results (check_name, expected, actual) select 'AI studio_game is seeded as a text use, off, 40 a day', 'text/false/40', kind||'/'||enabled||'/'||daily_limit from public.ai_uses where key = 'studio_game';
+insert into results (check_name, expected, actual) select 'AI studio_game is not live without a connection', 'false', ('studio_game' = any(public.ai_live_uses()))::text;
+with u as (update public.ai_uses set connection_id = current_setting('test.ai1')::uuid, enabled = true where key = 'studio_game' returning 1) insert into results (check_name, expected, actual) select 'AI SA gives studio_game the text connection', '1 rows', count(*)||' rows' from u;
+insert into results (check_name, expected, actual) select 'AI studio_game is live with a text connection that has a key and a model', 'true', ('studio_game' = any(public.ai_live_uses()))::text;
+update public.ai_uses set enabled = false where key = 'studio_game';
+insert into results (check_name, expected, actual) select 'AI studio_game is not live once switched off', 'false', ('studio_game' = any(public.ai_live_uses()))::text;
 update public.ai_uses set enabled = false where key = 'profile_chat';
 insert into results (check_name, expected, actual) select 'AI disabled use is not live', 'false', ('profile_chat' = any(public.ai_live_uses()))::text;
 update public.ai_uses set enabled = true where key = 'profile_chat';
@@ -2821,12 +2827,12 @@ begin
   begin execute p_sql; insert into results (check_name, expected, actual) values (p_name, p_expect, 'allowed');
   exception when others then insert into results (check_name, expected, actual) values (p_name, p_expect, 'blocked: '||sqlstate); end;
 end $f$;
-select pg_temp.gm_blocked('GM a client cannot insert a review', format($q$insert into public.game_reviews (contribution_id, files_hash, passed) values (%L, 'x', true)$q$, (select id from public.contributions where title = 'T gm bad')), 'blocked: 42501');
+select pg_temp.gm_blocked('GM a client cannot insert a review', format($q$insert into public.game_reviews (contribution_id, review_hash, passed) values (%L, 'x', true)$q$, (select id from public.contributions where title = 'T gm bad')), 'blocked: 42501');
 select pg_temp.gm_blocked('GM a client cannot update a review', $q$update public.game_reviews set passed = true$q$, 'blocked: 42501');
 select pg_temp.gm_blocked('GM a client cannot read the review table', $q$select count(*) from public.game_reviews$q$, 'blocked: 42501');
 select pg_temp.gm_blocked('GM a client cannot execute record_game_review', format($q$select public.record_game_review(%L, 'x', true, '{}')$q$, (select id from public.contributions where title = 'T gm bad')), 'blocked: 42501');
 select pg_temp.gm_blocked('GM a client cannot execute game_review_input', format($q$select public.game_review_input('00000000-0000-0000-0000-0000000000aa', %L)$q$, (select id from public.contributions where title = 'T gm bad')), 'blocked: 42501');
-select pg_temp.gm_blocked('GM a client cannot execute game_files_hash', $q$select private.game_review_hash('t', '[]', '{}')$q$, 'blocked: 42501');
+select pg_temp.gm_blocked('GM a client cannot execute game_review_hash', $q$select private.game_review_hash('t', '[]', '{}')$q$, 'blocked: 42501');
 insert into results (check_name, expected, actual) select 'GM the author reads the verdict, for the files as they are', 'true/true', (public.game_review_status(id) ->> 'passed')||'/'||(public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm ok';
 update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_js => 'GameStudio.ready(); // edited after')) where title = 'T gm bad';
 insert into results (check_name, expected, actual) select 'GM and sees it is no longer current once the code changes', 'true/false', (public.game_review_status(id) ->> 'passed')||'/'||(public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm bad';
@@ -2840,7 +2846,7 @@ select set_config('test.gm_rv_id', (select id::text from public.contributions wh
 -- the service role (the `ai` function) loads the author's own game and records a verdict for exactly those files
 set local role service_role;
 insert into results (check_name, expected, actual) select 'GM the service role loads the author''s game: title, files hash and content without what the AI role knows', 'T gm role/true/true',
-  (j ->> 'title')||'/'||(j ->> 'files_hash' = current_setting('test.gm_rv_hash'))::text||'/'||(position('brother' in j::text) = 0)::text
+  (j ->> 'title')||'/'||(j ->> 'review_hash' = current_setting('test.gm_rv_hash'))::text||'/'||(position('brother' in j::text) = 0)::text
   from (select public.game_review_input('00000000-0000-0000-0000-0000000000aa', current_setting('test.gm_rv_id')::uuid) as j) x;
 insert into results (check_name, expected, actual) select 'GM it loads nothing for someone who is not the author', 'null', coalesce(public.game_review_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.gm_rv_id')::uuid)::text, 'null');
 select pg_temp.gm_blocked('GM it cannot record a verdict for files that changed meanwhile', format($q$select public.record_game_review(%L, 'stale-hash', true, '{}')$q$, current_setting('test.gm_rv_id')), 'blocked: P0001');
@@ -2898,6 +2904,8 @@ with i as (insert into public.game_runs (contribution_id, test) values ((select 
 insert into results (check_name, expected, actual) select 'GR the author may play-test their Game (test = true)', '1', count(*)::text from public.game_runs where id = current_setting('test.gr_test_run')::uuid and test;
 select pg_temp.gr_blocked('GR a test run on someone else''s draft is refused', format($q$insert into public.game_runs (contribution_id, test) values (%L, true)$q$, current_setting('test.gr_c_other')), 'blocked: 42501');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a07","role":"authenticated"}';
+-- an assigned reviewer reads the verdict on the game they review (read only: the RPC is the whole surface, they cannot write one)
+insert into results (check_name, expected, actual) select 'GM an assigned reviewer reads the verdict, for the content as it is', 'true/true', (public.game_review_status(id) ->> 'passed')||'/'||(public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm ok';
 with i as (insert into public.game_runs (contribution_id, test) values ((select id from public.contributions where title = 'T gm ok'), true) returning id) insert into results (check_name, expected, actual) select 'GR an assigned reviewer may play-test it', '1', count(*)::text from i;
 -- someone else: sees none of another's runs and cannot finish one
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a02","role":"authenticated"}';

@@ -15,7 +15,7 @@
 import { withSupabase } from '@supabase/server';
 import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
 import type { Conn, UseRow } from '../_shared/aiUse.ts';
-import { USE_LIMITS } from '../_shared/aiGuard.ts';
+import { NO_SCRIPT, USE_LIMITS } from '../_shared/aiGuard.ts';
 import { callProvider, inputChars, limitMessage, LIMITS, readAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
 import { reviewGame } from './review.ts';
 import type { ReviewLoad } from './review.ts';
@@ -76,7 +76,7 @@ export default {
         load: async () => ((await admin.rpc('game_review_input', { p_user: callerId, p_contribution: contribution })).data as ReviewLoad | null) ?? null,
         count: (chars) => countCall(admin, callerId, GAME_USE, chars),
         call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_USE].timeoutMs),
-        record: async (hash, v) => (await admin.rpc('record_game_review', { p_contribution: contribution, p_files_hash: hash, p_passed: v.passed, p_reasons: v.reasons })).error?.message ?? null,
+        record: async (hash, v) => (await admin.rpc('record_game_review', { p_contribution: contribution, p_review_hash: hash, p_passed: v.passed, p_reasons: v.reasons })).error?.message ?? null,
       });
       console.log(JSON.stringify({ action: 'review_game', status: out.status, ms: Date.now() - started }));
       return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
@@ -90,7 +90,7 @@ export default {
     const ask = withPreamble(r.ask, use.preamble);
     // Counted before the call, atomically; beyond the limit nothing is counted and nothing is sent.
     const counted = await countCall(admin, callerId, r.use, inputChars(ask));
-    if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit)) : fail(500, 'Could not count the call');
+    if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit, !NO_SCRIPT.includes(r.use))) : fail(500, 'Could not count the call');
     const key = await connectionKey(admin, use.connection!.id);
     if (!key) return fail(409, 'The connection has no key');
     const out = await callProvider({ provider: use.connection!.provider, baseUrl: use.connection!.base_url, model: use.model || use.connection!.default_model!, key }, ask, fetch, USE_LIMITS[r.use]?.timeoutMs);

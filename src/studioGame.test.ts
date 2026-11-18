@@ -9,7 +9,7 @@ import * as gameStore from './lib/gameStore';
 import { continueText } from './logic/continuation';
 import { emptyParts } from './logic/contribution';
 import type { CreateData } from './logic/contribution';
-import { GAME_LAST, NO_ROLE, ROLE_QUESTION, gameOf } from './logic/gameContent';
+import { GAME_LAST, NO_ROLE, ROLE_QUESTION, gameOf, reviewBasis } from './logic/gameContent';
 import type { GameItem, GameReviewStatus } from './logic/gameContent';
 import { retryStep, runBuild } from './logic/studioBuild';
 import { studioById } from './logic/studios';
@@ -54,7 +54,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe('the four build steps', () => {
   it('are the design\'s, and step 1 checks the rows with no AI call', async () => {
     const h = open();
-    expect(h.st().build!.steps.map((s) => s.name)).toEqual(['Writing the game content', 'Building the screens', 'Writing the game logic', 'Checking against the house rules']);
+    expect(h.st().build!.steps.map((s) => s.name)).toEqual(['Writing the game content · from your rounds · no AI', 'Building the screens', 'Writing the game logic', 'Checking against the house rules']);
     await h.st().buildRunner!('Writing the game content', 0);
     expect(calls()).toHaveLength(0);
     await expect(open({ list: ROWS.slice(0, 2) }).st().buildRunner!('x', 0)).rejects.toThrow(/Add at least|Round/);
@@ -160,6 +160,52 @@ describe('the house-rules review', () => {
   });
 });
 
+describe('what the draft shows after the server passed the review', () => {
+  const passed = async () => { answers({ text: HTML }, { text: JS }); const h = open(); await h.build(); await flush(); expect(h.statuses()[3]).toBe('done'); return h; };
+  const stale = (h: Awaited<ReturnType<typeof passed>>) => { expect(h.statuses()[3]).toBe('todo'); expect(h.st().game!.review).toBe('Run the house-rules check again'); expect(h.st().reviewNote).toBe('Run the house-rules check again'); };
+  it('says passed on this version while nothing the review read has changed', async () => {
+    const h = await passed();
+    expect(h.st().game!.review).toBe('The house-rules check passed on this version');
+    expect(h.st().reviewNote).toBe('');
+  });
+  it('goes stale when a row, the title or a Shape answer the review read is edited (as the server\'s hash will say)', async () => {
+    const edits: ((h: Awaited<ReturnType<typeof passed>>) => void)[] = [
+      (h) => h.st().rows[1].edit(1, 'Round one, now naming a real company'), (h) => h.st().rows[0].edit(2, 'A new win condition'),
+      (h) => h.L().setState({ nw: { ...h.state.nw, title: 'Another title' } }), (h) => h.st().shape.find((g) => g.key === 'Leaderboard?')!.chips[2].pick(),
+    ];
+    for (const edit of edits) { const h = await passed(); edit(h); stale(h); }
+  });
+  it('stays passed through an edit the review did not read (the AI role\'s hidden text, a Produce choice)', async () => {
+    const h = await passed();
+    h.st().produce[0].chips[1].pick();
+    expect(h.st().game!.review).toBe('The house-rules check passed on this version');
+    expect(h.statuses()[3]).toBe('done');
+  });
+});
+
+describe('the game is saved without overwriting rows edited during the build', () => {
+  it('saves the rows as they are when the review step runs, with the built game after them', async () => {
+    const h = open();
+    let first = true;
+    vi.mocked(aiStore.askAi).mockImplementation(async () => { if (!first) h.st().rows[1].edit(1, 'Edited during the build'); const out = first ? HTML : JS; first = false; return { text: out, cut: false }; });
+    await h.build(); await flush();
+    const saved = vi.mocked(store.saveDraft).mock.calls.at(-1)![0] as { items: StudioEntry[] };
+    expect(saved.items[1]).toEqual(['Round 1', 'Edited during the build', ROWS[1][2]]);
+    expect(gameOf(saved.items)).not.toBeNull();
+    expect((h.state.nw.items!.list as StudioEntry[])[1]).toEqual(['Round 1', 'Edited during the build', ROWS[1][2]]);
+  });
+});
+
+describe('the review is held to the same gate as every AI call', () => {
+  it('does not run with ?live=off, even when the use is live', async () => {
+    const h = open({ uses: ['studio_game'] });
+    stubWindow({});
+    const off = harness({ access: member('u1'), subject: person(), config: { liveAssistant: false }, state: { ...h.state, aiLive: ['studio_game'] } });
+    await expect(off.vm().create!.studio.buildRunner!('x', 3)).rejects.toThrow(NO_AI);
+    expect(vi.mocked(aiStore.reviewGame)).not.toHaveBeenCalled();
+  });
+});
+
 describe('without AI, or as someone else', () => {
   it('there is no scripted game: it says Game Studio needs AI, and calls nothing', async () => {
     const h = open({ uses: [] }); await h.build(); await flush();
@@ -182,9 +228,11 @@ describe('gameBuilt: how many steps the draft shows done', () => {
     expect(gameBuilt(rows, {})).toBe(0);
     expect(gameBuilt([...rows, item('')], {})).toBe(2);
     expect(gameBuilt([...rows, item(JS)], {})).toBe(3);
-    expect(gameBuilt([...rows, item(JS)], {}, nwOf({ gameReview: PASSED }))).toBe(4);
-    expect(gameBuilt([...rows, item(JS)], {}, nwOf({ gameReview: { ...PASSED, current: false } }))).toBe(3);
-    expect(gameBuilt([...rows, item(JS)], {}, nwOf({ gameReview: { passed: false, reasons: ['x'], current: true } }))).toBe(3);
+    const all = [...rows, item(JS)], reviewed = (r: GameReviewStatus) => nwOf({ gameReview: r, gameReviewFor: reviewBasis('Invoice detective', all, {}) });
+    expect(gameBuilt(all, {}, reviewed(PASSED))).toBe(4);
+    expect(gameBuilt(all, {}, reviewed({ ...PASSED, current: false }))).toBe(3);
+    expect(gameBuilt(all, {}, reviewed({ passed: false, reasons: ['x'], current: true }))).toBe(3);
+    expect(gameBuilt(all, {}, nwOf({ gameReview: PASSED, gameReviewFor: 'an older basis' }))).toBe(3); // something the review read was edited since
     expect(GAME_LAST).toMatch(/after the rows/);
   });
 });

@@ -7,7 +7,7 @@
 -- game item  {kind, files, for}: `review` and `made` are no longer accepted from an author (game_item_ok counts exactly three keys), so a
 --            crafted write can neither forge a pass nor hide "Made with AI". A Game is always AI built: game_content says made 'ai'
 --            and publish_contribution reads that, whatever a client sends.
--- game_reviews  contribution_id, files_hash, passed, reasons, reviewed_at; RLS on, no policy, no grant: only definers and the service role.
+-- game_reviews  contribution_id, review_hash, passed, reasons, reviewed_at; RLS on, no policy, no grant: only definers and the service role.
 -- RPCs       record_game_review and game_review_input: service_role only (public schema, as the other `ai` function RPCs, so PostgREST
 --            serves them). game_review_status: the author or an assigned reviewer reads {passed, reasons, current}, current meaning the
 --            verdict is for the files as they are now.
@@ -58,7 +58,7 @@ $$;
 -- 3. The verdicts: one per contribution, the latest.
 create table public.game_reviews (
   contribution_id uuid primary key references public.contributions (id) on delete cascade,
-  files_hash text not null,
+  review_hash text not null,
   passed boolean not null,
   reasons text[] not null default '{}',
   reviewed_at timestamptz not null default now(),
@@ -76,14 +76,14 @@ stable
 security definer
 set search_path = ''
 as $$
-  select private.game_review_basis(c.title, c.items, c.shape) || jsonb_build_object('files_hash', private.game_review_hash(c.title, c.items, c.shape))
+  select private.game_review_basis(c.title, c.items, c.shape) || jsonb_build_object('review_hash', private.game_review_hash(c.title, c.items, c.shape))
   from public.contributions c
   where c.id = p_contribution and c.type = 'Game' and c.author_id = p_user and c.status in ('draft', 'changes')
     and jsonb_typeof(c.items) = 'array' and private.items_ok('Game', c.items) and private.game_review_hash(c.title, c.items, c.shape) is not null;
 $$;
 
 -- Records the verdict for the hash the function was given; refuses when the files changed meanwhile.
-create function public.record_game_review(p_contribution uuid, p_files_hash text, p_passed boolean, p_reasons text[])
+create function public.record_game_review(p_contribution uuid, p_review_hash text, p_passed boolean, p_reasons text[])
 returns void
 language plpgsql
 security definer
@@ -94,12 +94,12 @@ declare
 begin
   select * into c from public.contributions where id = p_contribution and type = 'Game' for update;
   if not found or jsonb_typeof(c.items) <> 'array' or private.game_review_hash(c.title, c.items, c.shape) is null then raise exception 'That game is not built'; end if;
-  if p_files_hash is distinct from private.game_review_hash(c.title, c.items, c.shape) then raise exception 'The game changed during the review · run it again'; end if;
+  if p_review_hash is distinct from private.game_review_hash(c.title, c.items, c.shape) then raise exception 'The game changed during the review · run it again'; end if;
   if p_passed is null or cardinality(coalesce(p_reasons, '{}')) > 10
     or exists (select 1 from unnest(coalesce(p_reasons, '{}')) r where r is null or char_length(r) > 300) then raise exception 'The verdict is not valid'; end if;
-  insert into public.game_reviews (contribution_id, files_hash, passed, reasons, reviewed_at)
-  values (p_contribution, p_files_hash, p_passed, coalesce(p_reasons, '{}'), now())
-  on conflict (contribution_id) do update set files_hash = excluded.files_hash, passed = excluded.passed, reasons = excluded.reasons, reviewed_at = excluded.reviewed_at;
+  insert into public.game_reviews (contribution_id, review_hash, passed, reasons, reviewed_at)
+  values (p_contribution, p_review_hash, p_passed, coalesce(p_reasons, '{}'), now())
+  on conflict (contribution_id) do update set review_hash = excluded.review_hash, passed = excluded.passed, reasons = excluded.reasons, reviewed_at = excluded.reviewed_at;
 end;
 $$;
 
@@ -111,7 +111,7 @@ stable
 security definer
 set search_path = ''
 as $$
-  select jsonb_build_object('passed', r.passed, 'reasons', to_jsonb(r.reasons), 'current', r.files_hash is not distinct from private.game_review_hash(c.title, c.items, c.shape))
+  select jsonb_build_object('passed', r.passed, 'reasons', to_jsonb(r.reasons), 'current', r.review_hash is not distinct from private.game_review_hash(c.title, c.items, c.shape))
   from public.game_reviews r join public.contributions c on c.id = r.contribution_id
   where r.contribution_id = p_contribution and (private.is_contribution_author(p_contribution) or private.is_contribution_reviewer(p_contribution));
 $$;
@@ -204,7 +204,7 @@ begin
       select * into v_review from public.game_reviews where contribution_id = c.id;
       if not found then
         p := array_append(p, 'The house-rules check has not passed');
-      elsif v_review.files_hash is distinct from private.game_review_hash(c.title, c.items, c.shape) then
+      elsif v_review.review_hash is distinct from private.game_review_hash(c.title, c.items, c.shape) then
         p := array_append(p, 'Run the house-rules check again');
       elsif not v_review.passed then
         p := array_append(p, 'The house-rules check has not passed' || coalesce(': ' || nullif(v_review.reasons[1], ''), ''));

@@ -6,7 +6,10 @@ export const fail = (status: number, error: string) => Response.json({ error }, 
 
 // Per-use ceilings on one answer, for the uses that write long text (the Game Studio's files, in parts). Every other use keeps the
 // default of 2048 tokens and 30 s. One call stays under the 150 s request limit of Supabase edge functions (confirm the plan's limit at deploy).
-export const USE_LIMITS: Record<string, { maxTokens: number; timeoutMs: number }> = { studio_game: { maxTokens: 8000, timeoutMs: 110_000 } };
+export const USE_LIMITS: Record<string, { maxTokens: number; timeoutMs: number }> = { studio_game: { maxTokens: 5000, timeoutMs: 110_000 } };
+// A part that times out keeps no text, so the budget per part is what one call can surely write in the time: about 5000 tokens in 110 s (measure at deploy); MAX_PARTS (src/logic/continuation.ts) times this fits a full game.js.
+// Uses with no scripted answer: a reached daily limit does not fall back to a script for them.
+export const NO_SCRIPT = ['studio_game'];
 
 export type Provider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'heygen' | 'other';
 

@@ -26,7 +26,7 @@ describe('the check gate reads the verdict for everything the review read, as it
     expect(reviewProblem({ passed: false, reasons: ['a'], current: true })).toEqual([NOT_PASSED + ': a']);
   });
   it('compares the stored hash with the hash of the current items, in SQL only', () => {
-    expect(problems).toContain('v_review.files_hash is distinct from private.game_review_hash(c.title, c.items, c.shape)');
+    expect(problems).toContain('v_review.review_hash is distinct from private.game_review_hash(c.title, c.items, c.shape)');
     expect(fn('game_review_hash')).toContain('sha256(');
     // one basis for the hash and for what the model reads: the title and the game's content
     expect(fn('game_review_basis')).toContain("jsonb_build_object('title', p_title, 'content', private.game_content(p_items, p_shape))");

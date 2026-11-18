@@ -4,7 +4,7 @@
 // files, and a game is always AI built (GameContent.made). The database repeats these rules (private.game_item_ok,
 // private.game_ok, private.game_content and the Game part of private.contribution_problems).
 import { roleOf, GAME_ROLES, ROLE_LABEL } from '../../supabase/functions/_shared/gameRules.ts';
-import type { GameContent, GameData } from '../types';
+import type { GameContent, GameData, NewDraft } from '../types';
 import { FILE_NAMES, GAME_FILE_MAX, scanGameFiles } from './gameScan';
 import { stepsOf } from './studioRows';
 import type { StudioEntry } from './studios';
@@ -28,6 +28,8 @@ const ECHO_MIN = 12;
 
 // The server's verdict as game_review_status gives it: current is true while it is for the files as they are now.
 export type GameReviewStatus = { passed: boolean; reasons: string[]; current: boolean };
+// What the server's verdict was for, as the browser can tell: the title and the game's content (the twin of private.game_review_basis).
+export const reviewBasis = (title: string, items: StudioEntry[], shape: Record<string, string>) => JSON.stringify([title.trim().slice(0, 120), gameContent(items, shape)]);
 export type GameItem = { kind: 'game'; files: { 'index.html': string; 'game.js': string }; for: { role: string } };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -62,6 +64,12 @@ export function gameContent(items: StudioEntry[], shape: Record<string, string>)
 
 // Case-insensitive containment. JavaScript's toLowerCase and Postgres' lower() can differ for a few Unicode letters (decisions.md).
 const hasIn = (text: string, part: string) => text.toLowerCase().includes(part.toLowerCase());
+
+/** The verdict as it stands for the draft on screen: still current only while nothing the review read has been edited since (undefined: not known). */
+export function shownReview(nw: Pick<NewDraft, 'title' | 'shape' | 'items' | 'gameReview' | 'gameReviewFor'>): GameReviewStatus | null | undefined {
+  const r = nw.gameReview;
+  return !r ? r : nw.gameReviewFor === reviewBasis(nw.title, (nw.items?.list ?? []) as StudioEntry[], nw.shape ?? {}) ? r : { ...r, current: false };
+}
 
 /** What the check gate says about the verdict, in the words of private.contribution_problems. */
 export function reviewProblem(review: GameReviewStatus | null): string[] {

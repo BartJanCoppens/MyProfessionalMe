@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { reviewGame } from '../../supabase/functions/ai/review.ts';
 import type { ReviewDeps } from '../../supabase/functions/ai/review.ts';
 
-const input = { title: 'Invoice detective', files_hash: 'h1', content: { concept: 'c', win: 'w', rounds: [{ text: 't', answer: 'a' }], role: null, files: { 'index.html': '<main></main>', 'game.js': 'GameStudio.ready();' } } };
+const input = { title: 'Invoice detective', review_hash: 'h1', content: { concept: 'c', win: 'w', rounds: [{ text: 't', answer: 'a' }], role: null, files: { 'index.html': '<main></main>', 'game.js': 'GameStudio.ready();' } } };
 const verdict = (v: unknown) => ({ ok: true as const, text: JSON.stringify(v), cut: false });
 const deps = (o: Partial<ReviewDeps> = {}): ReviewDeps => ({
   preamble: 'HOUSE RULES', load: vi.fn(async () => input), count: vi.fn(async () => 'ok' as const),
@@ -34,6 +34,7 @@ describe('reviewGame', () => {
   it('sends nothing beyond the daily limit, and says so', async () => {
     const d = deps({ count: vi.fn(async () => 'limit' as const) });
     expect(await reviewGame(d)).toMatchObject({ status: 429, error: expect.stringContaining('Daily AI limit reached') });
+    expect(((await reviewGame(d)) as { error: string }).error).not.toMatch(/scripted/);
     expect(d.call).not.toHaveBeenCalled();
     expect(await reviewGame(deps({ count: vi.fn(async () => 'error' as const) }))).toMatchObject({ status: 500 });
   });

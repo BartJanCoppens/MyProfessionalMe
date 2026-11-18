@@ -540,6 +540,9 @@ Phase 1 of the studios (v0.10.0): the generic studio spine with one available st
 | STU-63 | Creator | The house-rules review fails | Step 4 | The step fails with the first reason; Preview says "The house-rules check has not passed: …"; a rebuild or any change to the reviewed text makes the verdict stale ("Run the house-rules check again"); a passed verdict the server already holds is reused without a new AI call | `studioGame.test.ts`, `studioPreviews.test.tsx`, GM cases in `rls.sql` |
 | STU-64 | Creator (API) | Crafted writes | Set `review` or `made` on the game item; insert, update or select `game_reviews`; call `record_game_review`, `game_review_input` or `game_review_hash`; record a verdict for other files | Each refused; the check only trusts `game_reviews` for the hash of title, concept, rounds, role and files as they are now | GM cases in `rls.sql`, `gameReview.sync.test.ts` |
 | STU-65 | Creator | A saved or unsaved Game draft | Preview & test | "Play-test · not saved, never counts as progress"; a saved draft plays a test run on it, an unsaved one no run | `studioPreviews.test.tsx` |
+| STU-66 | Creator | A game that passed the review | Edit a row, the title, the leaderboard answer or the win condition | The Produce line says "Run the house-rules check again", step 4 shows To do and the preview says so; editing the AI role's hidden text or a Produce choice leaves it passed | `studioGame.test.ts`, GM cases in `rls.sql` |
+| STU-67 | Creator | A long build | Edit a row while the logic is being written | The review step saves the edited row, not the one the build started with | `studioGame.test.ts` |
+| STU-68 | System Admin, reviewer | `studio_game` seeded off | Give it a text connection with key and model; an assigned reviewer reads the verdict | Live only then (`ai_live_uses`); the reviewer reads `game_review_status` (read only) | AI and GM cases in `rls.sql` |
 
 ## Bugs found and fixed
 

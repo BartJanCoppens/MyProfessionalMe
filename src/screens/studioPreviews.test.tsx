@@ -7,6 +7,7 @@ import * as store from '../lib/contributionStore';
 import * as gameStore from '../lib/gameStore';
 import * as learner from '../lib/learnerStore';
 import { emptyParts } from '../logic/contribution';
+import { reviewBasis } from '../logic/gameContent';
 import type { GameReviewStatus } from '../logic/gameContent';
 import { GAME_PLAYTEST } from './studioPreviews';
 import { EVIDENCE_QUESTION } from '../logic/studioContent';
@@ -92,7 +93,7 @@ describe('Game preview', () => {
     const h = harness({ access: member('u1'), subject: person(), state: { screen: 'create', createTab: 'new', nwKb: [], studio: { view: 'studio', step: 4, id: 'game' },
       create: { contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 },
       nw: { line: 'Consulting', aud: '', type: 'Game', title: 'T', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'x', outline: [], sources: [], ai: false, aiNote: '', shape: { 'Does the AI play a role?': 'No AI role' },
-        savedId: o.savedId, gameReview: o.review, items: { list: [...ROWS, GAME] as never, how: 'manual', problems: [], note: '' } } } });
+        savedId: o.savedId, gameReview: o.review, gameReviewFor: reviewBasis('T', [...ROWS, GAME] as never, { 'Does the AI play a role?': 'No AI role' }), items: { list: [...ROWS, GAME] as never, how: 'manual', problems: [], note: '' } } } });
     render(<Preview kind="game" c={h.vm().create!} />);
     return h;
   };

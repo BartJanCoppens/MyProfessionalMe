@@ -2,7 +2,7 @@
 // requests for Anthropic and OpenAI-compatible services, reply and error parsing, and that the key never leaks.
 import { describe, expect, it, vi } from 'vitest';
 import { ANTHROPIC_MIN_TOKENS, ANTHROPIC_VERSION, buildRequest, callProvider, inputChars, isLimitError, limitMessage, LIMITS, parseReply, readAsk, scrub, TEST_ASK, withPreamble } from '../../supabase/functions/ai/core.ts';
-import { USE_LIMITS } from '../../supabase/functions/_shared/aiGuard.ts';
+import { NO_SCRIPT, USE_LIMITS } from '../../supabase/functions/_shared/aiGuard.ts';
 import type { Target } from '../../supabase/functions/ai/core.ts';
 
 const user = (content: string) => ({ role: 'user', content });
@@ -20,11 +20,16 @@ describe('readAsk', () => {
     expect(readAsk({ use: 'studio_draft', messages: [user('Q')], max_tokens: 2000 })).toMatchObject({ ok: true, ask: { max_tokens: 2000 } });
   });
   it('lets the game build ask for more, and every other use keeps 2048', () => {
-    expect(USE_LIMITS.studio_game).toEqual({ maxTokens: 8000, timeoutMs: 110_000 });
-    expect(readAsk({ use: 'studio_game', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 8000 } });
-    expect(readAsk({ use: 'studio_game', messages: [user('Q')], max_tokens: 5000 })).toMatchObject({ ok: true, ask: { max_tokens: 5000 } });
+    expect(USE_LIMITS.studio_game).toEqual({ maxTokens: 5000, timeoutMs: 110_000 });
+    expect(readAsk({ use: 'studio_game', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 5000 } });
+    expect(readAsk({ use: 'studio_game', messages: [user('Q')], max_tokens: 4000 })).toMatchObject({ ok: true, ask: { max_tokens: 4000 } });
     expect(readAsk({ use: 'kb_answer', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 2048 } });
     expect(Object.keys(USE_LIMITS)).toEqual(['studio_game']);
+  });
+  it('says a reached daily limit truthfully: no scripted reply exists for a use without a script', () => {
+    expect(limitMessage(40)).toContain('scripted reply');
+    expect(NO_SCRIPT).toEqual(['studio_game']);
+    expect(limitMessage(40, false)).toBe('Daily AI limit reached (40 a day per person for this use); try again tomorrow (UTC)');
   });
   it('refuses what is malformed or too large', () => {
     expect(readAsk(null)).toEqual({ ok: false, error: 'Name the AI use' });

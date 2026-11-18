@@ -6,10 +6,10 @@
 //   openai_compatible  Chat completions at <base URL>/chat/completions, key as a bearer token (and api-key for
 //                      Azure). Covers OpenAI, Azure OpenAI and EU-hosted OpenAI-compatible services such as Mistral.
 // The key is only ever put in a request header; errors are scrubbed of it before they leave the function.
-import { isLimitError, scrub, USE_LIMITS } from '../_shared/aiGuard.ts';
+import { isLimitError, NO_SCRIPT, scrub, USE_LIMITS } from '../_shared/aiGuard.ts';
 import type { Provider } from '../_shared/aiGuard.ts';
 
-export { isLimitError, scrub };
+export { isLimitError, NO_SCRIPT, scrub };
 export type { Provider };
 
 export const TEXT_PROVIDERS: Provider[] = ['anthropic', 'openai_compatible'];
@@ -66,7 +66,8 @@ export function withPreamble(ask: Ask, preamble: string | null | undefined): Ask
 }
 // Characters sent to the model, counted per person and day (ai_usage.input_chars).
 export const inputChars = (ask: Ask) => (ask.system || '').length + ask.messages.reduce((a, m) => a + m.content.length, 0);
-export const limitMessage = (limit: number | null) => 'Daily AI limit reached' + (limit != null ? ' (' + limit + ' a day per person for this use)' : '') + '; the scripted reply is used until tomorrow (UTC)';
+// scripted: the use has a scripted reply to fall back on (false for the Game Studio's build and review: there is none).
+export const limitMessage = (limit: number | null, scripted = true) => 'Daily AI limit reached' + (limit != null ? ' (' + limit + ' a day per person for this use)' : '') + (scripted ? '; the scripted reply is used until tomorrow (UTC)' : '; try again tomorrow (UTC)');
 
 const trimUrl = (u: string) => u.replace(/\/+$/, '');
 
