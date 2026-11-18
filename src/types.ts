@@ -62,12 +62,12 @@ export type Access = { isSystem: boolean; isGeneral?: boolean; domains: string[]
 // Catalogue entry metadata: owning business line (null = firm-wide) and publication status.
 // The admin library form; numbers stay text while typing. line '' = firm-wide.
 export type LearnForm = { id: string | null; title: string; domain: string; level: string; format: string; source: string; hours: string; cpd: string; why: string; line: string; status: LearnMeta['status'] };
-// Podcast and reel players (design v3)
+// The v3 episodes' chapters (seeded, played as chapters on the step player) and the reel viewer (design v3)
 export type PodMedia = { kind: 'pod'; by: string; len: string; dur: number; ch: [number, string][] };
 export type ReelMedia = { kind: 'reel'; by: string; len: string; dur: number; caps: string[]; take: string; q: string; opts: string[]; a: number };
 export type Media = PodMedia | ReelMedia;
 // owner: whose app playback started in; the clock stops when the viewed person changes
-export type MediaState = { playing: string | null; owner?: string | null; pos: Record<string, number>; speed: string };
+export type MediaState = { playing: string | null; owner?: string | null; pos: Record<string, number> };
 // Interactive content of the v4 formats. Teach-back patterns are stored as strings and compiled when read.
 export type FlashContent = { kind: 'flash'; total: number; due: number; next: string; cards: [string, string][] };
 export type ExamQuestion = { t: string; q: string; o: string[]; a: number; why: string };
@@ -130,7 +130,7 @@ export type AppState = {
   reads: Record<string, Read>; readBusy: boolean;
   // growth map: the domain zoomed into (domain key), or null for all domains
   zoom: string | null;
-  // podcast and reel players: what plays, positions this session, podcast speed; reel answers and whose they are
+  // the reel viewer: what plays, positions this session; reel answers and whose they are
   media: MediaState; answers: Record<string, number>; answersFor: string | null;
   // admin library: the learning being added or edited in the drawer
   libForm: LearnForm | null;

@@ -26,7 +26,7 @@ import { blankDraft } from './createSave';
 import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
-import { currentPos, podSave, podView, reelView, startPos, step } from './logic/media';
+import { currentPos, reelView, startPos, step } from './logic/media';
 import { completionOf, completionText, completionTodo, lastActivity, lastActivityLabel, openChanges } from './logic/record';
 import { logHour, recordVals, submit } from './recordVals';
 import { fmtCover } from './fmtCover';
@@ -68,7 +68,7 @@ export function initState(cfg: Config): AppState {
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, trjs: [], trjView: null, trjOrigin: 'library', trjMine: null, trjLeave: null, stepDraft: {}, credForm: null, renewForm: null, mapMode: 'learn', trjSel: null, trjStep: null, trjAud: '', trjStage: STAGES[0], sigDone: {}, sigAll: false, reads: {}, readBusy: false, zoom: null, libForm: null, media: { playing: null, pos: {}, speed: '1' }, answers: {}, answersFor: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, trjs: [], trjView: null, trjOrigin: 'library', trjMine: null, trjLeave: null, stepDraft: {}, credForm: null, renewForm: null, mapMode: 'learn', trjSel: null, trjStep: null, trjAud: '', trjStage: STAGES[0], sigDone: {}, sigAll: false, reads: {}, readBusy: false, zoom: null, libForm: null, media: { playing: null, pos: {} }, answers: {}, answersFor: null,
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
     kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbAnswerAi: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
@@ -119,8 +119,8 @@ export class Logic {
     if (this.readOnly()) return;
     try { await write(); await this.reloadSubject(); if (done) this.say(done); } catch (err) { this.say((err as Error).message); }
   }
-  // Podcast and reel players. Playback lives in app state; progress is saved for the learner only, never in View as.
-  // Saves are remembered per person and learning until the reload lands, so a tick never repeats one.
+  // The reel viewer. Playback lives in app state; progress is saved for the learner only, never in View as. (Podcasts play on the
+  // step player, fmtPodcast.ts.) Saves are remembered per person and learning until the reload lands, so a tick never repeats one.
   mediaSaved(id: string) {
     const own = this.subject.data.progress[id], last = MEDIA_SAVED.get(this.subject.id + '|' + id);
     if (last === 100 || own?.state === 'accepted') return { state: 'accepted' as LearnState, pct: 100 };
@@ -135,26 +135,16 @@ export class Logic {
     if (m.owner !== this.subject.id) { this.setState({ media: { ...m, playing: null } }); return; }
     const next = step(m); this.setState({ media: next });
     if (this.subject.readOnly) return;
-    const M = MEDIA[id], p = next.pos[id];
-    if (M.kind === 'pod') {
-      const sv = podSave(p, M.dur, this.mediaSaved(id));
-      if (sv) this.saveMedia(id, sv, sv.state === 'accepted' ? 'Podcast complete · ' + LEARN_BY[id][1] + ' counts toward your hours' : undefined);
-    } else if (p >= M.dur && !this.mediaSaved(id)) this.saveMedia(id, { state: 'in-progress', pct: 0 });
+    if (next.pos[id] >= MEDIA[id].dur && !this.mediaSaved(id)) this.saveMedia(id, { state: 'in-progress', pct: 0 });
   }
   mediaVals(it: Item) {
-    const M = MEDIA[it.id]; if (!M) return { isPod: false, isReel: false, pod: null, reel: null };
+    const M = MEDIA[it.id]; if (!M || M.kind !== 'reel') return { isReel: false, reel: null };
     // Session positions and answers belong to the person they were made for; another person starts from their own progress.
     const mine = (st: AppState) => (st.media.owner === this.subject.id ? st.media.pos : {});
-    const m = this.state.media, on = m.playing === it.id && m.owner === this.subject.id, pos = currentPos(M, mine(this.state)[it.id], it.pct);
-    const play = (at?: number) => this.setState((st) => ({ media: { ...st.media, playing: at == null && st.media.playing === it.id && st.media.owner === this.subject.id ? null : it.id, owner: this.subject.id, pos: { ...mine(st), [it.id]: at ?? startPos(M, mine(st)[it.id], it.pct) } } }));
-    if (M.kind === 'pod') {
-      const v = podView(M, pos, on);
-      return { isPod: true, isReel: false, reel: null, pod: { ...v, sub: M.len + ' · ' + M.by + (it.isPeer ? ' · peer-made' : ''), toggle: () => play(),
-        speed: m.speed, speedOptions: [{ value: '1', label: '1×' }, { value: '1.5', label: '1.5×' }, { value: '2', label: '2×' }], setSpeed: (v: string) => this.setState((st) => ({ media: { ...st.media, speed: v } })),
-        chapters: v.chapters.map((c) => ({ ...c, seek: () => play(c.at) })) } };
-    }
+    const m = this.state.media, on = m.playing === it.id && m.owner === this.subject.id, pos = currentPos(mine(this.state)[it.id]);
+    const play = () => this.setState((st) => ({ media: { ...st.media, playing: st.media.playing === it.id && st.media.owner === this.subject.id ? null : it.id, owner: this.subject.id, pos: { ...mine(st), [it.id]: startPos(M, mine(st)[it.id]) } } }));
     const ans = this.state.answersFor === this.subject.id ? this.state.answers[it.id] : undefined, v = reelView(M, pos, on, ans, it.title);
-    return { isPod: false, isReel: true, pod: null, reel: { ...v, toggle: () => play(),
+    return { isReel: true, reel: { ...v, toggle: () => play(),
       opts: v.opts.map((o, k) => ({ ...o, pick: () => {
         this.setState((st) => ({ answers: { ...(st.answersFor === this.subject.id ? st.answers : {}), [it.id]: k }, answersFor: this.subject.id }));
         if (o.right && ans !== M.a && this.mediaSaved(it.id)?.state !== 'accepted') this.saveMedia(it.id, { state: 'accepted', pct: 100 }, 'Reel complete · added to your year');

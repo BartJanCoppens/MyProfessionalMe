@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Avatar, Banner, Button, Card, Checkbox, Eyebrow, Field, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, PillToggle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
+import { Avatar, Banner, Button, Card, Checkbox, Eyebrow, Field, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
 import AiMadeTag from './AiMadeTag';
 import { AvatarBadge } from './Map';
@@ -115,7 +115,6 @@ export function DetailScreen({ vm }: { vm: VM }) {
           <FormatPanels vm={vm} />
           {vm.rec.showEvidence && <EvidenceCard rec={vm.rec} />}
           {vm.rec.hasHistory && <RecordCard rec={vm.rec} />}
-          {det.pod && <PodcastPlayer pod={det.pod} />}
           {det.reel && <ReelViewer reel={det.reel} />}
           {det.av && <AvatarPractice av={det.av} counsellorFirst={vm.counsellorFirst} />}
           {vm.done.quiz && <QuizCard quiz={vm.done.quiz} />}
@@ -412,34 +411,6 @@ function AttendanceCard({ att }: { att: NonNullable<Done['attendance']> }) {
           <div><Button disabled={!att.canSave} onClick={att.save}>{att.busy ? 'Registering…' : 'Register attendance'}</Button></div>
         )}
         <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>Registering completes the classroom for each person ticked, without a counsellor. Someone already completed stays as they are.</div>
-      </div>
-    </Card>
-  );
-}
-
-function PodcastPlayer({ pod }: { pod: NonNullable<VM['det']['pod']> }) {
-  return (
-    <Card title="Listen" subtitle={pod.sub}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          <Hover as="button" type="button" onClick={pod.toggle} title={pod.playTitle} hoverStyle={{ background: '#78aa1e' }}
-            style={{ width: 48, height: 48, borderRadius: '50%', border: 0, background: '#86BC25', color: '#10180a', fontSize: 15, cursor: 'pointer', flex: 'none', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{pod.playIcon}</Hover>
-          <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ height: 6, borderRadius: 999, background: '#eef0ec', overflow: 'hidden' }}><div style={{ height: '100%', width: pod.w, background: '#1a1d18', transition: 'width .25s linear' }} /></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#5a6058', fontVariantNumeric: 'tabular-nums' }}><span>{pod.time}</span><span>{pod.left}</span></div>
-          </div>
-          <PillToggle options={pod.speedOptions} value={pod.speed} onChange={pod.setSpeed} size="xs" />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ ...caps, paddingBottom: 4 }}>Chapters</div>
-          {pod.chapters.map((ch) => (
-            <Hover key={ch.t} onClick={ch.seek} hoverStyle={{ background: '#fafbf8' }}
-              style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr)', gap: 10, padding: '8px 6px', borderTop: '1px solid #eef0ea', cursor: 'pointer', borderRadius: 4, fontWeight: ch.fw }}>
-              <span style={{ fontVariantNumeric: 'tabular-nums', color: '#5a6058' }}>{ch.t}</span><span>{ch.title}</span>
-            </Hover>
-          ))}
-        </div>
-        <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>{pod.note}</div>
       </div>
     </Card>
   );

@@ -1,44 +1,24 @@
-// Podcast player and reel viewer (design v3): playback position, what the player shows, and when progress is saved.
+// The reel viewer (design v3): playback position and what the viewer shows. Podcasts play on the step player (fmtPodcast.ts).
 import { MEDIA } from '../data';
-import type { MediaState, PodMedia, ReelMedia } from '../types';
-import type { LearnState } from './learner';
+import type { MediaState, ReelMedia } from '../types';
 
 export const TICK = 0.25; // seconds per tick
 
 export const fmtTime = (x: number) => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0');
 
-// Where playback stands: the session position, else a podcast resumes from saved progress. A finished item restarts.
-export function startPos(M: PodMedia | ReelMedia, pos: number | undefined, pct: number) {
-  const p = pos != null ? pos : M.kind === 'pod' ? (pct || 0) / 100 * M.dur : 0;
+// Where playback stands: the session position, else the start. A finished reel restarts.
+export function startPos(M: ReelMedia, pos: number | undefined) {
+  const p = pos ?? 0;
   return p >= M.dur ? 0 : p;
 }
-export function currentPos(M: PodMedia | ReelMedia, pos: number | undefined, pct: number) {
-  return pos != null ? pos : M.kind === 'pod' ? (pct || 0) / 100 * M.dur : 0;
-}
+export const currentPos = (pos: number | undefined) => pos ?? 0;
 
-// One tick of playback: podcasts honour the speed, reels play at 1×. Stops at the end.
+// One tick of playback at 1x. Stops at the end.
 export function step(m: MediaState, dt = TICK): MediaState {
   const id = m.playing; if (!id) return m;
   const M = MEDIA[id];
-  const p = Math.min(M.dur, (m.pos[id] || 0) + dt * (M.kind === 'pod' ? +m.speed : 1));
+  const p = Math.min(M.dur, (m.pos[id] || 0) + dt);
   return { ...m, pos: { ...m.pos, [id]: p }, playing: p >= M.dur ? null : id };
-}
-
-// Podcast progress to save, if any: once per tenth listened, and accepted with the full hours at 80%.
-export function podSave(pos: number, dur: number, saved: { state: LearnState; pct: number } | undefined): { state: LearnState; pct: number } | null {
-  if (saved?.state === 'accepted') return null;
-  const pct = Math.floor(pos / dur * 100);
-  if (pct >= 80) return { state: 'accepted', pct: 100 };
-  return Math.floor(pct / 10) > Math.floor((saved?.pct || 0) / 10) ? { state: 'in-progress', pct } : null;
-}
-
-export function podView(M: PodMedia, pos: number, on: boolean) {
-  const chI = M.ch.reduce((a, c, k) => (pos >= c[0] ? k : a), 0);
-  return {
-    playIcon: on ? '❚❚' : '▶', playTitle: on ? 'Pause' : 'Play', w: (pos / M.dur * 100).toFixed(1) + '%', time: fmtTime(pos), left: '−' + fmtTime(M.dur - pos),
-    chapters: M.ch.map((c, k) => ({ at: c[0], t: fmtTime(c[0]), title: c[1], fw: k === chI ? 600 : 400 })),
-    note: 'Listening to 80% completes it and adds the hours to your year. A transcript is available for every episode.',
-  };
 }
 
 export function reelView(M: ReelMedia, pos: number, on: boolean, answer: number | undefined, title: string) {

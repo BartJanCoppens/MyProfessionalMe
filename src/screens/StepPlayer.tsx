@@ -9,7 +9,8 @@ import { Button } from '../ds';
 import type { RunMark, RunStep } from '../logic/narration';
 import { useClock } from './useClock';
 
-export type StepAt = { step: RunStep; index: number; t: number; marks: RunMark[] };
+// jump: go to another step (a chapter's first), playing on when this one was playing.
+export type StepAt = { step: RunStep; index: number; t: number; marks: RunMark[]; jump: (index: number) => void };
 type Props = { steps: RunStep[]; note?: string; onEnd?: () => void; children?: (at: StepAt) => ReactNode };
 
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
@@ -41,7 +42,7 @@ function StepRun({ step, index, count, auto, note, go, onLast, show }: RunProps)
   const marks = step.marks.filter((m) => m.at <= c.t);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {show?.({ step, index, t: c.t, marks })}
+      {show?.({ step, index, t: c.t, marks, jump: (i) => go(i, c.playing) })}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <Button size="sm" variant="secondary" onClick={() => go(index - 1, c.playing)} disabled={index === 0}>Previous</Button>
         {c.playing ? <Button size="sm" variant="secondary" onClick={c.pause}>Pause</Button> : <Button size="sm" onClick={c.play}>Play</Button>}

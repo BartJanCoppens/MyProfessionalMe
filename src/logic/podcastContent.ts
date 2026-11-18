@@ -80,7 +80,7 @@ export function podcastProblems(items: readonly StudioEntry[], shape: Record<str
 }
 // How many of the studio's three build steps the output shows done: the script written, every line told, the length within the limit.
 export function podcastBuilt(items: readonly StudioEntry[], shape: Record<string, string>): number {
-  if (itemsValid(studioById('podcast')!, items).length || wrongSpeaker(items, shape)) return 0;
+  if (itemsValid(studioById('podcast')!, [...items]).length || wrongSpeaker(items, shape)) return 0;
   return !boundClips(items) ? 1 : overTime(items) ? 2 : 3;
 }
 

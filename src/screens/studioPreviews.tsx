@@ -1,5 +1,5 @@
 // The preview step's registry: one preview per studio kind (StudioDef.pv). Flash plays its cards or questions; a studio
-// whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow, Slides) shows that format's own
+// whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow, Slides, Podcast) shows that format's own
 // learner panel over studioContent. A preview is a play-test: never saved, never counted as progress. The same panels
 // show a saved studio contribution to its author and its reviewers (SavedContent), and a Presentation's file.
 import { useState } from 'react';
@@ -12,10 +12,12 @@ import { aidView, casePreview } from '../fmtVals';
 import { caseHours } from '../logic/studioContent';
 import type { VM } from '../model';
 import { horizonView } from '../fmtHorizon';
+import { podcastView } from '../fmtPodcast';
 import { slidesView } from '../fmtSlides';
-import type { AidContent, ExplainerContent, FormatContent, HorizonContent, MotionContent, SlidesContent } from '../types';
+import type { AidContent, ExplainerContent, FormatContent, HorizonContent, MotionContent, PodcastContent, SlidesContent } from '../types';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
 import ExplainerPanel from './ExplainerPanel';
+import PodcastPanel from './PodcastPanel';
 import PresentationPanel from './PresentationPanel';
 import SlidesPanel from './SlidesPanel';
 import { AidPanel, CasePanel } from './FormatWork';
@@ -51,6 +53,10 @@ const FlowTry = ({ content, still }: { content: MotionContent; still: boolean })
 const SlidesTry = ({ content, still }: { content: SlidesContent; still: boolean }) =>
   <SlidesPanel sl={slidesView(content, { ro: false, still, done: false, onEnd: () => {} })} />;
 
+// The learner's episode; listening to the end completes nothing.
+const PodcastTry = ({ content }: { content: PodcastContent }) =>
+  <PodcastPanel pc={podcastView(content, { ro: false, done: false, onEnd: () => {} })} />;
+
 // A studio piece's content and what its learner panel needs: the case's hours and whether motion is off.
 export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean };
 
@@ -65,6 +71,7 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
       {content.kind === 'motion' && <FlowTry content={content} still={t.still} />}
       {content.kind === 'horizon' && <DeckTry content={content} still={t.still} />}
       {content.kind === 'slides' && <SlidesTry content={content} still={t.still} />}
+      {content.kind === 'podcast' && <PodcastTry content={content} />}
     </>
   );
 }
@@ -100,6 +107,7 @@ const PREVIEWS: Record<string, (p: { c: CS }) => ReactNode> = {
   explainer: ({ c }) => <Learner c={c} />,
   motion: ({ c }) => <Learner c={c} />,
   slides: ({ c }) => <Learner c={c} />,
+  podcast: ({ c }) => <Learner c={c} />,
 };
 
 export function Preview({ kind, c }: { kind: string; c: CS }) {

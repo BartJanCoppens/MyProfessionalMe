@@ -8,6 +8,7 @@ import type { VM } from '../model';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
 import ExplainerPanel from './ExplainerPanel';
 import PresentationPanel from './PresentationPanel';
+import PodcastPanel from './PodcastPanel';
 import SlidesPanel from './SlidesPanel';
 import { WorkPanels } from './FormatWork';
 import QuestionRound from './QuestionRound';
@@ -122,6 +123,7 @@ export function FormatPanels({ vm }: { vm: VM }) {
       {det.af && <AnimatedFlowPanel fl={det.af} />}
       {det.hz && <PresentationPanel hz={det.hz} />}
       {det.sl && <SlidesPanel sl={det.sl} />}
+      {det.pc && <PodcastPanel pc={det.pc} />}
       <WorkPanels det={det} />
     </>
   );

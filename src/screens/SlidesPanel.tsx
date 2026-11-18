@@ -4,34 +4,20 @@
 // there is no voice. The bullets build in at the talk-over's ⟨cue⟩ marks; "Calm" fades between slides, "Slide in" slides the
 // next one in with Horizon's easing, and with motion off both are a fade. Playing the last slide to its end is told once. It reads
 // the view-model (fmtSlides.ts); the step player keeps the slide it is on.
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { Card } from '../ds';
 import type { SlidesView } from '../fmtSlides';
 import { FADE_IN, FLIGHT_EASING } from '../horizon/motion';
-import { mediaUrl } from '../lib/mediaStore';
 import { PACE, narrationSteps, spoken } from '../logic/narration';
 import type { NarrationPart } from '../logic/narration';
 import SafeSvg from './SafeSvg';
 import StepPlayer from './StepPlayer';
+import { useAudioLinks } from './useAudioLinks';
 import type { StepAt } from './StepPlayer';
 
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 const FLY_SECONDS = 0.9;
-
-// The signed links of the slides' audio, in order: null while they load, or why they could not be opened.
-function useAudioLinks(paths: string[]): { urls: string[] } | { error: string } | null {
-  const key = paths.join('|'), [got, setGot] = useState<{ key: string; urls?: string[]; error?: string } | null>(null);
-  useEffect(() => {
-    if (!key) return;
-    let on = true;
-    Promise.all(key.split('|').map((p) => mediaUrl(p))).then((urls) => on && setGot({ key, urls }), (e: Error) => on && setGot({ key, error: e.message }));
-    return () => { on = false; };
-  }, [key]);
-  if (!key) return { urls: [] };
-  if (!got || got.key !== key) return null;
-  return got.urls ? { urls: got.urls } : { error: got.error ?? 'The voice-over could not be opened' };
-}
 
 export default function SlidesPanel({ sl }: { sl: SlidesView }) {
   const links = useAudioLinks(sl.paths);
