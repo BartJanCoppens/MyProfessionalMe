@@ -1,14 +1,14 @@
 // A deck's panel (studios plan, Task 3.4), for the learner on the detail page, as the Slides Studio's preview and, read only, for
 // the author and reviewers (studioPreviews.tsx): one slide at a time on the shared step player (Horizon plays its narration on the
 // same one), each slide's stored audio played with it (a signed link per file, mediaStore), or the words at a reading pace when
-// there is no voice. The bullets build in at the talk-over's ⟨cue⟩ marks; "Calm" fades between slides, "Camera flight" flies the
+// there is no voice. The bullets build in at the talk-over's ⟨cue⟩ marks; "Calm" fades between slides, "Slide in" slides the
 // next one in with Horizon's easing, and with motion off both are a fade. Playing the last slide to its end is told once. It reads
 // the view-model (fmtSlides.ts); the step player keeps the slide it is on.
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Card } from '../ds';
 import type { SlidesView } from '../fmtSlides';
-import { FLIGHT_EASING } from '../horizon/motion';
+import { FADE_IN, FLIGHT_EASING } from '../horizon/motion';
 import { mediaUrl } from '../lib/mediaStore';
 import { PACE, narrationSteps, spoken } from '../logic/narration';
 import type { NarrationPart } from '../logic/narration';
@@ -55,7 +55,7 @@ function Deck({ sl, urls }: { sl: SlidesView; urls: string[] }) {
 }
 
 // What a slide shows as it moves in: the fade, or the flight with Horizon's easing (never with motion off).
-const arrival = (sl: SlidesView): string | undefined => (sl.transitions === 'Camera flight' && !sl.still ? 'pmFlyIn ' + FLY_SECONDS + 's ' + FLIGHT_EASING : 'pmFade .45s ease-out');
+const arrival = (sl: SlidesView): string | undefined => (sl.transitions === 'Slide in' && !sl.still ? 'pmFlyIn ' + FLY_SECONDS + 's ' + FLIGHT_EASING : FADE_IN);
 
 function Slide({ sl, at }: { sl: SlidesView; at: StepAt }) {
   const s = sl.slides[+at.step.part], firm = sl.template === 'Firm template';

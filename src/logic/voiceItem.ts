@@ -4,16 +4,18 @@
 // marks fall. Mirrored by private.voice_ok in supabase/migrations/20261117300000_slides_studio.sql (slidesContent.test.ts
 // compares the limits).
 import type { RunMark } from './narration';
+import { VOICE_ID } from '../../supabase/functions/_shared/voiceRules.ts';
 import { MEDIA_PATH } from './mediaFiles';
 
-export type Clip = { slide: number; text: string; path: string; seconds: number; marks: RunMark[] };
+// voice: the stock voice's provider id; one voice for the whole deck (boundClips).
+export type Clip = { slide: number; text: string; voice: string; path: string; seconds: number; marks: RunMark[] };
 export type VoiceItem = { kind: 'voice'; clips: Clip[] };
 
 export const CLIPS_MAX = 14; // one per slide (private.item_max('Slides') less the place the voice-over takes)
 export const CLIP_SECONDS_MAX = 180;
 export const CLIP_MARKS_MAX = 50;
 export const CLIP_TEXT_MAX = 600;
-const CLIP_KEYS = ['slide', 'text', 'path', 'seconds', 'marks'];
+const CLIP_KEYS = ['slide', 'text', 'voice', 'path', 'seconds', 'marks'];
 
 const isMark = (m: unknown) => {
   const x = m as Record<string, unknown> | null;
@@ -34,7 +36,7 @@ const isClip = (c: unknown): c is Clip => {
   const keys = Object.keys(x);
   return keys.length === CLIP_KEYS.length && CLIP_KEYS.every((k) => keys.includes(k))
     && Number.isInteger(x.slide) && (x.slide as number) >= 0 && (x.slide as number) < CLIPS_MAX
-    && typeof x.text === 'string' && x.text.trim() !== '' && x.text.length <= CLIP_TEXT_MAX && isAudio(x);
+    && typeof x.text === 'string' && x.text.trim() !== '' && x.text.length <= CLIP_TEXT_MAX && typeof x.voice === 'string' && VOICE_ID.test(x.voice) && isAudio(x);
 };
 
 export function isVoiceItem(v: unknown): v is VoiceItem {

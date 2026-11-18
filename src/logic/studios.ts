@@ -5,7 +5,7 @@ import type { ExamQuestion } from '../types';
 import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, isQuestion, rowFieldMax } from './items';
 import { isDrawing } from './motionSvg';
 import type { MotionDrawing } from './motionSvg';
-import { bulletsOf } from './slidesContent';
+import { bulletsOf, hasWords } from './slidesContent';
 import { isVoiceItem } from './voiceItem';
 import type { VoiceItem } from './voiceItem';
 
@@ -22,7 +22,7 @@ export type StudioItem = [label: string, text: string] | [label: string, text: s
 // Animated flow's one drawing.
 export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing | VoiceItem;
 export const CHECK_SIZE = 3;
-export const stepsOf = (items: StudioEntry[]) => items.filter((i): i is StudioItem => Array.isArray(i));
+export const stepsOf = (items: readonly StudioEntry[]) => items.filter((i): i is StudioItem => Array.isArray(i));
 // The rows as {label, text}, trimmed: an explainer's steps and an Animated flow's stages.
 export const labelledRows = (items: StudioEntry[]) => stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() }));
 export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i) && !isVoiceItem(i));
@@ -64,7 +64,7 @@ function avatar(items: StudioItem[]): string[] {
 const onScreen = (items: StudioItem[]) => items.filter((i) => blank(i[2])).map((i) => i[0] + ': add on-screen text');
 // A slide has bullets and a talk-over; its voice-over takes the last place of the items, so the slides leave one free (private.slides_ok).
 const SLIDES_MAX = ITEM_MAX.Slides - 1;
-const slides = (items: StudioItem[]) => [...items.filter((i) => !bulletsOf(i[1]).length).map((i) => i[0] + ': add at least one bullet'), ...items.filter((i) => blank(i[2])).map((i) => i[0] + ': add the talk-over'),
+const slides = (items: StudioItem[]) => [...items.filter((i) => !bulletsOf(i[1]).length).map((i) => i[0] + ': add at least one bullet'), ...items.filter((i) => !hasWords(i[2])).map((i) => i[0] + ': add the talk-over (marks are not spoken words)'),
   ...(items.length > SLIDES_MAX ? ['Keep at most ' + SLIDES_MAX + ' slides: the voice-over takes the last place'] : [])];
 function podcast(items: StudioItem[]): string[] {
   const secs = items.map((i) => seconds(i[0]));

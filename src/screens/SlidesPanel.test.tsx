@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The Slides panel (studios plan, Task 3.4) for the learner on the detail page, as the Slides Studio's preview and for the
 // author and reviewers: one slide at a time on the shared step player, each slide's audio played with it, the bullets built in
-// at the talk-over's cues, "Calm" or "Camera flight" between slides (a fade with motion off), and completion only when the last
+// at the talk-over's cues, "Calm" or "Slide in" between slides (a fade with motion off), and completion only when the last
 // slide has finished playing.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
@@ -149,12 +149,12 @@ describe('a deck with captions only', () => {
 
 describe('between slides', () => {
   const moved = async (c: SlidesContent, o = opts()) => { await panel(c, o); click('Next'); return screen.getByTestId('slide').style.animation; };
-  it('Calm fades, Camera flight flies in with Horizon\'s easing, and either is a fade with motion off', async () => {
+  it('Calm fades, Slide in flies in with Horizon\'s easing, and either is a fade with motion off', async () => {
     expect(await moved(VOICED)).toMatch(/pmFade/);
     cleanup();
-    expect(await moved({ ...VOICED, transitions: 'Camera flight' })).toMatch(/pmFlyIn .*cubic-bezier\(0\.65, ?0, ?0\.35, ?1\)/);
+    expect(await moved({ ...VOICED, transitions: 'Slide in' })).toMatch(/pmFlyIn .*cubic-bezier\(0\.65, ?0, ?0\.35, ?1\)/);
     cleanup();
-    expect(await moved({ ...VOICED, transitions: 'Camera flight' }, opts({ still: true }))).toMatch(/pmFade/);
+    expect(await moved({ ...VOICED, transitions: 'Slide in' }, opts({ still: true }))).toMatch(/pmFade/);
   });
   it('carries the template: the firm\'s accent bar, or none', async () => {
     await panel(VOICED);

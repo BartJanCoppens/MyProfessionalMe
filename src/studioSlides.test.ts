@@ -26,7 +26,7 @@ vi.mock('./lib/voice', async (orig) => ({ ...(await orig<typeof import('./lib/vo
 
 const FOLDER = '0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7/';
 const ROWS: StudioItem[] = [['Why it matters', 'Decisions · Not status updates', 'A steering committee exists to take decisions.'], ['Before', 'Send the pack ahead', 'Send the pack three working days ahead.'], ['After', 'Minutes · Decision log', 'Minutes go out within a day.']];
-const VOICES: StockVoice[] = [{ id: 'sv1', name: 'Warm · Flemish English', voice_id: 'EL1', language: 'English', accent: null, active: true }, { id: 'sv2', name: 'Retired', voice_id: 'EL2', language: 'English', accent: null, active: false }];
+const VOICES: StockVoice[] = [{ id: 'sv1', name: 'Warm · Flemish English', voice_id: 'EL1', language: 'English', accent: null, active: true }, { id: 'sv3', name: 'Other voice', voice_id: 'EL3', language: 'English', accent: null, active: true }, { id: 'sv2', name: 'Retired', voice_id: 'EL2', language: 'English', accent: null, active: false }];
 const nwOf = (o: Partial<NewDraft> = {}): NewDraft => ({ line: 'Consulting', aud: '', type: 'Slides', title: 'Steering committees', dom: 'lead', lvl: '2', stage: 'Senior consultant',
   take: 'Decide, not report.', outline: [], sources: [], ai: false, aiNote: '', ...o });
 const data = (): CreateData => ({ contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 });
@@ -75,7 +75,7 @@ describe('who presents', () => {
     expect(shape.map((g) => [g.key, g.hint])).toEqual([[PRESENTER, ''], ['Length?', 'Steers the AI draft'], ['Template', ''], ['Transitions', '']]);
   });
   it('casts the active stock voices only, once the AI voice is chosen and live', () => {
-    expect(open().st().cast.map((g) => [g.key, g.chips.map((c) => c.label)])).toEqual([['Voice', ['Warm · Flemish English']]]);
+    expect(open().st().cast.map((g) => [g.key, g.chips.map((c) => c.label)])).toEqual([['Voice', ['Warm · Flemish English', 'Other voice']]]);
     expect(open({ shape: { [PRESENTER]: CAPTIONS } }).st().cast).toEqual([]);
     expect(open({ live: false }).st().cast).toEqual([]);
   });
@@ -146,6 +146,42 @@ describe('building a deck with the AI voice', () => {
   });
 });
 
+describe('one voice for the whole deck', () => {
+  const clipOf = (k: number, voiceId: string) => ({ slide: k, text: ROWS[k][2] ?? '', voice: voiceId, path: FOLDER + 'old-' + k + '.mp3', seconds: 5, marks: [] });
+  const voiced = (n: number, voiceId = 'EL1'): StudioEntry[] => [...ROWS, { kind: 'voice' as const, clips: ROWS.slice(0, n).map((_, k) => clipOf(k, voiceId)) }];
+  it('after a reload or an Edit, with no voice picked, a retry goes on in the voice the stored clips were made in', async () => {
+    const h = open({ list: voiced(1) });
+    h.L().setState({ nw: { ...h.state.nw, cast: {} } });
+    expect(h.st().cast[0].chips.filter((c) => c.on).map((c) => c.label)).toEqual(['Warm · Flemish English']);
+    await h.build();
+    expect(voice.speak).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(voice.speak).mock.calls.every(([r]) => r.voiceId === 'EL1')).toBe(true);
+    expect(boundClips(h.list())).toHaveLength(3);
+  });
+  it('voices every slide again when another voice is picked, so a deck never mixes voices', async () => {
+    const h = open({ list: voiced(3) });
+    expect(h.statuses()).toEqual(['done', 'done', 'done']);
+    h.st().cast[0].chips.find((c) => c.label === 'Other voice')!.pick();
+    expect(voiceOf(h.list())).toBeNull();
+    expect(h.statuses()).toEqual(['done', 'todo', 'todo']);
+    await h.build();
+    expect(voice.speak).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(voice.speak).mock.calls.every(([r]) => r.voiceId === 'EL3')).toBe(true);
+    expect(new Set(voiceOf(h.list())!.clips.map((c) => c.voice))).toEqual(new Set(['EL3']));
+  });
+  it('has nothing to do, and asks nothing of the voice, when every slide is voiced', async () => {
+    const h = open({ list: voiced(3), live: false });
+    await h.build();
+    expect(h.statuses()).toEqual(['done', 'done', 'done']);
+    expect(voice.speak).not.toHaveBeenCalled();
+  });
+  it('speaks the trimmed talk-over', async () => {
+    const h = open({ list: [['A', 'a', '  Say it plainly.  '], ROWS[1], ROWS[2]] });
+    await h.build();
+    expect(vi.mocked(voice.speak).mock.calls[0][0].text).toBe('Say it plainly.');
+  });
+});
+
 describe('captions only and timing', () => {
   it('needs no voice: every step is done from the rows, the talk runs at a reading pace and nothing is spoken', async () => {
     const h = open({ shape: { [PRESENTER]: CAPTIONS }, live: false });
@@ -190,8 +226,8 @@ describe('the browser voice', () => {
 
 describe('the preview', () => {
   it('is the deck as learners will get it, from the rows, and saves nothing', async () => {
-    const h = open({ shape: { [PRESENTER]: CAPTIONS, Template: 'Minimal', Transitions: 'Camera flight' }, live: false });
-    expect(h.st().content).toMatchObject({ kind: 'slides', template: 'Minimal', transitions: 'Camera flight', slides: [{ title: 'Why it matters' }, {}, {}] });
+    const h = open({ shape: { [PRESENTER]: CAPTIONS, Template: 'Minimal', Transitions: 'Slide in' }, live: false });
+    expect(h.st().content).toMatchObject({ kind: 'slides', template: 'Minimal', transitions: 'Slide in', slides: [{ title: 'Why it matters' }, {}, {}] });
     expect(store.saveDraft).not.toHaveBeenCalled();
   });
   it('waits for the voice when the AI voice is chosen: no preview until every slide has its clip, and says why', () => {

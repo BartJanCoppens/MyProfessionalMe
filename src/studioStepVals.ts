@@ -20,7 +20,7 @@ import type { Steers, StudioDef, StudioEntry, StudioItem } from './logic/studios
 import { STOCK_LOOKS, STOCK_VOICES } from './studioData';
 import type { Chip } from './screens/ChipGroup';
 import { motionProduce } from './studioMotion';
-import { NO_STOCK_VOICES, slidesProduce, stockVoicesOf } from './studioSlides';
+import { NO_STOCK_VOICES, deckVoiceName, dropOtherVoices, slidesProduce, stockVoicesOf } from './studioSlides';
 import { BUILDS } from './studioRunners';
 
 type Field = 'shape' | 'produce' | 'cast';
@@ -39,6 +39,12 @@ function castPickers(L: Logic, def: StudioDef, nw: NewDraft) {
     return wantsVoice(nw.shape ?? {}) && voiceOn(L.aiOpts()) ? [{ key: 'Voice', options: (voices ?? []).map((v) => v.name), note: voices && !voices.length ? NO_STOCK_VOICES : '' }] : [];
   }
   return def.cast === 'look' ? [{ key: 'Look', options: looks }] : def.cast === 'voices' ? [{ key: 'Host voice', options: STOCK_VOICES }, { key: 'Guest voice', options: STOCK_VOICES }] : [];
+}
+
+// A deck's voice: the one picked, or the one its clips were made in; picking another drops the clips of the old one.
+function voiceChoice(L: Logic, nw: NewDraft, setNw: SetNw, options: string[], note: string) {
+  const g = choices({ ...nw, cast: { ...nw.cast, Voice: deckVoiceName(L, nw) ?? '' } }, setNw, 'cast', 'Voice', options, undefined, note);
+  return { ...g, chips: g.chips.map((c) => ({ ...c, pick: () => { c.pick(); const v = stockVoicesOf(L)?.find((x) => x.name === c.label); if (v) setNw((cur) => dropOtherVoices(cur, v.voice_id)); } })) };
 }
 
 // A question's options, without the ones only Draft with AI (or the live AI voice) delivers while it cannot run (and why), but
@@ -62,7 +68,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
   return {
     shape: def.qs.map(([q, options, steers]) => { const o = offered(on, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers)),
-    cast: castPickers(L, def, nw).map((p) => choices(nw, setNw, 'cast', p.key, p.options, undefined, 'note' in p ? p.note : '')),
+    cast: castPickers(L, def, nw).map((p) => (p.key === 'Voice' ? voiceChoice(L, nw, setNw, p.options, 'note' in p ? p.note : '') : choices(nw, setNw, 'cast', p.key, p.options))),
     rows: stepsOf(list).map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
       edit: (f: 0 | 1 | 2, v: string) => change((rows, q) => [...rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x)), ...q]),
       remove: () => change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]) })),

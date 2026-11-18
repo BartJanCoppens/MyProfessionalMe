@@ -17,5 +17,7 @@ export function pullOf(level: Motion, far: number): number {
 }
 /** The eye's distance in front of the world (Present mode's perspective, px): a pull of p px shows the world at EYE / (EYE + p). */
 export const EYE = 1100;
+/** How a slide fades in (a fade between slides, with motion off or between sections). */
+export const FADE_IN = 'pmFade .45s ease-out';
 /** The camera's easing (Horizon's FLIGHT_CURVE), as CSS. */
 export const FLIGHT_EASING = 'cubic-bezier(0.65,0,0.35,1)';

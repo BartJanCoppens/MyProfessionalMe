@@ -8,7 +8,7 @@ import { STUDIOS } from '../studioData';
 import { horizonHours } from './horizonItem';
 import { aiAssisted, itemRows, itemsFromSaved, itemsText, ITEM_MAX } from './items';
 import { COMPLETION, completionTodo } from './record';
-import { AI_VOICE, CAPTIONS, PRESENTER, SLIDES_MAX_SECONDS, bulletsOf, slidesLine, slidesProblems, slidesSeconds, wantsVoice } from './slidesContent';
+import { AI_VOICE, CAPTIONS, PRESENTER, SLIDES_MAX_SECONDS, bulletsOf, hasWords, slidesLine, slidesProblems, slidesSeconds, wantsVoice } from './slidesContent';
 import { studioContent } from './studioContent';
 import { itemsValid, questionsOf, stepsOf, studioById } from './studios';
 import type { StudioEntry, StudioItem } from './studios';
@@ -20,7 +20,7 @@ const def = studioById('slides')!;
 // 14 words with the marks: ⟨next⟩ and ⟨cue⟩ are not spoken.
 const TALK = 'A steering committee exists to take decisions ⟨next⟩ not to receive updates ⟨cue⟩ every single week.';
 const ROWS: StudioItem[] = [['Why it matters ', 'Decisions · Not status updates', TALK], ['Before', 'Send the pack ahead', 'Send the pack three working days ahead.'], ['After', 'Minutes · Decision log', 'Minutes go out within a day.']];
-const clip = (slide: number, text: string, seconds = 6): Clip => ({ slide, text, path: FOLDER + 'voice-' + slide + '.mp3', seconds, marks: [{ kind: 'next', at: 2.5 }] });
+const clip = (slide: number, text: string, seconds = 6, voice = 'EL1'): Clip => ({ slide, text, voice, path: FOLDER + 'voice-' + slide + '.mp3', seconds, marks: [{ kind: 'next', at: 2.5 }] });
 const VOICE = (rows = ROWS): VoiceItem => ({ kind: 'voice', clips: rows.map((r, k) => clip(k, r[2] ?? '', 5 + k)) });
 const WITH_VOICE = { [PRESENTER]: AI_VOICE };
 
@@ -36,7 +36,7 @@ describe('a voice-over item', () => {
     ['no seconds', { clips: [clip(0, 'a', 0)] }], ['too many seconds', { clips: [clip(0, 'a', CLIP_SECONDS_MAX + 1)] }],
     ['a mark of another kind', { clips: [{ ...clip(0, 'a'), marks: [{ kind: 'x', at: 1 }] }] }], ['a mark past the longest clip', { clips: [{ ...clip(0, 'a'), marks: [{ kind: 'cue', at: CLIP_SECONDS_MAX + 1 }] }] }],
     ['too many marks', { clips: [{ ...clip(0, 'a'), marks: Array.from({ length: CLIP_MARKS_MAX + 1 }, () => ({ kind: 'cue', at: 1 })) }] }],
-    ['an extra key on a clip', { clips: [{ ...clip(0, 'a'), voice: 'x' }] }],
+    ['an extra key on a clip', { clips: [{ ...clip(0, 'a'), made: 'x' }] }], ['no voice on a clip', { clips: [{ ...clip(0, 'a'), voice: undefined }] }], ['a voice id with a space', { clips: [{ ...clip(0, 'a'), voice: 'a b' }] }],
   ])('refuses %s', (_, patch) => { expect(isVoiceItem({ ...VOICE(), ...patch })).toBe(false); });
   it('repeats private.voice_ok\'s limits', () => {
     expect(CLIPS_MAX).toBe(ITEM_MAX.Slides - 1);
@@ -44,6 +44,7 @@ describe('a voice-over item', () => {
     expect(body).toContain('<= ' + CLIP_SECONDS_MAX);
     expect(body).toContain('<= ' + CLIP_MARKS_MAX);
     expect(body).toContain("right(c ->> 'path', 4) = '.mp3'");
+    expect(body).toContain('{1,64}$'); // VOICE_ID in supabase/functions/_shared/voiceRules.ts
     expect(body).toContain('between 0 and ' + (ITEM_MAX.Slides - 2));
   });
 });
@@ -58,7 +59,7 @@ describe('the slides of a Slides piece', () => {
   });
   it('need a title, a bullet and a talk-over on every slide, at least 3 slides, and at most one fewer than the cap', () => {
     expect(itemsValid(def, [ROWS[0], ROWS[1], ['After', '·', 'x']])).toEqual(['After: add at least one bullet']);
-    expect(itemsValid(def, [ROWS[0], ROWS[1], ['After', 'Minutes', '']])).toEqual(['After: add the talk-over']);
+    expect(itemsValid(def, [ROWS[0], ROWS[1], ['After', 'Minutes', '']])).toEqual(['After: add the talk-over (marks are not spoken words)']);
     expect(itemsValid(def, ROWS.slice(0, 2))).toContain('Add at least 3 items');
     const many = Array.from({ length: ITEM_MAX.Slides }, (_, k): StudioItem => ['S' + k, 'b', 'say it']);
     expect(itemsValid(def, many)).toContain('Keep at most ' + (ITEM_MAX.Slides - 1) + ' slides: the voice-over takes the last place');
@@ -96,12 +97,18 @@ describe('studioContent for Slides', () => {
     expect(studioContent('Slides', [...ROWS, VOICE()].slice(0, 3), WITH_VOICE)).toBeNull();
     expect(studioContent('Slides', [...ROWS, stale], WITH_VOICE)).toBeNull();
   });
+  it('has no content while the clips are in more than one voice, and a talk-over of marks only is not a talk-over', () => {
+    const mixed = VOICE(); mixed.clips[1] = clip(1, ROWS[1][2] ?? '', 6, 'EL2');
+    expect(studioContent('Slides', [...ROWS, mixed], WITH_VOICE)).toBeNull();
+    expect(itemsValid(def, [ROWS[0], ROWS[1], ['After', 'Minutes', '⟨next⟩ ⟨cue⟩']])).toEqual(['After: add the talk-over (marks are not spoken words)']);
+    expect(hasWords('⟨cue⟩')).toBe(false);
+  });
   it('ignores the clips when the studio is not told to use the AI voice (captions only)', () => {
     expect(studioContent('Slides', [...ROWS, VOICE()], { [PRESENTER]: CAPTIONS })).toMatchObject({ made: 'scripted', seconds: 12 });
     expect(studioContent('Slides', [...ROWS, VOICE()], {})!).not.toHaveProperty('slides.0.audio');
   });
   it('carries the template and the transitions that were chosen; an unknown answer reads as the default', () => {
-    expect(studioContent('Slides', ROWS, { Template: 'Minimal', Transitions: 'Camera flight' })).toMatchObject({ template: 'Minimal', transitions: 'Camera flight' });
+    expect(studioContent('Slides', ROWS, { Template: 'Minimal', Transitions: 'Slide in' })).toMatchObject({ template: 'Minimal', transitions: 'Slide in' });
     expect(studioContent('Slides', ROWS, { Template: 'Neon', Transitions: 'Spin' })).toMatchObject({ template: 'Firm template', transitions: 'Calm' });
   });
   it('is read back strictly: slides need a title, bullets and words, audio a media path, the length at most 15 minutes', () => {
@@ -150,9 +157,10 @@ describe('the SQL repeats these rules', () => {
   const fn = (name: string) => latestMatch(new RegExp('create (?:or replace )?function private\\.' + name + '\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$'))[1];
   it('the pace, the 15-minute cap and the template and transition defaults', () => {
     expect(fn('own_seconds')).toContain('/ 140');
+    expect(fn('slides_ok')).toContain('spoken_words(e ->> 2), 0) < 1');
     expect(fn('slides_seconds')).toContain('round(');
     expect(fn('slides_content')).toContain("'Minimal'");
-    expect(fn('slides_content')).toContain("'Camera flight'");
+    expect(fn('slides_content')).toContain("'Slide in'");
     expect(latestMatch(/slides_seconds\([^)]*\) > (\d+)/)[1]).toBe(String(SLIDES_MAX_SECONDS));
   });
   it('Slides complete themselves and count their hours from the content\'s seconds through horizon_hours', () => {

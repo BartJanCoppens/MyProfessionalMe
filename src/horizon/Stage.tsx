@@ -6,7 +6,7 @@
 // their end. Horizon's 3D worlds are not part of the player.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { EYE, FLIGHT_EASING, slideMotion } from './motion';
+import { EYE, FADE_IN, FLIGHT_EASING, slideMotion } from './motion';
 import { BuildIn } from './SlideBuild';
 import { SlideFace } from './SlideFace';
 import { canvasLook } from './slideTheme';
@@ -66,7 +66,7 @@ export function Stage({ deck, p }: { deck: Deck; p: Presentation }) {
           ))}
         </div>
       ) : (
-        <div key={f.id + '|' + p.arrival} style={{ position: 'absolute', left: 0, top: 0, transformOrigin: '0 0', transform: `scale(${k})`, animation: m ? 'pmFade .45s ease-out' : undefined }}>
+        <div key={f.id + '|' + p.arrival} style={{ position: 'absolute', left: 0, top: 0, transformOrigin: '0 0', transform: `scale(${k})`, animation: m ? FADE_IN : undefined }}>
           {faceOf(f, p.index, true)}
         </div>
       )}

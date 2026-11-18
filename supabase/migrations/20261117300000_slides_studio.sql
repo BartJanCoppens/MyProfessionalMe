@@ -4,8 +4,8 @@
 -- items     A deck's slides are [title, bullets, talk-over] rows (rows_ok, width 3): the bullets are one text between
 --           middle dots (·), at least one, and the talk-over is required; at most one fewer than the item cap (14), because
 --           after them may come one voice-over item {kind: 'voice', clips: [...]} (private.voice_ok; isVoiceItem in
---           src/logic/voiceItem.ts). A clip is {slide, text, path, seconds, marks}: the slide's index (0 to 13), the words it
---           was made from, an .mp3 in the media folder shape, its length (up to 180 s) and the marks of the talk-over (at
+--           src/logic/voiceItem.ts). A clip is {slide, text, voice, path, seconds, marks}: the slide's index (0 to 13), the words it
+--           was made from, the stock voice's id (`voice`, one voice for the whole deck), an .mp3 in the media folder shape, its length (up to 180 s) and the marks of the talk-over (at
 --           most 50, each {kind: 'next' | 'cue', at}). A clip counts only while its text is the slide's present talk-over.
 -- shape     "Who presents?" = 'AI voice' needs a clip on every slide (else only captions at a reading pace of 140 words
 --           a minute); "Template" and "Transitions" are published with the deck (default Firm template, Calm).
@@ -21,15 +21,35 @@
 -- completion 'media' (COMPLETION in src/logic/record.ts): the learner completes it by playing it to the end;
 --           private.is_self_complete lists it.
 
--- The seconds a talk-over takes at 140 words a minute without a voice (ownSeconds in src/logic/narration.ts): the words
--- without the ⟨next⟩ and ⟨cue⟩ marks, at least 2 seconds.
+-- Text trimmed of spaces, tabs and line ends, as JavaScript's trim() does for the single-line inputs of the studios.
+create function private.trimmed(p_text text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select btrim(p_text, E' \t\r\n');
+$$;
+
+-- How many words a talk-over speaks: the text without the ⟨next⟩ and ⟨cue⟩ marks (spoken in src/logic/narration.ts).
+create function private.spoken_words(p_text text)
+returns integer
+language sql
+immutable
+set search_path = ''
+as $$
+  select cardinality(array_remove(regexp_split_to_array(btrim(regexp_replace(regexp_replace(regexp_replace(p_text, '⟨(next|cue)⟩', ' ', 'g'), '\s+', ' ', 'g'), '\s+([.,!?;:])', '\1', 'g')), '\s+'), ''));
+$$;
+
+-- The seconds a talk-over takes at 140 words a minute without a voice (ownSeconds in src/logic/narration.ts): its spoken
+-- words, at least 2 seconds.
 create function private.own_seconds(p_text text)
 returns numeric
 language sql
 immutable
 set search_path = ''
 as $$
-  select greatest(2, cardinality(array_remove(regexp_split_to_array(btrim(regexp_replace(regexp_replace(regexp_replace(p_text, '⟨(next|cue)⟩', ' ', 'g'), '\s+', ' ', 'g'), '\s+([.,!?;:])', '\1', 'g')), '\s+'), '')) * 60 / 140.0);
+  select greatest(2, private.spoken_words(p_text) * 60 / 140.0);
 $$;
 
 -- A deck's voice-over item.
@@ -46,10 +66,10 @@ as $$
         and (select count(distinct c ->> 'slide') from jsonb_array_elements(e -> 'clips') c) = jsonb_array_length(e -> 'clips')
         and not exists (select 1 from jsonb_array_elements(e -> 'clips') c where not (case
           when jsonb_typeof(c) is distinct from 'object' then false
-          when (select count(*) from jsonb_object_keys(c)) <> 5 or not (c ?& array['slide', 'text', 'path', 'seconds', 'marks']) then false
+          when (select count(*) from jsonb_object_keys(c)) <> 6 or not (c ?& array['slide', 'text', 'path', 'seconds', 'marks', 'voice']) then false
           when jsonb_typeof(c -> 'slide') is distinct from 'number' or (c ->> 'slide') !~ '^[0-9]{1,2}$' or jsonb_typeof(c -> 'text') is distinct from 'string'
-            or jsonb_typeof(c -> 'path') is distinct from 'string' or jsonb_typeof(c -> 'seconds') is distinct from 'number' or jsonb_typeof(c -> 'marks') is distinct from 'array' then false
-          else (c ->> 'slide')::integer between 0 and 13 and btrim(c ->> 'text') <> '' and char_length(c ->> 'text') <= 600
+            or jsonb_typeof(c -> 'path') is distinct from 'string' or jsonb_typeof(c -> 'voice') is distinct from 'string' or jsonb_typeof(c -> 'seconds') is distinct from 'number' or jsonb_typeof(c -> 'marks') is distinct from 'array' then false
+          else (c ->> 'slide')::integer between 0 and 13 and private.trimmed(c ->> 'text') <> '' and char_length(c ->> 'text') <= 600 and (c ->> 'voice') ~ '^[A-Za-z0-9_-]{1,64}$'
             and private.media_path_ok(c ->> 'path') and right(c ->> 'path', 4) = '.mp3'
             and (c ->> 'seconds')::numeric > 0 and (c ->> 'seconds')::numeric <= 180
             and jsonb_array_length(c -> 'marks') <= 50
@@ -73,7 +93,7 @@ set search_path = ''
 as $$
   select private.rows_ok(private.rows_of(p_items), private.item_max('Slides') - 1, 3)
     and not exists (select 1 from jsonb_array_elements(private.rows_of(p_items)) e
-                    where coalesce(btrim(e ->> 2), '') = '' or not exists (select 1 from regexp_split_to_table(e ->> 1, '\s*·\s*') b where btrim(b) <> ''))
+                    where coalesce(private.spoken_words(e ->> 2), 0) < 1 or not exists (select 1 from regexp_split_to_table(e ->> 1, '\s*·\s*') b where private.trimmed(b) <> ''))
     and (select count(*) from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array') <= 1
     and not exists (select 1 from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array' and not private.voice_ok(e));
 $$;
@@ -86,7 +106,7 @@ immutable
 set search_path = ''
 as $$
   select c from jsonb_array_elements(coalesce((select e -> 'clips' from jsonb_array_elements(p_items) e where jsonb_typeof(e) = 'object' limit 1), '[]'::jsonb)) c
-  where (c ->> 'slide')::integer = p_slide and btrim(c ->> 'text') = btrim(private.rows_of(p_items) -> p_slide ->> 2)
+  where (c ->> 'slide')::integer = p_slide and private.trimmed(c ->> 'text') = private.trimmed(private.rows_of(p_items) -> p_slide ->> 2)
   limit 1;
 $$;
 
@@ -98,7 +118,8 @@ immutable
 set search_path = ''
 as $$
   select coalesce(p_shape ->> 'Who presents?', '') = 'AI voice' and jsonb_array_length(private.rows_of(p_items)) > 0
-    and not exists (select 1 from generate_series(0, jsonb_array_length(private.rows_of(p_items)) - 1) n where private.slide_clip(p_items, n) is null);
+    and not exists (select 1 from generate_series(0, jsonb_array_length(private.rows_of(p_items)) - 1) n where private.slide_clip(p_items, n) is null)
+    and (select count(distinct private.slide_clip(p_items, n) ->> 'voice') from generate_series(0, jsonb_array_length(private.rows_of(p_items)) - 1) n) = 1;
 $$;
 
 -- How long the deck plays, rounded to seconds: each slide's stored seconds with the AI voice, else its words at the pace.
@@ -121,8 +142,8 @@ immutable
 set search_path = ''
 as $$
   select jsonb_build_object('kind', 'slides',
-    'slides', (select jsonb_agg(jsonb_build_object('title', btrim(r.e ->> 0), 'bullets', (select jsonb_agg(btrim(b)) from regexp_split_to_table(r.e ->> 1, '\s*·\s*') b where btrim(b) <> ''),
-                                                   'narration', btrim(r.e ->> 2))
+    'slides', (select jsonb_agg(jsonb_build_object('title', private.trimmed(r.e ->> 0), 'bullets', (select jsonb_agg(private.trimmed(b)) from regexp_split_to_table(r.e ->> 1, '\s*·\s*') b where private.trimmed(b) <> ''),
+                                                   'narration', private.trimmed(r.e ->> 2))
                                 || case when private.slides_voiced(p_items, p_shape)
                                      then jsonb_build_object('audio', jsonb_build_object('path', private.slide_clip(p_items, r.n::integer - 1) ->> 'path',
                                        'seconds', private.slide_clip(p_items, r.n::integer - 1) -> 'seconds', 'marks', private.slide_clip(p_items, r.n::integer - 1) -> 'marks'))
@@ -131,7 +152,7 @@ as $$
                from jsonb_array_elements(private.rows_of(p_items)) with ordinality as r(e, n)),
     'seconds', private.slides_seconds(p_items, p_shape)::integer,
     'template', case when p_shape ->> 'Template' = 'Minimal' then 'Minimal' else 'Firm template' end,
-    'transitions', case when p_shape ->> 'Transitions' = 'Camera flight' then 'Camera flight' else 'Calm' end,
+    'transitions', case when p_shape ->> 'Transitions' = 'Slide in' then 'Slide in' else 'Calm' end,
     'made', case when private.slides_voiced(p_items, p_shape) then 'ai' else 'scripted' end);
 $$;
 
@@ -295,5 +316,5 @@ begin
 end;
 $$;
 
-revoke execute on function private.own_seconds(text), private.voice_ok(jsonb), private.slides_ok(jsonb), private.slide_clip(jsonb, integer), private.slides_voiced(jsonb, jsonb),
+revoke execute on function private.trimmed(text), private.spoken_words(text), private.own_seconds(text), private.voice_ok(jsonb), private.slides_ok(jsonb), private.slide_clip(jsonb, integer), private.slides_voiced(jsonb, jsonb),
   private.slides_seconds(jsonb, jsonb), private.slides_content(jsonb, jsonb) from public, anon, authenticated;
