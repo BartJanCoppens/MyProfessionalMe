@@ -23,7 +23,7 @@ export const LIMITS = { score: 1_000_000, messages: 20, messageChars: 1000, stat
 /** The API generated games are told about (the Game Studio's AI) and the platform implements. */
 export const BRIDGE_API = `window.GameStudio (always available; every method returns a Promise):
 - GameStudio.ready(): call once when the game has loaded.
-- GameStudio.getData(): the game's content (the game's content: { concept, win, rounds: [{ text, answer }] }).
+- GameStudio.getData(): the game's content ({ concept, win, rounds: [{ text, answer }] }).
 - GameStudio.getPlayer(): { name } (first name and initial).
 - GameStudio.submitScore(score): the player's final score (a whole number from 0 to 1,000,000, higher is better). Call once.
 - GameStudio.getLeaderboard(): [{ rank, name, score, seconds }] (top 10), only if the game has a leaderboard.

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GameFrame, LEFT_MESSAGE } from './GameFrame';
 
@@ -72,6 +73,30 @@ describe('GameFrame', () => {
     expect(screen.getByText(LEFT_MESSAGE)).toBeTruthy();
     await act(async () => { window.dispatchEvent(new MessageEvent('message', { data: ask('getData'), origin: 'null', source: gameWindow })); await new Promise((r) => setTimeout(r, 5)); });
     expect(posted).not.toHaveBeenCalled();
+  });
+
+  it('counts a load that fires right after the commit, before passive effects, as the first', async () => {
+    // Outside act, passive effects run in a later task; a mutation observer fires in between, like a real first load.
+    const flag = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    flag.IS_REACT_ACT_ENVIRONMENT = false;
+    const container = document.body.appendChild(document.createElement('div'));
+    // jsdom loads a srcdoc frame by itself, later; only the loads this test fires count.
+    container.addEventListener('load', (e) => { if (e.isTrusted) e.stopPropagation(); }, true);
+    const root = createRoot(container);
+    const seen = new MutationObserver(() => {
+      const el = container.querySelector('iframe');
+      if (el) { seen.disconnect(); el.dispatchEvent(new Event('load')); }
+    });
+    seen.observe(container, { childList: true, subtree: true });
+    root.render(<GameFrame files={FILES} data={null} runId={null} test={false} player="Player" onScore={async () => {}} leaderboard={null} askAI={null} onFinished={() => {}} />);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(container.textContent).not.toContain(LEFT_MESSAGE);
+    container.querySelector('iframe')!.dispatchEvent(new Event('load'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(container.textContent).toContain(LEFT_MESSAGE);
+    root.unmount();
+    container.remove();
+    flag.IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   it('answers a second submitScore with an error', async () => {

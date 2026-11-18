@@ -19,7 +19,7 @@ type RunProps = Omit<Props, 'files' | 'test'> & { srcDoc: string };
 function FrameRun({ srcDoc, height, onFinished, ...ctx }: RunProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [left, setLeft] = useState(false);
-  useBridgeHost(frame, { ...ctx, onFinished: (score) => onFinished?.(score), onLeft: () => setLeft(true) });
+  const { onLoad } = useBridgeHost(frame, { ...ctx, onFinished: (score) => onFinished?.(score), onLeft: () => setLeft(true) });
   if (left) return <div role="alert"><Banner tone="warning">{LEFT_MESSAGE}</Banner></div>;
   return (
     <iframe
@@ -28,6 +28,7 @@ function FrameRun({ srcDoc, height, onFinished, ...ctx }: RunProps) {
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
       srcDoc={srcDoc}
+      onLoad={onLoad}
       style={{ width: '100%', height, border: '1px solid var(--tc-line-soft)', borderRadius: 8, background: 'var(--tc-surface)', display: 'block' }}
     />
   );

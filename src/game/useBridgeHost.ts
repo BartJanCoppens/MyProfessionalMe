@@ -37,17 +37,13 @@ export function useBridgeHost(frame: RefObject<HTMLIFrameElement | null>, ctx: B
   const left = useRef(false);
   const leaderboardQueue = useRef(limitedQueue(LEADERBOARD_CALLS));
 
-  useEffect(() => {
-    const el = frame.current;
-    let loads = 0;
-    // The first load is the game's own page; any further load means it navigated away.
-    const onLoad = () => {
-      loads += 1;
-      if (loads > 1 && !left.current) { left.current = true; latest.current.onLeft(); }
-    };
-    el?.addEventListener('load', onLoad);
-    return () => el?.removeEventListener('load', onLoad);
-  }, [frame]);
+  // The iframe's onLoad (attached at commit, so even a first load that fires at once is counted): the first load is
+  // the game's own page; any further load means it navigated away.
+  const loads = useRef(0);
+  const onLoad = () => {
+    loads.current += 1;
+    if (loads.current > 1 && !left.current) { left.current = true; latest.current.onLeft(); }
+  };
 
   useEffect(() => {
     async function submitScore(score: number): Promise<unknown> {
@@ -98,4 +94,5 @@ export function useBridgeHost(frame: RefObject<HTMLIFrameElement | null>, ctx: B
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [frame]);
+  return { onLoad };
 }
