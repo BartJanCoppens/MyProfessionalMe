@@ -2692,8 +2692,7 @@ insert into results (check_name, expected, actual) select 'SL private.trimmed st
 -- the one chapter-label predicate
 insert into results (check_name, expected, actual) select 'PD is_chapter accepts "Chapter 1 · 0:00" and refuses lookalikes', 'true/false/false/false/false',
   private.is_chapter('Chapter 1 · 0:00')||'/'||private.is_chapter('Chapter 1 · 0:60')||'/'||private.is_chapter('Chapter 1 · 0:00 ')||'/'||private.is_chapter('Host')||'/'||private.is_chapter(null);
--- the older voice-over use is the Reel Studio's alone
-insert into results (check_name, expected, actual) select 'VO media_voice is narrowed to reels', 'Reel voice-over/the Reel Studio', label||'/'||waiting_for from public.ai_uses where key = 'media_voice';
+-- reels are voiced through studio_voice (the older media_voice use is deleted by the Reel Studio migration, see RL)
 -- ---------- Game Studio (GM) ----------
 -- A game is [label, text, text2] rows (private.game_ok): one Concept first, Rounds, at most one "AI role" row (text who the AI plays, text2 what
 -- it knows), then one built game {kind, files, for} (private.game_item_ok; the house-rules verdict is not in it: game_reviews, server-owned). The scan of its two files runs here too
@@ -3130,5 +3129,177 @@ set local role anon;
 set local request.jwt.claims = '';
 select pg_temp.gr_blocked('LK anon reads no looks', $q$select count(*) from public.stock_looks$q$, 'blocked: 42501');
 reset role;
+-- ---------- Reel Studio (RL) ----------
+-- A reel is [label, text, text2] rows (private.reel_ok): Hook, "Scene N" from 1, Close (3 to 7 scenes in all) and a Check last (the question,
+-- then 2 to 4 options, the right one first), then at most one voice-over item (clips, `slide` the scene's index) and one video item
+-- {kind, path, seconds, size, mime, made} (private.video_ok). The check gate refuses a reel that is not voiced as chosen, has no word timing,
+-- runs over 90 s, has no final cut, was changed after it, whose cut does not match the voice, whose look is not an active stock look, or whose
+-- files are missing, in another folder or not the type and size they claim; it publishes as reel content.
+reset role;
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000aa','{Consulting}','{Reel}');
+insert into public.review_policies (formats, peers, expert, quality) values ('{Reel}', 0, false, false);
+insert into public.stock_looks (name, portrait, color, licence, active) values ('T rl switched-off look · 60s', 'p2', '#112233', 'Drawn in code', false);
+select set_config('test.rl_rows', '[["Hook","Your project is drifting. Here are three signs.","three signs"],["Scene 1","Can you just also turns up in every steering committee.","Just also x3"],["Scene 2","Hours are booked on tasks that are not in the statement of work.","A timesheet"],["Scene 3","Deliverables keep getting one more round.","v7_final_FINAL"],["Close","Spot one? Raise it with your engagement manager this week.","Talk to your EM"],["Check","What should you do when you spot one?","Raise it this week · Wait for the next review · Ignore it"]]', true);
+-- Fills a reel contribution: its rows, the voice-over and the final cut. Options: rows, madeRows, secs (clip seconds), skip (scene without a clip), nowords (scene whose clip has no word timing),
+-- novoice, novideo, vsecs, vpath, look (made.look), clips (made.clips), made and top (merged into made and the video item).
+create function pg_temp.rl_set(p_title text, p_o jsonb default '{}') returns void language plpgsql as $f$
+declare
+  v_id text; v_rows jsonb := coalesce(p_o -> 'rows', current_setting('test.rl_rows')::jsonb); v_dir text;
+  v_secs numeric[] := case when p_o ? 'secs' then array(select jsonb_array_elements_text(p_o -> 'secs'))::numeric[] else array[4, 5, 6, 5.5, 3.5] end;
+  v_voice jsonb; v_video jsonb; v_clips jsonb; v_items jsonb;
+begin
+  select id::text into v_id from public.contributions where title = p_title;
+  v_dir := '00000000-0000-0000-0000-0000000000aa/' || v_id || '/';
+  v_clips := to_jsonb(array(select v_dir || 'voice-' || n || '.mp3' from generate_series(1, 5) n));
+  v_voice := (select jsonb_build_object('kind', 'voice', 'clips', jsonb_agg(t.c order by t.n)) from (
+    select r.n, jsonb_build_object('slide', r.n - 1, 'text', r.e ->> 1, 'path', v_dir || 'voice-' || r.n || '.mp3', 'voice', 'EL1', 'seconds', v_secs[r.n], 'marks', '[]'::jsonb)
+      || case when r.n - 1 = coalesce((p_o ->> 'nowords')::integer, -1) then '{}'::jsonb else '{"words":[0,0.5]}'::jsonb end as c
+    from (select x.e, row_number() over (order by x.n) as n from jsonb_array_elements(v_rows) with ordinality as x(e, n) where x.e ->> 0 <> 'Check') r
+    where r.n - 1 <> coalesce((p_o ->> 'skip')::integer, -1)) t);
+  v_video := jsonb_build_object('kind', 'video', 'path', coalesce(p_o ->> 'vpath', v_dir || 'reel-0123456789abcdef.mp4'), 'seconds', coalesce((p_o ->> 'vsecs')::numeric, 25.2),
+    'size', '720x1280', 'mime', 'video/mp4',
+    'made', jsonb_build_object('rows', coalesce(p_o -> 'madeRows', v_rows), 'clips', case when p_o ? 'clips' then p_o -> 'clips' when p_o ? 'novoice' then '[]'::jsonb else v_clips end,
+      'look', p_o ->> 'look', 'format', '9:16 vertical', 'captions', 'Burned in', 'music', 'Calm') || coalesce(p_o -> 'made', '{}')) || coalesce(p_o -> 'top', '{}');
+  v_items := v_rows || case when p_o ? 'novoice' then '[]'::jsonb else jsonb_build_array(v_voice) end || case when p_o ? 'novideo' then '[]'::jsonb else jsonb_build_array(v_video) end;
+  update public.contributions set items = v_items where id = v_id::uuid;
+end $f$;
+create function pg_temp.rl_problems(p_title text) returns text language sql security invoker as $f$
+  select array_to_string(public.check_contribution((select id from public.contributions where title = p_title)), '|') $f$;
+select set_config('test.rl_look', (select id::text from public.stock_looks where name = 'HR director · 50s'), true);
+select set_config('test.rl_off', (select id::text from public.stock_looks where name = 'T rl switched-off look · 60s'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, shape) values
+ ('Consulting','Reel','T rl ok','prof','Spot drift early.','reel','{"Who presents?":"Stock presenter and AI voice"}'),
+ ('Consulting','Reel','T rl cards','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl text','prof','x','reel','{"Who presents?":"Text and music only"}'),
+ ('Consulting','Reel','T rl nocheck','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl unvoiced','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl nowords','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl long','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl nocut','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl stale rows','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl stale clips','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl stale presenter','prof','x','reel','{"Who presents?":"Text and music only"}'),
+ ('Consulting','Reel','T rl mismatch','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl look off','prof','x','reel','{"Who presents?":"Stock presenter and AI voice"}'),
+ ('Consulting','Reel','T rl look none','prof','x','reel','{"Who presents?":"Stock presenter and AI voice"}'),
+ ('Consulting','Reel','T rl voice file','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl elsewhere','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl webm','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl big','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl bad','prof','x','reel',null) returning 1)
+  insert into results (check_name, expected, actual) select 'RL a Reel is made in its studio', '19 rows', count(*)||' rows' from i;
+select pg_temp.rl_set('T rl ok', jsonb_build_object('look', current_setting('test.rl_look')));
+select pg_temp.rl_set('T rl cards');
+select pg_temp.rl_set('T rl text', '{"novoice":true,"vsecs":21.3,"made":{"music":"None","captions":"Separate file"}}');
+select pg_temp.rl_set('T rl nocheck', jsonb_build_object('rows', current_setting('test.rl_rows')::jsonb - 5));
+select pg_temp.rl_set('T rl unvoiced', '{"skip":2,"clips":[]}');
+select pg_temp.rl_set('T rl nowords', '{"nowords":1}');
+select pg_temp.rl_set('T rl long', '{"secs":[18.12,18.12,18.12,18.12,18.12],"novideo":true}');
+select pg_temp.rl_set('T rl nocut', '{"novideo":true}');
+select pg_temp.rl_set('T rl stale rows', jsonb_build_object('rows', replace(current_setting('test.rl_rows'), 'Just also x3', 'Just also x4')::jsonb, 'madeRows', current_setting('test.rl_rows')::jsonb));
+select pg_temp.rl_set('T rl stale clips', '{"clips":["00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/voice-1.mp3","00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/voice-2.mp3","00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/voice-3.mp3","00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/voice-4.mp3","00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/voice-5.mp3"]}');
+select pg_temp.rl_set('T rl stale presenter', '{"vsecs":21.3}');
+select pg_temp.rl_set('T rl mismatch', '{"vsecs":30}');
+select pg_temp.rl_set('T rl look off', jsonb_build_object('look', current_setting('test.rl_off')));
+select pg_temp.rl_set('T rl look none');
+select pg_temp.rl_set('T rl voice file');
+select pg_temp.rl_set('T rl elsewhere', jsonb_build_object('vpath', '00000000-0000-0000-0000-0000000000aa/' || (select id from public.contributions where title = 'T rl ok') || '/reel-0123456789abcdef.mp4'));
+select pg_temp.rl_set('T rl webm');
+select pg_temp.rl_set('T rl big');
+-- Storage: the voice files and the cut, with the type and size Storage records (a stand-in row)
+insert into storage.objects (bucket_id, name, metadata) select 'media', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-'||n||'.mp3', '{"mimetype":"audio/mpeg","size":40000}'::jsonb
+  from public.contributions c, generate_series(1, 5) n where c.title like 'T rl %' and c.title not in ('T rl bad', 'T rl text') and not (c.title = 'T rl voice file' and n = 3);
+insert into storage.objects (bucket_id, name, metadata) select 'media', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/reel-0123456789abcdef.mp4',
+  case c.title when 'T rl webm' then '{"mimetype":"video/webm","size":1000000}'::jsonb when 'T rl big' then '{"mimetype":"video/mp4","size":52428801}'::jsonb else '{"mimetype":"video/mp4","size":1000000}'::jsonb end
+  from public.contributions c where c.title like 'T rl %' and c.title not in ('T rl nocut', 'T rl long', 'T rl bad');
+insert into results (check_name, expected, actual) select 'RL a voiced reel with a stock presenter and a current cut in its folder passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T rl ok'))::text;
+insert into results (check_name, expected, actual) select 'RL a reel voiced over text cards passes', '{}', public.check_contribution((select id from public.contributions where title = 'T rl cards'))::text;
+insert into results (check_name, expected, actual) select 'RL a text and music only reel (no clips) passes', '{}', public.check_contribution((select id from public.contributions where title = 'T rl text'))::text;
+insert into results (check_name, expected, actual) select 'RL a reel without its check question is refused', 'Add the check question: one question, the right answer first', pg_temp.rl_problems('T rl nocheck');
+insert into results (check_name, expected, actual) select 'RL a reel voiced as chosen but with a scene without a clip is refused', 'Voice every scene in Produce, or choose Text and music only in Shape it', pg_temp.rl_problems('T rl unvoiced');
+insert into results (check_name, expected, actual) select 'RL a clip without word timing is refused with its scene', 'Voice scene 2 again · its word timing is missing', pg_temp.rl_problems('T rl nowords');
+insert into results (check_name, expected, actual) select 'RL a reel over 90 s is refused with its length (and, here, has no cut)', 'The reel runs 92 s · at most 90 s|Make the final cut in Produce', pg_temp.rl_problems('T rl long');
+insert into results (check_name, expected, actual) select 'RL a reel without a final cut is refused', 'Make the final cut in Produce', pg_temp.rl_problems('T rl nocut');
+insert into results (check_name, expected, actual) select 'RL a row edited after the cut is refused', 'You changed the reel after the final cut · make the final cut again', pg_temp.rl_problems('T rl stale rows');
+insert into results (check_name, expected, actual) select 'RL clips that are not the ones the cut was made with are refused', 'You changed the reel after the final cut · make the final cut again', pg_temp.rl_problems('T rl stale clips');
+insert into results (check_name, expected, actual) select 'RL a cut with the voice (made.clips) while the reel is now text only is refused', 'You changed the reel after the final cut · make the final cut again', pg_temp.rl_problems('T rl stale presenter');
+insert into results (check_name, expected, actual) select 'RL a cut that does not run as long as the voice-over is refused', 'The video''s length does not match the voice-over · make the final cut again', pg_temp.rl_problems('T rl mismatch');
+insert into results (check_name, expected, actual) select 'RL a look that was switched off after it was picked is refused', 'That look is not on the stock list', pg_temp.rl_problems('T rl look off');
+insert into results (check_name, expected, actual) select 'RL a stock presenter without a look is refused', 'That look is not on the stock list', pg_temp.rl_problems('T rl look none');
+insert into results (check_name, expected, actual) select 'RL a voice file that is not in Storage is refused', 'A voice-over file is not there · voice the reel again', pg_temp.rl_problems('T rl voice file');
+insert into results (check_name, expected, actual) select 'RL a video in another contribution''s folder is refused', 'The video file is not there · make the final cut again', pg_temp.rl_problems('T rl elsewhere');
+insert into results (check_name, expected, actual) select 'RL a video whose stored type is not the one it claims is refused', 'The video file is not the type or size it claims', pg_temp.rl_problems('T rl webm');
+insert into results (check_name, expected, actual) select 'RL a video over 50 MB in Storage is refused', 'The video file is not the type or size it claims', pg_temp.rl_problems('T rl big');
+do $$ declare r record; begin
+  for r in select * from (values ('an extra key', '{"x":1}'::jsonb, 'top'), ('another kind', '{"kind":"voice"}', 'top'), ('an mp4 path with the mime of a webm', '{"mime":"video/webm"}', 'top'),
+    ('a path that is not a media path', '{"path":"x/reel.mp4"}', 'top'), ('91 seconds', '{"seconds":91}', 'top'), ('0 seconds', '{"seconds":0}', 'top'), ('a size that is not one of the two', '{"size":"640x480"}', 'top'),
+    ('a size that is not the format''s', '{"size":"1080x1080"}', 'top'), ('an extra key in made', '{"x":1}', 'made'), ('a format that is not one of the two', '{"format":"16:9"}', 'made'),
+    ('captions that are not one of the two', '{"captions":"Both"}', 'made'), ('music that is not one of the three', '{"music":"Loud"}', 'made'), ('a look that is not a uuid', '{"look":"HR director"}', 'made'),
+    ('clips that are not mp3 paths', '{"clips":["00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/a.m4a"]}', 'made'), ('rows that are not rows', '{"rows":["a"]}', 'made')) as t(k, v, w) loop
+    perform pg_temp.rl_set('T rl bad', case when r.w = 'top' then jsonb_build_object('top', r.v) else jsonb_build_object('made', r.v) end);
+    insert into results (check_name, expected, actual) values ('RL a video item with '||r.k||' fails the check', 'Check the reel''s rows first: a Hook, scenes, a Close and a check with 2 to 4 options, the right one first', pg_temp.rl_problems('T rl bad'));
+  end loop;
+  for r in select * from (values ('two scenes', '[["Hook","a","b"],["Close","c","d"]]'::jsonb), ('eight scenes', (select jsonb_agg(jsonb_build_array(case when g = 1 then 'Hook' when g = 8 then 'Close' else 'Scene '||(g - 1) end, 'a', 'b') order by g) from generate_series(1, 8) g)),
+    ('no Hook first', '[["Scene 1","a","b"],["Scene 2","c","d"],["Close","e","f"]]'), ('no Close last', '[["Hook","a","b"],["Scene 1","c","d"],["Scene 2","e","f"]]'),
+    ('a scene numbered out of order', '[["Hook","a","b"],["Scene 2","c","d"],["Close","e","f"]]'), ('a repeated scene number', '[["Hook","a","b"],["Scene 1","c","d"],["Scene 1","e","f"],["Close","g","h"]]'),
+    ('a scene without on-screen text', '[["Hook","a","b"],["Scene 1","c"],["Close","e","f"]]'), ('a scene with blank on-screen text', '[["Hook","a","b"],["Scene 1","c"," "],["Close","e","f"]]'),
+    ('the check not last', '[["Hook","a","b"],["Check","q","x · y"],["Close","e","f"],["Scene 1","c","d"]]'), ('two checks', '[["Hook","a","b"],["Scene 1","c","d"],["Close","e","f"],["Check","q","x · y"],["Check","q","x · y"]]'),
+    ('a check with one option', '[["Hook","a","b"],["Scene 1","c","d"],["Close","e","f"],["Check","q","x"]]'), ('a check with five options', '[["Hook","a","b"],["Scene 1","c","d"],["Close","e","f"],["Check","q","1 · 2 · 3 · 4 · 5"]]'),
+    ('a check with an empty option', '[["Hook","a","b"],["Scene 1","c","d"],["Close","e","f"],["Check","q","x ·  · y"]]'), ('a check without options', '[["Hook","a","b"],["Scene 1","c","d"],["Close","e","f"],["Check","q"]]'),
+    ('another label', '[["Hook","a","b"],["Scene 1","c","d"],["Outro","e","f"]]'), ('a voice-over before the rows', '[{"kind":"voice","clips":[]},["Hook","a","b"],["Scene 1","c","d"],["Close","e","f"]]')) as t(k, v) loop
+    update public.contributions set items = r.v where title = 'T rl bad';
+    insert into results (check_name, expected, actual) values ('RL a reel with '||r.k||' fails the check', 'Check the reel''s rows first: a Hook, scenes, a Close and a check with 2 to 4 options, the right one first', pg_temp.rl_problems('T rl bad'));
+  end loop;
+  begin update public.contributions set items = (select jsonb_agg(jsonb_build_array('Scene', 'x', 'y')) from generate_series(1, 11) g) where title = 'T rl bad';
+    insert into results (check_name, expected, actual) values ('RL more than 10 items are refused', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RL more than 10 items are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+-- publishing: a learner reads nothing before it, the author can still upload, and afterwards the video is open to a learner and frozen for the author
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'RL a learner reads no file of an unpublished reel', '0', count(*)::text from storage.objects where name like '%/reel-0123456789abcdef.mp4' and bucket_id = 'media';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'RL the author can upload to the reel while it is a draft', 'true', private.can_write_media('00000000-0000-0000-0000-0000000000aa/'||c.id||'/reel-0123456789abcdef.mp4')::text from public.contributions c where c.title = 'T rl ok';
+insert into results (check_name, expected, actual) select 'RL the reel is published', 'published', public.submit_contribution((select id from public.contributions where title = 'T rl ok'));
+insert into results (check_name, expected, actual) select 'RL the reel becomes reel content: scenes on the voice clock, the cut, the look, the check', 'true',
+  (l.content = jsonb_build_object('kind', 'reel', 'size', '720x1280', 'seconds', 25.2, 'made', 'ai', 'burned', true, 'music', 'Calm',
+    'video', jsonb_build_object('path', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/reel-0123456789abcdef.mp4', 'mime', 'video/mp4'),
+    'look', (select jsonb_build_object('id', k.id, 'name', k.name, 'portrait', k.portrait, 'color', k.color) from public.stock_looks k where k.name = 'HR director · 50s'),
+    'check', jsonb_build_object('q', 'What should you do when you spot one?', 'opts', jsonb_build_array('Raise it this week', 'Wait for the next review', 'Ignore it'), 'a', 0),
+    'scenes', jsonb_build_array(
+      jsonb_build_object('label', 'Hook', 'text', 'Your project is drifting. Here are three signs.', 'onScreen', 'three signs', 'start', 0, 'seconds', 4, 'words', jsonb_build_array(0, 0.5)),
+      jsonb_build_object('label', 'Scene 1', 'text', 'Can you just also turns up in every steering committee.', 'onScreen', 'Just also x3', 'start', 4.3, 'seconds', 5, 'words', jsonb_build_array(0, 0.5)),
+      jsonb_build_object('label', 'Scene 2', 'text', 'Hours are booked on tasks that are not in the statement of work.', 'onScreen', 'A timesheet', 'start', 9.6, 'seconds', 6, 'words', jsonb_build_array(0, 0.5)),
+      jsonb_build_object('label', 'Scene 3', 'text', 'Deliverables keep getting one more round.', 'onScreen', 'v7_final_FINAL', 'start', 15.9, 'seconds', 5.5, 'words', jsonb_build_array(0, 0.5)),
+      jsonb_build_object('label', 'Close', 'text', 'Spot one? Raise it with your engagement manager this week.', 'onScreen', 'Talk to your EM', 'start', 21.7, 'seconds', 3.5, 'words', jsonb_build_array(0, 0.5)))))::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T rl ok';
+insert into results (check_name, expected, actual) select 'RL a voiced reel counts the reel default 0.025 h (kept to two decimals: 0.03) and is marked AI made', 'Reel/0.03/true', l.format||'/'||l.hours||'/'||l.ai_made
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T rl ok';
+insert into results (check_name, expected, actual) select 'RL the author cannot upload to the reel once it is submitted', 'false', private.can_write_media('00000000-0000-0000-0000-0000000000aa/'||c.id||'/reel-0123456789abcdef.mp4')::text from public.contributions c where c.title = 'T rl ok';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'RL a learner reads the published reel''s video, and no other file of it', '1', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/reel-0123456789abcdef.mp4'
+  and name in (select l.content -> 'video' ->> 'path' from public.learnings l where l.format = 'Reel' and l.title = 'T rl ok');
+insert into results (check_name, expected, actual) select 'RL the published reel''s voice clips are not open to a learner', '0', count(*)::text from storage.objects o join public.contributions c on o.name like '%/' || c.id || '/voice-%' where c.title = 'T rl ok';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'RL a text and music only reel is published as scripted, with no words and no look', 'published', public.submit_contribution((select id from public.contributions where title = 'T rl text'));
+insert into results (check_name, expected, actual) select 'RL a scripted reel is not AI made, has no look and no word timing', 'scripted/false/true/false/true', (l.content ->> 'made')||'/'||l.ai_made::text||'/'||(l.content -> 'look' = 'null'::jsonb)||'/'||(l.content ->> 'burned')||'/'||((l.content -> 'scenes' -> 0 -> 'words') = 'null'::jsonb)
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T rl text';
+do $$ begin
+  begin perform private.reel_ok('[]'::jsonb);
+    insert into results (check_name, expected, actual) values ('RL a signed-in user cannot call reel_ok', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RL a signed-in user cannot call reel_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin perform private.video_ok('{}'::jsonb);
+    insert into results (check_name, expected, actual) values ('RL a signed-in user cannot call video_ok', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('RL a signed-in user cannot call video_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
+insert into results (check_name, expected, actual) select 'RL the Reel cap is 10 items: 8 rows, the voice-over and the video', '10', private.item_max('Reel')::text;
+insert into results (check_name, expected, actual) select 'RL media_voice is gone from ai_uses (reels are voiced through studio_voice)', '0', count(*)::text from public.ai_uses where key = 'media_voice';
+insert into results (check_name, expected, actual) select 'RL studio_voice is used by the Slides, Podcast and Reel studios', 'Create & share · Slides, Podcast and Reel studios', place from public.ai_uses where key = 'studio_voice';
+insert into results (check_name, expected, actual) select 'RL completing a published Reel is as before (self-complete)', 'true', private.is_self_complete(c.learning_id)::text from public.contributions c where c.title = 'T rl ok';
+insert into results (check_name, expected, actual) select 'RL the timeline: 5 scenes of 4, 5, 6, 5.5 and 3.5 s run 25.2 s with 0.3 s between them', '25.2', private.reel_seconds(c.items, c.shape)::text
+  from public.contributions c where c.title = 'T rl cards';
+insert into results (check_name, expected, actual) select 'RL without a voice a scene lasts its words at 140 a minute (14 words 6 s, a short line 2 s)', '6/2', round(private.own_seconds('one two three four five six seven eight nine ten eleven twelve thirteen fourteen'))||'/'||round(private.own_seconds('Hi'));
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
