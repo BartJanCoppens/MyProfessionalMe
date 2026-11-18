@@ -6,9 +6,9 @@ import type { Trajectory } from './logic/trajectory';
 import { blankTrajectory } from './logic/trajectoryEdit';
 import { LEARN_META } from './data';
 import type { Access, AppState } from './types';
-import { domainAdmin, flush, generalAdmin, harness, stubWindow, systemAdmin } from './test/harness';
+import { domainAdmin, flush, generalAdmin, harness, person, stubWindow, systemAdmin } from './test/harness';
 
-vi.mock('./lib/trajectoryStore', async (orig) => ({ ...(await orig<object>()), createTrajectory: vi.fn(), saveTrajectorySoon: vi.fn(), saveTrajectoryNow: vi.fn() }));
+vi.mock('./lib/trajectoryStore', async (orig) => ({ ...(await orig<object>()), createTrajectory: vi.fn(), deleteTrajectory: vi.fn(), saveTrajectorySoon: vi.fn(), saveTrajectoryNow: vi.fn() }));
 beforeEach(() => { stubWindow(); vi.clearAllMocks(); });
 
 const ev = (value: string) => ({ target: { value } }) as ChangeEvent<HTMLInputElement & HTMLSelectElement>;
@@ -320,5 +320,53 @@ describe('business line', () => {
     expect(h.state.trjs[0].business_line).toBe('Consulting');
     h.vm().tj!.setLine(ev('Audit'));
     expect(h.state.trjs[0].business_line).toBe('Audit');
+  });
+});
+
+describe('deleting a trajectory that was never used', () => {
+  const two = () => [T('T1'), T('T2', { name: 'Second' })];
+  it('offers Delete only when nobody used it', () => {
+    const h = setup(two(), systemAdmin(), { trjUsed: ['T2'] });
+    expect(h.vm().tj!.canDelete).toBe(true);
+    h.vm().trjList[1].pick();
+    expect(setup(two(), systemAdmin(), { trjUsed: ['T2'], trjSel: 'T2' }).vm().tj!.canDelete).toBe(false);
+  });
+  it('offers nothing in View as', () => {
+    const h = harness({ access: systemAdmin(), subject: { ...person(), readOnly: true }, state: { screen: 'adminMap', mapMode: 'traj', trjs: two(), trjSel: 'T1' } });
+    expect(h.vm().tj!.canDelete).toBe(false);
+  });
+  it('asks first, naming the trajectory, and Cancel puts it back', () => {
+    const h = setup(two());
+    h.vm().tj!.askDelete();
+    expect(h.state.trjDelete).toBe('T1');
+    expect(h.vm().tj!.deleteAsk).toBe('Delete “Trajectory T1”? This cannot be undone.');
+    h.vm().tj!.cancelDelete();
+    expect(h.state.trjDelete).toBeNull();
+    expect(store.deleteTrajectory).not.toHaveBeenCalled();
+  });
+  it('deletes, removes it from the list and selects the next one', async () => {
+    vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: null });
+    const h = setup(two());
+    h.vm().tj!.confirmDelete(); await flush();
+    expect(store.deleteTrajectory).toHaveBeenCalledWith('T1');
+    expect(h.state.trjs.map((t) => t.id)).toEqual(['T2']);
+    expect(h.state.trjSel).toBe('T2');
+    expect(h.state.trjDelete).toBeNull();
+    expect(h.lastToast()).toBe('Deleted “Trajectory T1”');
+  });
+  it('shows the refusal, keeps the trajectory and hides Delete from then on', async () => {
+    vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: 'Not deleted · people are enrolled or hold its credential · retire it instead' });
+    const h = setup(two());
+    h.vm().tj!.confirmDelete(); await flush();
+    expect(h.lastToast()).toBe('Not deleted · people are enrolled or hold its credential · retire it instead');
+    expect(h.state.trjs).toHaveLength(2);
+    expect(h.state.trjUsed).toEqual(['T1']);
+    expect(h.state.trjDelete).toBeNull();
+    expect(h.vm().tj!.canDelete).toBe(false);
+  });
+  it('does nothing in View as', async () => {
+    const h = harness({ access: systemAdmin(), subject: { ...person(), readOnly: true }, state: { screen: 'adminMap', mapMode: 'traj', trjs: two(), trjSel: 'T1' } });
+    h.vm().tj!.confirmDelete(); await flush();
+    expect(store.deleteTrajectory).not.toHaveBeenCalled();
   });
 });

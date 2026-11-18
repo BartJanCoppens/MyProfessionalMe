@@ -11,7 +11,7 @@ import { cfg, domainAdmin, person, systemAdmin } from '../test/harness';
 import type { Access, AppState } from '../types';
 import AdminMappingScreen from './Mapping';
 
-vi.mock('../lib/trajectoryStore', async (orig) => ({ ...(await orig<object>()), createTrajectory: vi.fn(), saveTrajectorySoon: vi.fn(), saveTrajectoryNow: vi.fn() }));
+vi.mock('../lib/trajectoryStore', async (orig) => ({ ...(await orig<object>()), createTrajectory: vi.fn(), deleteTrajectory: vi.fn(), saveTrajectorySoon: vi.fn(), saveTrajectoryNow: vi.fn() }));
 
 let current: AppState;
 function Live({ state, access }: { state: Partial<AppState>; access: Access }) {
@@ -88,5 +88,36 @@ describe('the trajectory editor', () => {
   it('marks coverage cells with the trajectory count', () => {
     show([trajectory({ maps: [['Audit', 'Manager', 'advised']] })], { mapMode: 'learn' });
     expect(screen.getByText('◆1')).toBeTruthy();
+  });
+});
+
+describe('deleting a trajectory that was never used', () => {
+  it('shows Delete next to the status for an unused trajectory and not for a used one', () => {
+    show([trajectory()], { trjUsed: ['T1'] });
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    cleanup();
+    show([trajectory()]);
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+  });
+  it('asks naming the trajectory, then removes it from the list', async () => {
+    vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: null });
+    show([trajectory(), trajectory({ id: 'T2', name: 'Second' })]);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByText('Delete “Tax certificate”? This cannot be undone.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(store.deleteTrajectory).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete' }));
+    expect(await screen.findByDisplayValue('Second')).toBeTruthy();
+    expect(screen.getByText('Trajectories · 1')).toBeTruthy();
+  });
+  it('shows the refusal and keeps the trajectory', async () => {
+    vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: 'Not deleted · people are enrolled or hold its credential · retire it instead' });
+    show([trajectory()]);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete' }));
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Not deleted · people are enrolled or hold its credential · retire it instead');
+    expect(screen.getByDisplayValue('Tax certificate')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });
 });

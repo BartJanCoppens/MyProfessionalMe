@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, has, op } from '../test/fakeSupabase';
 import {
-  addExternalCredential, confirmCredential, createTrajectory, decideTrajectory, loadCredentials, loadDecisions, loadEnrolments, loadTrajectories,
+  addExternalCredential, confirmCredential, createTrajectory, decideTrajectory, deleteTrajectory, loadTrajectoriesInUse, loadCredentials, loadDecisions, loadEnrolments, loadTrajectories,
   removeCredential, requestTrajectory, saveTrajectoryNow, saveTrajectorySoon, submitTrajectoryStep, withdrawTrajectory,
 } from './trajectoryStore';
 
@@ -148,6 +148,36 @@ describe('saving trajectories', () => {
     await vi.advanceTimersByTimeAsync(700);
     expect(db.calls).toHaveLength(1);
     expect((db.calls[0].steps[0][1][0] as { name: string }).name).toBe('two');
+  });
+});
+describe('deleting a trajectory', () => {
+  it('deletes by id and reads back what was removed', async () => {
+    db.answer(() => ({ data: [{ id: 'T100' }] }));
+    expect(await deleteTrajectory('T100')).toEqual({ error: null });
+    expect(op(db.calls[0])).toBe('delete');
+    expect(has(db.calls[0], 'eq', 'id', 'T100')).toBe(true);
+    expect(has(db.calls[0], 'select', 'id')).toBe(true);
+  });
+  it('says so when the database refused (used meanwhile, or not the admin\'s)', async () => {
+    db.answer(() => ({ data: [] }));
+    expect(await deleteTrajectory('T1')).toEqual({ error: 'Not deleted · people are enrolled or hold its credential · retire it instead' });
+  });
+  it('returns the database error', async () => {
+    failWith('boom');
+    expect(await deleteTrajectory('T1')).toEqual({ error: 'boom' });
+  });
+  it('cancels a pending save of that id, so the row is not written again', async () => {
+    vi.useFakeTimers();
+    db.answer(() => ({ data: [{ id: 'T1' }] }));
+    saveTrajectorySoon('T1', () => parsed(), vi.fn(), 600);
+    await deleteTrajectory('T1');
+    await vi.advanceTimersByTimeAsync(700);
+    expect(db.calls.map(op)).toEqual(['delete']);
+  });
+  it('lists the ids in use through the database function', async () => {
+    db.answer(() => ({ data: ['T1', 'T3'] }));
+    expect(await loadTrajectoriesInUse()).toEqual(['T1', 'T3']);
+    expect(db.calls[0].table).toBe('rpc:trajectories_in_use');
   });
 });
 function parsed() { return { ...row(), steps: [step], maps: [['Tax & Legal', 'Consultant', 'mandatory']] } as never as Awaited<ReturnType<typeof createTrajectory>>; }

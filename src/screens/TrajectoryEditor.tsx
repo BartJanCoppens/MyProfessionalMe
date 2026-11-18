@@ -60,7 +60,16 @@ function TrajectoryBody({ vm }: { vm: VM }) {
             <span aria-hidden="true" style={diamond(36, 8, 16)}>◆</span>
             <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 16 }}>{tj.name}</div><div style={{ fontSize: 12.5, color: '#5a6058' }}>{tj.sub}</div></div>
           </div>
-          <SegmentedControl options={vm.trjStatusOptions} value={tj.status} onChange={tj.setStatus} size="md" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <SegmentedControl options={vm.trjStatusOptions} value={tj.status} onChange={tj.setStatus} size="md" />
+            {tj.canDelete && (tj.deleteAsk ? (
+              <>
+                <span style={{ fontSize: 12.5 }}>{tj.deleteAsk}</span>
+                <Button size="sm" variant="dark" onClick={tj.confirmDelete}>Yes, delete</Button>
+                <LinkButton tone="muted" onClick={tj.cancelDelete}>Cancel</LinkButton>
+              </>
+            ) : <Button size="sm" variant="secondary" onClick={tj.askDelete}>Delete</Button>)}
+          </div>
         </div>
         <div style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
           <Field label="Trajectory name" size="sm"><Input size="md" maxLength={160} value={tj.name} onChange={tj.setName} /></Field>

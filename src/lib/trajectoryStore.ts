@@ -123,6 +123,25 @@ export function saveTrajectorySoon(id: string, latest: () => Trajectory | undefi
   clearTimeout(timers.get(id));
   timers.set(id, window.setTimeout(() => { timers.delete(id); const t = latest(); if (t) inOrder(id, () => saveTrajectory(t)).catch((err) => onError((err as Error).message)); }, wait));
 }
+// A trajectory nobody enrolled on and no credential refers to (the database decides; see trajectory_in_use). A pending
+// debounced save of it is cancelled first, and a write already running finishes before the delete, so it is never written back.
+const notDeleted = 'Not deleted · people are enrolled or hold its credential · retire it instead';
+export async function deleteTrajectory(id: string): Promise<{ error: string | null }> {
+  clearTimeout(timers.get(id));
+  timers.delete(id);
+  let result: { error: string | null } = { error: null };
+  await inOrder(id, async () => {
+    const { data, error } = await supabase.from('trajectories').delete().eq('id', id).select('id');
+    result = { error: error ? failure(error) : (data as unknown[] | null)?.length ? null : notDeleted };
+  });
+  return result;
+}
+// The ids (of those this admin can read) that are in use, so the editor offers Delete only on the others.
+export async function loadTrajectoriesInUse(): Promise<string[]> {
+  const { data, error } = await supabase.rpc('trajectories_in_use');
+  fail(error);
+  return (data || []) as string[];
+}
 export function saveTrajectoryNow(t: Trajectory, onError: (message: string) => void) {
   inOrder(t.id, () => saveTrajectory(t)).catch((err) => onError((err as Error).message));
 }

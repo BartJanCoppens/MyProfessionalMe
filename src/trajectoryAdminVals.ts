@@ -5,6 +5,7 @@ import { AUD_INFO, LEARN, LEARN_BY, LEARN_META, LENSES, STAGES } from './data';
 import type { Opt } from './ds';
 import type { Logic } from './model';
 import { createTrajectory, saveTrajectorySoon } from './lib/trajectoryStore';
+import { trajectoryDeleteVals } from './trajectoryDelete';
 import { countsAsEvidence } from './logic/studioContent';
 import { canBeMandatory, totals } from './logic/trajectory';
 import type { LearningRef, StepKind, Trajectory, TrjStep } from './logic/trajectory';
@@ -138,6 +139,7 @@ export function trajectoryAdminVals(L: Logic) {
   const warns = (saveable(t) ? [] : ['Not saved until it has a name and a credential.']).concat(adminWarnings(t, byId, YEARLY_GOAL));
   const ySplit = tot.perYear.map((h, i) => (h ? 'Y' + (i + 1) + ' ' + fmtHours(h) : null)).filter(Boolean).join(' · ') || '0 h';
   const tj = {
+    ...trajectoryDeleteVals(L, t),
     name: t.name, cred: t.credential, issuer: t.issuer, enrol: t.enrol as string, months: String(t.months), valid: String(t.valid_months ?? 0), renew: t.renewal, cost: t.cost, status: t.status as string,
     sub: [t.issuer, enrolLabel(t.enrol), t.status === 'live' ? 'live' : t.status === 'retired' ? 'retired, hidden from new people' : 'draft, visible to admins only'].filter(Boolean).join(' · '),
     setStatus: (v: string) => edit((x) => ({ ...x, status: v === 'live' ? 'live' : v === 'retired' ? 'retired' : 'draft' })),
