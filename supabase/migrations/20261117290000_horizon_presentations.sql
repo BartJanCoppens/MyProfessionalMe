@@ -15,8 +15,8 @@
 --          a referenced file must exist before it is sent).
 -- content  private.contribution_content publishes the summary, rebuilt from its known keys. Its "path" member opens the
 --          file to every signed-in person once published (private.can_read_media, 20261117270000).
--- hours    A published Presentation counts its narration length rounded up to 0.05 h (at least 0.05 h), or 0.25 h when it
---          has no narration (private.horizon_hours; horizonHours in src/logic/horizonItem.ts). A default awaiting the owner.
+-- hours    A published Presentation counts its narration length rounded up to 0.05 h (at least 0.05 h, at most 1 h, as the
+--          seconds are the file's own claim), or 0.25 h when it has no narration (private.horizon_hours; horizonHours in src/logic/horizonItem.ts). A default awaiting the owner.
 -- completion 'media' (COMPLETION in src/logic/record.ts): the learner completes it themselves by reaching the last
 --          slide of the route; private.is_self_complete lists it.
 
@@ -210,7 +210,7 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select case when p_seconds > 0 then greatest(1, ceil(p_seconds / 180)) * 0.05 else 0.25 end;
+  select case when p_seconds > 0 then least(1, greatest(1, ceil(p_seconds / 180)) * 0.05) else 0.25 end;
 $$;
 
 -- As before (20261117260000), with a Presentation's hours from its narration.

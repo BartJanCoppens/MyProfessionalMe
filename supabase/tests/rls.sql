@@ -2411,7 +2411,7 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","r
 insert into results (check_name, expected, actual) select 'VO not to their own contribution once published', 'false', public.can_write_media('00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/voice-a.mp3')::text;
 reset role;
 -- ---------- Horizon presentations (HZ) ----------
-insert into results (check_name, expected, actual) select 'HZ a narrated Presentation counts its length rounded up to 0.05 h, at least 0.05 h', '0.25/0.05/0.05/0.10/0.15/10.00',
+insert into results (check_name, expected, actual) select 'HZ a narrated Presentation counts its length rounded up to 0.05 h, at least 0.05 h', '0.25/0.05/0.05/0.10/0.15/1',
   concat_ws('/', private.horizon_hours(0), private.horizon_hours(1), private.horizon_hours(180), private.horizon_hours(181.5), private.horizon_hours(361), private.horizon_hours(36000));
 -- 'Presentation' is an upload-form format: no studio, one item {kind, path, title, slides, seconds} (private.horizon_ok)
 -- naming the .horizon file in the contribution's own folder, which must be in Storage before the check and submit pass.

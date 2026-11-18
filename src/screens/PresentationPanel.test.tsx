@@ -19,7 +19,7 @@ describe('the Presentation panel', () => {
     const onLast = vi.fn();
     render(<PresentationPanel hz={horizonView(content, { ro: false, still: false, done: false, onLast })} />);
     expect(screen.getByText('Play the presentation')).toBeTruthy();
-    expect(screen.getByText('3 slides · Horizon presentation')).toBeTruthy();
+    expect(screen.getByText('3 slides · counts 0.25 h · Horizon presentation')).toBeTruthy();
     await screen.findByText(/Slide 1 of 3/);
     fireEvent.click(screen.getByRole('button', { name: 'Next slide' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next slide' }));

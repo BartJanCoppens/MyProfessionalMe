@@ -50,8 +50,8 @@ describe('the Presentation upload', () => {
     const item = { kind: 'horizon', path: USER + '/' + ID + '/presentation.horizon', title: 'Garden tour', slides: 3, seconds: 0 };
     expect(vi.mocked(store.saveDraft).mock.calls.at(-1)).toEqual([expect.objectContaining({ type: 'Presentation', title: 'Garden tour', items: [item] }), ID]);
     expect(h.state.nw).toMatchObject({ title: 'Garden tour', savedId: ID, items: { list: [item], problems: [] } });
-    expect(h.c().horizonPanel!.item).toEqual({ title: 'Garden tour', line: '3 slides' });
-    expect(h.c().nwChecks.map((c) => c.text)).toContain('Presentation added · 3 slides');
+    expect(h.c().horizonPanel!.item).toEqual({ title: 'Garden tour', line: '3 slides · counts 0.25 h' });
+    expect(h.c().nwChecks.map((c) => c.text)).toContain('Presentation added · 3 slides · counts 0.25 h');
     expect(h.lastToast()).toBe('Saved as draft · the presentation is stored with it');
   });
   it.each([

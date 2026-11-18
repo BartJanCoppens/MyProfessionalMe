@@ -37,7 +37,7 @@ describe('the library card', () => {
 
 describe('the panel', () => {
   it('plays the file named in the content, with motion as the app has it', () => {
-    expect(open().vm().det.hz).toMatchObject({ path: PATH, sub: '3 slides · Horizon presentation', still: false, note: '' });
+    expect(open().vm().det.hz).toMatchObject({ path: PATH, sub: '3 slides · counts 0.25 h · Horizon presentation', still: false, note: '' });
     expect(open({ motion: false }).vm().det.hz).toMatchObject({ still: true });
   });
   it('completes the learning when the last slide is reached, once', async () => {

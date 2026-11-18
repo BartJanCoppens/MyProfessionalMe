@@ -3,6 +3,7 @@
 // 'horizon', was made with a newer Horizon than this player reads, or has no slides; otherwise cleaned (cleanDeck.ts)
 // and summarised as a Presentation's item: its title, the slides along its route and how long its narration runs.
 // Horizon's own reader is offline.ts deckOfCopy; its messages are kept where they fit.
+import { sanitizeSvg } from '../logic/sanitizeSvg';
 import { mediaKind, mediaProblem } from '../logic/mediaFiles';
 import { cleanDeck } from './cleanDeck';
 import { deckNarration } from './narrationOf';
@@ -43,13 +44,13 @@ export function deckSummary(deck: Deck) {
 const NOT_SHOWN = new Set(['id', 'part', 'next', 'key', 'media', 'image', 'still', 'poster', 'audio', 'theme', 'layout', 'type', 'kind', 'shape', 'speaks', 'align', 'font',
   'titleFont', 'bodyFont', 'color', 'fill', 'line', 'canvas', 'canvasCustom', 'slide', 'slideCustom', 'world', 'transition', 'slideMotion', 'worldMotion']);
 
-// The words of a custom drawing: the text between its tags (its attributes are not shown).
-const drawnText = (svg: string) => svg.replace(/<[^>]*>/g, ' ');
+// The words of a custom drawing as SafeSvg draws them: sanitised, then the text as the browser reads it (entities decoded, tspans joined).
+const svgText = (svg: string) => new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg">' + sanitizeSvg(svg) + '</svg>', 'image/svg+xml').documentElement.textContent ?? '';
 
 // One walk over everything the slides show and the narration tells: titles, texts, charts, cases, picture and avatar
 // names, drawings. Used for the client-name check before upload.
 function shownStrings(v: unknown, key = ''): string[] {
-  if (typeof v === 'string') return key === 'svg' ? [drawnText(v)] : [v];
+  if (typeof v === 'string') return key === 'svg' ? [svgText(v)] : [v];
   if (Array.isArray(v)) return v.flatMap((x) => shownStrings(x, key));
   if (v && typeof v === 'object') return Object.entries(v).flatMap(([k, x]) => (NOT_SHOWN.has(k) ? [] : shownStrings(x, k)));
   return [];

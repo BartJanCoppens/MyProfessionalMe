@@ -24,13 +24,14 @@ export function isHorizonItem(v: unknown): v is HorizonItem {
 
 // The hours a published Presentation counts: its narration length rounded up to 0.05 h (at least 0.05 h), 0.25 h when it
 // has no narration. A default awaiting the owner (docs/decisions.md). Mirrored by private.horizon_hours.
-export const horizonHours = (seconds: number) => (seconds > 0 ? Math.round(Math.max(1, Math.ceil(seconds / 180)) * 5) / 100 : 0.25);
+// The seconds are the file's own claim, so the hours are capped at 1.
+export const horizonHours = (seconds: number) => (seconds > 0 ? Math.min(100, Math.round(Math.max(1, Math.ceil(seconds / 180)) * 5)) / 100 : 0.25);
 
 // "2 min 5 s", "40 s": a narration's length in words.
 export const lengthWords = (seconds: number) => {
   const s = Math.round(seconds), m = Math.floor(s / 60);
   return m ? m + ' min' + (s % 60 ? ' ' + (s % 60) + ' s' : '') : s + ' s';
 };
-// "3 slides", "1 slide · narrated, 2 min 5 s": what the deck holds, for reviewers and the library.
+// "3 slides · counts 0.25 h", "1 slide · narrated, 2 min 5 s · counts 0.05 h": what the deck holds and the hours it counts, for reviewers and the library.
 export const deckLine = (x: { slides: number; seconds: number }) =>
-  x.slides + (x.slides === 1 ? ' slide' : ' slides') + (x.seconds > 0 ? ' · narrated, ' + lengthWords(x.seconds) : '');
+  x.slides + (x.slides === 1 ? ' slide' : ' slides') + (x.seconds > 0 ? ' · narrated, ' + lengthWords(x.seconds) : '') + ' · counts ' + horizonHours(x.seconds) + ' h';

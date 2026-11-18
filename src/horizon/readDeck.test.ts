@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Reading a .horizon file (studios plan, Task 3.3; Review Focus 6): the Horizon e2e fixture, the reasons a file is refused
 // before it is stored, and the cleaning that keeps only what presenting draws, with every link that leaves the file dropped.
 import { describe, expect, it } from 'vitest';
@@ -122,6 +123,13 @@ describe('the client-name scan sees everything the slides show', () => {
     ] }, told('k')));
     const t = deckText(deck);
     for (const w of ['IMGALT', 'CENTERWORD', 'SVGWORD', 'CASEWORD', 'LABELWORD', 'FACTWORD', 'NOTEWORD', 'ANSWORD', 'CHARTLABEL', 'CHARTNOTE', 'SERIESWORD', 'SUFFIXWORD', 'ALTWORD', 'ANIMWORD', 'AVATARWORD', 'Hello there']) expect(t, w).toContain(w);
+  });
+  it('reads a drawing\'s text as it is drawn: entities decoded, tspans joined, a > in an attribute harmless', () => {
+    const svg = (inner: string) => deckText(readDeck(deckOf({ viz: { type: 'custom', items: [], svg: '<svg xmlns="http://www.w3.org/2000/svg">' + inner + '</svg>' } })));
+    expect(svg('<text>Del&#99;roix</text>')).toContain('Delcroix');
+    expect(svg('<text>Del<tspan>c</tspan>roix</text>')).toContain('Delcroix');
+    expect(svg('<text x="1" data-a="a>b">VISIBLE</text>')).toContain('VISIBLE');
+    expect(svg('<text x="1" data-a="a>b">VISIBLE</text>')).not.toContain('b"');
   });
   it('does not read ids, data: addresses or media keys as words', () => {
     const t = deckText(readDeck(deckOf({ id: 'slide-ID', image: PNG }, { media: { 'KEYWORD': MP3 } })));

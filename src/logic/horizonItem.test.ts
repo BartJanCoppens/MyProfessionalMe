@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseFormatContent } from '../lib/contentStore';
 import { latestMatch } from '../test/migrations';
-import { HORIZON_SECONDS_MAX, HORIZON_SLIDES_MAX, HORIZON_TITLE_MAX, horizonHours, isHorizonItem } from './horizonItem';
+import { HORIZON_SECONDS_MAX, HORIZON_SLIDES_MAX, HORIZON_TITLE_MAX, horizonHours, deckLine, isHorizonItem } from './horizonItem';
 import type { HorizonItem } from './horizonItem';
 import { carriesItems, itemRows, itemsFromSaved, itemsText, ITEM_MAX } from './items';
 import { COMPLETION, completionText, completionTodo, selfCompletes } from './record';
@@ -41,8 +41,8 @@ describe('the Presentation format', () => {
     expect(itemsFromSaved('Presentation', [{ ...item, kind: 'x' }])).toEqual([]);
   });
   it('shows reviewers one row and scans its title for client names', () => {
-    expect(itemRows('Presentation', [item])).toEqual([{ front: 'Horizon presentation · 3 slides', back: 'Garden tour' }]);
-    expect(itemRows('Presentation', [{ ...item, slides: 1, seconds: 125 }])).toEqual([{ front: 'Horizon presentation · 1 slide · narrated, 2 min 5 s', back: 'Garden tour' }]);
+    expect(itemRows('Presentation', [item])).toEqual([{ front: 'Horizon presentation · 3 slides · counts 0.25 h', back: 'Garden tour' }]);
+    expect(itemRows('Presentation', [{ ...item, slides: 1, seconds: 125 }])).toEqual([{ front: 'Horizon presentation · 1 slide · narrated, 2 min 5 s · counts 0.05 h', back: 'Garden tour' }]);
     expect(itemsText([item])).toEqual(['Garden tour']);
   });
   it('publishes as horizon content, read back strictly', () => {
@@ -59,18 +59,22 @@ describe('the Presentation format', () => {
 });
 
 describe('the hours a published Presentation counts (a default awaiting the owner)', () => {
-  it('is its narration length rounded up to 0.05 h (at least 0.05 h), or 0.25 h without a narration', () => {
+  it('is its narration length rounded up to 0.05 h (at least 0.05 h, at most 1 h), or 0.25 h without a narration', () => {
     expect(horizonHours(0)).toBe(0.25);
     expect([1, 180].map(horizonHours)).toEqual([0.05, 0.05]);
     expect([181, 360, 361].map(horizonHours)).toEqual([0.1, 0.1, 0.15]);
     expect(horizonHours(3600)).toBe(1);
-    expect(horizonHours(HORIZON_SECONDS_MAX)).toBe(10);
+    expect([3601, 7200, HORIZON_SECONDS_MAX].map(horizonHours)).toEqual([1, 1, 1]); // capped: the seconds are the file's own claim
+  });
+  it('is told to reviewers and in Mine as "counts N h"', () => {
+    expect(deckLine({ slides: 1, seconds: 0 })).toBe('1 slide · counts 0.25 h');
+    expect(deckLine({ slides: 3, seconds: 125 })).toBe('3 slides · narrated, 2 min 5 s · counts 0.05 h');
+    expect(deckLine({ slides: 3, seconds: 9000 })).toBe('3 slides · narrated, 150 min · counts 1 h');
   });
   it('is the same arithmetic in private.horizon_hours, which publishing uses', () => {
     const body = latestMatch(/create (?:or replace )?function private\.horizon_hours\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
     expect(body).toContain('0.25');
-    expect(body).toContain('greatest(1, ceil(p_seconds / 180))');
-    expect(body).toContain('* 0.05');
+    expect(body).toContain('least(1, greatest(1, ceil(p_seconds / 180)) * 0.05)');
     expect(latestMatch(/create (?:or replace )?function private\.publish_contribution\([\s\S]*?\n\$\$;/)[0]).toContain("when 'Presentation' then private.horizon_hours((v_content ->> 'seconds')::numeric)");
   });
 });
