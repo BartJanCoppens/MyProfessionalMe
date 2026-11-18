@@ -5,7 +5,10 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as store from '../lib/contributionStore';
+import * as media from '../lib/mediaStore';
 import * as voice from '../lib/voice';
+import { renderCut } from '../reel/compositor';
+import { CutError } from '../reel/cutRules';
 import { BROWSER_VOICE } from '../lib/voice';
 import type { StockVoice } from '../logic/ai';
 import type { CreateData } from '../logic/contribution';
@@ -17,7 +20,8 @@ import CreateScreen from './Create';
 
 vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.fn(), removeDraft: vi.fn(), submitContribution: vi.fn(), decideReview: vi.fn(), savePolicy: vi.fn(), removePolicy: vi.fn(), checkContribution: vi.fn() }));
 vi.mock('../lib/voice', async (orig) => ({ ...(await orig<typeof import('../lib/voice')>()), speak: vi.fn(), speakInBrowser: vi.fn() }));
-vi.mock('../lib/mediaStore', () => ({ mediaUrl: vi.fn(async () => 'blob:x') }));
+vi.mock('../lib/mediaStore', () => ({ mediaUrl: vi.fn(async () => 'blob:x'), uploadMedia: vi.fn() }));
+vi.mock('../reel/compositor', () => ({ renderCut: vi.fn() }));
 
 const VOICES: StockVoice[] = [{ id: 'sv1', name: 'Warm · Flemish English', voice_id: 'EL1', language: 'English', accent: null, active: true }];
 const ROWS = [['Why it matters', 'Decisions · Not updates', 'A steering committee takes decisions.'], ['Before', 'Send the pack ahead', 'Send the pack three days ahead.'], ['After', 'Minutes · Log', 'Minutes go out within a day.']];
@@ -113,5 +117,56 @@ describe('Preview & test', () => {
     render(at(PREVIEW, { shape: { [PRESENTER]: AI_VOICE } }));
     expect(screen.queryByText('Play the deck')).toBeNull();
     expect(screen.getByText('Voice every slide in Produce, or choose Captions only in Shape it')).toBeTruthy();
+  });
+});
+
+describe('Download as video', () => {
+  const made = { blob: new Blob(['x'], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4' as const, seconds: 12 };
+  const captions = { shape: { [PRESENTER]: CAPTIONS } };
+  beforeEach(() => { URL.createObjectURL = vi.fn(() => 'blob:v'); URL.revokeObjectURL = vi.fn(); });
+  it('is offered to the author of a deck told by captions, and says it is made in the browser and not stored', async () => {
+    render(at(PREVIEW, captions, { live: false }));
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Download as video' })).toBeTruthy();
+    expect(screen.getByText(/Made in your browser · not stored/)).toBeTruthy();
+  });
+  it('is not offered while a voiced deck has slides without a voice, and not in View as', async () => {
+    render(at(PREVIEW, { shape: { [PRESENTER]: AI_VOICE } }));
+    expect(screen.queryByRole('button', { name: 'Download as video' })).toBeNull();
+    cleanup();
+    render(at(PREVIEW, captions, { live: false, readOnly: true }));
+    await act(async () => {});
+    expect(screen.queryByRole('button', { name: 'Download as video' })).toBeNull();
+  });
+  it('renders a 1280 by 720 cut and downloads it, uploading nothing', async () => {
+    vi.mocked(renderCut).mockResolvedValue(made);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    render(at(PREVIEW, captions, { live: false }));
+    await act(async () => {});
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download as video' })); });
+    expect(renderCut).toHaveBeenCalledWith(expect.objectContaining({ size: { w: 1280, h: 720 } }), expect.objectContaining({ signal: expect.anything() }));
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(media.uploadMedia).not.toHaveBeenCalled();
+    expect(store.saveDraft).not.toHaveBeenCalled();
+    click.mockRestore();
+  });
+  it('shows the progress with Cancel and the open-tab note, and Cancel stops it', async () => {
+    vi.mocked(renderCut).mockImplementation((_c, o) => { o.onProgress(42); return new Promise((_, no) => o.signal.addEventListener('abort', () => no(new CutError('CUT_CANCELLED')))); });
+    render(at(PREVIEW, captions, { live: false }));
+    await act(async () => {});
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download as video' })); });
+    expect(screen.getByText(/Rendering 42 % · about \d+:\d\d left · keep this tab open and in front/)).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); });
+    expect(screen.getByText(/Cancelled · nothing was saved/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+  it('shows a failure in words with Retry and that nothing was saved', async () => {
+    vi.mocked(renderCut).mockRejectedValue(new CutError('CUT_UNSUPPORTED'));
+    render(at(PREVIEW, captions, { live: false }));
+    await act(async () => {});
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download as video' })); });
+    expect(screen.getByRole('alert').textContent).toMatch(/This browser cannot record video/);
+    expect(screen.getByText('Nothing was saved')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
 });

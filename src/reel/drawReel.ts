@@ -5,10 +5,10 @@ import { AI_MADE } from '../logic/provenance';
 import { reelFrameAt } from '../logic/reelFrame';
 import type { CutPlan } from '../logic/reelFrame';
 
-const FONT = "'IBM Plex Sans', system-ui, sans-serif";
+export const FONT = "'IBM Plex Sans', system-ui, sans-serif";
 
 // Words wrapped to lines of at most `width` pixels, as the context measures them.
-function lines(ctx: CanvasRenderingContext2D, text: string, width: number): string[] {
+export function lines(ctx: CanvasRenderingContext2D, text: string, width: number): string[] {
   const out: string[] = [];
   let line = '';
   for (const word of text.split(/\s+/).filter(Boolean)) {

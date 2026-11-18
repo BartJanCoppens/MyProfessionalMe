@@ -8,8 +8,8 @@ import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import type { SlidesView } from '../fmtSlides';
 import { FADE_IN, FLIGHT_EASING } from '../horizon/motion';
-import { PACE, narrationSteps, spoken } from '../logic/narration';
-import type { NarrationPart } from '../logic/narration';
+import { deckSteps } from '../logic/slidesContent';
+import { spoken } from '../logic/narration';
 import SafeSvg from './SafeSvg';
 import StepPlayer from './StepPlayer';
 import { AudioGate } from './AudioGate';
@@ -27,9 +27,7 @@ export default function SlidesPanel({ sl }: { sl: SlidesView }) {
 }
 
 function Deck({ sl, urls }: { sl: SlidesView; urls: string[] }) {
-  // One step per slide (its index is the step's part), timed by its audio or by its words at the reading pace.
-  const steps = useMemo(() => narrationSteps(sl.slides.map((s, k): NarrationPart => ({ part: String(k), text: s.narration,
-    audio: s.audio && urls[k] ? { url: urls[k], seconds: s.audio.seconds, marks: s.audio.marks } : null })), sl.voiced ? 'voice' : 'own', PACE).steps, [sl, urls]);
+  const steps = useMemo(() => deckSteps(sl.slides, urls, sl.voiced), [sl, urls]);
   return <StepPlayer steps={steps} note={sl.way} onEnd={sl.onEnd}>{(at) => <Slide sl={sl} at={at} />}</StepPlayer>;
 }
 

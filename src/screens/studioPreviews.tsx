@@ -23,6 +23,7 @@ import ExplainerPanel from './ExplainerPanel';
 import PodcastPanel from './PodcastPanel';
 import PresentationPanel from './PresentationPanel';
 import SlidesPanel from './SlidesPanel';
+import SlidesVideo from './SlidesVideo';
 import { AidPanel, CasePanel } from './FormatWork';
 import { label } from './labelStyle';
 import StudioPlayTest from './StudioPlayTest';
@@ -96,6 +97,7 @@ function Learner({ c }: { c: CS }) {
       <div style={note}>{content.kind === 'game' ? GAME_PLAYTEST : 'A play-test, as learners will see it: nothing is saved or counted.'}</div>
       {content.kind === 'game' && c.studio.reviewNote && <div role="status" style={{ ...note, color: '#7a5000' }}>{c.studio.reviewNote}</div>}
       <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still, contributionId: c.nw.savedId, ai: c.studio.ai }} />
+      {content.kind === 'slides' && !c.readOnly && <SlidesVideo content={content} title={c.nw.title} />}
     </div>
   );
 }

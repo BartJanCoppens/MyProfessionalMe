@@ -5,7 +5,8 @@
 // private.slides_content, which this repeats for the preview and for the checks; the seconds are private.slides_seconds.
 import type { SlidesContent } from '../types';
 import { mediaHours, lengthWords, slideCount } from './horizonItem';
-import { ownSeconds, spoken } from './narration';
+import { PACE, narrationSteps, ownSeconds, spoken } from './narration';
+import type { NarrationPart, RunStep } from './narration';
 import { stepsOf } from './studios';
 import type { StudioEntry } from './studios';
 import { boundClips as boundOf, clipsFor as clipsOf, withClips as withOf } from './voiceItem';
@@ -25,6 +26,12 @@ export const hasWords = (talk: string | undefined) => !!spoken(talk ?? '');
 // A slide's bullets: the text between middle dots, each trimmed, none empty.
 export const bulletsOf = (text: string) => text.split(/\s*·\s*/).map((b) => b.trim()).filter(Boolean);
 export const wantsVoice = (shape: Record<string, string>) => shape[PRESENTER] === AI_VOICE;
+
+// One step per slide (its index is the step's part), timed by its audio or by its words at the reading pace: what the deck's panel
+// plays and what the Slides video is cut from. `urls` are the signed links of the slides' stored clips, in order.
+export const deckSteps = (slides: SlidesContent['slides'], urls: string[], voiced: boolean): RunStep[] =>
+  narrationSteps(slides.map((s, k): NarrationPart => ({ part: String(k), text: s.narration,
+    audio: s.audio && urls[k] ? { url: urls[k], seconds: s.audio.seconds, marks: s.audio.marks } : null })), voiced ? 'voice' : 'own', PACE).steps;
 
 // A deck's parts: each slide's talk-over, said by no one in particular (so the one voice rule is the deck's voice).
 export const slideParts = (items: readonly StudioEntry[]): Part[] => stepsOf(items).map((r) => ({ speaker: '', text: r[2] ?? '' }));
