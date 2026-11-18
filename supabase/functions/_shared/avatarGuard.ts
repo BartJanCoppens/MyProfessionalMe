@@ -122,6 +122,9 @@ const OUTPUT_PATTERNS: [RegExp, GuardCode][] = [
   [/\bals\s+(?:een\s+)?(?:ai|taalmodel|chatbot|kunstmatige\s+intelligentie)\b/i, 'out_ai_admission'],
   [/\bik\s+ben\s+(?:een\s+|maar\s+een\s+|slechts\s+een\s+)?(?:ai|taalmodel|chatbot)\b/i, 'out_ai_admission'],
   [/\bmijn\s+(?:trainingsdata|systeemprompt)\b/i, 'out_meta'],
+  // FR (normalised text: straight apostrophes)
+  [/\ben\s+tant\s+qu'(?:une?\s+)?(?:ia|intelligence\s+artificielle|mod[èe]le\s+de\s+langage|chatbot)\b/i, 'out_ai_admission'],
+  [/\bje\s+suis\s+(?:juste\s+|seulement\s+|simplement\s+)?(?:une?\s+)?(?:ia|intelligence\s+artificielle|mod[èe]le\s+de\s+langage|chatbot)\b/i, 'out_ai_admission'],
   [/\b(?:hier\s+is\s+een|hier\s+komt\s+een)\s+(?:mop|grap|verhaal|gedicht|lied)\b/i, 'out_joke'],
   [/\bhet\s+spijt\s+me,?\s+maar\s+ik\s+kan\s+(?:dit|dat)\s+verzoek\s+niet\b/i, 'out_refusal'],
 ];

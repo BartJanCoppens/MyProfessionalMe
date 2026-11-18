@@ -51,6 +51,14 @@ describe('postfilterReply', () => {
     expect(postfilterReply('Ik ben een taalmodel.')).toBe('out_ai_admission');
     expect(postfilterReply('I was trained by OpenAI.')).toBe('out_meta');
   });
+  it('holds a French AI admission, with a curly apostrophe or look-alike letters too', () => {
+    for (const text of ["En tant qu'IA, je ne peux pas.", 'En tant qu’intelligence artificielle, je ne ressens rien.', "En tant qu'une IA je dois dire non.", 'Je suis une IA.', "Je suis juste un modèle de langage.", 'Je suis un chatbot.', 'En tant qu’І\u200BA, désolé'])
+      expect(postfilterReply(text), text).toBe('out_ai_admission');
+  });
+  it('lets a French character speak normally', () => {
+    for (const text of ["En tant que directeur financier, je dois valider le budget avant vendredi.", "Je suis une personne prudente : j'ai besoin des chiffres.", "Je suis le responsable de l'audit interne, et l'intelligence artificielle n'est pas mon sujet.", "Qu'est-ce que vous voulez savoir sur le fournisseur ?"])
+      expect(postfilterReply(text), text).toBeNull();
+  });
   it('lets a normal reply pass', () => {
     expect(postfilterReply('We renewed the contract two years ago. Why do you ask?')).toBeNull();
     expect(postfilterReply('')).toBeNull();
