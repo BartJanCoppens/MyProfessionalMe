@@ -3073,5 +3073,24 @@ reset role;
 set local request.jwt.claims = '';
 insert into results (check_name, expected, actual) select 'TU the marker survived the admin save', '1', count(*)::text from public.trajectories where id = 'TU7' and first_enrolled_at is not null;
 insert into results (check_name, expected, actual) select 'TU what stays', 'TU3, TU4, TU5, TU7', string_agg(id, ', ' order by id) from public.trajectories where id like 'TU%';
+-- ---------- Word timings in voice clips (RS) ----------
+-- private.voice_ok: a clip has 6 keys, or 7 with `words`: at most 300 numbers, non-decreasing, each within [0, seconds].
+reset role;
+set local request.jwt.claims = '';
+create function pg_temp.rs_voice(p_extra jsonb) returns jsonb language sql as $f$
+  select jsonb_build_object('kind', 'voice', 'clips', jsonb_build_array(jsonb_build_object('slide', 0, 'text', 'Hello big world.', 'voice', 'EL1',
+    'path', '00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/voice-1.mp3', 'seconds', 4, 'marks', '[]'::jsonb) || p_extra)) $f$;
+insert into results (check_name, expected, actual) select 'RS voice_ok accepts a clip of 6 keys', 'true', private.voice_ok(pg_temp.rs_voice('{}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok accepts a clip with words', 'true', private.voice_ok(pg_temp.rs_voice('{"words":[0,0.5,4]}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok accepts empty words', 'true', private.voice_ok(pg_temp.rs_voice('{"words":[]}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok refuses words that go back', 'false', private.voice_ok(pg_temp.rs_voice('{"words":[0.5,0.2]}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok refuses a word at 4.1 in a 4-second clip', 'false', private.voice_ok(pg_temp.rs_voice('{"words":[0,4.1]}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok refuses a negative word time', 'false', private.voice_ok(pg_temp.rs_voice('{"words":[-0.1]}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok refuses words that are not numbers', 'false', private.voice_ok(pg_temp.rs_voice('{"words":["0"]}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok refuses words that are not a list', 'false', private.voice_ok(pg_temp.rs_voice('{"words":0}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok accepts 300 words', 'true', private.voice_ok(pg_temp.rs_voice(jsonb_build_object('words', (select jsonb_agg(1) from generate_series(1, 300)))))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok refuses 301 words', 'false', private.voice_ok(pg_temp.rs_voice(jsonb_build_object('words', (select jsonb_agg(1) from generate_series(1, 301)))))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok refuses a 7th key that is not words', 'false', private.voice_ok(pg_temp.rs_voice('{"made":"x"}'))::text;
+insert into results (check_name, expected, actual) select 'RS voice_ok refuses an 8th key next to words', 'false', private.voice_ok(pg_temp.rs_voice('{"words":[0],"made":"x"}'))::text;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

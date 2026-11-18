@@ -7,3 +7,6 @@ export const VOICE_MODEL = 'eleven_multilingual_v2';
 // The longest stored clip, in seconds: the function refuses audio of 0 s or more than this, so a stored clip is always one
 // the clip model accepts (src/logic/voiceItem.ts, private.voice_ok), and one bad clip cannot make a whole voice-over invalid.
 export const CLIP_SECONDS_MAX = 180;
+// The most words a clip holds timings for (clip.words): its text is at most 600 characters, so this is never the limit in
+// practice; private.voice_ok (20261118160000_voice_words.sql) repeats it.
+export const CLIP_WORDS_MAX = 300;
