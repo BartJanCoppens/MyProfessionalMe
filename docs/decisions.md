@@ -30,6 +30,11 @@ Known proof-of-concept shortcuts and what a production version replaces them wit
 | The AI animation path (`studio_motion` with a live connection) has not been run against a real provider; only the scripted flow and the strict reader are tested | `src/studioMotion.ts` | A live smoke test once a System Admin switches `studio_motion` on |
 | The `voice` function has not been run against ElevenLabs, nor type-checked by Deno locally (no Deno here); its core is tested under Vitest with a fake ElevenLabs | `supabase/functions/voice/` | `deno check` in CI and a live smoke test once `studio_voice` is switched on |
 | A re-voiced narration with changed words leaves the old mp3 in the draft's folder until the draft is deleted | `supabase/functions/voice/core.ts` | The studio removes the replaced file, or a cleanup job removes files no item names |
+| The `voice` function refuses a clip of 0 s or over 180 s only after ElevenLabs has produced it and `ai_count_call` has counted the call and characters | `supabase/functions/voice/core.ts:140` | Estimate length from the text before the call, or refund the count on refusal |
+| The 180-second clip cap is a literal in the podcast/slides SQL besides `CLIP_SECONDS_MAX` in `_shared/voiceRules.ts` (the sync test mirrors it) | `supabase/migrations/20261117310000_podcast_studio.sql` | One `private.clip_seconds_max()` read by every check |
+| `StepPlayer` keeps its played-steps set while mounted; it is not reset if the steps change without a remount (probably not reachable: an item change is expected to remount the player; not verified) | `src/screens/StepPlayer.tsx` | Key the set on the item's id |
+| `mediaHours` lives in `src/logic/horizonItem.ts` although Slides and Podcast use it too | same path | Move it beside `media_hours` in a shared hours module |
+| `podcast_seconds` and `podcast_content` rebuild the turn list on each call (about 1.9 s for a 49-row script on PGlite) | `supabase/migrations/20261117310000_podcast_studio.sql` | Build the turns once per check, or keep them in a temporary table; time it live |
 
 ## Trajectory start month and who an auto-enrol trajectory binds (design v4, Task 5, 2026-11-17)
 
