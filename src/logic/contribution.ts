@@ -119,6 +119,10 @@ export const rubricComplete = (r: boolean[] | undefined) => !!r && r.length === 
 // The effective review requirement: the strictest of every matching one (most peers, an expert if any asks,
 // quality & risk if any asks); none matches: the full flow. Without an audience a contribution could be for any, so
 // audience-scoped requirements count too. The database's private.policy_for does the same.
+// The review requirements that route a contribution: all of them, except for one made under a placeholder (a draft for a trajectory's step) whose author's
+// own creation rules do not allow it, which the database always routes through the full default review (none match: DEFAULT_POLICY). `rules` null: not known
+// (a reviewer), taken as no rule. Mirrors submit_contribution (20261118250000).
+export const routePolicies = (rules: RuleParts[] | null, policies: PolicyRow[], a: Attrs, forPlan: boolean): PolicyRow[] => (forPlan && (!rules || !mayCreate(rules, a)) ? [] : policies);
 export function policyFor(rows: (RuleParts & Policy)[], a: Attrs | null): Policy {
   const m = a ? rows.filter((r) => ruleMatches(a.audience ? r : { ...r, audiences: [] }, a)) : [];
   return m.length ? { peers: Math.max(...m.map((r) => r.peers)), expert: m.some((r) => r.expert), quality: m.some((r) => r.quality) } : DEFAULT_POLICY;

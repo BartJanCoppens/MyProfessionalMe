@@ -4026,14 +4026,14 @@ with i as (insert into public.contributions (author_id, business_line, type, tit
   select set_config('test.tm_c3', (select id::text from i), true);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
-with u as (update public.trajectories set steps = '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}]' where id = 'TM1' returning 1)
+with u as (update public.trajectories set steps = '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Micro-guide","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}]' where id = 'TM1' returning 1)
   insert into results (check_name, expected, actual) select 'TM a make step is accepted', '1 rows', count(*)||' rows' from u;
-select pg_temp.gr_blocked('TM a make step with a cid that is no uuid is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","title":"x","fmt":"Flash cards","cid":"abc","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
-select pg_temp.gr_blocked('TM a make step with an upper-case cid is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","title":"x","fmt":"Flash cards","cid":"00000000-0000-0000-0000-00000000000A","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
-select pg_temp.gr_blocked('TM a make step without a title is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","fmt":"Flash cards","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TM a make step with a cid that is no uuid is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","title":"x","fmt":"Micro-guide","cid":"abc","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TM a make step with an upper-case cid is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","title":"x","fmt":"Micro-guide","cid":"00000000-0000-0000-0000-00000000000A","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TM a make step without a title is refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"make","fmt":"Micro-guide","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
 select pg_temp.gr_blocked('TM an unknown step kind is still refused', $q$update public.trajectories set steps = '[{"id":"m1","k":"zzz","win":3,"req":true,"pre":null}]' where id = 'TM1'$q$, 'blocked: 23514');
 -- a contribution in review does not link
-select set_config('test.tm_steps', format('[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx","cid":"%s"},{"id":"m2","k":"make","title":"Second","fmt":"Flash cards","hours":1,"win":4,"req":true,"pre":"m1","from":"p:my","cid":"%s"},{"id":"m3","k":"make","title":"Third","fmt":"Flash cards","hours":1,"win":5,"req":true,"pre":"m2","from":"p:mz","cid":"%s"}]', current_setting('test.tm_c1'), current_setting('test.tm_c2'), current_setting('test.tm_c3')), true);
+select set_config('test.tm_steps', format('[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Micro-guide","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx","cid":"%s"},{"id":"m2","k":"make","title":"Second","fmt":"Micro-guide","hours":1,"win":4,"req":true,"pre":"m1","from":"p:my","cid":"%s"},{"id":"m3","k":"make","title":"Third","fmt":"Micro-guide","hours":1,"win":5,"req":true,"pre":"m2","from":"p:mz","cid":"%s"}]', current_setting('test.tm_c1'), current_setting('test.tm_c2'), current_setting('test.tm_c3')), true);
 update public.trajectories set steps = current_setting('test.tm_steps')::jsonb where id = 'TM1';
 insert into results (check_name, expected, actual) select 'TM a make step whose contribution is not published stays make', 'make/make', (steps -> 0 ->> 'k')||'/'||(steps -> 1 ->> 'k') from public.trajectories where id = 'TM1';
 reset role;
@@ -4052,7 +4052,7 @@ insert into results (check_name, expected, actual) select 'TM ... and the other 
 -- a stale save from an open editor still sends the make step: stored as learn
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
-select set_config('test.tm_steps', format('[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx","cid":"%s"}]', current_setting('test.tm_c1')), true);
+select set_config('test.tm_steps', format('[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Micro-guide","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx","cid":"%s"}]', current_setting('test.tm_c1')), true);
 update public.trajectories set steps = current_setting('test.tm_steps')::jsonb where id = 'TM1';
 insert into results (check_name, expected, actual) select 'TM an update that sends the stale make step stores learn', 'learn/LM1', (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid') from public.trajectories where id = 'TM1';
 insert into results (check_name, expected, actual) select 'TM ... and keeps the first linked_at', 'true', (extract(epoch from (steps -> 0 ->> 'linked_at')::timestamptz) = extract(epoch from current_setting('test.tm_linked')::timestamptz))::text from public.trajectories where id = 'TM1';
@@ -4164,6 +4164,57 @@ do $$ begin
   exception when others then insert into results (check_name, expected, actual) values ('PD a removed editor''s draft in review is not published under the grant', 'blocked: 42501', 'blocked: '||sqlstate); end;
 end $$;
 select set_config('request.jwt.claims', '', true);
+-- PD fix round 1: one grant draft per placeholder, nobody takes it over; rule holders unaffected; a rule holder cannot name a placeholder they cannot plan
+reset role;
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+ select 'PD' || n, 'T plan draft ' || n, 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting',
+  '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}]', '[]' from generate_series(5, 6) n;
+insert into public.user_roles (user_id, role, business_line) values ('00000000-0000-0000-0000-0000000000a1','domain_admin','Consulting');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD first draft', 'prof', 'x', 'flash', 'PD5', 'm1') returning id)
+  select set_config('test.pd_a', (select id::text from i), true);
+reset role;
+update public.trajectories set steps = jsonb_set(steps, '{0,cid}', to_jsonb(current_setting('test.pd_a'))) where id = 'PD5';
+set local role authenticated;
+select pg_temp.gr_blocked('PD a second grant draft for a placeholder that has one is refused', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD second draft', 'prof', 'x', 'flash', 'PD5', 'm1')$q$, 'blocked: 42501');
+select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', current_setting('test.sa')), true);
+select pg_temp.gr_blocked('PD a second editor cannot take over a placeholder that has a draft', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD stolen', 'prof', 'x', 'flash', 'PD5', 'm1')$q$, 'blocked: 42501');
+reset role;
+delete from public.contributions where id = current_setting('test.pd_a')::uuid;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD after the first was deleted', 'prof', 'x', 'flash', 'PD5', 'm1') returning 1)
+  insert into results (check_name, expected, actual) select 'PD once the first draft is deleted the placeholder can be drafted again', '1 rows', count(*)||' rows' from i;
+-- rule holders: plain content is unaffected; naming a placeholder they cannot plan is refused
+reset role;
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000a2', '{Consulting}', '{"Flash cards"}');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway) values ('Consulting', 'Flash cards', 'PD plain content of a rule holder', 'prof', 'x') returning 1)
+  insert into results (check_name, expected, actual) select 'PD a rule holder still creates plain content', '1 rows', count(*)||' rows' from i;
+select pg_temp.gr_blocked('PD a rule holder who cannot change the trajectory cannot name its placeholder', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD rule holder names it', 'prof', 'x', 'flash', 'PD6', 'm1')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('PD authenticated cannot execute plan_draft_matches', $q$select private.plan_draft_matches('PD6', 'm1', 'Consulting', 'Flash cards', 'prof', null, gen_random_uuid())$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('PD the claim-switching copy of plan_trajectory_allowed is gone', $q$select private.user_can_plan_trajectory('00000000-0000-0000-0000-0000000000a1', 'PD6')$q$, 'blocked');
+reset role;
+-- a line with too few peers: the grant draft says so in its own words
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000f9','t.solo@test.local');
+update public.profiles set business_line = 'Tax & Legal' where id = '00000000-0000-0000-0000-0000000000f9';
+insert into public.user_roles (user_id, role, business_line) values ('00000000-0000-0000-0000-0000000000f9','domain_admin','Tax & Legal');
+delete from public.profiles where business_line = 'Tax & Legal' and id <> '00000000-0000-0000-0000-0000000000f9' and id <> '00000000-0000-0000-0000-0000000000a3';
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps) values
+ ('PD7', 'T solo line', 'T issuer', 'T credential', 'open', 6, 'draft', 'Tax & Legal', '[{"id":"m1","k":"make","title":"Flash cards","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null}]', '[]');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f9","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step, items) values ('Tax & Legal', 'Flash cards', 'PD solo line', 'prof', 'Know the VAT rates.', 'flash', 'PD7', 'm1', '[["Standard rate?","25 %"],["SME rate?","20 %"],["Pillar Two rate?","15 %"],["Advance payments?","Four instalments"]]') returning id)
+  select set_config('test.pd_solo', (select id::text from i), true);
+select public.check_contribution(current_setting('test.pd_solo')::uuid);
+do $$ begin
+  begin perform public.submit_contribution(current_setting('test.pd_solo')::uuid);
+    insert into results (check_name, expected, actual) values ('PD too few peers: a grant draft is told in its own words', 'Drafts made from a trajectory need 2 peer reviewers', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('PD too few peers: a grant draft is told in its own words', 'Drafts made from a trajectory need 2 peer reviewers', sqlerrm); end;
+end $$;
+reset role;
 -- the trajectory goes: plan and sources go with it
 reset role;
 set local request.jwt.claims = '';

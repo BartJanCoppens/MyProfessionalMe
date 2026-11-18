@@ -10,8 +10,6 @@ import { fromModule } from './logic/planApply';
 import { emptyPlan } from './logic/trajectoryPlan';
 import type { PlanModule } from './logic/trajectoryPlan';
 import type { Trajectory, TrjStep } from './logic/trajectory';
-import { noItems } from './logic/items';
-import type { DraftItems } from './logic/items';
 import { studioById, visibleSteps } from './logic/studios';
 import type { StudioDef } from './logic/studios';
 import { studioFor } from './logic/planDraft';
@@ -63,21 +61,20 @@ export async function openStudioFor(L: Logic, trajectoryId: string, stepId: stri
   await draftItems(L, nw, picked, setNwOf(L), query, spec);
 }
 
-const NO_ROWS: Record<string, string> = { game: 'Build the game in the Game Studio' };
-// One placeholder: its draft run, then saved in the admin's name as a draft of its studio and linked to its step. A string is what is left to say.
-async function draftOne(L: Logic, p: Prepared, onLimit: (m: string) => void): Promise<{ note: string | null; limit: boolean }> {
+const GAME_NOTE = 'Build the game in the Game Studio';
+// One placeholder: its draft run, then, only when it gave rows, saved in the admin's name as a draft of its studio and linked to its step. A run that gave
+// nothing saves and links nothing and says why (a Game has no scripted rows: it is built in its studio).
+async function draftOne(L: Logic, p: Prepared, onLimit: (m: string) => void): Promise<{ note: string | null; limit: boolean; saved: boolean }> {
   const passages = [...(p.nw.brief?.passages ?? []), ...passagesOf(p.picked, querySpec(p.def, p.nw)[0])].slice(0, 8);
-  const title = p.step.title ?? p.step.fmt ?? '';
-  if (!passages.length) return { note: title + ': no cited passage a creator may use · open it in its studio and pick a bundle', limit: false };
+  const title = p.step.title ?? p.step.fmt ?? '', none = (note: string | null, limit = false) => ({ note: note && title + ': ' + note, limit, saved: false });
+  if (!passages.length) return none('no cited passage a creator may use · open it in its studio and pick a bundle');
   let limit = false;
-  const out = await runDraft(L, querySpec(p.def, p.nw)[1](passages), (m) => { limit = true; onLimit(m); });
-  if (limit) return { note: null, limit: true };
-  const items: DraftItems = typeof out === 'string' ? noItems() : out;
-  const row = rowOf({ ...p.nw, items }, p.kb, p.def.id, null);
-  const id = await saveDraft(row, null);
+  const spec = querySpec(p.def, p.nw)[1](passages), out = await runDraft(L, spec, (m) => { limit = true; onLimit(m); });
+  if (limit) return none(null, true);
+  if (typeof out === 'string') return none(p.def.id === 'game' && out === spec.noScript ? GAME_NOTE : out);
+  const id = await saveDraft(rowOf({ ...p.nw, items: out }, p.kb, p.def.id, null), null);
   const notLinked = linkMadeStep(L, p.t.id, p.step.id, id);
-  const note = typeof out === 'string' ? NO_ROWS[p.def.id] ?? out : notLinked && 'saved but not linked to the step · ' + notLinked;
-  return { note: note ? title + ': ' + note : null, limit: false };
+  return { note: notLinked && title + ': saved but not linked to the step · ' + notLinked, limit: false, saved: true };
 }
 
 // Several placeholders, one after the other (one AI call each); stops at the first daily limit. Each lands in My contributions as a draft, linked to its step.
@@ -86,7 +83,7 @@ export async function draftPlaceholders(L: Logic, trajectoryId: string, stepIds:
   if (busy(L)) return out;
   const t = L.state.trjs.find((x) => x.id === trajectoryId), ids = (t?.steps ?? []).filter((s) => stepIds.includes(s.id)).map((s) => s.id), total = ids.length;
   const progress = (done: number | null) => L.setState((s) => ({ trjAi: { ...s.trjAi, busy: done === null ? null : 'draft', drafting: done === null ? null : { done, total } } }));
-  let limit: string | null = null;
+  let limit: string | null = null, done = 0;
   progress(0);
   try {
     for (const id of ids) {
@@ -94,8 +91,9 @@ export async function draftPlaceholders(L: Logic, trajectoryId: string, stepIds:
       if (typeof made === 'string') { out.notes.push((t?.steps.find((s) => s.id === id)?.title ?? id) + ': ' + made); continue; }
       const r = await draftOne(L.latest(), made, (m) => { limit = m; });
       if (r.limit) break;
-      out.drafted++; if (r.note) out.notes.push(r.note);
-      progress(out.drafted);
+      if (r.saved) out.drafted++;
+      if (r.note) out.notes.push(r.note);
+      progress(++done);
     }
   } catch (err) { out.notes.push((err as Error).message); } finally { progress(null); }
   await L.latest().reloadCreate();

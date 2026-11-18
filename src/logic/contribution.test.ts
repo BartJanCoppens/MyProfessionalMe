@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { NEW_TYPES, REVIEW_STAGES, RUBRIC } from '../data';
 import {
   CREATE_TYPES, MAKEABLE_FORMATS, TYPE_NAMES, DEFAULT_POLICY, PART_VALUES, allowedValues, attrsLabel, blockedTerm, checksPass, contentChecks, daysWaiting, emptyParts, fmtDate, isEmptyRule, mayCreate,
-  policyFor, policyLabel, reviewBadge, rubricComplete, ruleMatches, ruleProblem, ruleSentence, stageAt, stagesFor, stagesOf, togglePart, withinLines,
+  policyFor, policyLabel, routePolicies, reviewBadge, rubricComplete, ruleMatches, ruleProblem, ruleSentence, stageAt, stagesFor, stagesOf, togglePart, withinLines,
 } from './contribution';
 import type { Attrs, Contribution, CreateData, PolicyRow, Review, RuleParts } from './contribution';
 import { contribution, review } from '../test/contributions';
@@ -196,4 +196,16 @@ describe('dates', () => {
     expect(daysWaiting('2026-11-02T08:00:00Z', now)).toBe('Assigned today');
     expect(daysWaiting('2026-10-30T08:00:00Z', now)).toBe('Waiting 3 days');
   });
+});
+
+describe('routePolicies: which review requirements route a contribution', () => {
+  const lax: PolicyRow = { id: 1, lines: [], formats: ['Reel'], domains: [], audiences: [], peers: 0, expert: false, quality: true };
+  const reel: Attrs = { line: 'Consulting', format: 'Reel', domain: 'prof', audience: null };
+  const mine: RuleParts[] = [{ lines: [], formats: ['Reel'], domains: [], audiences: [] }];
+  it('is every requirement for ordinary content', () => expect(routePolicies(mine, [lax], reel, false)).toEqual([lax]));
+  it('is none (the full default review) for a draft made for a placeholder when the author\'s own rules do not allow it', () => {
+    expect(policyFor(routePolicies([], [lax], reel, true), reel)).toEqual(DEFAULT_POLICY);
+    expect(policyFor(routePolicies(null, [lax], reel, true), reel)).toEqual(DEFAULT_POLICY);
+  });
+  it('is the normal requirements for a placeholder draft whose author also has a rule for it', () => expect(routePolicies(mine, [lax], reel, true)).toEqual([lax]));
 });

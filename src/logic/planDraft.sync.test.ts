@@ -14,7 +14,12 @@ describe('placeholder grant: TypeScript and the database agree', () => {
   });
   it('routes a grant draft through the full default review and re-checks the author at publish', () => {
     expect(sql).toContain('v_peers := 2; v_expert := true; v_quality := true;');
-    expect(sql).toContain('private.user_can_plan_trajectory(c.author_id, c.for_trajectory)');
+    expect(sql).toContain('public.plan_trajectory_allowed(c.author_id, c.for_trajectory)');
+    expect(sql).not.toContain('create function private.user_can_plan_trajectory');
+  });
+  it('gives a placeholder one draft: free when it has no cid, names this draft or names none that exists', () => {
+    expect(sql).toContain("s ->> 'cid' = p_id::text or not exists (select 1 from public.contributions x where x.id::text = s ->> 'cid' and x.id <> p_id)");
+    expect(sql).toContain("c.type = s.v ->> 'fmt'");
   });
   it('makes the placeholder columns insert-only and links only what was drafted for the step', () => {
     expect(sql).toContain('grant insert (for_trajectory, for_step) on public.contributions to authenticated;');

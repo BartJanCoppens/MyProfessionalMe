@@ -46,17 +46,30 @@ describe('saving a draft made from a placeholder', () => {
     await saveForm(h.L(), false);
     expect(cidOf(h)).toBe('new1');
   });
-  it('leaves a step that already has an own draft alone', async () => {
+  it('refuses a second draft for a step that already has an own draft (one draft per placeholder), and keeps the link', async () => {
     const own = { id: 'old', author_id: 'u1' };
     const h = setup({ trjs: [{ ...T, steps: [{ ...T.steps[0], cid: 'old' }] }], create: { contributions: [own as never], reviews: [], rules: [], policies: [], peers: 0 } });
     await saveForm(h.L(), false);
+    expect(save).not.toHaveBeenCalled();
     expect(cidOf(h)).toBe('old');
+  });
+  it('saves the draft that already is the step\'s own again', async () => {
+    const own = { id: 'new1', author_id: 'u1' };
+    const h = setup({ nw: { ...draft(), savedId: 'new1' }, trjs: [{ ...T, steps: [{ ...T.steps[0], cid: 'new1' }] }], create: { contributions: [own as never], reviews: [], rules: [], policies: [], peers: 0 } });
+    await saveForm(h.L(), false);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+  it('names no audience: a draft made from a trajectory with one is refused', async () => {
+    const h = setup({ nw: { ...draft(), aud: 'ind:energy' } });
+    await saveForm(h.L(), false);
+    expect(save).not.toHaveBeenCalled();
+    expect(h.lastToast()).toBe('A draft made from a trajectory names no audience');
   });
   it('without the right to change the trajectory there is no grant: nothing is saved', async () => {
     const h = setup({}, domainAdmin(['Audit']));
     await saveForm(h.L(), false);
     expect(save).not.toHaveBeenCalled();
-    expect(h.lastToast()).toBe('Ask an admin for creation rights first');
+    expect(h.lastToast()).toBe('This placeholder cannot be drafted by you now: it already has a draft, or you may not change its trajectory');
   });
   it('a link refused after the save still saves the draft and says it is not linked', async () => {
     const h = setup();

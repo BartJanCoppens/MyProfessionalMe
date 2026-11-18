@@ -8,8 +8,8 @@ import type { AppState } from './types';
 import { itemsPanel, viewItems } from './createItems';
 import { carriesItems, hasItems, itemsCheck, itemsFromSaved, itemsText, noItems, noun } from './logic/items';
 import {
-  CREATE_TYPES, DEFAULT_POLICY, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
-  emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
+  CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
+  emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, routePolicies, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
 } from './logic/contribution';
 import type { Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
 import { removePolicy, savePolicy } from './lib/contributionStore';
@@ -49,7 +49,7 @@ function createScreen(L: Logic) {
   const s = L.state, me = L.access.userId, d = s.create || EMPTY, now = new Date();
   const byId = new Map(d.contributions.map((c) => [c.id, c]));
   const revsOf = (id: string) => d.reviews.filter((r) => r.contribution_id === id).sort((a, b) => a.step - b.step || a.slot - b.slot);
-  const nw = effective(s), rules: RuleParts[] = [...d.rules, ...grantRules(L, nw.brief, nw.type)], canCreate = rules.length > 0, isAdmin = L.isAdmin();
+  const nw = effective(s), grant = grantRules(L, nw.brief, nw.type, s.editing ?? nw.savedId), rules: RuleParts[] = nw.brief ? grant : d.rules, canCreate = rules.length > 0, isAdmin = L.isAdmin();
   const setState = (p: Partial<AppState>) => L.setState(p);
 
   // Mine
@@ -79,7 +79,7 @@ function createScreen(L: Logic) {
   // New
   const attrs = attrsOfDraft(nw), allowed = allowedValues(rules), ok = mayCreate(rules, attrs);
   // A draft made under a placeholder (no creation rule of the person's own) always gets the full default review, as the database routes it.
-  const policy = mayCreate(d.rules, attrs) ? policyFor(d.policies, attrs) : DEFAULT_POLICY;
+  const policy = policyFor(routePolicies(d.rules, d.policies, attrs, !!nw.brief), attrs);
   const setNw = setNwOf(L);
   const checks = contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) })
     .concat(hasItems(nw.type) ? [itemsCheck(nw.type, nw.items ?? noItems())] : [], nw.type === 'Presentation' ? [horizonCheck(nw)] : []);
@@ -97,7 +97,7 @@ function createScreen(L: Logic) {
   ].map((x, k) => ({ ...x, n: String(k + 1) }));
   // Pickers offer what at least one rule allows; a submitted contribution keeps its own values. Every contribution has a line.
   const lineOptions = (locked ? [nw.line] : allowed.lines).map((v) => ({ value: v, label: v }));
-  const audOptions = (locked ? [nw.aud] : (allowed.noAudience ? [''] : []).concat(allowed.audiences)).map((v) => ({ value: v, label: v ? audienceName(v) : 'None' }));
+  const audOptions = (locked ? [nw.aud] : nw.brief ? [''] : (allowed.noAudience ? [''] : []).concat(allowed.audiences)).map((v) => ({ value: v, label: v ? audienceName(v) : 'None' }));
 
   // Review requirements (admins): System and General Admins any; a Domain Admin only with lines, all of them theirs.
   const anyLine = L.access.isSystem || !!L.access.isGeneral;
@@ -154,7 +154,7 @@ function createScreen(L: Logic) {
     nwChecks: [...checks.map(dot), ...(studioOf(s) === 'reel' ? [REEL_CAPTIONS] : []), ...(studioOf(s) === 'avatar' ? [...avatarChecks(nw.items?.list ?? []).map(dot), AVATAR_STOCK] : [])], nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
     nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: fresh(), nwKb: [], nwKbQ: '', createTab: 'mine', studio: HUB }),
-    nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this combination needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement.' : '',
+    nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short && nw.brief ? 'Drafts made from a trajectory need ' + policy.peers + ' peer reviewers in ' + (nw.line || 'your business line') + ' and only ' + d.peers + (d.peers === 1 ? ' is' : ' are') + ' available · ask an admin to add reviewers, or get a creation rule' : short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this combination needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement.' : '',
     // Review requirements
     policyRows, defaultPolicy: 'When no requirement matches: ' + policyLabel(policyFor([], null)) + '. When several match, the strictest counts.',
     polGroups: PARTS.map((part) => ({ part, label: PART_LABEL[part], chips: (part === 'lines' ? pfLines : PART_VALUES[part]).map((v) => ({ value: v, label: valueName(part, v), on: pf[part].includes(v),
@@ -181,7 +181,7 @@ function dateLine(c: Contribution) {
 }
 
 function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
-  const st = ST[c.status], stages = stagesOf(c, revs, d.policies), policy = policyFor(d.policies, attrsOf(c));
+  const st = ST[c.status], stages = stagesOf(c, revs, routePolicies(d.rules, d.policies, attrsOf(c), !!c.for_trajectory)), policy = policyFor(routePolicies(d.rules, d.policies, attrsOf(c), !!c.for_trajectory), attrsOf(c));
   const learning = c.learning_id ? LEARN_BY[c.learning_id] : null;
   const base = {
     id: c.id, eyebrow: c.type + ' · ' + domainName(c.domain) + ' · L' + c.level + ' · ' + attrsLabel(attrsOf(c)), title: c.title || 'Untitled ' + c.type.toLowerCase(), date: dateLine(c) + ' · for ' + c.audience_stage,
@@ -205,7 +205,7 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
 }
 
 function reviewDetail(L: Logic, c: Contribution, r: Review, d: CreateData, now: Date) {
-  const s = L.state, key = revKey(r), chk = s.revChecks[key] || [], com = s.revComment[key] || '', policy = policyFor(d.policies, attrsOf(c));
+  const s = L.state, key = revKey(r), chk = s.revChecks[key] || [], com = s.revComment[key] || '', policy = policyFor(routePolicies(null, d.policies, attrsOf(c), !!c.for_trajectory), attrsOf(c));
   const open = r.verdict === 'pending' && c.status === 'review';
   // A peer reads only their own review row, so the number of peers comes from the effective requirement.
   const role = r.step === 1 ? 'Peer reviewer ' + r.slot + ' of ' + Math.max(r.slot, policy.peers, d.reviews.filter((x) => x.contribution_id === c.id && x.step === 1).length) : ROLE_OF_STEP[r.step];

@@ -81,12 +81,20 @@ describe('draftPlaceholders', () => {
     expect(r.drafted).toBe(1);
     expect(r.notes[0]).toBe('Title m1: No studio makes Book · add it as evidence instead');
   });
-  it('saves the Game placeholder with no rows when the AI is off, and says to build it in the Game Studio', async () => {
+  it('saves and links nothing when the AI gave nothing usable, and says why', async () => {
+    ask.mockImplementation(async () => ({ text: 'nope', cut: false }));
+    const t = { ...T, steps: [make('m1', 'Game', 'p:a')] };
+    const h = setup({ trjPlans: { T1: { record: { ...record, plan: { ...record.plan, modules: [mod('a', 'VAT game', 'Game')] } }, sources: [] } } }, t);
+    const r = await draftPlaceholders(h.L(), 'T1', ['m1']);
+    expect([r.drafted, save.mock.calls.length, h.state.trjs[0].steps[0].cid]).toEqual([0, 0, undefined]);
+    expect(r.notes).toContain('Title m1: AI did not return usable items · try again or write them yourself');
+  });
+  it('does not save the Game placeholder when the AI is off, and says to build it in the Game Studio', async () => {
     const t = { ...T, steps: [make('m1', 'Game', 'p:a')] };
     const h = setup({ aiLive: [], trjPlans: { T1: { record: { ...record, plan: { ...record.plan, modules: [mod('a', 'VAT game', 'Game')] } }, sources: [] } } }, t);
     const r = await draftPlaceholders(h.L(), 'T1', ['m1']);
-    expect(r.drafted).toBe(1);
-    expect(save.mock.calls[0][0].items).toEqual([]);
+    expect(r.drafted).toBe(0);
+    expect(save).not.toHaveBeenCalled();
     expect(r.notes).toContain('Title m1: Build the game in the Game Studio');
   });
   it('with the studio use off the rows are saved as scripted from the cited passages, never marked AI', async () => {

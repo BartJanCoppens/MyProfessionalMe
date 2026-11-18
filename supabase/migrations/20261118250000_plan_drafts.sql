@@ -3,18 +3,21 @@
 --
 -- contributions.for_trajectory / for_step   the placeholder a contribution was drafted for. Insert only (never grantable on update), so a draft cannot be
 --                                           pointed at another placeholder afterwards. for_trajectory goes to null when the trajectory is deleted.
--- private.plan_draft_matches                the placeholder exists: a make step of that trajectory with that id and fmt = the contribution's format, the
+-- private.plan_draft_matches                the placeholder exists and is free (no cid, or the cid names this contribution or no contribution that still exists: one
+--                                           grant draft per placeholder, nobody takes it over): a make step of that trajectory with that id and fmt = the contribution's format, the
 --                                           contribution's line is the trajectory's (any line for a firm-wide trajectory), its domain is the step's `dom`
 --                                           (default 'prof') and it names no audience. So the grant cannot pick a domain or audience that routes to a weaker review.
--- private.may_create (6 arguments)          the creation-rule check (4 arguments, unchanged) OR a matching placeholder the caller may plan
---                                           (private.can_plan_trajectory). It extends the one helper; the policies, check_contribution and submit_contribution call it.
--- private.user_can_plan_trajectory          the same right for a named user (the author, while a reviewer publishes): tx-local claim, restored before returning.
+-- private.may_create (7 arguments)          extends the one helper: without for_trajectory the creation-rule check (4 arguments, unchanged); with it, a matching free
+--                                           placeholder the caller may plan (private.can_plan_trajectory). The policies, check_contribution and submit_contribution call it.
+--                                           A rule holder naming a placeholder needs the same: nobody names a placeholder they cannot plan or that is taken.
 -- submit_contribution                       as before, except a contribution its author's creation rules do not allow (made under the placeholder grant) is always
---                                           routed through the full default review (2 peers, an expert, quality & risk), whatever review requirements say.
+--                                           routed through the full default review (2 peers, an expert, quality & risk), whatever review requirements say; a line with too few
+--                                           peers says so in its own words (no requirement an admin could lower).
 -- publish_contribution                      as before (20261117310000), except the author's creation rules may be replaced by a matching placeholder the author
---                                           can still plan (re-checked at publish; a removed editor's draft is not published under the grant).
+--                                           can still plan (re-checked at publish with public.plan_trajectory_allowed, the one claim-switching function; a removed
+--                                           editor's draft is not published under the grant).
 -- link_made_steps                           as before (20261118240000), except a make step links only to a contribution drafted for that very step
---                                           (for_trajectory = the trajectory, for_step = the step), never to any published contribution its cid names.
+--                                           (for_trajectory = the trajectory, for_step = the step, type = the step's fmt), never to any published contribution its cid names.
 -- Every other behaviour is unchanged for everyone else.
 
 alter table public.contributions
@@ -23,7 +26,7 @@ alter table public.contributions
 create index contributions_for_trajectory_idx on public.contributions (for_trajectory) where for_trajectory is not null;
 grant insert (for_trajectory, for_step) on public.contributions to authenticated;
 
-create function private.plan_draft_matches(p_trajectory text, p_step text, p_line public.business_line, p_format text, p_domain text, p_audience text)
+create function private.plan_draft_matches(p_trajectory text, p_step text, p_line public.business_line, p_format text, p_domain text, p_audience text, p_id uuid)
 returns boolean
 language sql
 stable
@@ -35,49 +38,32 @@ as $$
     where t.id = p_trajectory and (t.business_line is null or t.business_line = p_line)
       and s ->> 'id' = p_step and s ->> 'k' = 'make' and s ->> 'fmt' = p_format
       and p_audience is null and p_domain = coalesce(s ->> 'dom', 'prof')
+      and (not (s ? 'cid') or s ->> 'cid' = p_id::text
+           or not exists (select 1 from public.contributions x where x.id::text = s ->> 'cid' and x.id <> p_id))
   ), false);
 $$;
 
-create function private.may_create(p_line public.business_line, p_format text, p_domain text, p_audience text, p_trajectory text, p_step text)
+create function private.may_create(p_line public.business_line, p_format text, p_domain text, p_audience text, p_trajectory text, p_step text, p_id uuid)
 returns boolean
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select private.may_create(p_line, p_format, p_domain, p_audience)
-    or (private.plan_draft_matches(p_trajectory, p_step, p_line, p_format, p_domain, p_audience) and coalesce(private.can_plan_trajectory(p_trajectory), false));
+  select case when p_trajectory is null then private.may_create(p_line, p_format, p_domain, p_audience)
+    else private.plan_draft_matches(p_trajectory, p_step, p_line, p_format, p_domain, p_audience, p_id) and coalesce(private.can_plan_trajectory(p_trajectory), false) end;
 $$;
 
-create function private.user_can_plan_trajectory(p_user uuid, p_trajectory text)
-returns boolean
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $$
-declare
-  previous text := current_setting('request.jwt.claims', true);
-  allowed boolean;
-begin
-  perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', 'authenticated')::text, true);
-  allowed := coalesce(private.can_plan_trajectory(p_trajectory), false);
-  perform set_config('request.jwt.claims', coalesce(previous, ''), true);
-  return allowed;
-end;
-$$;
-
-revoke execute on function private.plan_draft_matches(text, text, public.business_line, text, text, text), private.may_create(public.business_line, text, text, text, text, text),
-  private.user_can_plan_trajectory(uuid, text) from public, anon, authenticated;
-grant execute on function private.plan_draft_matches(text, text, public.business_line, text, text, text), private.may_create(public.business_line, text, text, text, text, text) to authenticated;
+revoke execute on function private.plan_draft_matches(text, text, public.business_line, text, text, text, uuid), private.may_create(public.business_line, text, text, text, text, text, uuid) from public, anon, authenticated;
+grant execute on function private.may_create(public.business_line, text, text, text, text, text, uuid) to authenticated;  -- the policies run as the caller; plan_draft_matches is only called by definers
 
 drop policy "contributions: author adds" on public.contributions;
 drop policy "contributions: author edits" on public.contributions;
 create policy "contributions: author adds" on public.contributions for insert to authenticated
-  with check (author_id = (select auth.uid()) and (select private.may_create(business_line, type, domain, audience, for_trajectory, for_step)));
+  with check (author_id = (select auth.uid()) and (select private.may_create(business_line, type, domain, audience, for_trajectory, for_step, id)));
 create policy "contributions: author edits" on public.contributions for update to authenticated
   using (author_id = (select auth.uid()) and status in ('draft', 'changes'))
-  with check (author_id = (select auth.uid()) and status in ('draft', 'changes') and (select private.may_create(business_line, type, domain, audience, for_trajectory, for_step)));
+  with check (author_id = (select auth.uid()) and status in ('draft', 'changes') and (select private.may_create(business_line, type, domain, audience, for_trajectory, for_step, id)));
 
 -- As before (20261117230000), with the placeholder grant.
 create or replace function private.check_contribution(p_id uuid)
@@ -98,7 +84,7 @@ begin
   if c.status not in ('draft', 'changes') then
     raise exception 'Only a draft or a contribution with changes requested can be checked' using errcode = 'P0001';
   end if;
-  v_problems := case when private.may_create(c.business_line, c.type, c.domain, c.audience, c.for_trajectory, c.for_step) then '{}'::text[]
+  v_problems := case when private.may_create(c.business_line, c.type, c.domain, c.audience, c.for_trajectory, c.for_step, c.id) then '{}'::text[]
                      else array['Not allowed by your creation rules; ask an admin'] end || private.contribution_problems(c);
   update public.contributions set
     check_fingerprint = case when cardinality(v_problems) = 0 then private.contribution_fingerprint(c.items, c.title, c.type, c.shape) end,
@@ -119,6 +105,7 @@ declare
   me uuid := (select auth.uid());
   c public.contributions%rowtype;
   v_peers smallint;
+  v_grant boolean;
   v_expert boolean;
   v_quality boolean;
   v_problems text[];
@@ -133,7 +120,7 @@ begin
   if c.status not in ('draft', 'changes') then
     raise exception 'Only a draft or a contribution with changes requested can be submitted' using errcode = 'P0001';
   end if;
-  if not private.may_create(c.business_line, c.type, c.domain, c.audience, c.for_trajectory, c.for_step) then
+  if not private.may_create(c.business_line, c.type, c.domain, c.audience, c.for_trajectory, c.for_step, c.id) then
     raise exception 'Not allowed by your creation rules; ask an admin' using errcode = '42501';
   end if;
   v_problems := private.contribution_problems(c);
@@ -155,7 +142,8 @@ begin
     return 'review';
   end if;
 
-  if private.rules_allow(me, c.business_line, c.type, c.domain, c.audience) then
+  v_grant := not private.rules_allow(me, c.business_line, c.type, c.domain, c.audience);
+  if not v_grant then
     select f.peers, f.expert, f.quality into v_peers, v_expert, v_quality from private.policy_for(c.business_line, c.type, c.domain, c.audience) f;
   else
     v_peers := 2; v_expert := true; v_quality := true;  -- made under the placeholder grant: always the full default review
@@ -192,6 +180,10 @@ begin
       insert into public.contribution_reviews (contribution_id, step, slot, reviewer_id, reviewer_name)
       values (p_id, 1, n, v_pick, private.display_name(v_pick));
     end loop;
+    if n < v_peers and v_grant then
+      raise exception 'Drafts made from a trajectory need % peer reviewers in your business line and only % can review it. It stays a draft: ask an admin to add reviewers, or get a creation rule.', v_peers, n
+        using errcode = 'P0001';
+    end if;
     if n < v_peers then
       raise exception 'Only % colleague(s) in your business line can peer-review this (the expert and quality reviewers do not count); the review requirement needs %. It stays a draft: ask an admin to lower the peer requirement.', n, v_peers
         using errcode = 'P0001';
@@ -222,7 +214,7 @@ declare
   v_content jsonb;
 begin
   select * into c from public.contributions where id = p_id;
-  if not (private.rules_allow(c.author_id, c.business_line, c.type, c.domain, c.audience) or (private.plan_draft_matches(c.for_trajectory, c.for_step, c.business_line, c.type, c.domain, c.audience) and private.user_can_plan_trajectory(c.author_id, c.for_trajectory))) then
+  if not (private.rules_allow(c.author_id, c.business_line, c.type, c.domain, c.audience) or (private.plan_draft_matches(c.for_trajectory, c.for_step, c.business_line, c.type, c.domain, c.audience, c.id) and public.plan_trajectory_allowed(c.author_id, c.for_trajectory))) then
     raise exception 'The author''s creation rules no longer allow this contribution, and it is not the material of a placeholder its author can still plan, so it cannot be published' using errcode = '42501';
   end if;
   if private.carries_items(c.type, c.studio) then
@@ -269,7 +261,7 @@ begin
         select c.learning_id, (select (o ->> 'linked_at')::timestamptz from jsonb_array_elements(prev) o where o ->> 'id' = s.v ->> 'id' and o ->> 'k' = 'learn' limit 1) as was
         from public.contributions c
         where s.v ->> 'k' = 'make' and c.status = 'published' and c.learning_id is not null
-          and c.for_trajectory = new.id and c.for_step = s.v ->> 'id'
+          and c.for_trajectory = new.id and c.for_step = s.v ->> 'id' and c.type = s.v ->> 'fmt'
           and c.id = case when s.v ->> 'cid' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then (s.v ->> 'cid')::uuid end
       ) l on true
     );

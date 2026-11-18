@@ -120,7 +120,9 @@ async function submitChecked(id: string, studio: string | null | undefined) {
 type Saved = { s: AppState; nw: NewDraft; studio: string | null; id: string };
 async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>, patch: Partial<NewDraft> = {}): Promise<boolean> {
   if (busy(L)) return false;
-  const s = latestDraft(L), nw = { ...effective(s), ...patch }, rules: RuleParts[] = [...(s.create?.rules || []), ...grantRules(L, nw.brief, nw.type)], studio = draftStudio(s);
+  const s = latestDraft(L), nw = { ...effective(s), ...patch }, rules: RuleParts[] = nw.brief ? grantRules(L, nw.brief, nw.type, s.editing ?? nw.savedId) : s.create?.rules || [], studio = draftStudio(s);
+  if (nw.brief && !rules.length) { L.say('This placeholder cannot be drafted by you now: it already has a draft, or you may not change its trajectory'); return false; }
+  if (nw.brief && nw.aud) { L.say('A draft made from a trajectory names no audience'); return false; }
   if (!rules.length) { L.say('Ask an admin for creation rights first'); return false; }
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return false; }
   let id = s.editing ?? nw.savedId ?? null;
@@ -174,7 +176,7 @@ export async function submitSaved(L: Logic, c: Contribution) {
   const bad = contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(items) }).find((x) => !x.ok);
   if (bad) { L.say(bad.text + ' · edit it first'); return; }
   const ref = c.for_trajectory && c.for_step ? { trajectoryId: c.for_trajectory, stepId: c.for_step } : undefined;
-  if (!mayCreate([...(L.state.create?.rules || []), ...grantRules(L, ref, c.type)], attrsOf(c))) { L.say('Not allowed by your creation rules · ask an admin'); return; }
+  if (!mayCreate(ref ? grantRules(L, ref, c.type, c.id) : L.state.create?.rules || [], attrsOf(c))) { L.say('Not allowed by your creation rules · ask an admin'); return; }
   L.setState({ createBusy: true });
   try {
     const status = await submitChecked(c.id, c.studio), d = await reloaded(L);
