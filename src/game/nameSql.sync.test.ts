@@ -3,12 +3,11 @@
 // JavaScript trims and splits on, held once in the database as private.js_space() (private.trimmed uses it too).
 import { describe, expect, it } from 'vitest';
 import { migrationText } from '../test/migrations';
-import { readFileSync } from 'node:fs';
 import { firstNameInitial } from './protocol';
 
 export const SAMPLES: string[] = ['Jan Peeters', 'Jan Peeters', '\tJan Peeters', '\t', '   ', '', 'a@b.test', 'Jan <jan@x.test>', 'Cher', 'Jan van　Peeters', '﻿Jan Peeters﻿', ' ann  de vries '];
 const literal = (s: string) => "E'" + [...s].map((c) => (c.charCodeAt(0) > 0x20 && c.charCodeAt(0) < 0x7f ? c : c === ' ' ? ' ' : '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))).join('') + "'";
-const rls = readFileSync('supabase/tests/rls.sql', 'utf8');
+const rls = Object.values(import.meta.glob('../../supabase/tests/rls.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)[0];
 const sql = migrationText('20261118110000_game_runs.sql');
 
 describe('first_and_initial matches firstNameInitial', () => {

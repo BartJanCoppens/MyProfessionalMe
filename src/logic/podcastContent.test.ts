@@ -226,7 +226,7 @@ describe('the SQL repeats these rules', () => {
     expect(sql.match(/private\.is_chapter\(/g)!.length).toBeGreaterThanOrEqual(4);
   });
   it('trims exactly what JavaScript trim() trims, no-break and other Unicode spaces included', () => {
-    const set = [...fn('trimmed').matchAll(/\\u([0-9a-f]{4})/g)].map((m) => parseInt(m[1], 16));
+    const set = [...fn('js_space').matchAll(/\\u([0-9a-f]{4})/g)].map((m) => parseInt(m[1], 16));
     const js: number[] = [];
     for (let c = 0; c < 0x10000; c++) if (String.fromCharCode(c).trim() === '') js.push(c);
     expect(set).toEqual(js);
