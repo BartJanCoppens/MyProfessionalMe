@@ -3738,5 +3738,97 @@ reset role;
 insert into results (check_name, expected, actual) select 'AR can_test_game_as still allows a Game''s author and refuses an Avatar contribution', 'true/false',
   private.can_test_game_as((select id from public.contributions where title = 'T gm ok'), '00000000-0000-0000-0000-0000000000aa')::text||'/'||private.can_test_game_as(current_setting('test.ar_c')::uuid, '00000000-0000-0000-0000-0000000000aa')::text;
 insert into results (check_name, expected, actual) select 'AR can_play_test_as keeps the types apart', 'true/false', private.can_play_test_as(current_setting('test.ar_c')::uuid, '00000000-0000-0000-0000-0000000000aa', 'Avatar')::text||'/'||private.can_play_test_as(current_setting('test.ar_c')::uuid, '00000000-0000-0000-0000-0000000000aa', 'Game')::text;
+-- ---------- AL: live video (Task 6.5) ----------
+-- The look gets a HeyGen avatar; a HeyGen connection with a key serves avatar_video; the function reserves seconds before a token is issued.
+reset role;
+update public.learnings set status = 'published' where id = current_setting('test.ar_learning');
+insert into results (check_name, expected, actual) select 'AL avatar_video and avatar_voice are no longer waiting, off, with their limits', 'false/false/10/1800/300/30000', (select (waiting_for is not null or enabled)::text||'/'||(select (waiting_for is not null or enabled)::text from public.ai_uses where key = 'avatar_voice')||'/'||daily_limit||'/'||daily_seconds||'/'||(select daily_limit from public.ai_uses where key = 'avatar_voice')||'/'||(select daily_chars from public.ai_uses where key = 'avatar_voice') from public.ai_uses where key = 'avatar_video');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000da","role":"authenticated"}';
+with u as (update public.stock_looks set heygen_avatar_id = '11111111-2222-4333-8444-555555555555', heygen_voice_id = '66666666-7777-4888-8999-000000000000' where name = 'HR director · 50s' returning 1)
+  insert into results (check_name, expected, actual) select 'AL a General Admin sets a look''s HeyGen avatar and voice', '1 rows', count(*)||' rows' from u;
+select pg_temp.gr_blocked('AL a HeyGen id that is not a uuid is refused', $q$update public.stock_looks set heygen_avatar_id = 'abc' where name = 'HR director · 50s'$q$, 'blocked: 22P02');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+with u as (update public.stock_looks set heygen_avatar_id = '11111111-2222-4333-8444-555555555556' where name = 'HR director · 50s' returning 1)
+  insert into results (check_name, expected, actual) select 'AL a creator sets no HeyGen avatar', '0 rows', count(*)||' rows' from u;
+select pg_temp.gr_blocked('AL a creator cannot read avatar_sessions', $q$select count(*) from public.avatar_sessions$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_open', format($q$select public.avatar_session_open('00000000-0000-0000-0000-0000000000ab', %L)$q$, current_setting('test.ar_run')), 'blocked: 42501');
+select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_report', $q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', gen_random_uuid(), 0, true)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AL authenticated cannot execute avatar_say_input', format($q$select public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', %L)$q$, current_setting('test.ar_run')), 'blocked: 42501');
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+with i as (insert into public.ai_connections (name, provider) values ('T HeyGen', 'heygen') returning id) select set_config('test.al_conn', (select id::text from i), true);
+with i as (insert into public.ai_connections (name, provider) values ('T HeyGen no key', 'heygen') returning id) select set_config('test.al_nokey', (select id::text from i), true);
+select public.ai_set_key(current_setting('test.al_conn')::uuid, 'hg-test-key-4321');
+with u as (update public.ai_uses set connection_id = current_setting('test.al_nokey')::uuid, enabled = true where key = 'avatar_video' returning 1) insert into results (check_name, expected, actual) select 'AL a System Admin gives avatar_video a HeyGen connection', '1 rows', count(*)||' rows' from u;
+insert into results (check_name, expected, actual) select 'AL avatar_video is not live on a HeyGen connection without a key', 'false', ('avatar_video' = any(public.ai_live_uses()))::text;
+with u as (update public.ai_uses set connection_id = current_setting('test.al_conn')::uuid, daily_seconds = 1800 where key = 'avatar_video' returning 1) insert into results (check_name, expected, actual) select 'AL a System Admin edits the seconds a day', '1 rows', count(*)||' rows' from u;
+insert into results (check_name, expected, actual) select 'AL avatar_video is live on a HeyGen connection with a key and no model', 'true', ('avatar_video' = any(public.ai_live_uses()))::text;
+reset role;
+-- three runs for the learner, one for another person; one with a character line
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+with a as (insert into public.avatar_runs (learning_id, test) values (current_setting('test.ar_learning'), false) returning id), b as (insert into public.avatar_runs (learning_id, test) values (current_setting('test.ar_learning'), false) returning id)
+  select set_config('test.al_a', (select id::text from a), true), set_config('test.al_b', (select id::text from b), true);
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ad","role":"authenticated"}';
+with a as (insert into public.avatar_runs (learning_id, test) values (current_setting('test.ar_learning'), false) returning id) select set_config('test.al_other', (select id::text from a), true);
+reset role;
+with a as (insert into public.avatar_runs (user_id, learning_id, test, turns) values ('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_learning'), false,
+  '[{"who":"learner","text":"What worries you?","guard":null},{"who":"character","text":"The cost, mostly.","guard":null}]') returning id) select set_config('test.al_said', (select id::text from a), true);
+reset role;
+create function pg_temp.al_open(p_user text, p_run text) returns text language sql as $f$
+  select coalesce(j ->> 'refusal', (j ->> 'max_seconds')||'/'||(j ->> 'avatar_id')||'/'||(j ->> 'voice_id')||'/'||(j ->> 'language')) from (select public.avatar_session_open(p_user::uuid, p_run::uuid) as j) x $f$;
+create function pg_temp.al_usage() returns text language sql security definer as $f$ select calls||'/'||seconds from public.ai_usage where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video' $f$;
+create function pg_temp.al_session(p_run text) returns uuid language sql security definer as $f$ select id from public.avatar_sessions where run_id = p_run::uuid order by opened_at desc, id limit 1 $f$;
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AL another person''s run is not_yours', 'not_yours', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_other'));
+insert into results (check_name, expected, actual) select 'AL a 10-minute run reserves 660 s and gives the look''s avatar, voice and the language code', '660/11111111-2222-4333-8444-555555555555/66666666-7777-4888-8999-000000000000/nl', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_a'));
+insert into results (check_name, expected, actual) select 'AL the reservation is counted: one call and 660 s today', '1/660', pg_temp.al_usage();
+insert into results (check_name, expected, actual) select 'AL a second open while the first is unclosed is open_elsewhere', 'open_elsewhere', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
+insert into results (check_name, expected, actual) select 'AL the refused open counted nothing', '1/660', pg_temp.al_usage();
+-- clamps: opened 60 s ago, a report of 90 keeps 65, a later 50 keeps 65
+reset role;
+update public.avatar_sessions set opened_at = now() - interval '60 seconds' where id = pg_temp.al_session(current_setting('test.al_a'));
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AL a report of 90 s on a session opened 60 s ago keeps 65, and a later report of 50 keeps 65', '65/65', public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 90, false)||'/'||public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 50, false);
+select pg_temp.gr_blocked('AL a report of more than 3,600 s is refused', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', %L, 3601, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: Seconds are 0 to 3,600');
+select pg_temp.gr_blocked('AL a report on another person''s session is refused', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ad', %L, 5, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: That is not your video session');
+-- final: 120 s used of 660 gives 540 back
+reset role;
+update public.avatar_sessions set opened_at = now() - interval '300 seconds' where id = pg_temp.al_session(current_setting('test.al_a'));
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AL a final report of 120 on 660 returns 540 to today''s seconds', '120/120', public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 120, true)||'/'||split_part(pg_temp.al_usage(), '/', 2);
+select pg_temp.gr_blocked('AL a report on a closed session raises', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', %L, 130, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: This video session has ended');
+-- today's seconds: 1,500 used leaves 300; 1,770 leaves 30: minutes_used
+reset role;
+update public.ai_usage set seconds = 1500 where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video';
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AL with 1,500 s used today a 10-minute run reserves 300', '300', split_part(pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b')), '/', 1);
+select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 0, true);
+reset role;
+update public.ai_usage set seconds = 1770 where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video';
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AL with 1,770 s used (less than 60 s left) the open gives minutes_used', 'minutes_used', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
+reset role;
+update public.ai_usage set seconds = 0, calls = 9 where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video';
+set local role service_role;
+select pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
+select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 0, true);
+insert into results (check_name, expected, actual) select 'AL the tenth session is allowed, the eleventh is sessions_used (10 a day)', 'sessions_used', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
+-- no live look, or a finished run
+reset role;
+update public.stock_looks set heygen_avatar_id = null where name = 'HR director · 50s';
+update public.ai_usage set calls = 0 where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video';
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AL a portrait-only look gives no_video', 'no_video', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
+reset role;
+update public.stock_looks set heygen_avatar_id = '11111111-2222-4333-8444-555555555555' where name = 'HR director · 50s';
+update public.avatar_runs set finished_at = now() where id = current_setting('test.al_b')::uuid;
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AL a finished run gives finished', 'finished', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
+-- what the portrait says
+insert into results (check_name, expected, actual) select 'AL avatar_say_input gives the last character line, the scenario''s stock voice and the language', 'The cost, mostly./tAvVoice01/nl', (j ->> 'text')||'/'||(j ->> 'voice_id')||'/'||(j ->> 'language') from (select public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_said')::uuid) as j) x;
+insert into results (check_name, expected, actual) select 'AL avatar_say_input for another person''s run is refused', 'not_yours', public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_other')::uuid) ->> 'refusal';
+insert into results (check_name, expected, actual) select 'AL avatar_say_input on a run with no character line gives no_line', 'no_line', public.avatar_say_input('00000000-0000-0000-0000-0000000000ad', current_setting('test.al_other')::uuid) ->> 'refusal';
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
