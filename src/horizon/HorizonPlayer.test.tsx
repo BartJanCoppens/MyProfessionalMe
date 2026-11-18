@@ -87,3 +87,28 @@ describe('the narration', () => {
     expect(screen.queryByText(/Step 2 of 2/)).toBeNull();
   });
 });
+
+describe('what only Horizon runs is said on the page', () => {
+  const frame = { id: 'a', x: 0, y: 0, next: [], title: 'A', body: '', viz: null, layout: 'blank',
+    objects: [{ id: 'av', kind: 'avatar', x: 10, y: 10, w: 200, h: 200, avatar: { mode: 'live', look: { name: 'Guide' }, speaks: 'arrival' } }] };
+  const passage = (key: string) => ({ id: 'p', part: 'a', text: 'Hello there', audio: { key, seconds: 3, marks: [] } });
+  const deck = { format: 'horizon', version: 1, title: 'T', theme: { world: 'space' }, frames: [frame], media: {},
+    narratives: { items: [{ id: 'n1', name: 'One', passages: [passage('constructor')] }, { id: 'n2', name: 'Two', passages: [passage('k')] }] } };
+  it('shows a conversation avatar as a placeholder, a 3D scene as flat, and the first of several narrations', async () => {
+    await open(JSON.stringify(deck));
+    expect(screen.getByText('Conversation runs in Horizon')).toBeTruthy();
+    expect(screen.getByText(/shown flat/)).toBeTruthy();
+    expect(screen.getByText('This deck has 2 narrations; the first plays here.')).toBeTruthy();
+    expect(screen.queryByText('This deck has 1 narrations; the first plays here.')).toBeNull();
+  });
+  it('does not call a narration voiced when its audio key is only an object\'s own member', async () => {
+    await open(JSON.stringify(deck));
+    fireEvent.click(screen.getByRole('button', { name: 'Play the narration' }));
+    expect(screen.getByText(/No voice in the file/)).toBeTruthy();
+    expect(screen.queryByText(/AI voice/)).toBeNull();
+  });
+  it('says nothing of it for a plain deck (the Garden tour does use a globe, so it says it is flat)', async () => {
+    await open(JSON.stringify({ format: 'horizon', version: 1, title: 'T', frames: [{ id: 'a', title: 'A' }] }));
+    expect(screen.queryByText(/shown flat|narrations;/)).toBeNull();
+  });
+});

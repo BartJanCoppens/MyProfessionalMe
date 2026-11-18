@@ -1,7 +1,7 @@
 // An avatar's prepared clip on a slide (studios plan, Task 3.3), copied from Horizon's AvatarSpeaker.tsx: its still
 // underneath and, while it speaks (or has finished, on its last frame), its clip over it with sound. The clip comes
 // from the file's own media (a data: URL); without one it shows its still. A click starts or stops it. Conversation
-// avatars (LiveAvatar) are not part of the player: cleanDeck.ts leaves them out.
+// avatars (LiveAvatar) are not part of the player: cleanDeck.ts keeps them as a placeholder (still and a note).
 import { useEffect, useReducer, useRef } from 'react';
 import { describe } from './objects';
 import { speechAfter } from './avatarSpeech';

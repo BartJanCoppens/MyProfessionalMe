@@ -57,6 +57,8 @@ function Presenting({ deck, still, onLast }: { deck: Deck; still: boolean; onLas
       )}
       {narration && <div><Button size="sm" variant="secondary" onClick={() => setNarrated(!narrated)}>{narrated ? 'Present it yourself' : 'Play the narration'}</Button></div>}
       {hasClips(deck) && <div style={muted}>The avatars’ clips were made with AI in Horizon.</div>}
+      {deck.flat && <div style={muted}>This presentation has a 3D scene in Horizon (a world, a falling change or a standing stage); here its slides are shown flat.</div>}
+      {narration && narration.narrations > 1 && <div style={muted}>This deck has {narration.narrations} narrations; the first plays here.</div>}
     </div>
   );
 }

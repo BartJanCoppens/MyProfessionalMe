@@ -17,7 +17,7 @@ export interface VizItem { label: string; value?: number; note?: string; more?: 
 export interface Viz { type: VizType; items: VizItem[]; center?: string; suffix?: string; series?: string[]; svg?: string }
 
 /** An avatar's prepared clip: its still picture and its clip (a key in the deck's `media`), when it speaks. */
-export interface SlideAvatar { name: string; speaks: 'arrival' | 'cue'; still?: string; clip?: { media: string; seconds: number } }
+export interface SlideAvatar { name: string; speaks: 'arrival' | 'cue'; still?: string; clip?: { media: string; seconds: number }; live?: true }
 /** An animation from Horizon Calc: only its name and its poster (a PNG data URL) are kept; its program never runs here. */
 export interface SlideAnimation { name: string; poster: string }
 /** A case's last result as plain text (Horizon's CaseShot); the explorer itself is not part of the player. */
@@ -58,6 +58,9 @@ export interface Frame {
 export interface Theme {
   canvas: string; canvasCustom: string; slide: string; slideCustom: string;
   hue?: number | null;
+  /** Horizon's 3D world and its falling change of slide: kept only to say they are shown flat here. */
+  world?: 'surface' | 'globe' | 'space' | 'panorama';
+  transition?: 'fly' | 'fall';
   slideMotion?: Motion;
   worldMotion?: Motion;
 }
@@ -67,5 +70,5 @@ export type PassageAudio = { key: string; seconds: number; marks: { kind: 'next'
 export interface Passage { id: string; part: string; text: string; audio?: PassageAudio }
 export interface Narrative { id: string; name: string; passages: Passage[]; pace?: number }
 
-/** A presentation as the player shows it. `media`: clips and voices by key, as data: URLs. */
-export interface Deck { title: string; theme: Theme; frames: Frame[]; narratives: Narrative[]; media: Record<string, string> }
+/** A presentation as the player shows it. `media`: clips and voices by key, as data: URLs. `flat`: it uses what Horizon draws in 3D. */
+export interface Deck { title: string; theme: Theme; frames: Frame[]; narratives: Narrative[]; media: Record<string, string>; flat: boolean }

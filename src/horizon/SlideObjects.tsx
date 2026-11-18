@@ -4,7 +4,7 @@
 // (cleanDeck.ts) and the player has no sandbox to run one. A case shows its last result as text (the explorer and its
 // rules stay in Horizon). The `data-object`/`data-kind` attributes are what the build-in finds (buildIn.ts).
 import type { CSSProperties } from 'react';
-import { AvatarSpeaker } from './AvatarSpeaker';
+import { AvatarSpeaker, AvatarStill } from './AvatarSpeaker';
 import { HeldVisual } from './HeldVisual';
 import { animationBox, describe, inkCss, isLine, lineEnds, shapePath } from './objects';
 import { fontOf } from './slideTheme';
@@ -20,12 +20,17 @@ const textCss = (o: SlideObject, align: 'left' | 'center'): CSSProperties => ({ 
 const fill: CSSProperties = { display: 'block', width: '100%', height: '100%' };
 const note: CSSProperties = { fontSize: 13, color: 'var(--s-muted)' };
 
+// What only Horizon runs, said on the object itself.
+const RunsInHorizon = ({ what }: { what: string }) => (
+  <span style={{ position: 'absolute', left: 8, bottom: 8, padding: '3px 8px', borderRadius: 999, fontSize: 12, background: 'rgba(0,0,0,.6)', color: '#fff' }}>{what} runs in Horizon</span>
+);
+
 function Animation({ o }: { o: SlideObject }) {
   const a = o.animation!, b = animationBox(o);
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#1c2a36', overflow: 'hidden' }}>
       <img src={a.poster} alt={a.name} draggable={false} style={{ position: 'absolute', left: b.x, top: b.y, width: b.w, height: b.h, display: 'block' }} />
-      <span style={{ position: 'absolute', left: 8, bottom: 8, padding: '3px 8px', borderRadius: 999, fontSize: 12, background: 'rgba(0,0,0,.6)', color: '#fff' }}>Animation runs in Horizon</span>
+      <RunsInHorizon what="Animation" />
     </div>
   );
 }
@@ -71,7 +76,7 @@ function Body({ o, media, live, hold }: { o: SlideObject; media: Record<string, 
     case 'chart': return o.viz ? <div style={{ ...fill, display: 'flex', alignItems: 'center' }}><HeldVisual run={live && !hold ? 'play' : 'still'}><Visual key={vizKey(o.viz) + (live?.run ?? '')} v={o.viz} still={hold} /></HeldVisual></div> : null;
     case 'animation': return <Animation o={o} />;
     case 'case': return <Case o={o} />;
-    case 'avatar': return <AvatarSpeaker o={o} url={o.avatar!.clip ? media[o.avatar!.clip.media] ?? null : null} run={live?.run} cue={live?.cue ?? 0} />;
+    case 'avatar': return o.avatar!.live ? <div style={{ position: 'relative', ...fill }}><AvatarStill o={o} /><RunsInHorizon what="Conversation" /></div> : <AvatarSpeaker o={o} url={o.avatar!.clip ? media[o.avatar!.clip.media] ?? null : null} run={live?.run} cue={live?.cue ?? 0} />;
     default: return <Shape o={o} />;
   }
 }

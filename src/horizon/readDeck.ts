@@ -38,9 +38,20 @@ export function deckSummary(deck: Deck) {
   return { title: deck.title, slides: routeOf(deck.frames).length, seconds: deckNarration(deck)?.seconds ?? 0 };
 }
 
-// Every text the slides and the narration show, for the client-name check before upload.
-export const deckText = (deck: Deck): string => {
-  const frames = (F: Deck['frames']): string[] => F.flatMap((f) => [f.title, f.body, f.tag ?? '', ...(f.viz?.items ?? []).flatMap((it) => [it.label, it.note ?? '']),
-    ...(f.objects ?? []).map((o) => o.text ?? ''), ...(f.section ? frames(f.section.frames) : [])]);
-  return [deck.title, ...frames(deck.frames), ...deck.narratives.flatMap((n) => n.passages.map((p) => p.text))].join(' ');
-};
+// What a cleaned deck holds that is not read by a person: ids and routes, colours, fonts, layouts, addresses (pictures,
+// clips) and the media itself. Every other string in the deck is shown or spoken, so the scan reads it.
+const NOT_SHOWN = new Set(['id', 'part', 'next', 'key', 'media', 'image', 'still', 'poster', 'audio', 'theme', 'layout', 'type', 'kind', 'shape', 'speaks', 'align', 'font',
+  'titleFont', 'bodyFont', 'color', 'fill', 'line', 'canvas', 'canvasCustom', 'slide', 'slideCustom', 'world', 'transition', 'slideMotion', 'worldMotion']);
+
+// The words of a custom drawing: the text between its tags (its attributes are not shown).
+const drawnText = (svg: string) => svg.replace(/<[^>]*>/g, ' ');
+
+// One walk over everything the slides show and the narration tells: titles, texts, charts, cases, picture and avatar
+// names, drawings. Used for the client-name check before upload.
+function shownStrings(v: unknown, key = ''): string[] {
+  if (typeof v === 'string') return key === 'svg' ? [drawnText(v)] : [v];
+  if (Array.isArray(v)) return v.flatMap((x) => shownStrings(x, key));
+  if (v && typeof v === 'object') return Object.entries(v).flatMap(([k, x]) => (NOT_SHOWN.has(k) ? [] : shownStrings(x, k)));
+  return [];
+}
+export const deckText = (deck: Deck): string => shownStrings({ ...deck, media: undefined }).join(' ');

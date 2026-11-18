@@ -51,7 +51,7 @@ function slideVars(t: SlideTheme): CSSProperties {
   return { '--s-bg1': t.bg1, '--s-bg2': t.bg2, '--s-text': t.text, '--s-muted': t.muted, '--s-kicker': t.kicker, '--s-acc': t.acc, '--s-acc2': t.acc2, '--s-line': t.line,
     '--s-line2': t.line2, '--s-fill': t.fill, '--s-hole': t.hole, '--s-tint': t.tint, '--s-tint2': t.tint2, '--s-light': t.light, '--s-label': t.label } as CSSProperties;
 }
-const slideThemeOf = (t: Theme, k?: string) => { k = k || t.slide; return k === 'custom' ? customSlide(t.slideCustom) : SLIDE[k] || SLIDE.nocturne; };
+const slideThemeOf = (t: Theme, k?: string) => { k = k || t.slide; return k === 'custom' ? customSlide(t.slideCustom) : Object.hasOwn(SLIDE, k) ? SLIDE[k] : SLIDE.nocturne; };
 
 // A slide's colours and background: its level's theme, its own slide theme and hue (as Horizon's lookFor).
 export function slideLook(theme: Theme, f: Frame): CSSProperties {

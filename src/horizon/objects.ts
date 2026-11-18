@@ -5,8 +5,10 @@ import type { ObjectInk, ShapeKind, SlideObject } from './types';
 
 const INKS: Record<string, string> = { accent: 'var(--s-acc)', accent2: 'var(--s-acc2)', light: 'var(--s-light)', tint: 'var(--s-tint)', text: 'var(--s-text)',
   muted: 'var(--s-muted)', surface: 'var(--s-fill)', none: 'transparent' };
-const HEX = /^#[0-9a-f]{6}$/i;
-export const inkCss = (k: ObjectInk | undefined, fallback: ObjectInk = 'none') => { const v = k || fallback; return HEX.test(v) ? v : INKS[v] ?? 'transparent'; };
+export const HEX = /^#[0-9a-f]{6}$/i;
+/** A colour a file may use: one of Horizon's theme inks or #rrggbb (own keys only, never Object.prototype's). */
+export const isInk = (v: unknown): v is ObjectInk => typeof v === 'string' && (HEX.test(v) || Object.hasOwn(INKS, v));
+export const inkCss = (k: ObjectInk | undefined, fallback: ObjectInk = 'none') => { const v = k || fallback; return HEX.test(v) ? v : Object.hasOwn(INKS, v) ? INKS[v] : 'transparent'; };
 
 export const isLine = (o: SlideObject) => o.kind === 'shape' && (o.shape === 'line' || o.shape === 'arrow');
 /** A line's start and end points (an arrow points at the end). */
