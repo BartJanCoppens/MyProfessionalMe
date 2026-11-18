@@ -3108,6 +3108,7 @@ insert into results (check_name, expected, actual) select 'LK a General Admin re
 select pg_temp.gr_blocked('LK a portrait outside the drawn four is refused', $q$insert into public.stock_looks (name, portrait, color, licence) values ('T look bad portrait', 'p9', '#aa5500', 'x')$q$, 'blocked: 23514');
 select pg_temp.gr_blocked('LK a colour that is not six lower-case hex digits is refused', $q$insert into public.stock_looks (name, portrait, color, licence) values ('T look bad colour', 'p1', 'red', 'x')$q$, 'blocked: 23514');
 select pg_temp.gr_blocked('LK a look has a licence', $q$insert into public.stock_looks (name, portrait, color, licence) values ('T look no licence', 'p1', '#aa5500', ' ')$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('LK a look name is on the list once, ignoring case and spaces', $q$insert into public.stock_looks (name, portrait, color, licence) values (' cfo · 40S ', 'p1', '#aa5500', 'x')$q$, 'blocked: 23505');
 select pg_temp.gr_blocked('LK nobody deletes a look (switch it off instead)', $q$delete from public.stock_looks where name = 'T look · intern'$q$, 'blocked: 42501');
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
 with i as (insert into public.stock_looks (name, portrait, color, licence) values ('T look · auditor, 40s', 'p2', '#112233', 'Drawn in code') returning 1)

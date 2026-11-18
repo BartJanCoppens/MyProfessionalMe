@@ -18,6 +18,9 @@ create table public.stock_looks (
   created_at timestamptz not null default now()
 );
 
+-- A look is chosen by its id (a draft stores it), and a role is on the list once, so the admin list never has twins.
+create unique index stock_looks_name_key on public.stock_looks (lower(trim(name)));
+
 alter table public.stock_looks enable row level security;
 revoke all on public.stock_looks from anon, authenticated;
 grant select on public.stock_looks to authenticated;

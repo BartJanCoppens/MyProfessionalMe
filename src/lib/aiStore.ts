@@ -65,44 +65,33 @@ export async function updateUse(key: string, patch: Partial<Pick<AiUse, 'connect
   if (!(data as unknown[] | null)?.length) throw new Error('Only a System Admin can change AI uses');
 }
 
-// Admins read every voice; anyone else only the active ones (RLS).
-export async function loadStockVoices(): Promise<StockVoice[]> {
-  const { data, error } = await supabase.from('stock_voices').select('id, name, voice_id, language, accent, active').order('name');
+// Stock voices and stock looks share one shape of access: admins read every row, anyone else only the active ones (RLS); System
+// and General Admins add and switch off; an insert or update that changes no row was refused by RLS.
+type StockTable = 'stock_voices' | 'stock_looks';
+async function loadStock<T>(table: StockTable, columns: string, order: string): Promise<T[]> {
+  const { data, error } = await supabase.from(table).select(columns).order(order);
   fail(error);
-  return (data || []) as StockVoice[];
+  return (data || []) as T[];
+}
+async function addStock(table: StockTable, what: string, row: object, duplicate?: [RegExp, string]) {
+  const { data, error } = await supabase.from(table).insert(row).select('id');
+  if (error && duplicate && duplicate[0].test(error.message)) throw new Error(duplicate[1]);
+  fail(error);
+  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can add ' + what);
+}
+async function setStockActive(table: StockTable, what: string, id: string, active: boolean) {
+  const { data, error } = await supabase.from(table).update({ active }).eq('id', id).select('id');
+  fail(error);
+  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can change ' + what);
 }
 
-export async function addStockVoice(f: StockVoiceForm) {
-  const { data, error } = await supabase.from('stock_voices').insert({ ...f, accent: f.accent || null }).select('id');
-  if (error && /duplicate key|stock_voices_voice_id_key/i.test(error.message)) throw new Error('That ElevenLabs voice id is on the list already');
-  fail(error);
-  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can add stock voices');
-}
+export const loadStockVoices = () => loadStock<StockVoice>('stock_voices', 'id, name, voice_id, language, accent, active', 'name');
+export const addStockVoice = (f: StockVoiceForm) => addStock('stock_voices', 'stock voices', { ...f, accent: f.accent || null }, [/duplicate key|stock_voices_voice_id_key/i, 'That ElevenLabs voice id is on the list already']);
+export const setStockVoiceActive = (id: string, active: boolean) => setStockActive('stock_voices', 'stock voices', id, active);
 
-export async function setStockVoiceActive(id: string, active: boolean) {
-  const { data, error } = await supabase.from('stock_voices').update({ active }).eq('id', id).select('id');
-  fail(error);
-  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can change stock voices');
-}
-
-// Admins read every look; anyone else only the active ones (RLS).
-export async function loadStockLooks(): Promise<StockLook[]> {
-  const { data, error } = await supabase.from('stock_looks').select('id, name, portrait, color, licence, active').order('created_at');
-  fail(error);
-  return (data || []) as StockLook[];
-}
-
-export async function addStockLook(f: StockLookForm) {
-  const { data, error } = await supabase.from('stock_looks').insert({ ...f, color: f.color.toLowerCase() }).select('id');
-  fail(error);
-  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can add stock looks');
-}
-
-export async function setStockLookActive(id: string, active: boolean) {
-  const { data, error } = await supabase.from('stock_looks').update({ active }).eq('id', id).select('id');
-  fail(error);
-  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can change stock looks');
-}
+export const loadStockLooks = () => loadStock<StockLook>('stock_looks', 'id, name, portrait, color, licence, active', 'created_at');
+export const addStockLook = (f: StockLookForm) => addStock('stock_looks', 'stock looks', { ...f, color: f.color.toLowerCase() }, [/duplicate key|stock_looks_name_key/i, 'A look with that name is on the list already']);
+export const setStockLookActive = (id: string, active: boolean) => setStockActive('stock_looks', 'stock looks', id, active);
 
 export const testConnection = (id: string) => invokeFunction<{ ok: boolean; model?: string; error?: string }>('ai', { action: 'test', connection_id: id });
 

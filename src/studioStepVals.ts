@@ -41,16 +41,16 @@ const NO_STOCK_LOOKS = 'No stock looks are offered yet. A General Admin adds the
 // Which stock looks and voices a studio casts. A look is one of the active stock looks. A voice is one of the active stock voices, offered once the AI voice is live: for a deck
 // once the AI voice is chosen, for an episode one for each speaker of its format.
 function castPickers(L: Logic, def: StudioDef, nw: NewDraft) {
-  const looks = (L.state.stockLooks ?? []).filter((l) => l.active).map((l) => l.name), voices = stockVoicesOf(L), names = (voices ?? []).map((v) => v.name), note = voices && !voices.length ? NO_STOCK_VOICES : '';
+  const looks = (L.state.stockLooks ?? []).filter((l) => l.active).map((l) => l.id), voices = stockVoicesOf(L), names = (voices ?? []).map((v) => v.name), note = voices && !voices.length ? NO_STOCK_VOICES : '';
   if (def.cast === 'voice') return wantsVoice(nw.shape ?? {}) && voiceOn(L.aiOpts()) ? [{ key: 'Voice', options: names, note }] : [];
   if (def.cast === 'voices') return voiceOn(L.aiOpts()) ? speakersOf(nw.shape ?? {}).map((speaker) => ({ key: castKey(speaker), options: names, note, speaker })) : [];
   return def.cast === 'look' ? [{ key: 'Look', options: looks, note: L.state.stockLooks && !looks.length ? NO_STOCK_LOOKS : '' }] : [];
 }
 
-// A look choice: the active stock looks, each with its drawn portrait next to the role.
+// A look choice: the active stock looks, each with its drawn portrait next to the role; the draft stores the look's id.
 function lookChoice(L: Logic, nw: NewDraft, setNw: SetNw, key: string, options: string[], note = '') {
   const g = choices(nw, setNw, 'cast', key, options, undefined, note);
-  return { ...g, chips: g.chips.map((c) => ({ ...c, image: portraitUrl(lookOf(L.state.stockLooks, c.label)!.portrait) })) };
+  return { ...g, chips: g.chips.map((c) => { const look = lookOf(L.state.stockLooks, c.key)!; return { ...c, label: look.name, image: portraitUrl(look.portrait) }; }) };
 }
 
 // A voice choice: the voice picked, or the one the stored clips were made in; picking another drops the clips of the old one.

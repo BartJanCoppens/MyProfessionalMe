@@ -96,25 +96,25 @@ describe('the stock voices', () => {
     expect(h.lastToast()).toBe('Added Coach · bright, 20s to the stock voices');
   });
   it('offers "Hear the voice" only while the AI voice is live, and plays the sample', async () => {
-    expect(page().vm().ai!.voices.rows[0].canHear).toBe(false);
+    expect(page().vm().ai!.voices.rows[0].hear).toBeUndefined();
     expect(page().vm().ai!.voices.note).toBe('Hear the voices once Studio voice-over is live (an ElevenLabs connection with a key, switched on)');
     const h = page(generalAdmin(), { aiLive: ['studio_voice'] });
     const row = h.vm().ai!.voices.rows[0];
-    expect(row.canHear).toBe(true);
+    expect(row.hear).toBeDefined();
     expect(h.vm().ai!.voices.note).toBe('');
-    await row.hear(); await flush();
+    await row.hear!.run(); await flush();
     expect(voice.hearStockVoice).toHaveBeenCalledWith('tVoiceWarm01');
     expect(played).toHaveBeenCalled();
     expect(h.state.voiceHearing).toBeNull();
   });
   it('hides "Hear the voice" with the AI switched off in the URL (?live=off)', () => {
     const row = page(systemAdmin(), { aiLive: ['studio_voice'] }, { liveAssistant: false }).vm().ai!.voices.rows[0];
-    expect(row.canHear).toBe(false);
+    expect(row.hear).toBeUndefined();
   });
   it('says why a sample did not play', async () => {
     vi.mocked(voice.hearStockVoice).mockRejectedValueOnce(new Error('ElevenLabs has no sample of that voice'));
     const h = page(systemAdmin(), { aiLive: ['studio_voice'] });
-    await h.vm().ai!.voices.rows[0].hear(); await flush();
+    await h.vm().ai!.voices.rows[0].hear!.run(); await flush();
     expect(h.lastToast()).toBe('ElevenLabs has no sample of that voice');
   });
 });
@@ -137,6 +137,9 @@ describe('the stock looks', () => {
     const f = () => h.vm().ai!.looks.form!;
     const fill = (label: string, v: string) => f().fields.find((x) => x.label === label)!.set(ev(v));
     expect(f().fields.map((x) => x.label)).toEqual(['Name, as a role and an age', 'Portrait', 'Colour', 'Licence']);
+    expect(f().fields[1].preview).toMatchObject({ src: expect.stringMatching(/^data:image\/svg/), color: '#2f7fc1' });
+    fill('Colour', 'red');
+    expect(f().fields[2].preview).toBeUndefined();
     await f().save();
     expect(h.lastToast()).toBe('Name the look as a role and an age, e.g. HR director · 50s');
     fill('Name, as a role and an age', ' Auditor · 40s '); fill('Colour', 'red'); await f().save();
@@ -148,12 +151,23 @@ describe('the stock looks', () => {
 });
 
 describe('the Reel Studio\'s look picker', () => {
+  it('keys a pick by the look\'s id: same-named looks are told apart and a rename keeps the pick', () => {
+    const twins = [...LOOKS, { ...LOOKS[0], id: 'l3', portrait: 'p1' as const }];
+    const h = reel(twins);
+    const chips = () => picker(h)!.chips;
+    expect(chips().map((c) => c.key)).toEqual(['l1', 'l3']);
+    chips()[1].pick();
+    expect(h.state.nw.cast).toEqual({ Look: 'l3' });
+    expect(chips().map((c) => c.on)).toEqual([false, true]);
+    h.L().setState({ stockLooks: twins.map((l) => (l.id === 'l3' ? { ...l, name: 'Renamed' } : l)) });
+    expect(chips().map((c) => [c.label, c.on])).toEqual([['CFO · 40s', false], ['Renamed', true]]);
+  });
   const reel = (looks = LOOKS) => harness({ access: member('u1'), subject: person(), state: { screen: 'create', createTab: 'new', stockLooks: looks, studio: { view: 'studio', step: 3, id: 'reel' },
     nw: { line: 'Consulting', aud: '', type: 'Reel', title: 'Pricing', dom: 'prof', lvl: '3', stage: 'Manager', take: 'x', outline: [], sources: [], ai: false, aiNote: '' } } });
   const picker = (h: ReturnType<typeof reel>) => h.vm().create!.studio.cast.find((g) => g.key === 'Look');
   it('lists the active looks with their portrait, and no longer a look an admin switched off', async () => {
     const h = reel();
-    expect(picker(h)!.chips.map((c) => [c.label, c.image?.startsWith('data:image/svg+xml')])).toEqual([['CFO · 40s', true]]);
+    expect(picker(h)!.chips.map((c) => [c.key, c.label, c.image?.startsWith('data:image/svg+xml')])).toEqual([['l1', 'CFO · 40s', true]]);
     vi.mocked(store.loadStockLooks).mockResolvedValue(LOOKS.map((l) => ({ ...l, active: false })));
     const admin = page(generalAdmin());
     await admin.vm().ai!.looks.rows[0].toggle(); await flush();

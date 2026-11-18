@@ -19,5 +19,5 @@ export function stockLookProblem(f: StockLookForm): string | null {
   return null;
 }
 
-// The look a studio draft names (its role), among the looks offered.
-export const lookOf = (looks: StockLook[] | null | undefined, name: string | undefined) => looks?.find((l) => l.name === name);
+// The look a studio draft names: a draft stores the look's id, so a rename keeps the pick.
+export const lookOf = (looks: StockLook[] | null | undefined, id: string | undefined) => looks?.find((l) => l.id === id);

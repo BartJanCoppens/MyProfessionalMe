@@ -163,7 +163,7 @@ function StockList({ title, addLabel, emptyText, v }: { title: string; addLabel:
             <div style={{ fontSize: 12, color: '#5a6058', marginTop: 2 }}>{r.meta}</div>
           </div>
           <Tag tone={r.active ? 'green' : 'neutral'}>{r.state}</Tag>
-          {r.canHear && <Button size="sm" variant="secondary" onClick={r.hear} disabled={r.hearing}>{r.hearing ? 'Loading the sample' : 'Hear the voice'}</Button>}
+          {r.hear && <Button size="sm" variant="secondary" onClick={r.hear.run} disabled={r.hear.busy}>{r.hear.busy ? 'Loading the sample' : 'Hear the voice'}</Button>}
           <LinkButton tone={r.active ? 'muted' : 'link'} onClick={r.toggle}>{r.toggleLabel}</LinkButton>
         </div>
       ))}
@@ -177,8 +177,12 @@ function StockDrawer({ f }: { f: NonNullable<AiVM['voices']['form'] | AiVM['look
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {f.fields.map((x) => (
           <Field key={x.label} label={x.label} hint={x.hint}>
-            {x.options ? <Select aria-label={x.label} value={x.value} onChange={x.set} options={x.options} />
-              : <Input aria-label={x.label} value={x.value} onChange={x.set} placeholder={x.placeholder} />}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              {x.options ? <Select aria-label={x.label} value={x.value} onChange={x.set} options={x.options} />
+                : <Input aria-label={x.label} value={x.value} onChange={x.set} placeholder={x.placeholder} />}
+              {x.preview && <span aria-hidden="true" style={{ flex: 'none', width: 40, height: x.preview.src ? 50 : 24, borderRadius: 6, border: '1px solid #e1e5dc', background: x.preview.color || '#fafbf8', overflow: 'hidden' }}>
+                {x.preview.src && <img src={x.preview.src} alt="" width={40} height={50} />}</span>}
+            </div>
           </Field>
         ))}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

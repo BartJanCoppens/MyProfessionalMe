@@ -24,6 +24,9 @@ describe('public.stock_looks repeats the TypeScript rules', () => {
       ['Consultant · 30s', 'p3', '#4c7a10', DRAWN_LICENCE], ['Engineer · 50s', 'p4', '#b5762a', DRAWN_LICENCE],
     ]);
   });
+  it('keeps a look name once, ignoring case and spaces', () => {
+    expect(sql).toContain('create unique index stock_looks_name_key on public.stock_looks (lower(trim(name)))');
+  });
   it('grants no delete and no upload column', () => {
     expect(sql).not.toMatch(/grant[^;]*delete/i);
     const table = /create table public\.stock_looks \(([\s\S]*?)\n\);/.exec(sql)![1];
@@ -40,9 +43,10 @@ describe('stockLookProblem', () => {
     expect(stockLookProblem({ ...ok, color: 'red' })).toMatch(/six hex digits/);
     expect(stockLookProblem({ ...ok, licence: '' })).toMatch(/Say where/);
   });
-  it('finds a look by its role', () => {
+  it('finds a look by its id, so a rename keeps a pick', () => {
     const looks = [{ id: 'l1', ...ok, active: true }];
-    expect(lookOf(looks, 'CFO · 40s')?.id).toBe('l1');
-    expect(lookOf(looks, 'Nobody')).toBeUndefined();
+    expect(lookOf(looks, 'l1')?.name).toBe('CFO · 40s');
+    expect(lookOf([{ ...looks[0], name: 'Renamed' }], 'l1')?.name).toBe('Renamed');
+    expect(lookOf(looks, 'CFO · 40s')).toBeUndefined();
   });
 });

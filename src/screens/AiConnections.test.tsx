@@ -161,7 +161,7 @@ describe('the stock voices', () => {
     fireEvent.change(screen.getByLabelText('ElevenLabs voice id'), { target: { value: 'tVoiceBright3' } });
     await click('Add voice');
     expect(store.addStockVoice).toHaveBeenCalledWith({ name: 'Coach · bright, 20s', voice_id: 'tVoiceBright3', language: 'en', accent: '' });
-    await click('Deactivate');
+    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Stock voices' })).getByRole('button', { name: 'Deactivate' })); });
     expect(store.setStockVoiceActive).toHaveBeenCalledWith('v1', false);
   });
   it('shows a General Admin the stock voices only', () => {
