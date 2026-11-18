@@ -15,7 +15,7 @@ type DecisionRow = { trajectory_id: string; step_id: string | null; decision: Tr
 type CredentialRow = Omit<Credential, 'link' | 'ref' | 'renewal_of' | 'superseded_at'> & { link: string | null; ref: string | null; renewal_of: string | null; superseded_at: string | null };
 type Failure = { message: string; code?: string };
 
-const TRAJECTORY_COLUMNS = 'id, name, issuer, credential, enrol, months, valid_months, renewal, cost, status, business_line, steps, maps, published_at';
+export const TRAJECTORY_COLUMNS = 'id, name, issuer, credential, enrol, months, valid_months, renewal, cost, status, business_line, steps, maps, published_at';
 const KINDS = ['learn', 'elect', 'evidence', 'check', 'exam'];
 const stepOk = (s: unknown) => isObject(s) && typeof s.id === 'string' && s.id.trim() !== '' && typeof s.k === 'string' && KINDS.includes(s.k);
 const mapOk = (m: unknown) => Array.isArray(m) && m.length === 3 && typeof m[0] === 'string' && typeof m[1] === 'string' && (m[2] === 'mandatory' || m[2] === 'advised');
@@ -118,25 +118,31 @@ export async function saveTrajectory(t: Trajectory) {
 
 // Edits come in bursts. Each trajectory saves one write at a time, in order; a scheduled save reads the trajectory as it
 // is when the timer fires, so the last edit wins. (Same scheme as saveBundleSoon; inOrder is shared, the timers are not.)
-const timers = new Map<string, number>();
-export function saveTrajectorySoon(id: string, latest: () => Trajectory | undefined, onError: (message: string) => void, wait = 600) {
-  clearTimeout(timers.get(id));
-  timers.set(id, window.setTimeout(() => { timers.delete(id); const t = latest(); if (t) inOrder(id, () => saveTrajectory(t)).catch((err) => onError((err as Error).message)); }, wait));
+const timers = new Map<string, { handle: number; run: () => void; wait: number }>();
+function schedule(id: string, run: () => void, wait: number) {
+  clearTimeout(timers.get(id)?.handle);
+  timers.set(id, { handle: window.setTimeout(() => { timers.delete(id); run(); }, wait), run, wait });
 }
-// A trajectory nobody enrolled on and no credential refers to (the database decides; see trajectory_in_use). A pending
-// debounced save of it is cancelled first, and a write already running finishes before the delete, so it is never written back.
-const notDeleted = 'Not deleted · people are enrolled or hold its credential · retire it instead';
+export function saveTrajectorySoon(id: string, latest: () => Trajectory | undefined, onError: (message: string) => void, wait = 600) {
+  schedule(id, () => { const t = latest(); if (t) inOrder(id, () => saveTrajectory(t)).catch((err) => onError((err as Error).message)); }, wait);
+}
+// A trajectory nobody was ever enrolled on and no credential refers to (the database decides; see trajectory_in_use). A pending
+// debounced save of it is held back first, and a write already running finishes before the delete, so it is never written back.
+// When the delete is refused the trajectory stays, so the held-back save is scheduled again (an edit the screen shows is not lost).
+const notDeleted = 'Not deleted · it is in use or you cannot delete it · retire it instead';
 export async function deleteTrajectory(id: string): Promise<{ error: string | null }> {
-  clearTimeout(timers.get(id));
+  const held = timers.get(id);
+  clearTimeout(held?.handle);
   timers.delete(id);
   let result: { error: string | null } = { error: null };
   await inOrder(id, async () => {
     const { data, error } = await supabase.from('trajectories').delete().eq('id', id).select('id');
     result = { error: error ? failure(error) : (data as unknown[] | null)?.length ? null : notDeleted };
   });
+  if (result.error && held && !timers.has(id)) schedule(id, held.run, held.wait);
   return result;
 }
-// The ids (of those this admin can read) that are in use, so the editor offers Delete only on the others.
+// The ids (of those this admin may write) that are in use, so the editor offers Delete only on the others.
 export async function loadTrajectoriesInUse(): Promise<string[]> {
   const { data, error } = await supabase.rpc('trajectories_in_use');
   fail(error);

@@ -823,7 +823,7 @@ insert into results (check_name, expected, actual) select 'AI studio_game is liv
 update public.ai_uses set enabled = false where key = 'studio_game';
 insert into results (check_name, expected, actual) select 'AI studio_game is not live once switched off', 'false', ('studio_game' = any(public.ai_live_uses()))::text;
 insert into results (check_name, expected, actual) select 'AI game_role is seeded as a text use, off, 60 a day', 'text/false/60', kind||'/'||enabled||'/'||daily_limit from public.ai_uses where key = 'game_role';
-insert into results (check_name, expected, actual) select 'AI game_role has a character budget of 60,000 a person a day', '60000', daily_chars::text from public.ai_uses where key = 'game_role';
+insert into results (check_name, expected, actual) select 'AI game_role has a character budget of 300,000 a person a day', '300000', daily_chars::text from public.ai_uses where key = 'game_role';
 insert into results (check_name, expected, actual) select 'AI game_role is not live without a connection', 'false', ('game_role' = any(public.ai_live_uses()))::text;
 with u as (update public.ai_uses set connection_id = current_setting('test.ai1')::uuid, enabled = true where key = 'game_role' returning 1) insert into results (check_name, expected, actual) select 'AI SA gives game_role the text connection', '1 rows', count(*)||' rows' from u;
 insert into results (check_name, expected, actual) select 'AI game_role is live with a text connection that has a key and a model', 'true', ('game_role' = any(public.ai_live_uses()))::text;
@@ -3027,8 +3027,8 @@ select pg_temp.gr_blocked('GA the call beyond the daily limit is refused', $q$se
 insert into results (check_name, expected, actual) select 'GA another person''s count is their own', '1', public.ai_count_call('00000000-0000-0000-0000-000000000a02', 'game_role', 100)::text;
 reset role;
 -- ---------- Delete a trajectory that was never used (TU) ----------
--- trajectories: admins remove = can_write_trajectory and not private.trajectory_in_use (an enrolment or a credential).
--- trajectories_in_use() lists the used ids the caller can read.
+-- trajectories: admins remove = can_write_trajectory and not private.trajectory_in_use (ever enrolled: the marker first_enrolled_at,
+-- stamped on the first enrolment and never cleared, or a credential). trajectories_in_use() lists the used ids the caller may write.
 reset role;
 set local request.jwt.claims = '';
 insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps) values
@@ -3037,13 +3037,20 @@ insert into public.trajectories (id, name, issuer, credential, enrol, months, st
   ('TU3', 'T live with an enrolment', 'T issuer', 'T credential', 'open', 6, 'live', 'Consulting', '[]', '[]'),
   ('TU4', 'T draft with a credential', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]'),
   ('TU5', 'T retired with a credential', 'T issuer', 'T credential', 'open', 6, 'retired', 'Consulting', '[]', '[]'),
-  ('TU6', 'T unused for the other line', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]');
+  ('TU6', 'T unused for the other line', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]'),
+  ('TU7', 'T live, enrolled once then withdrawn', 'T issuer', 'T credential', 'open', 6, 'live', 'Consulting', '[]', '[]');
 insert into public.trajectory_enrolments (user_id, trajectory_id, status, start_month) values ('00000000-0000-0000-0000-0000000000d1', 'TU3', 'enrolled', 24318);
 insert into public.credentials (user_id, name, issuer, earned_on, link, trajectory_id, status) values
   ('00000000-0000-0000-0000-0000000000d1', 'T cred of TU4', 'T issuer', '2026-01-01', 'https://cert.example/tu4', 'TU4', 'confirmed'),
   ('00000000-0000-0000-0000-0000000000d1', 'T cred of TU5', 'T issuer', '2026-01-01', 'https://cert.example/tu5', 'TU5', 'waiting');
+insert into results (check_name, expected, actual) select 'TU only the enrolled one has the marker (a credential alone does not stamp it)', 'TU3', string_agg(id, ', ' order by id) from public.trajectories where id like 'TU%' and first_enrolled_at is not null;
 set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TU a learner enrols on TU7', 'enrolled', public.request_trajectory('TU7');
+select public.withdraw_trajectory('TU7');
+insert into results (check_name, expected, actual) select 'TU after withdrawing no enrolment row is left', '0', count(*)::text from public.trajectory_enrolments where trajectory_id = 'TU7';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TU another line''s Domain Admin lists none of them as in use', '0', count(*)::text from public.trajectories_in_use() id where id like 'TU%';
 with d as (delete from public.trajectories where id = 'TU6' returning 1) insert into results (check_name, expected, actual) select 'TU another line''s Domain Admin deletes an unused draft', '0 rows', count(*)||' rows' from d;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
 with d as (delete from public.trajectories where id = 'TU1' returning 1) insert into results (check_name, expected, actual) select 'TU the line''s Domain Admin deletes an unused draft', '1 rows', count(*)||' rows' from d;
@@ -3051,7 +3058,12 @@ with d as (delete from public.trajectories where id = 'TU2' returning 1) insert 
 with d as (delete from public.trajectories where id = 'TU3' returning 1) insert into results (check_name, expected, actual) select 'TU a live trajectory with an enrolment is refused', '0 rows', count(*)||' rows' from d;
 with d as (delete from public.trajectories where id = 'TU4' returning 1) insert into results (check_name, expected, actual) select 'TU a draft with a credential is refused', '0 rows', count(*)||' rows' from d;
 with d as (delete from public.trajectories where id = 'TU5' returning 1) insert into results (check_name, expected, actual) select 'TU a retired one with a waiting credential is refused', '0 rows', count(*)||' rows' from d;
-insert into results (check_name, expected, actual) select 'TU the used ids the admin reads', 'TU3, TU4, TU5', string_agg(id, ', ' order by id) from public.trajectories_in_use() id where id like 'TU%';
+with d as (delete from public.trajectories where id = 'TU7' returning 1) insert into results (check_name, expected, actual) select 'TU enrolled once then withdrawn: the delete is refused (retire only)', '0 rows', count(*)||' rows' from d;
+insert into results (check_name, expected, actual) select 'TU the used ids the admin may write (the withdrawn one too)', 'TU3, TU4, TU5, TU7', string_agg(id, ', ' order by id) from public.trajectories_in_use() id where id like 'TU%';
+with u as (update public.trajectories set name = 'T7 renamed by an admin' where id = 'TU7' returning 1) insert into results (check_name, expected, actual) select 'TU an admin save of the other columns works', '1 rows', count(*)||' rows' from u;
+select pg_temp.gr_blocked('TU an admin update cannot clear the marker', $q$update public.trajectories set first_enrolled_at = null where id = 'TU7'$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TU an admin cannot set it on a new trajectory', $q$insert into public.trajectories (id, name, credential, months, first_enrolled_at) values ('TU8', 'T x', 'T c', 6, now())$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TU an admin cannot set it on an existing one', $q$update public.trajectories set first_enrolled_at = now() where id = 'TU7'$q$, 'blocked: 42501');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
 with d as (delete from public.trajectories where id = 'TU3' returning 1) insert into results (check_name, expected, actual) select 'TU a General Admin is refused too, a used one is retired only', '0 rows', count(*)||' rows' from d;
 with d as (delete from public.trajectories where id = 'TU6' returning 1) insert into results (check_name, expected, actual) select 'TU a General Admin deletes an unused draft of any line', '1 rows', count(*)||' rows' from d;
@@ -3059,6 +3071,7 @@ set local role anon;
 select pg_temp.gr_blocked('TU anon cannot list the used ids', $q$select public.trajectories_in_use()$q$, 'blocked: 42501');
 reset role;
 set local request.jwt.claims = '';
-insert into results (check_name, expected, actual) select 'TU what stays', 'TU3, TU4, TU5', string_agg(id, ', ' order by id) from public.trajectories where id like 'TU%';
+insert into results (check_name, expected, actual) select 'TU the marker survived the admin save', '1', count(*)::text from public.trajectories where id = 'TU7' and first_enrolled_at is not null;
+insert into results (check_name, expected, actual) select 'TU what stays', 'TU3, TU4, TU5, TU7', string_agg(id, ', ' order by id) from public.trajectories where id like 'TU%';
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

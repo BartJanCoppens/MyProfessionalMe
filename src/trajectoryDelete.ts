@@ -1,5 +1,5 @@
 // Admin: delete a trajectory nobody used (curriculum mapping). The database decides what "used" means
-// (private.trajectory_in_use: an enrolment or a credential); here are the ask-first step and the result.
+// (private.trajectory_in_use: ever enrolled, or a credential); here are the ask-first step and the result.
 import { deleteTrajectory } from './lib/trajectoryStore';
 import type { Logic } from './model';
 import type { Trajectory } from './logic/trajectory';
@@ -9,7 +9,7 @@ async function remove(L: Logic, t: Trajectory) {
   if (L.readOnly()) return;
   const { error } = await deleteTrajectory(t.id);
   if (error) {
-    L.setState((s) => ({ trjUsed: s.trjUsed.concat([t.id]) }));
+    L.setState((s) => ({ trjUsed: s.trjUsed && s.trjUsed.concat([t.id]) }));
     L.say(error);
     return;
   }
@@ -22,7 +22,8 @@ async function remove(L: Logic, t: Trajectory) {
 }
 
 export const trajectoryDeleteVals = (L: Logic, t: Trajectory) => ({
-  canDelete: !L.subject.readOnly && !L.state.trjUsed.includes(t.id),
+  // Unknown (the list did not load) counts as in use: the database refuses a used one anyway, but the screen must not offer it.
+  canDelete: !L.subject.readOnly && L.state.trjUsed !== null && !L.state.trjUsed.includes(t.id),
   deleteAsk: L.state.trjDelete === t.id ? 'Delete “' + t.name + '”? This cannot be undone.' : '',
   askDelete: () => L.setState({ trjDelete: t.id }),
   cancelDelete: () => L.setState({ trjDelete: null }),

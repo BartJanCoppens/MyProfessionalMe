@@ -5,6 +5,7 @@ import { canBeMandatory, inMandatoryAudience, PROOF_LIMITS, stepProofProblem } f
 import type { Trajectory } from './trajectory';
 import { MEMBERSHIP_PATTERN } from './membership';
 import { RENEW_DAYS } from './trajectoryLearner';
+import { TRAJECTORY_COLUMNS } from '../lib/trajectoryStore';
 
 const migrations = import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const sql = Object.entries(migrations).filter(([f]) => f.includes('_trajectories')).map(([, text]) => text).join('\n');
@@ -65,15 +66,27 @@ describe('renewal window: TypeScript and the database agree', () => {
 // Deleting an unused trajectory: the owner's rule lives in the database only (the editor asks trajectories_in_use()).
 describe('delete rule: the migration holds the owner rule', () => {
   const del = Object.entries(migrations).filter(([f]) => f.includes('_trajectory_delete')).map(([, text]) => text).join('\n').replace(/\s+/g, ' ');
-  it('"in use" is an enrolment or a credential of the trajectory', () => {
-    expect(del).toContain('select exists (select 1 from public.trajectory_enrolments where trajectory_id = p_trajectory) or exists (select 1 from public.credentials where trajectory_id = p_trajectory)');
+  it('"in use" is ever enrolled (the durable marker) or a credential of the trajectory', () => {
+    expect(del).toContain('select exists (select 1 from public.trajectories where id = p_trajectory and first_enrolled_at is not null) or exists (select 1 from public.credentials where trajectory_id = p_trajectory)');
+  });
+  it('the marker is stamped on the first enrolment insert, backfilled, and not writable by clients', () => {
+    expect(del).toContain('create trigger stamp_first_enrolment after insert on public.trajectory_enrolments');
+    expect(del).toContain('update public.trajectories set first_enrolled_at = now() where id = new.trajectory_id and first_enrolled_at is null');
+    expect(del).toContain('from public.trajectory_decisions d where d.trajectory_id = t.id');
+    expect(del).toContain('revoke insert, update on public.trajectories from authenticated');
+    const grants = [...del.matchAll(/grant (?:insert|update) \(([^)]*)\) on public\.trajectories/g)].map((m) => m[1]);
+    expect(grants).toHaveLength(2);
+    for (const g of grants) expect(g).not.toContain('first_enrolled_at');
+  });
+  it('the editor\'s save path never sends the marker', () => {
+    expect(TRAJECTORY_COLUMNS).not.toContain('first_enrolled_at');
   });
   it('the one delete policy keeps the write rule and refuses a used trajectory', () => {
     expect(del).toContain('drop policy "trajectories: admins remove"');
     expect(del).toContain('using ((select private.can_write_trajectory(business_line, status, maps)) and not (select private.trajectory_in_use(id)))');
     expect(del.match(/create policy "trajectories: admins remove"/g)).toHaveLength(1);
   });
-  it('the editor\'s list of used ids is the same helper', () => {
-    expect(del).toContain('select t.id from public.trajectories t where private.trajectory_in_use(t.id)');
+  it('the editor\'s list of used ids is the same helper, for the trajectories the caller may write', () => {
+    expect(del).toContain('select t.id from public.trajectories t where private.can_write_trajectory(t.business_line, t.status, t.maps) and private.trajectory_in_use(t.id)');
   });
 });

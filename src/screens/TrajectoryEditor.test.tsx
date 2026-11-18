@@ -26,7 +26,7 @@ const trajectory = (over: Partial<Trajectory> = {}): Trajectory => ({
   steps: [{ id: 's1', k: 'learn', lid: 'L1', win: 3, req: true, pre: null }, { id: 's2', k: 'exam', title: 'Final exam', hours: 2, win: 12, req: true, pre: 's1' }], ...over,
 });
 const show = (trjs: Trajectory[], state: Partial<AppState> = {}, access: Access = systemAdmin()) =>
-  render(<Live state={{ screen: 'adminMap', mapMode: 'traj', trjs, trjSel: trjs[0]?.id ?? null, ...state }} access={access} />);
+  render(<Live state={{ screen: 'adminMap', mapMode: 'traj', trjs, trjSel: trjs[0]?.id ?? null, trjUsed: [], ...state }} access={access} />);
 
 beforeEach(() => { vi.clearAllMocks(); window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; });
 afterEach(cleanup);
@@ -99,6 +99,10 @@ describe('deleting a trajectory that was never used', () => {
     show([trajectory()]);
     expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
   });
+  it('shows no Delete while the in-use list is unknown', () => {
+    show([trajectory()], { trjUsed: null });
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
   it('asks naming the trajectory, then removes it from the list', async () => {
     vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: null });
     show([trajectory(), trajectory({ id: 'T2', name: 'Second' })]);
@@ -112,11 +116,11 @@ describe('deleting a trajectory that was never used', () => {
     expect(screen.getByText('Trajectories · 1')).toBeTruthy();
   });
   it('shows the refusal and keeps the trajectory', async () => {
-    vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: 'Not deleted · people are enrolled or hold its credential · retire it instead' });
+    vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: 'Not deleted · it is in use or you cannot delete it · retire it instead' });
     show([trajectory()]);
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     fireEvent.click(screen.getByRole('button', { name: 'Yes, delete' }));
-    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Not deleted · people are enrolled or hold its credential · retire it instead');
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Not deleted · it is in use or you cannot delete it · retire it instead');
     expect(screen.getByDisplayValue('Tax certificate')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });

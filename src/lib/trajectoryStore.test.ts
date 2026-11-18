@@ -160,7 +160,7 @@ describe('deleting a trajectory', () => {
   });
   it('says so when the database refused (used meanwhile, or not the admin\'s)', async () => {
     db.answer(() => ({ data: [] }));
-    expect(await deleteTrajectory('T1')).toEqual({ error: 'Not deleted · people are enrolled or hold its credential · retire it instead' });
+    expect(await deleteTrajectory('T1')).toEqual({ error: 'Not deleted · it is in use or you cannot delete it · retire it instead' });
   });
   it('returns the database error', async () => {
     failWith('boom');
@@ -173,6 +173,17 @@ describe('deleting a trajectory', () => {
     await deleteTrajectory('T1');
     await vi.advanceTimersByTimeAsync(700);
     expect(db.calls.map(op)).toEqual(['delete']);
+  });
+  it('schedules the held-back save again when the delete is refused, so the edit is not lost', async () => {
+    vi.useFakeTimers();
+    db.answer(() => ({ data: [] }));
+    const latest = { ...parsed(), name: 'edited' };
+    saveTrajectorySoon('T1', () => latest, vi.fn(), 600);
+    expect((await deleteTrajectory('T1')).error).toMatch(/^Not deleted/);
+    db.answer(() => ({ data: [{ id: 'T1' }] }));
+    await vi.advanceTimersByTimeAsync(700);
+    expect(db.calls.map(op)).toEqual(['delete', 'update']);
+    expect((db.calls[1].steps[0][1][0] as { name: string }).name).toBe('edited');
   });
   it('lists the ids in use through the database function', async () => {
     db.answer(() => ({ data: ['T1', 'T3'] }));

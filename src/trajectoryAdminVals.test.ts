@@ -17,7 +17,7 @@ const T = (id: string, over: Partial<Trajectory> = {}): Trajectory => ({
   steps: [{ id: 's1', k: 'learn', lid: 'L1', win: 3, req: true, pre: null }, { id: 's2', k: 'exam', title: 'Exam', hours: 2, win: 12, req: true, pre: 's1' }], ...over,
 });
 const setup = (trjs: Trajectory[], access: Access = systemAdmin(), state: Partial<AppState> = {}) =>
-  harness({ access, state: { screen: 'adminMap', mapMode: 'traj', trjs, trjSel: trjs[0]?.id ?? null, ...state } });
+  harness({ access, state: { screen: 'adminMap', mapMode: 'traj', trjs, trjSel: trjs[0]?.id ?? null, trjUsed: [], ...state } });
 
 describe('the tabs and the list', () => {
   it('switches between learnings and trajectories, with the count on the tab', () => {
@@ -331,6 +331,9 @@ describe('deleting a trajectory that was never used', () => {
     h.vm().trjList[1].pick();
     expect(setup(two(), systemAdmin(), { trjUsed: ['T2'], trjSel: 'T2' }).vm().tj!.canDelete).toBe(false);
   });
+  it('offers no Delete while it is unknown which trajectories are in use (the list did not load)', () => {
+    expect(setup(two(), systemAdmin(), { trjUsed: null }).vm().tj!.canDelete).toBe(false);
+  });
   it('offers nothing in View as', () => {
     const h = harness({ access: systemAdmin(), subject: { ...person(), readOnly: true }, state: { screen: 'adminMap', mapMode: 'traj', trjs: two(), trjSel: 'T1' } });
     expect(h.vm().tj!.canDelete).toBe(false);
@@ -355,10 +358,10 @@ describe('deleting a trajectory that was never used', () => {
     expect(h.lastToast()).toBe('Deleted “Trajectory T1”');
   });
   it('shows the refusal, keeps the trajectory and hides Delete from then on', async () => {
-    vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: 'Not deleted · people are enrolled or hold its credential · retire it instead' });
+    vi.mocked(store.deleteTrajectory).mockResolvedValue({ error: 'Not deleted · it is in use or you cannot delete it · retire it instead' });
     const h = setup(two());
     h.vm().tj!.confirmDelete(); await flush();
-    expect(h.lastToast()).toBe('Not deleted · people are enrolled or hold its credential · retire it instead');
+    expect(h.lastToast()).toBe('Not deleted · it is in use or you cannot delete it · retire it instead');
     expect(h.state.trjs).toHaveLength(2);
     expect(h.state.trjUsed).toEqual(['T1']);
     expect(h.state.trjDelete).toBeNull();

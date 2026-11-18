@@ -122,7 +122,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   useEffect(() => {
     let live = true;
     loadTrajectories().then((trjs) => { if (live) setRaw((s) => ({ ...s, trjs })); }, (err) => { if (live) logicRef.current.say('Trajectories did not load · ' + (err as Error).message); });
-    // Only for Delete: without it the editor offers none (the database refuses a used one anyway).
+    // Only for Delete: until it has loaded (or when it fails) trjUsed stays null and the editor offers none.
     loadTrajectoriesInUse().then((trjUsed) => { if (live) setRaw((s) => ({ ...s, trjUsed })); }, () => {});
     return () => { live = false; };
   }, [me]);
