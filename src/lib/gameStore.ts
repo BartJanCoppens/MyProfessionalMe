@@ -3,17 +3,17 @@
 // definer function with first names and initials only, and the player's own best. Nothing reads another person's raw runs.
 import type { LeaderRow } from '../game/protocol';
 import type { GameReviewStatus } from '../logic/gameContent';
+import { runRow } from './runTarget';
+import type { RunTarget } from './runTarget';
 import { supabase } from './supabase';
 
-export type RunTarget = { learningId: string } | { contributionId: string };
 export type Best = { score: number; seconds: number };
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 
 // A play-test (a contribution) is marked test; a test never counts.
 export async function startRun(target: RunTarget): Promise<string> {
-  const row: { contribution_id?: string; learning_id?: string; test: boolean } = 'contributionId' in target ? { contribution_id: target.contributionId, test: true } : { learning_id: target.learningId, test: false };
-  const { data, error } = await supabase.from('game_runs').insert(row).select('id').single();
+  const { data, error } = await supabase.from('game_runs').insert(runRow(target)).select('id').single();
   fail(error);
   return (data as { id: string }).id;
 }

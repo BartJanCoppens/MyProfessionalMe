@@ -8,7 +8,7 @@ import type { LeaderRow } from './game/protocol';
 import type { CompleteOpts } from './lib/ai';
 import { roleAsker, ROLE_UNAVAILABLE } from './lib/gameRole';
 import { finishRun, leaderboard, myBest, startRun } from './lib/gameStore';
-import type { RunTarget } from './lib/gameStore';
+import type { RunTarget } from './lib/runTarget';
 import { fmtTime } from './logic/media';
 import { completionText } from './logic/record';
 import type { Item, Logic } from './model';
