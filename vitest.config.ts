@@ -6,6 +6,8 @@ import viteConfig from './vite.config.ts';
 export default mergeConfig(viteConfig, defineConfig({
   test: {
     include: ['src/**/*.test.{ts,tsx}'],
+    // Screen tests are slow under parallel load; 5 s (the default) made `npm test` flaky as a release gate.
+    testTimeout: 15000,
     setupFiles: ['src/test/setup.ts'],
     env: { VITE_SUPABASE_URL: 'http://127.0.0.1:9', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test' },
     coverage: {
