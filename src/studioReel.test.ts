@@ -27,7 +27,7 @@ vi.mock('./lib/contributionStore', () => ({
   checkContribution: vi.fn(async () => ({ passed: true, reasons: [] })), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(async () => {}), removePolicy: vi.fn(async () => {}),
 }));
 vi.mock('./lib/voice', async (orig) => ({ ...(await orig<typeof import('./lib/voice')>()), speak: vi.fn(), speakInBrowser: vi.fn() }));
-vi.mock('./lib/mediaStore', () => ({ mediaUrl: vi.fn(async (p: string) => 'https://signed/' + p.split('/').pop()), uploadMedia: vi.fn(async (_id: string, _blob: Blob, name: string) => FOLDER + name) }));
+vi.mock('./lib/mediaStore', () => ({ mediaUrl: vi.fn(async (p: string) => 'https://signed/' + p.split('/').pop()), uploadMedia: vi.fn(async (_id: string, _blob: Blob, name: string) => FOLDER + name), removeMedia: vi.fn(async () => {}) }));
 vi.mock('./reel/compositor', () => ({ renderCut: vi.fn(), prepareAudio: vi.fn() }));
 vi.mock('./reel/reelCut', async (orig) => ({ ...(await orig<typeof import('./reel/reelCut')>()), loadPortrait: vi.fn(async () => null) }));
 
@@ -45,7 +45,7 @@ const clip = (k: number, seconds = 5, words: number[] = timed(SCENES[k][1])): Cl
 const VOICED = (seconds = 5): StudioEntry[] => withClips(ROWS, SCENES.map((_, k) => clip(k, seconds))) as StudioEntry[];
 const nwOf = (o: Partial<NewDraft> = {}): NewDraft => ({ line: 'Consulting', aud: '', type: 'Reel', title: 'Three signs', dom: 'prof', lvl: '2', stage: 'Senior consultant', take: 'Spot drift early.', outline: [], sources: [], ai: false, aiNote: '', key: 'k1', ...o });
 const data = (): CreateData => ({ contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 });
-const made = { blob: new Blob(['video']), mime: 'video/mp4;codecs=avc1', ext: 'mp4' as const, seconds: 22.6 };
+const made = { blob: new Blob(['video']), mime: 'video/mp4;codecs=avc1', ext: 'mp4' as const, seconds: 20.9 }; // what renderCut returns: the cut's own length (VOICED is 4 x 5 s and 3 gaps of 0.3 s)
 let spoken = 0;
 const mockVoice = (seconds = 5) => vi.mocked(voice.speak).mockImplementation(async (r) => { spoken++; return { path: FOLDER + 'voice-' + spoken + '.mp3', seconds, marks: [], words: timed(r.text), made: 'voice' as const }; });
 
@@ -123,7 +123,7 @@ describe('step 4: the final cut', () => {
     expect(vi.mocked(media.uploadMedia).mock.calls[0][2]).toMatch(/^reel-[0-9a-f]{16}\.mp4$/);
     const video = h.list().filter(isVideoItem);
     expect(video).toHaveLength(1);
-    expect(video[0]).toMatchObject({ kind: 'video', size: '720x1280', mime: 'video/mp4', seconds: 22.6, path: FOLDER + vi.mocked(media.uploadMedia).mock.calls[0][2] });
+    expect(video[0]).toMatchObject({ kind: 'video', size: '720x1280', mime: 'video/mp4', seconds: 20.9, path: FOLDER + vi.mocked(media.uploadMedia).mock.calls[0][2] });
     expect(video[0].made).toMatchObject({ rows: ROWS, clips: [1, 2, 3, 4].map((k) => FOLDER + 'voice-' + k + '.mp3'), look: null, format: '9:16 vertical', captions: 'Burned in', music: 'None' });
     expect(h.list().slice(0, 5)).toEqual(ROWS);
     expect(voiceOf(h.list())!.clips).toHaveLength(4);
@@ -192,6 +192,64 @@ describe('step 4: the final cut', () => {
     const h = open({ readOnly: true, list: VOICED() });
     for (const k of [0, 1, 2, 3]) await expect(h.step(k)).rejects.toThrow('Only the creator can build it');
     expect(renderCut).not.toHaveBeenCalled();
+  });
+});
+
+describe('the reading-pace estimate before any voice is spent (M3)', () => {
+  const wordy = ROWS.map((r) => (r[0] === 'Check' ? r : [r[0], 'word '.repeat(100).trim(), r[2]])) as StudioEntry[];
+  it('refuses in step 1 a reel whose text alone reads over 90 s, so no voice call is made', async () => {
+    const h = open({ list: wordy });
+    await expect(h.step(0)).rejects.toThrow(/reads at about 17\d s · at most 90 s/);
+    expect(voice.speak).not.toHaveBeenCalled();
+  });
+  it('lets a reel that reads within 90 s go on to the voice', async () => {
+    await expect(open().step(0)).resolves.toBeUndefined();
+  });
+});
+
+describe('the audio context opened in the click is never leaked (M4)', () => {
+  const context = () => { const c = { close: vi.fn(async () => {}) }; vi.mocked(prepareAudio).mockReturnValueOnce(c as never); return c; };
+  it('is closed when the cut stops before the render starts (no stock look picked)', async () => {
+    const c = context(), runner = open({ list: VOICED(), shape: { [PRESENTER]: PORTRAIT_VOICE } }).st().buildRunner!;
+    runner.prepare!();
+    await expect(runner('x', 3)).rejects.toThrow(PICK_LOOK);
+    expect(c.close).toHaveBeenCalledTimes(1);
+  });
+  it('is closed when prepare is called again over an open one, and the render is handed the newest', async () => {
+    const first = context(), second = context(), runner = open({ list: VOICED() }).st().buildRunner!;
+    runner.prepare!(); runner.prepare!();
+    expect(first.close).toHaveBeenCalledTimes(1);
+    await runner('x', 3);
+    expect(vi.mocked(renderCut).mock.calls[0][1].context).toBe(second);
+    expect(second.close).not.toHaveBeenCalled(); // the render owns it from here (renderCut closes it)
+  });
+});
+
+describe('a re-cut removes the previous video once the new one is saved (M7)', () => {
+  const OLD = FOLDER + 'reel-aaaaaaaaaaaaaaaa.mp4';
+  const withOld = (path = OLD) => [...VOICED(), { kind: 'video', path, seconds: 20.9, size: '720x1280', mime: 'video/mp4', made: { rows: ROWS, clips: SCENES.map((_, k) => FOLDER + 'voice-' + (k + 1) + '.mp3'),
+    look: null, format: '9:16 vertical', captions: 'Separate file', music: 'None' } }] as StudioEntry[];
+  it('removes the old file after the upload and the draft save, and keeps only the new video item', async () => {
+    const h = open({ list: withOld() });
+    await h.step(3);
+    expect(media.removeMedia).toHaveBeenCalledWith(OLD);
+    expect(vi.mocked(media.removeMedia).mock.invocationCallOrder[0]).toBeGreaterThan(vi.mocked(store.saveDraft).mock.invocationCallOrder.at(-1)!);
+    expect(h.list().filter(isVideoItem).map((v) => v.path)).toEqual([FOLDER + vi.mocked(media.uploadMedia).mock.calls[0][2]]);
+  });
+  it('removes nothing when the new cut is stored under the same name, or when the render fails', async () => {
+    const h = open({ list: withOld() });
+    await h.step(3);
+    const same = open({ list: withOld(FOLDER + vi.mocked(media.uploadMedia).mock.calls[0][2]) });
+    vi.mocked(media.removeMedia).mockClear();
+    await same.step(3);
+    expect(media.removeMedia).not.toHaveBeenCalled();
+    vi.mocked(renderCut).mockRejectedValue(new CutError('CUT_HIDDEN'));
+    await expect(open({ list: withOld() }).step(3)).rejects.toThrow();
+    expect(media.removeMedia).not.toHaveBeenCalled();
+  });
+  it('still succeeds when the old file cannot be removed (the new cut is saved; only storage is left)', async () => {
+    vi.mocked(media.removeMedia).mockRejectedValueOnce(new Error('nope'));
+    await expect(open({ list: withOld() }).step(3)).resolves.toBeUndefined();
   });
 });
 

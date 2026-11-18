@@ -8,17 +8,17 @@ import type { Logic } from './model';
 import type { NewDraft } from './types';
 import { latestDraft } from './studioDraft';
 import type { BuildCtx } from './studioDraft';
-import { mediaUrl, uploadMedia } from './lib/mediaStore';
+import { mediaUrl, removeMedia, uploadMedia } from './lib/mediaStore';
 import { voiceOn } from './lib/voice';
 import { captionCues } from './logic/captions';
 import type { Item } from './logic/items';
 import { ownSeconds } from './logic/narration';
-import { NO_VOICE, PRESENTER, REEL_SECONDS_MAX, TEXT_ONLY, cutMade, reelContent, reelProblems, reelSeconds, reelStepsDone, sceneRows, wantsVoice } from './logic/reelContent';
+import { NO_VOICE, PRESENTER, REEL_SECONDS_MAX, TEXT_ONLY, cutMade, readingProblem, reelContent, reelProblems, reelSeconds, reelStepsDone, sceneRows, wantsVoice } from './logic/reelContent';
 import type { BuildRunner } from './logic/studioBuild';
 import { itemsValid, stepsOf, studioById } from './logic/studios';
 import type { StudioEntry } from './logic/studios';
 import { MIME_OF_EXT, SIZE_OF, isVideoItem, videoOf } from './logic/videoItem';
-import type { VideoItem } from './logic/videoItem';
+import type { CutMade, VideoItem } from './logic/videoItem';
 import { voiceOf, withClips } from './logic/voiceItem';
 import { renderBuiltCut } from './reel/renderBuilt';
 import type { AudioLike, CutResult } from './reel/compositor';
@@ -56,14 +56,53 @@ async function hash16(made: unknown): Promise<string> {
   return [...new Uint8Array(digest)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// The audio context opened in the click: whoever holds it closes it, and the render owns it from the moment it starts.
+type Held = { context?: AudioLike };
+const release = (held: Held) => { void held.context?.close().catch(() => {}); held.context = undefined; };
+
+// The final cut's render. Every refusal before `host.run` leaves the context in `held`, for the runner to close.
+async function renderReel(ctx: BuildCtx, list: StudioEntry[], host: CutHost, held: Held) {
+  const { L, nw } = ctx, shape = nw.shape ?? {}, { produce, cast } = chosen(nw, list), rows = list.filter((x) => !isVideoItem(x));
+  const content = reelContent(rows, shape, L.state.stockLooks ?? [], { produce, cast }), made = cutMade(rows, shape, produce, cast);
+  if (!content) throw new Error('Voice the reel first');
+  if (shape[PRESENTER] === 'Stock presenter and AI voice' && !content.look) throw new Error(PICK_LOOK);
+  const ai = content.made === 'ai' || nw.items?.how === 'ai', context = held.context;
+  held.context = undefined;
+  const done = await host.run(async () => {
+    const [urls, img] = await Promise.all([Promise.all(made.clips.map((p) => mediaUrl(p))), content.look ? loadPortrait(content.look.portrait) : null]);
+    return reelCut({ ...content, made: ai ? 'ai' : content.made }, urls, img);
+  }, context);
+  if (!done) throw new Error(CUT_FAILED);
+  return { done, made };
+}
+
+// Stores the cut with the draft (the video item is written only after the upload), then removes the video it replaces: never before.
+async function storeCut(ctx: BuildCtx, done: CutResult, made: CutMade) {
+  const name = 'reel-' + (await hash16(made)) + '.' + done.ext;
+  let replaced: string | null = null;
+  const stored = await ctx.withFile(async (id) => {
+    const path = await uploadMedia(id, done.blob, name), now = listOf(latestDraft(ctx.L).nw), before = videoOf(now)?.path;
+    replaced = before && before !== path ? before : null;
+    const video: VideoItem = { kind: 'video', path, seconds: Math.min(done.seconds, REEL_SECONDS_MAX), size: SIZE_OF[made.format], mime: MIME_OF_EXT[done.ext], made };
+    return [...stepsOf(now), ...(made.clips.length ? [voiceOf(now)!] : []), video] as Item[];
+  }, 'Saved as draft · the final cut is stored with it', ctx.nw.items?.how ?? '');
+  if (!stored) throw new Error('The final cut could not be saved · try again');
+  // an old cut left behind costs storage only, so a failed removal does not fail a cut that is saved
+  if (replaced) await removeMedia(replaced).catch(() => {});
+}
+
 export function reelRunner(ctx: BuildCtx, host: CutHost = direct): BuildRunner {
-  const { L, nw } = ctx, shape = nw.shape ?? {}, def = studioById('reel')!;
-  let list = listOf(nw), held: AudioLike | undefined; // the reel as the steps leave it, and the audio context opened in the click
+  const { L, nw } = ctx, shape = nw.shape ?? {}, def = studioById('reel')!, held: Held = {};
+  let list = listOf(nw); // the reel as the steps leave it
   const voice = async () => {
     const id = voiceId(L, nw, list)?.voice_id, parts = sceneRows(list).map((r) => ({ text: r[1], voice: id }));
     list = await voiceParts(ctx, usableClips(list), parts, NO_VOICE);
   };
-  const check = () => {
+  const rows = async () => {
+    const bad = itemsValid(def, list)[0] ?? readingProblem(list);
+    if (bad) throw new Error(bad);
+  };
+  const check = async () => {
     const bad = reelProblems(list, shape, { voiceOn: voiceOn(L.aiOpts()), looks: null })[0];
     if (bad) throw new Error(bad);
     // the caption cues of every voiced scene: a scene whose word timings do not match its words has to be voiced again
@@ -71,37 +110,13 @@ export function reelRunner(ctx: BuildCtx, host: CutHost = direct): BuildRunner {
     const at = scenes.findIndex((s) => s.words && !captionCues(s.text, s.words, s.start, s.start + s.seconds));
     if (at >= 0) throw new Error('Voice scene ' + (at + 1) + ' again · its word timing does not match its words');
   };
-  async function cut() {
-    const { produce, cast } = chosen(nw, list), rows = list.filter((x) => !isVideoItem(x));
-    const content = reelContent(rows, shape, L.state.stockLooks ?? [], { produce, cast }), made = cutMade(rows, shape, produce, cast);
-    if (!content) throw new Error('Voice the reel first');
-    if (shape[PRESENTER] === 'Stock presenter and AI voice' && !content.look) throw new Error(PICK_LOOK);
-    const ai = content.made === 'ai' || nw.items?.how === 'ai';
-    const done = await host.run(async () => {
-      const [urls, img] = await Promise.all([Promise.all(made.clips.map((p) => mediaUrl(p))), content.look ? loadPortrait(content.look.portrait) : null]);
-      return reelCut({ ...content, made: ai ? 'ai' : content.made }, urls, img);
-    }, held);
-    held = undefined;
-    if (!done) throw new Error(CUT_FAILED);
-    const name = 'reel-' + (await hash16(made)) + '.' + done.ext;
-    const stored = await ctx.withFile(async (id) => {
-      const path = await uploadMedia(id, done.blob, name), now = listOf(latestDraft(L).nw);
-      const video: VideoItem = { kind: 'video', path, seconds: Math.min(done.seconds, REEL_SECONDS_MAX), size: SIZE_OF[made.format], mime: MIME_OF_EXT[done.ext], made };
-      return [...stepsOf(now), ...(made.clips.length ? [voiceOf(now)!] : []), video] as Item[];
-    }, 'Saved as draft · the final cut is stored with it', nw.items?.how ?? '');
-    if (!stored) throw new Error('The final cut could not be saved · try again');
-  }
-  const steps = [
-    async () => { const bad = itemsValid(def, list)[0]; if (bad) throw new Error(bad); },
-    async () => { if (wantsVoice(shape)) await voice(); },
-    async () => check(),
-    cut,
-  ];
+  const cut = async () => { const { done, made } = await renderReel(ctx, list, host, held); await storeCut(ctx, done, made); };
+  const steps = [rows, async () => { if (wantsVoice(shape)) await voice(); }, check, cut];
   const run: BuildRunner = async (_name, index) => {
     if (L.readOnly()) throw new Error('Only the creator can build it');
-    try { await steps[index](); } catch (e) { if (index < 3) void held?.close().catch(() => {}); if (index < 3) held = undefined; throw e; }
+    try { await steps[index](); } catch (e) { release(held); throw e; }
   };
-  return Object.assign(run, { prepare: () => { held = prepareAudio(); } });
+  return Object.assign(run, { prepare: () => { release(held); held.context = prepareAudio(); } });
 }
 
 // How many of the four build steps the draft's own output shows done.

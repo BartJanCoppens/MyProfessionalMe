@@ -82,6 +82,13 @@ export function reelTimeline(items: readonly unknown[], shape: Record<string, st
     return { start, seconds: round3(seconds) };
   });
 }
+// How long the voice-over text reads at the reading pace, gaps included: the estimate before any voice is made (the real clips are
+// checked later, against the same 90 s). Not mirrored in SQL: the database only ever sees the voiced reel.
+export const readingSeconds = (items: readonly unknown[]): number => sceneRows(items).reduce((t, r) => t + ownSeconds(r[1]) + SCENE_GAP, -SCENE_GAP);
+export const readingProblem = (items: readonly unknown[]): string | null => {
+  const s = readingSeconds(items);
+  return s > REEL_SECONDS_MAX ? 'The text reads at about ' + Math.ceil(s) + ' s · at most ' + REEL_SECONDS_MAX + ' s · shorten the voice-over before it is voiced' : null;
+};
 export function reelSeconds(items: readonly unknown[], shape: Record<string, string>): number | null {
   const line = reelTimeline(items, shape), last = line?.[line.length - 1];
   return last ? round3(last.start + last.seconds) : line ? 0 : null;
