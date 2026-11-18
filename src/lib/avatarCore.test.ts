@@ -140,10 +140,10 @@ describe('the final report never refunds from the client\'s number', () => {
     expect((init.headers as Record<string, string>)['X-API-KEY']).toBe(KEY);
     expect(d.reports).toEqual([[SID, 1, true, true]]);
   });
-  it('a session LiveAvatar no longer knows (404) counts as stopped', async () => {
+  it('a 404 does not count as stopped: the reservation and the open session stay (fail closed)', async () => {
     const d = deps({ fetch: vi.fn(async () => new Response('{}', { status: 404 })) });
     await reportResponse(final, d);
-    expect(d.reports).toEqual([[SID, 1, true, true]]);
+    expect(d.reports).toEqual([[SID, 1, true, false]]);
   });
   it('when the stop fails, errors or cannot be asked (no id or key), the report says not stopped, so the database keeps the whole reservation', async () => {
     for (const over of [{ fetch: vi.fn(async () => new Response('{}', { status: 500 })) }, { fetch: vi.fn(async () => { throw new Error('down'); }) }, { provider: async () => null }, { target: async () => null }]) {

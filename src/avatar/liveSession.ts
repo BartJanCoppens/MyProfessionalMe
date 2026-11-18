@@ -33,7 +33,7 @@ export function classifyLiveError(e: unknown): LiveError {
   return { reason: 'unknown', message: msg || 'Live video failed to start.' };
 }
 
-export type UsageMeter = { start(): void; stop(): void };
+export type UsageMeter = { start(): void; stop(): Promise<void> };
 
 /** Meters one video session: a heartbeat while live, one final report on stop (also when it never started: the reservation is returned). */
 export function createUsageMeter(sessionId: string, report: typeof reportLiveSeconds = reportLiveSeconds, now: () => number = () => Date.now()): UsageMeter {
@@ -45,11 +45,12 @@ export function createUsageMeter(sessionId: string, report: typeof reportLiveSec
       startedAt = now();
       timer = setInterval(() => { void report(sessionId, elapsed(), false); }, USAGE_HEARTBEAT_MS);
     },
-    stop() {
+    // Resolves when the final report has been sent (the server stops the session at LiveAvatar then), so the caller can stop its own end after it.
+    async stop() {
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
-      void report(sessionId, elapsed(), true);
+      await report(sessionId, elapsed(), true);
     },
   };
 }

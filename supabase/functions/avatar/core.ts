@@ -61,7 +61,7 @@ export function readSessionId(json: unknown): string | null {
   return typeof id === 'string' && id ? id : null;
 }
 // Stops the session at LiveAvatar. UNCONFIRMED against LiveAvatar's reference: POST <base>/v1/sessions/stop with { session_id } and the key in X-API-KEY
-// (check at the first live run, docs/testing/functional-test-cases.md). A session LiveAvatar no longer knows (404: the client's own stop got there first) counts as stopped.
+// (check at the first live run, docs/testing/functional-test-cases.md). Only a confirmed successful stop (2xx) counts as stopped; a 404 or any failure does not, so the reservation and the open-session lock stay until the maximum has passed.
 export function stopRequest(t: TokenTarget, providerSessionId: string) {
   return { url: (t.baseUrl || LIVEAVATAR).replace(/\/+$/, '') + '/v1/sessions/stop', init: { method: 'POST' as const, headers: { 'Content-Type': 'application/json', 'X-API-KEY': t.key }, body: JSON.stringify({ session_id: providerSessionId }) } };
 }
@@ -121,14 +121,14 @@ export async function startResponse(body: unknown, d: StartDeps): Promise<Respon
   }
 }
 
-// Stops the LiveAvatar session; true when it is stopped or already gone. Without the provider's id or the key it cannot be stopped.
+// Stops the LiveAvatar session (which also invalidates a token not used yet); true only when LiveAvatar confirmed it. Without the provider's id or the key it cannot be stopped.
 async function stopUpstream(sessionId: string, d: StartDeps): Promise<boolean> {
   const [t, id] = await Promise.all([d.target(), d.provider(sessionId)]);
   if (!t || !id) return false;
   const req = stopRequest(t, id);
   try {
     const res = await (d.fetch || fetch)(req.url, { ...req.init, signal: AbortSignal.timeout(AVATAR_LIMITS.timeoutMs) });
-    return res.ok || res.status === 404;
+    return res.ok;
   } catch { return false; }
 }
 

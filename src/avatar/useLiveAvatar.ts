@@ -27,7 +27,8 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
     if (idle.current) clearTimeout(idle.current);
     const [s, m] = [session.current, meter.current];
     session.current = null; meter.current = null;
-    m?.stop();
+    // The final report goes first: the server stops the session at LiveAvatar and only a confirmed stop releases the reserved minutes. Then our own end (3 s at most).
+    if (m) await Promise.race([m.stop(), new Promise((r) => setTimeout(r, 3000))]);
     if (s) await s.stop().catch((): void => undefined);
   }, []);
 
@@ -51,7 +52,7 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
       return;
     }
     const usage = createUsageMeter(opened.sessionId);
-    if (mine !== generation.current) { usage.stop(); return; } // stopped while the token was coming: give the seconds back
+    if (mine !== generation.current) { void usage.stop(); return; } // stopped while the token was coming: give the seconds back
     const s = new LiveAvatarSession(opened.token);
     s.voiceChat.start = async () => {}; // the SDK would open the microphone here; the avatar only speaks the text it is given
     s.on(SessionEvent.SESSION_DISCONNECTED, () => { if (session.current === s) void end('ended', STOPPED_MESSAGE); });
