@@ -1,19 +1,25 @@
 // The Avatar's character, as the `ai` function plays it (use avatar_conversation) on the one role-play path (rolePlay.ts): the run is the caller's own,
 // unfinished and in time (public.avatar_run_context, service role: the one place what the character reveals or hides is read). The client sends the
 // run and one line; the server holds the conversation, so no character line can be forged. The reply and the learner's line are written once
-// (public.avatar_add_turns) after the answer. This file is only the Avatar's side: its context, refusals, request and the turn write.
-// Guardrails around the call are Task 6.3. Tested in src/lib/aiAvatarTurn.test.ts.
+// (public.avatar_add_turns) after the answer. This file is only the Avatar's side: its context, refusals, request and the turn write. The guards
+// (_shared/avatarGuard.ts): the learner's line is checked by patterns first (a hold sends nothing and counts nothing), then one count covers the persona's
+// ask and both classifiers' (avatarGuarded.ts); a held line or reply is never answered: the character says an in-character substitute line, stored with the
+// guard code on both turns, and the held reply is stored nowhere. Tested in src/lib/aiAvatarTurn.test.ts.
 import { AVATAR_PROMPT_VERSION, avatarPromptHash, buildPersonaPrompt } from '../_shared/avatarPrompt.ts';
 import type { CharacterContext } from '../_shared/avatarPrompt.ts';
+import { kindOf, prefilterSay, sanitizeUntrusted, substituteLine } from '../_shared/avatarGuard.ts';
+import type { GuardCode } from '../_shared/avatarGuard.ts';
 import { AVATAR_ASK } from '../_shared/avatarRules.ts';
 import { marked } from '../_shared/promptData.ts';
+import { guardedCall, guardedCount } from './avatarGuarded.ts';
+import type { GuardState } from './avatarGuarded.ts';
 import { UUID } from './core.ts';
 import type { Msg } from './core.ts';
 import { playRole } from './rolePlay.ts';
 import type { RoleDeps as RoleDepsOf, RoleRefusal } from './rolePlay.ts';
 
 export const AVATAR_USE = 'avatar_conversation';
-export type AvatarTurn = { who: 'learner' | 'character'; text: string; guard: string | null };
+export type AvatarTurn = { who: 'learner' | 'character'; text: string; guard: GuardCode | null };
 export type AvatarRunContext = CharacterContext & { points: unknown[]; minutes: 5 | 10 | 15; turns: AvatarTurn[]; learner_turns: number; prompt_version: string | null; prompt_hash: string | null };
 export type AvatarDeps = RoleDepsOf<AvatarRunContext> & {
   // public.avatar_add_turns: appends the learner's line and the character's, and records the prompt version and hash; the database's refusal, or null.
@@ -45,28 +51,37 @@ export function readAvatarAsk(body: unknown): AvatarAsk | { ok: false; error: st
   return { ok: true, runId: b.run_id, say: b.say };
 }
 
-// The stored turns in order (the learner's as user, the character's as assistant), then the new line; every one is data, whoever wrote it.
+// The stored turns in order (the learner's as user, the character's as assistant), then the new line; every one is data, whoever wrote it, and a learner's
+// line is sanitised again. A held exchange (both its turns carry the guard code) is left out: the character never sees what was held, and the turns still alternate.
 const messagesOf = (turns: AvatarTurn[], say: string): Msg[] => [
-  ...turns.map((t) => ({ role: t.who === 'learner' ? 'user' as const : 'assistant' as const, content: marked(t.text, AVATAR_ASK.replyChars) })),
+  ...turns.filter((t) => !t.guard).map((t) => ({ role: t.who === 'learner' ? 'user' as const : 'assistant' as const, content: marked(t.who === 'learner' ? sanitizeUntrusted(t.text) : t.text, AVATAR_ASK.replyChars) })),
   { role: 'user', content: marked(say, AVATAR_ASK.sayChars) },
 ];
 
+// The held exchange: the learner's line as typed and the substitute, both with the code; no provider was asked for it, or its reply is dropped.
+async function storeHeld(d: AvatarDeps, ctx: AvatarRunContext, say: string, code: GuardCode, hash: string): Promise<AvatarResult> {
+  const line = substituteLine(ctx.language, kindOf(code)), stored = ctx.turns.length;
+  const refused = await d.addTurns([{ who: 'learner', text: say, guard: code }, { who: 'character', text: line, guard: code }], AVATAR_PROMPT_VERSION, hash, stored);
+  return refused ? { status: 409, error: refused } : { status: 200, body: { say: line, turn: stored + 2, held: true } };
+}
+
 export async function playAvatarTurn(d: AvatarDeps, a: AvatarAsk): Promise<AvatarResult> {
-  const seen: { ctx?: AvatarRunContext } = {}, hash = await avatarPromptHash();
+  const hash = await avatarPromptHash();
   // A run another prompt began is refused here, before the call is counted (the database refuses it again at the write).
-  const context = async () => {
-    const ctx = await d.context();
-    if (ctx && !('refusal' in ctx) && ctx.prompt_version && (ctx.prompt_version !== AVATAR_PROMPT_VERSION || ctx.prompt_hash !== hash)) return { refusal: 'prompt_changed' };
-    return ctx;
-  };
-  const out = await playRole({ ...d, context }, (ctx) => {
-    seen.ctx = ctx;
-    return { system: buildPersonaPrompt(ctx), messages: messagesOf(ctx.turns, a.say), max_tokens: AVATAR_ASK.maxTokens };
+  const first = await d.context();
+  const ctx = first && !('refusal' in first) && first.prompt_version && (first.prompt_version !== AVATAR_PROMPT_VERSION || first.prompt_hash !== hash) ? { refusal: 'prompt_changed' } : first;
+  const usable = ctx && !('refusal' in ctx) ? ctx as AvatarRunContext : null;
+  const pre = prefilterSay(a.say, usable?.language);
+  if (usable && pre.held) return storeHeld(d, usable, a.say, pre.held, hash);
+  const state: GuardState = { held: null };
+  const out = await playRole({ ...d, context: async () => ctx, count: guardedCount(d.count, pre.text), call: guardedCall(d.call, pre.text, state) }, (c) => {
+    return { system: buildPersonaPrompt(c), messages: messagesOf(c.turns, pre.text), max_tokens: AVATAR_ASK.maxTokens };
   }, REFUSED, AVATAR_USE);
   if ('error' in out) return out;
+  if (state.held) return storeHeld(d, usable!, a.say, state.held, hash);
   const reply = out.body.text.trim();
   if (!reply || reply.length > AVATAR_ASK.replyChars) return UNUSABLE;
-  const stored = seen.ctx!.turns.length;
+  const stored = usable!.turns.length;
   const refused = await d.addTurns([{ who: 'learner', text: a.say, guard: null }, { who: 'character', text: reply, guard: null }], AVATAR_PROMPT_VERSION, hash, stored);
   if (refused) return { status: 409, error: refused };
   return { status: 200, body: { say: reply, turn: stored + 2, held: false } };

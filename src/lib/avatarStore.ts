@@ -1,13 +1,14 @@
 // Avatar practice runs in Supabase (studios plan, Task 6.2): a run is started by the learner (a practice by an author or reviewer, on a
 // contribution, is a test and never counts), each line goes to the character through the `ai` function (the server holds the conversation and
 // what the character keeps back), and the run ends once through finish_avatar_run.
+import type { GuardCode } from '../../supabase/functions/_shared/avatarGuard.ts';
 import { runRow } from './runTarget';
 import type { RunTarget } from './runTarget';
 import { completeOrThrow } from './ai';
 import type { CompleteOpts } from './ai';
 import { supabase } from './supabase';
 
-export type AvatarTurn = { who: 'learner' | 'character'; text: string; guard: string | null };
+export type AvatarTurn = { who: 'learner' | 'character'; text: string; guard: GuardCode | null };
 export type AvatarRunRow = { id: string; learning_id: string | null; contribution_id: string | null; test: boolean; started_at: string; finished_at: string | null; turns: AvatarTurn[] };
 /** What the character answered: its line, the number of lines in the run so far, and whether a guard put in the substitute line. */
 export type CharacterReply = { say: string; turn: number; held: boolean };
