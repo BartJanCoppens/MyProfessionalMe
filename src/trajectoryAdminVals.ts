@@ -26,11 +26,16 @@ let creating = false;
 const managesMandatory = (L: Logic) => L.access.isSystem || !!L.access.isGeneral;
 const hasMandatory = (t: Trajectory) => t.maps.some((m) => m[2] === 'mandatory');
 export const visibleTrajectories = (L: Logic) => L.state.trjs.filter((t) => L.access.isSystem || !!L.access.isGeneral || (!!t.business_line && L.access.domains.includes(t.business_line)));
+// The trajectory the editor shows: the selected one this admin sees, else the first.
+export function selectedTrajectory(L: Logic): Trajectory | null {
+  const visible = visibleTrajectories(L);
+  return visible.find((x) => x.id === L.state.trjSel) ?? visible[0] ?? null;
+}
 // Coverage grid: live and draft trajectories this admin sees, mapped to the audience at the stage.
 export const trajectoryCount = (L: Logic, aud: string, stage: string) => visibleTrajectories(L).filter((t) => t.status !== 'retired' && t.maps.some((m) => m[0] === aud && m[1] === stage)).length;
 
 // Mirror of private.can_write_trajectory: the reason this admin may not write it as it is, or null.
-function refusal(L: Logic, t: Trajectory): string | null {
+export function refusal(L: Logic, t: Trajectory): string | null {
   if (!L.canEditLine(t.business_line)) return 'Not changed · you can only change trajectories of your own business line';
   if (t.maps.some((m) => !L.canEditAud(m[0]))) return 'Not changed · it maps audiences you cannot edit';
   if (t.status === 'live' && hasMandatory(t) && !managesMandatory(L)) return 'Not changed · a live trajectory with a mandatory map is changed by a General or System Admin';
@@ -74,7 +79,7 @@ const withCurrent = (options: { value: string; label: string }[], value: string,
 export function trajectoryAdminVals(L: Logic) {
   const s = L.state, visible = visibleTrajectories(L);
   s.trjs.forEach((t) => LATEST.set(t.id, t));
-  const t = visible.find((x) => x.id === s.trjSel) ?? visible[0] ?? null;
+  const t = selectedTrajectory(L);
   const byId = learningRefs();
   const offerable = published();
   const list = visible.map((x) => {
@@ -140,6 +145,8 @@ export function trajectoryAdminVals(L: Logic) {
   const ySplit = tot.perYear.map((h, i) => (h ? 'Y' + (i + 1) + ' ' + fmtHours(h) : null)).filter(Boolean).join(' · ') || '0 h';
   const tj = {
     ...trajectoryDeleteVals(L, t),
+    // "Build with AI": offered to someone who may write this trajectory (the database's rule, mirrored by refusal) and never in View as.
+    ai: { show: !L.subject.readOnly && refusal(L, t) === null, open: s.trjPanel.open, toggle: () => L.setState((st) => ({ trjPanel: { ...st.trjPanel, open: !st.trjPanel.open } })) },
     name: t.name, cred: t.credential, issuer: t.issuer, enrol: t.enrol as string, months: String(t.months), valid: String(t.valid_months ?? 0), renew: t.renewal, cost: t.cost, status: t.status as string,
     sub: [t.issuer, enrolLabel(t.enrol), t.status === 'live' ? 'live' : t.status === 'retired' ? 'retired, hidden from new people' : 'draft, visible to admins only'].filter(Boolean).join(' · '),
     setStatus: (v: string) => edit((x) => ({ ...x, status: v === 'live' ? 'live' : v === 'retired' ? 'retired' : 'draft' })),

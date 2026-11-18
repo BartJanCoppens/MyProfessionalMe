@@ -16,6 +16,7 @@ import type { Member } from './logic/team';
 import type { Subject } from './lib/useSubject';
 import { kbVals } from './kbVals';
 import { trajectoryAdminVals, trajectoryCount } from './trajectoryAdminVals';
+import { trajectoryAiVals } from './trajectoryAiVals';
 import { certMapVals } from './trajectoryMap';
 import { navScreen, trajectoryVals } from './trajectoryVals';
 import { audiencesOf } from './trajectoryCtx';
@@ -584,6 +585,7 @@ export class Logic {
       marks: [this.levels.every((l) => l > 0) ? 'All nine domains touched' : '', items.some((it) => it.state === 'accepted' && it.format === 'Certification') ? 'First certification' : ''].filter(Boolean),
       ...kbVals(this),
       ...trajectoryAdminVals(this),
+      ...trajectoryAiVals(this),
       ...trajectoryVals(this, byId),
       ...cert,
       ...createVals(this),

@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import { Button, Checkbox, Field, Input, LinkButton, SegmentedControl, Select, StatusChip, Tag } from '../ds';
 import type { VM } from '../model';
 import { TrajectoryAudiences, TrajectoryLane } from './TrajectoryMapping';
+import TrajectoryAi from './TrajectoryAi';
 
 const card: CSSProperties = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' };
 const cardHead: CSSProperties = { padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#fafbf8' };
@@ -24,6 +25,7 @@ export default function TrajectoryEditor({ vm }: { vm: VM }) {
           <div style={{ flex: '999 1 600px', minWidth: 0, ...card, padding: '18px', color: '#5a6058' }}>No trajectory yet. Use + New to start a draft.</div>
         )}
       </div>
+      {vm.tai && <TrajectoryAi tai={vm.tai} />}
     </>
   );
 }
@@ -61,6 +63,7 @@ function TrajectoryBody({ vm }: { vm: VM }) {
             <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 16 }}>{tj.name}</div><div style={{ fontSize: 12.5, color: '#5a6058' }}>{tj.sub}</div></div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {tj.ai.show && <Button size="sm" variant="secondary" onClick={tj.ai.toggle} aria-pressed={tj.ai.open}>Build with AI</Button>}
             <SegmentedControl options={vm.trjStatusOptions} value={tj.status} onChange={tj.setStatus} size="md" />
             {tj.canDelete && (tj.deleteAsk ? (
               <>

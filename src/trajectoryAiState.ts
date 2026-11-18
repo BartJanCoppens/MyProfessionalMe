@@ -4,7 +4,7 @@
 import type { Logic } from './model';
 import { emptyPlan } from './logic/trajectoryPlan';
 import type { PlanRecord, TrjPlanState } from './logic/trajectoryPlan';
-import { savePlanSoon } from './lib/planStore';
+import { loadPlan, savePlanSoon } from './lib/planStore';
 
 export const emptyPlanState = (): TrjPlanState => ({ record: null, sources: [] });
 export const blankRecord = (trajectoryId: string): PlanRecord => ({ trajectoryId, plan: emptyPlan(), messages: [], bundleIds: [], updatedAt: null });
@@ -17,4 +17,13 @@ export function editRecord(L: Logic, trajectoryId: string, f: (r: PlanRecord) =>
   const next = f(L.latest().state.trjPlans[trajectoryId]?.record ?? blankRecord(trajectoryId));
   change(L, trajectoryId, (p) => ({ ...p, record: f(p.record ?? blankRecord(trajectoryId)) }));
   savePlanSoon(next, (message) => L.say(message));
+}
+
+// The plan and sources of a trajectory, read once when the panel first shows it (an edit or an answer that came first is kept).
+export async function ensurePlan(L: Logic, trajectoryId: string): Promise<void> {
+  if (L.latest().state.trjPlans[trajectoryId]) return;
+  try {
+    const loaded = await loadPlan(trajectoryId);
+    L.latest().setState((s) => (s.trjPlans[trajectoryId] ? {} : { trjPlans: { ...s.trjPlans, [trajectoryId]: loaded } }));
+  } catch (err) { failed(L.latest(), 'The plan did not load · ' + (err as Error).message); }
 }

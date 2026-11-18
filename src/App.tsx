@@ -33,6 +33,7 @@ import { loadQueue } from './lib/recordStore';
 import { sharedAvatarRuns } from './lib/avatarStore';
 import { loadTrajectories, loadTrajectoriesInUse } from './lib/trajectoryStore';
 import { loadMine } from './trajectoryCtx';
+import { ensurePlan } from './trajectoryAiState';
 import { certResetPatch } from './trajectoryMap';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
@@ -136,6 +137,9 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
     return () => { live = false; };
   }, [subject.id]);
   useEffect(() => { if (state.screen === 'adminAi') loadAiPage(logicRef.current); }, [state.screen]);
+  // The plan of the trajectory shown in "Build with AI" loads once, when the panel first shows it.
+  const planOf = vm.tai?.id;
+  useEffect(() => { if (planOf) ensurePlan(logicRef.current, planOf); }, [planOf]);
 
   return (
     <div data-pm-motion={vm.motionAttr} style={{ display: 'flex', minHeight: '100vh', background: '#f3f5f0', color: '#1a1d18', fontFamily: "'IBM Plex Sans',system-ui,sans-serif", fontSize: 13, lineHeight: 1.45 }}>

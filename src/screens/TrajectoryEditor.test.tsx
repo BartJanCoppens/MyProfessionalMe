@@ -14,22 +14,45 @@ import AdminMappingScreen from './Mapping';
 vi.mock('../lib/trajectoryStore', async (orig) => ({ ...(await orig<object>()), createTrajectory: vi.fn(), deleteTrajectory: vi.fn(), saveTrajectorySoon: vi.fn(), saveTrajectoryNow: vi.fn() }));
 
 let current: AppState;
-function Live({ state, access }: { state: Partial<AppState>; access: Access }) {
+function Live({ state, access, readOnly = false }: { state: Partial<AppState>; access: Access; readOnly?: boolean }) {
   const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), ...state }));
   useEffect(() => { current = st; });
   const toastTimer = useRef<number | undefined>(undefined), drag = useRef<string | null>(null), file = useRef<HTMLInputElement | null>(null), chat = useRef<HTMLDivElement | null>(null);
-  const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, access, person(), async () => {}, async () => {}).renderVals();
+  const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, access, person({ readOnly }), async () => {}, async () => {}).renderVals();
   return <><AdminMappingScreen vm={vm} />{vm.toast && <div role="status">{vm.toast}</div>}</>;
 }
 const trajectory = (over: Partial<Trajectory> = {}): Trajectory => ({
   ...blankTrajectory('Audit'), id: 'T1', name: 'Tax certificate', credential: 'Certified adviser', issuer: 'ITAA',
   steps: [{ id: 's1', k: 'learn', lid: 'L1', win: 3, req: true, pre: null }, { id: 's2', k: 'exam', title: 'Final exam', hours: 2, win: 12, req: true, pre: 's1' }], ...over,
 });
-const show = (trjs: Trajectory[], state: Partial<AppState> = {}, access: Access = systemAdmin()) =>
-  render(<Live state={{ screen: 'adminMap', mapMode: 'traj', trjs, trjSel: trjs[0]?.id ?? null, trjUsed: [], ...state }} access={access} />);
+const show = (trjs: Trajectory[], state: Partial<AppState> = {}, access: Access = systemAdmin(), readOnly = false) =>
+  render(<Live state={{ screen: 'adminMap', mapMode: 'traj', trjs, trjSel: trjs[0]?.id ?? null, trjUsed: [], ...state }} access={access} readOnly={readOnly} />);
 
 beforeEach(() => { vi.clearAllMocks(); window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; });
 afterEach(cleanup);
+
+describe('Build with AI', () => {
+  it('is offered to a writer, opens the panel for the trajectory and closes it again', () => {
+    show([trajectory()]);
+    expect(screen.queryByText('Proposed by AI · from your sources only · you decide')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Build with AI' }));
+    expect(current.trjPanel.open).toBe(true);
+    expect(screen.getByText('Proposed by AI · from your sources only · you decide')).toBeTruthy();
+    expect(screen.getAllByText('Tax certificate').length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(current.trjPanel.open).toBe(false);
+  });
+  it('is not offered in View as, nor to a Domain Admin of another line', () => {
+    show([trajectory()], {}, systemAdmin(), true);
+    expect(screen.queryByRole('button', { name: 'Build with AI' })).toBeNull();
+    cleanup();
+    show([trajectory({ business_line: 'Consulting' })], {}, domainAdmin(['Audit']));
+    expect(screen.queryByRole('button', { name: 'Build with AI' })).toBeNull();
+    cleanup();
+    show([trajectory()], {}, domainAdmin(['Audit']));
+    expect(screen.getByRole('button', { name: 'Build with AI' })).toBeTruthy();
+  });
+});
 
 describe('the trajectory editor', () => {
   it('changes the business line from the select and saves it', () => {
