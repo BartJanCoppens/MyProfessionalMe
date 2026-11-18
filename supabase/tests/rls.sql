@@ -2477,5 +2477,113 @@ do $$ begin
   exception when others then insert into results (check_name, expected, actual) values ('HZ a signed-in user cannot call horizon_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
 end $$;
 reset role;
+-- ---------- Slides Studio (SL) ----------
+-- Slides are [title, bullets, talk-over] rows (private.slides_ok), then at most one voice-over item of clips made by the AI
+-- voice (private.voice_ok). "Who presents?" = 'AI voice' needs a clip made from every slide's present talk-over, in a file in the
+-- contribution's own folder that is in Storage; the talk plays at most 15 minutes; the deck publishes as slides content.
+reset role;
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000aa','t.slidesmaker@test.local'), ('00000000-0000-0000-0000-0000000000ab','t.slideslearner@test.local');
+update public.profiles set business_line='Consulting' where id in ('00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000000ab');
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000aa','{Consulting}','{Slides}');
+delete from public.review_policies; -- no review: published on submit
+insert into public.review_policies (formats, peers, expert, quality) values ('{Slides}', 0, false, false);
+create function pg_temp.sl_voice(p_id text, p_rows jsonb, p_skip integer default -1, p_secs numeric default 5) returns jsonb language sql as $f$
+  select jsonb_build_object('kind', 'voice', 'clips', jsonb_agg(jsonb_build_object('slide', r.n - 1, 'text', r.e ->> 2, 'path', '00000000-0000-0000-0000-0000000000aa/'||p_id||'/voice-'||r.n||'.mp3',
+    'seconds', p_secs + r.n - 1, 'marks', '[{"kind":"next","at":2.5}]'::jsonb) order by r.n))
+  from jsonb_array_elements(p_rows) with ordinality as r(e, n) where r.n - 1 <> p_skip $f$;
+select set_config('test.sl_rows', '[["Why it matters ","Decisions · Not status updates","A steering committee exists to take decisions ⟨next⟩ not to receive updates ⟨cue⟩ every single week."],["Before","Send the pack ahead","Send the pack three working days ahead."],["After","Minutes · Decision log","Minutes go out within a day."]]', true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, shape) values
+ ('Consulting','Slides','T sl voiced','lead','Decide.','slides','{"Who presents?":"AI voice","Template":"Minimal","Transitions":"Camera flight"}'),
+ ('Consulting','Slides','T sl captions','lead','Decide.','slides','{"Who presents?":"Captions only"}'),
+ ('Consulting','Slides','T sl unvoiced','lead','x','slides','{"Who presents?":"AI voice"}'), ('Consulting','Slides','T sl stale','lead','x','slides','{"Who presents?":"AI voice"}'),
+ ('Consulting','Slides','T sl missing','lead','x','slides','{"Who presents?":"AI voice"}'), ('Consulting','Slides','T sl elsewhere','lead','x','slides','{"Who presents?":"AI voice"}'),
+ ('Consulting','Slides','T sl long','lead','x','slides','{"Who presents?":"AI voice"}'), ('Consulting','Slides','T sl bad','lead','x','slides',null) returning 1)
+  insert into results (check_name, expected, actual) select 'SL a Slides piece is made in its studio', '8 rows', count(*)||' rows' from i;
+-- the items: the voiced deck (three files in Storage), a captions-only deck, and the ways a voice-over can be wrong
+update public.contributions c set items = current_setting('test.sl_rows')::jsonb || jsonb_build_array(pg_temp.sl_voice(c.id::text, current_setting('test.sl_rows')::jsonb)) where title = 'T sl voiced';
+update public.contributions set items = current_setting('test.sl_rows')::jsonb where title = 'T sl captions';
+update public.contributions c set items = current_setting('test.sl_rows')::jsonb || jsonb_build_array(pg_temp.sl_voice(c.id::text, current_setting('test.sl_rows')::jsonb, 1)) where title = 'T sl unvoiced';
+update public.contributions c set items = current_setting('test.sl_rows')::jsonb || jsonb_build_array(jsonb_set(pg_temp.sl_voice(c.id::text, current_setting('test.sl_rows')::jsonb), '{clips,1,text}', '"Words that were changed since."')) where title = 'T sl stale';
+update public.contributions c set items = current_setting('test.sl_rows')::jsonb || jsonb_build_array(pg_temp.sl_voice(c.id::text, current_setting('test.sl_rows')::jsonb)) where title = 'T sl missing';
+update public.contributions c set items = current_setting('test.sl_rows')::jsonb || jsonb_build_array(pg_temp.sl_voice((select id::text from public.contributions where title = 'T sl missing'), current_setting('test.sl_rows')::jsonb)) where title = 'T sl elsewhere';
+insert into storage.objects (bucket_id, name) select 'media', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-'||n||'.mp3' from public.contributions c, generate_series(1, 3) n where c.title in ('T sl voiced', 'T sl unvoiced', 'T sl stale');
+insert into storage.objects (bucket_id, name) select 'media', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-'||n||'.mp3' from public.contributions c, generate_series(1, 6) n where c.title = 'T sl long';
+insert into storage.objects (bucket_id, name) select 'media', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-'||n||'.mp3' from public.contributions c, generate_series(1, 2) n where c.title = 'T sl missing';
+update public.contributions c set items = '[["S1","a","x"],["S2","b","x"],["S3","c","x"],["S4","d","x"],["S5","e","x"],["S6","f","x"]]'::jsonb
+  || jsonb_build_array(pg_temp.sl_voice(c.id::text, '[["S1","a","x"],["S2","b","x"],["S3","c","x"],["S4","d","x"],["S5","e","x"],["S6","f","x"]]'::jsonb, -1, 175)) where title = 'T sl long';
+update public.contributions set items = current_setting('test.sl_rows')::jsonb where title = 'T sl bad';
+insert into results (check_name, expected, actual) select 'SL an AI-voice deck with every slide voiced passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T sl voiced'))::text;
+insert into results (check_name, expected, actual) select 'SL a captions-only deck passes without any file', '{}', public.check_contribution((select id from public.contributions where title = 'T sl captions'))::text;
+insert into results (check_name, expected, actual) select 'SL AI voice with a slide unvoiced fails the check', 'Voice every slide in Produce, or choose Captions only in Shape it', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sl unvoiced')), '|');
+insert into results (check_name, expected, actual) select 'SL a clip made from other words does not count', 'Voice every slide in Produce, or choose Captions only in Shape it', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sl stale')), '|');
+insert into results (check_name, expected, actual) select 'SL the check refuses a voice-over file that is not in Storage', 'A voice-over file is not there · voice the slides again', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sl missing')), '|');
+insert into results (check_name, expected, actual) select 'SL and a file in another contribution''s folder', 'A voice-over file is not there · voice the slides again', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sl elsewhere')), '|');
+insert into results (check_name, expected, actual) select 'SL a talk over 15 minutes is refused', 'The talk runs longer than 15 minutes: shorten the talk-over or cut slides', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sl long')), '|');
+do $$ begin
+  perform public.submit_contribution((select id from public.contributions where title = 'T sl missing'));
+  insert into results (check_name, expected, actual) values ('SL submit refuses a deck whose voice-over file is missing', 'blocked', 'allowed');
+exception when others then insert into results (check_name, expected, actual) values ('SL submit refuses a deck whose voice-over file is missing', 'blocked', 'blocked: '||sqlerrm); end $$;
+-- malformed items: a voice-over of the wrong shape, a slide without a bullet or a talk-over, more slides than the cap
+do $$ declare r record; begin
+  for r in select * from (values ('an extra key', '{"made":"x"}'::jsonb, 'top'), ('another kind', '{"kind":"motion"}', 'top'), ('no clips', '{"clips":[]}', 'top'),
+    ('slide 14', '{"slide":14}', 'clip'), ('a path that is not an mp3', '{"path":"00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/a.m4a"}', 'clip'),
+    ('181 seconds', '{"seconds":181}', 'clip'), ('no seconds', '{"seconds":0}', 'clip'), ('an extra key on a clip', '{"voice":"x"}', 'clip'), ('a blank text', '{"text":"  "}', 'clip'),
+    ('a mark of another kind', '{"marks":[{"kind":"x","at":1}]}', 'clip'), ('a mark past 180 s', '{"marks":[{"kind":"cue","at":181}]}', 'clip')) as t(k, v, w) loop
+    update public.contributions c set items = current_setting('test.sl_rows')::jsonb || jsonb_build_array(case when r.w = 'top' then pg_temp.sl_voice(c.id::text, current_setting('test.sl_rows')::jsonb) || r.v
+      else jsonb_set(pg_temp.sl_voice(c.id::text, current_setting('test.sl_rows')::jsonb), '{clips,0}', (pg_temp.sl_voice(c.id::text, current_setting('test.sl_rows')::jsonb) -> 'clips' -> 0) || r.v) end) where title = 'T sl bad';
+    insert into results (check_name, expected, actual) select 'SL a voice-over with '||r.k||' fails the check', 'Add the slides first: each needs a title, bullets and a talk-over', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sl bad')), '|');
+  end loop;
+  for r in select * from (values ('no bullet', '[["A","·","x"],["B","b","x"],["C","c","x"]]'::jsonb), ('no talk-over', '[["A","a",""],["B","b","x"],["C","c","x"]]'),
+    ('a text of 2 fields', '[["A","a"],["B","b","x"],["C","c","x"]]'), ('15 slides', (select jsonb_agg(jsonb_build_array('S'||g, 'b', 'x')) from generate_series(1, 15) g))) as t(k, v) loop
+    update public.contributions set items = r.v where title = 'T sl bad';
+    insert into results (check_name, expected, actual) select 'SL a deck with '||r.k||' fails the check', 'Add the slides first: each needs a title, bullets and a talk-over', array_to_string(public.check_contribution((select id from public.contributions where title = 'T sl bad')), '|');
+  end loop;
+  begin update public.contributions set items = (select jsonb_agg(jsonb_build_array('S'||g, 'b', 'x')) from generate_series(1, 16) g) where title = 'T sl bad';
+    insert into results (check_name, expected, actual) values ('SL more than 15 items are refused', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('SL more than 15 items are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+-- publishing: the voiced deck becomes slides content with each slide's audio and counts its hours; the captions deck is read at a pace
+insert into results (check_name, expected, actual) select 'SL a voiced deck is published', 'published', public.submit_contribution((select id from public.contributions where title = 'T sl voiced'));
+insert into results (check_name, expected, actual) select 'SL a captions-only deck is published', 'published', public.submit_contribution((select id from public.contributions where title = 'T sl captions'));
+insert into results (check_name, expected, actual) select 'SL the voiced deck becomes slides content with audio, 18 s, its template and transitions, told by the AI voice', 'true',
+  (l.content = jsonb_build_object('kind', 'slides', 'seconds', 18, 'template', 'Minimal', 'transitions', 'Camera flight', 'made', 'ai', 'slides', jsonb_build_array(
+    jsonb_build_object('title', 'Why it matters', 'bullets', '["Decisions","Not status updates"]'::jsonb, 'narration', 'A steering committee exists to take decisions ⟨next⟩ not to receive updates ⟨cue⟩ every single week.',
+      'audio', jsonb_build_object('path', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-1.mp3', 'seconds', 5, 'marks', '[{"kind":"next","at":2.5}]'::jsonb)),
+    jsonb_build_object('title', 'Before', 'bullets', '["Send the pack ahead"]'::jsonb, 'narration', 'Send the pack three working days ahead.',
+      'audio', jsonb_build_object('path', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-2.mp3', 'seconds', 6, 'marks', '[{"kind":"next","at":2.5}]'::jsonb)),
+    jsonb_build_object('title', 'After', 'bullets', '["Minutes","Decision log"]'::jsonb, 'narration', 'Minutes go out within a day.',
+      'audio', jsonb_build_object('path', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-3.mp3', 'seconds', 7, 'marks', '[{"kind":"next","at":2.5}]'::jsonb)))))::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sl voiced';
+insert into results (check_name, expected, actual) select 'SL the captions deck has no audio: 12 s at 140 words a minute, default template and transitions, told by captions', 'true',
+  (l.content = jsonb_build_object('kind', 'slides', 'seconds', 12, 'template', 'Firm template', 'transitions', 'Calm', 'made', 'scripted', 'slides', jsonb_build_array(
+    jsonb_build_object('title', 'Why it matters', 'bullets', '["Decisions","Not status updates"]'::jsonb, 'narration', 'A steering committee exists to take decisions ⟨next⟩ not to receive updates ⟨cue⟩ every single week.'),
+    jsonb_build_object('title', 'Before', 'bullets', '["Send the pack ahead"]'::jsonb, 'narration', 'Send the pack three working days ahead.'),
+    jsonb_build_object('title', 'After', 'bullets', '["Minutes","Decision log"]'::jsonb, 'narration', 'Minutes go out within a day.'))))::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sl captions';
+insert into results (check_name, expected, actual) select 'SL the hours come from the seconds (0.05 h steps, at least 0.05 h); an AI-voiced deck is marked AI-made', 'Slides/0.05/true', l.format||'/'||l.hours||'/'||l.ai_made
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sl voiced';
+insert into results (check_name, expected, actual) select 'SL a captions deck made by hand is not marked AI-made', 'Slides/0.05/false', l.format||'/'||l.hours||'/'||l.ai_made
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T sl captions';
+select set_config('test.sl_l', (select learning_id from public.contributions where title = 'T sl voiced'), true);
+select set_config('test.sl_f', '00000000-0000-0000-0000-0000000000aa/'||(select id from public.contributions where title = 'T sl voiced')||'/voice-1.mp3', true);
+select set_config('test.sl_u', '00000000-0000-0000-0000-0000000000aa/'||(select id from public.contributions where title = 'T sl stale')||'/voice-1.mp3', true);
+-- a learner reads the published audio (its path is in the content), not a draft's, and completes the deck themselves ('media')
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'SL a signed-in learner reads the published voice-over', '1', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.sl_f');
+insert into results (check_name, expected, actual) select 'SL and not the voice-over of an unpublished draft', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.sl_u');
+select public.save_learning(current_setting('test.sl_l'), p_state => 'accepted', p_pct => 100::smallint, p_detail => '{"last":true}');
+insert into results (check_name, expected, actual) select 'SL a learner completes a deck without a counsellor', 'accepted', state
+  from public.learner_learnings where user_id = '00000000-0000-0000-0000-0000000000ab' and learning_id = current_setting('test.sl_l');
+do $$ begin
+  begin perform private.slides_ok('[]'::jsonb);
+    insert into results (check_name, expected, actual) values ('SL a signed-in user cannot call slides_ok', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('SL a signed-in user cannot call slides_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- the pace repeats ownSeconds in src/logic/narration.ts (marks are not words; at least 2 s)
+reset role;
+insert into results (check_name, expected, actual) select 'SL the pace: 14 spoken words at 140 a minute is 6 s, a short line 2 s, marks are not words', '6/2/6',
+  round(private.own_seconds('A steering committee exists to take decisions ⟨next⟩ not to receive updates ⟨cue⟩ every single week.'))||'/'||round(private.own_seconds('Hi.'))||'/'||round(private.own_seconds('⟨next⟩ one two three ⟨cue⟩ four five six seven eight nine ten eleven twelve ⟨next⟩ thirteen fourteen .'));
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

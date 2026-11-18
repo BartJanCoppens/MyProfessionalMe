@@ -47,6 +47,11 @@ export function fmtCover(L: Logic, it: Item): Partial<Lines> {
       return { cvMeta: deckLine(c).split(' · ')[0], cvMeta2: last ? 'Played to the end' : c.seconds > 0 ? 'Narrated' : 'At your own pace',
         stepDots: Array.from({ length: Math.min(6, c.slides) }, (_, k) => ({ bg: last || k === 0 ? '#86BC25' : '#fff' })) };
     }
+    case 'slides': {
+      const last = done || !!detailOf<'slides'>(L, it.id).last;
+      return { cvMeta: c.slides.length + (c.slides.length === 1 ? ' slide' : ' slides'), cvMeta2: last ? 'Played to the end' : c.made === 'ai' ? 'AI voice' : 'Captions',
+        stepDots: c.slides.slice(0, 6).map((_, k) => ({ bg: last || k === 0 ? '#86BC25' : '#fff' })) };
+    }
     default: return {};
   }
 }

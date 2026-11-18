@@ -1,6 +1,8 @@
 import { AUDS, BLS } from '../data';
 import { isHorizonItem } from '../logic/horizonItem';
 import { isQuestion } from '../logic/items';
+import { SLIDES_MAX_SECONDS } from '../logic/slidesContent';
+import { isAudio } from '../logic/voiceItem';
 import { isCount, isText, isTexts } from '../logic/values';
 import type { Bundle, FormatContent, Learn, LearnMeta, Mapping } from '../types';
 import { supabase } from './supabase';
@@ -35,9 +37,12 @@ export function parseFormatContent(raw: unknown): FormatContent | null {
       && (c.check === undefined || (Array.isArray(c.check) && c.check.length === 3 && c.check.every(isQuestion))) ? c as FormatContent : null;
     case 'horizon': return isHorizonItem(c) ? c : null;
     case 'motion': return listOf(c.stages, labelled) && isText(c.svg) && isText(c.alt) && isCount(c.seconds) && c.seconds > 0 && c.seconds <= 90 && (c.made === 'ai' || c.made === 'scripted') ? c as FormatContent : null;
+    case 'slides': return listOf(c.slides, slideOk) && isCount(c.seconds) && c.seconds > 0 && c.seconds <= SLIDES_MAX_SECONDS && isText(c.template) && isText(c.transitions) && (c.made === 'ai' || c.made === 'scripted') ? c as FormatContent : null;
     default: return null;
   }
 }
+// A published slide: a title, at least one bullet, the talk-over, an optional drawing and the stored audio of its voice.
+const slideOk = (x: any) => isText(x.title) && isTexts(x.bullets) && x.bullets.length > 0 && isText(x.narration) && (x.svg === undefined || isText(x.svg)) && (x.audio === undefined || isAudio(x.audio));
 // A non-empty list whose every entry passes ok; a step or stage is { label, text }.
 const listOf = (v: unknown, ok: (x: any) => boolean) => Array.isArray(v) && v.length > 0 && v.every((x) => !!x && typeof x === 'object' && ok(x));
 const labelled = (x: any) => isText(x.label) && isText(x.text);

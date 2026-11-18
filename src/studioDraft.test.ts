@@ -55,7 +55,7 @@ describe('the request size', () => {
     ['slides', 'aid', 'avatar'].forEach((id) => expect(max(id).max_tokens).toBe(2000));
     expect(max('motion').max_tokens).toBe(1000);
     // An Animated flow's drawing takes one place of its items (tested under caps).
-    IDS.forEach((id) => { expect(max(id).max_tokens!).toBeLessThanOrEqual(2048); expect(max(id).messages[0].content).toContain('about one short sentence per row, and stay within ' + (rowsMax(def(id)) - (id === 'motion' ? 1 : 0)) + ' rows'); });
+    IDS.forEach((id) => { expect(max(id).max_tokens!).toBeLessThanOrEqual(2048); expect(max(id).messages[0].content).toContain('about one short sentence per row, and stay within ' + (rowsMax(def(id)) - (['motion', 'slides'].includes(id) ? 1 : 0)) + ' rows'); });
   });
 });
 

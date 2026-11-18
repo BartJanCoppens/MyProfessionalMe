@@ -25,7 +25,7 @@ export type Completion = 'acceptance' | 'media' | 'mark' | 'feedback' | 'quiz';
 export const COMPLETION: Record<string, Exclude<Completion, 'acceptance'>> = {
   Podcast: 'media', Reel: 'media', 'E-learning': 'mark', Classroom: 'feedback', Avatar: 'quiz',
   'Flash cards': 'mark', 'Job aid': 'mark', 'Practice exam': 'mark', 'Teach-back': 'mark', Webinar: 'feedback', 'Interactive explainer': 'mark', 'Animated flow': 'mark',
-  Presentation: 'media',
+  Presentation: 'media', Slides: 'media',
 };
 export const SELF_COMPLETE = Object.keys(COMPLETION);
 export const completionOf = (format: string): Completion => COMPLETION[format] || 'acceptance';
@@ -52,6 +52,7 @@ const panelTodo = (format: string, panel: boolean) => (panel ? PANEL_TODO[format
 const MEDIA_DONE: Record<string, [string, string]> = {
   Podcast: ['Listening to 80% completes it. It counts right away; no acceptance needed.', 'listen to it'],
   Presentation: ['Playing it to the last slide completes it. It counts right away; no acceptance needed.', 'play it to the last slide'],
+  Slides: ['Playing it to the end completes it. It counts right away; no acceptance needed.', 'play it to the end'],
 };
 
 // What completes this format, in the learner's words (detail sidebar and help). accepter: the counsellor's full name.

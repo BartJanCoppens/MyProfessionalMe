@@ -9,14 +9,14 @@ const ITEMS = (id: string) => def(id).items as StudioItem[];
 describe('studio definitions', () => {
   it('has the ten design studios, each with questions and, but for the Explainer (its options were not deliverable), produce rows', () => {
     expect(STUDIOS.map((s) => s.id)).toEqual(['avatar', 'reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
-    for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length > 0, s.id).toBe(s.id !== 'explainer'); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
+    for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length > 0, s.id).toBe(!['explainer', 'slides'].includes(s.id)); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
     expect(def('avatar').qs).toHaveLength(4);
     expect(def('reel').build).toEqual(['Writing the voice-over', 'Recording the avatar take', 'Adding visuals and captions', 'Final cut']);
   });
-  it('names a learning format per studio; Motion, Explainer, Job aid, Flash and Case are available', () => {
+  it('names a learning format per studio; Slides, Motion, Explainer, Job aid, Flash and Case are available', () => {
     expect(STUDIOS.map((s) => s.format)).toEqual(['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Flash cards', 'Case exercise']);
     expect(def('flash').alsoFormats).toEqual(['Practice exam']);
-    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['motion', 'explainer', 'aid', 'flash', 'case']);
+    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
   });
   it('names no person: examples and stock looks use roles', () => {
     const text = JSON.stringify([STUDIOS, STOCK_LOOKS]);

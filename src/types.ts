@@ -7,6 +7,7 @@ import type { QueueRow } from './lib/recordStore';
 import type { RosterRow } from './lib/attendanceStore';
 import type { AiAdmin, AiForm, AiUseEdit, StockVoice, StockVoiceForm } from './logic/ai';
 import type { HorizonItem } from './logic/horizonItem';
+import type { RunMark } from './logic/narration';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
 export type Learn = [string, string, string, number, string, string, number, number, string, string];
 // learning id, stage, obligation
@@ -83,7 +84,12 @@ export type ExplainerContent = { kind: 'explainer'; style: string; depth: string
 export type MotionContent = { kind: 'motion'; stages: { label: string; text: string }[]; svg: string; alt: string; seconds: number; made: 'ai' | 'scripted' };
 // A Horizon presentation (studios plan, Task 3.3): its .horizon file in the media bucket and the summary read from it.
 export type HorizonContent = HorizonItem;
-export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent;
+// A deck with a talk-over per slide (studios plan, Task 3.4): each slide's bullets and talk-over, the stored audio of an AI voice when
+// every slide has it (audio.path is the file the published learning names), the total seconds, the template and transitions
+// chosen, and who told it ('ai': the AI voice; 'scripted': captions at a reading pace). svg: a drawing for the slide, drawn only through SafeSvg.
+export type SlidesContent = { kind: 'slides'; slides: { title: string; bullets: string[]; svg?: string; narration: string; audio?: { path: string; seconds: number; marks: RunMark[] } }[];
+  seconds: number; template: string; transitions: string; made: 'ai' | 'scripted' };
+export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
 export type View = 'constellation' | 'radar' | 'road';
@@ -200,6 +206,7 @@ export type DetailOf = {
   explainer: { last: boolean; best?: number }; // the last step seen; the check's best score, in percent
   motion: { played?: boolean; read?: boolean }; // played to the end; the text version read
   horizon: { last?: boolean };                 // the last slide of the route reached
+  slides: { last?: boolean };                  // the last slide finished playing
 };
 export type LearningDetail = Partial<DetailOf[keyof DetailOf]>;
 

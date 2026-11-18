@@ -36,7 +36,7 @@ describe('the hub', () => {
     const h = open({ studio: { view: 'hub', step: 0 } });
     expect(h.c().newView).toBe('hub');
     expect(h.st().cards.map((x) => x.name)).toHaveLength(10);
-    expect(h.st().cards.filter((x) => !x.disabled).map((x) => x.name)).toEqual(['Motion Studio', 'Explainer Studio', 'Job Aid Studio', 'Flash card & Exam Studio', 'Case Studio']);
+    expect(h.st().cards.filter((x) => !x.disabled).map((x) => x.name)).toEqual(['Slides Studio', 'Motion Studio', 'Explainer Studio', 'Job Aid Studio', 'Flash card & Exam Studio', 'Case Studio']);
     expect(h.st().uploadLabel).toBe('Upload something you already made →');
   });
   it('opens the studio at step one with a format a studio makes', () => {

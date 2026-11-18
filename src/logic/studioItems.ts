@@ -15,7 +15,7 @@ const LAYOUT: Record<string, string> = {
   reel: 'a Hook row, rows labelled "Scene 1", "Scene 2" and so on, and a Close row; text is the voice-over, text2 the on-screen text',
   podcast: 'rows labelled "Chapter N · m:ss" with strictly rising times starting at 0:00; text is the chapter title, text2 what is said',
   game: 'one Concept row first (text: the setup, text2: the win condition), then rows labelled "Round 1", "Round 2" and so on (text: what the player sees, text2: the flaw or the answer)',
-  slides: 'one row per slide: label is the slide title, text is the talk-over',
+  slides: 'one row per slide: label is the slide title, text its bullets separated by " · " (two to four short bullets), text2 the talk-over the slide is spoken with (a few sentences)',
   motion: 'one row per stage, in order: label is the stage name, text is what happens',
   explainer: 'one row per step: label is who or what acts, text is what happens',
   aid: 'one row per checklist line: label is the moment (such as Before, During or After), text is the line',
@@ -26,8 +26,8 @@ export const TOKENS: Record<string, number> = { avatar: 2000, slides: 2000, aid:
 const arity = (def: StudioDef) => (def.items.some((i) => i.length === 3) ? 3 : 2);
 // The Explainer's three-question check is drafted with its steps when it ends with the check; the check shares the cap.
 const wantsCheck = (def: StudioDef, shape: Record<string, string> | undefined) => def.format === 'Interactive explainer' && explainerEnd(shape ?? {}) === END_CHECK;
-// How many rows the AI may write: the cap, less the Explainer's check or the place an Animated flow's drawing takes.
-const room = (def: StudioDef, shape: Record<string, string> | undefined) => rowsMax(def) - (wantsCheck(def, shape) ? CHECK_SIZE : 0) - (def.format === 'Animated flow' ? 1 : 0);
+// How many rows the AI may write: the cap, less the Explainer's check or the place an Animated flow's drawing or a deck's voice-over takes.
+const room = (def: StudioDef, shape: Record<string, string> | undefined) => rowsMax(def) - (wantsCheck(def, shape) ? CHECK_SIZE : 0) - (def.format === 'Animated flow' || def.format === 'Slides' ? 1 : 0);
 const CHECK_ASK = ' Also write exactly ' + CHECK_SIZE + ' multiple-choice questions that check the steps, as "check":[{"t":short topic,"q":question,"o":[four options],"a":0-based index of the right option,"why":one sentence on why}].';
 
 export function studioRequest(def: StudioDef, nw: NewDraft, passages: string[]): AiRequest {
@@ -69,7 +69,7 @@ const SCRIPTS: Record<string, (s: string[], nw: NewDraft) => StudioItem[]> = {
   reel: (s, nw) => [['Hook', nw.title, 'On screen: ' + leadWords(nw.title, 6)], ...s.slice(0, 6).map((x, k): StudioItem => ['Scene ' + (k + 1), x, 'On screen: ' + leadWords(x, 6)]),
     ['Close', nw.take || nw.title, 'On screen: ' + leadWords(nw.take || nw.title, 6)]],
   podcast: (s) => s.map((x, k): StudioItem => [stamp(k), leadWords(x, 10), 'Host: ' + x]),
-  slides: (s) => s.map((x, k): StudioItem => [leadWords(x, 5) || 'Slide ' + (k + 1), x]),
+  slides: (s) => s.map((x, k): StudioItem => [leadWords(x, 5) || 'Slide ' + (k + 1), x, x]),
   motion: (s) => numbered('Stage', s),
   explainer: (s) => numbered('Step', s),
   aid: (s) => s.map((x): StudioItem => ['Check', x]),

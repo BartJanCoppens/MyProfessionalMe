@@ -52,7 +52,7 @@ describe('the hub', () => {
     expect(card(/Reel Studio/).disabled).toBe(true);
     expect(card(/Reel Studio/).textContent).toContain('Coming in a later release');
     expect(card(/Flash card & Exam Studio/).disabled).toBe(false);
-    expect(screen.getAllByText('Coming in a later release')).toHaveLength(4);
+    expect(screen.getAllByText('Coming in a later release')).toHaveLength(3);
   });
   it('greys an available studio the creation rules do not allow, with the reason', () => {
     render(<Live state={{ create: data(['Flash cards']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);

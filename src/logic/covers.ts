@@ -9,7 +9,7 @@ type Bar = { bg: string; anim: string };
 // The one map of formats to cover kinds: the cover drawing (Cover.tsx) and the v4 cover lines (fmtCover.ts) read it.
 export const COVER_KIND: Record<string, CoverKind> = { Podcast: 'pod', Reel: 'reel', Avatar: 'avatar', Game: 'game', Book: 'book', Classroom: 'class', 'E-learning': 'elearn', Mentoring: 'mentor', Website: 'web', Certification: 'cert',
   'Flash cards': 'flash', 'Practice exam': 'exam', 'Case exercise': 'case', 'Teach-back': 'teach', 'Stretch assignment': 'stretch', Webinar: 'webinar', 'Job aid': 'aid', 'Interactive explainer': 'explainer', 'Animated flow': 'flow',
-  Presentation: 'deck' };
+  Presentation: 'deck', Slides: 'deck' };
 const DARK = ['Podcast', 'Reel', 'Avatar', 'Game', 'Certification', 'Practice exam', 'Webinar'];
 
 // "28 min" for media, otherwise the study time.
