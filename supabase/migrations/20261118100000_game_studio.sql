@@ -14,7 +14,8 @@
 --           src/logic/gameScan.sync.test.ts compares the two rule lists.
 -- check     contribution_problems refuses a game that was not built, shows a scan problem, has no passed review, was built for
 --           another AI role than the one chosen now, lacks (role chosen) or keeps (No AI role) the AI role row, or whose code
---           repeats the role's text 2 (12 characters or more, case-insensitive; GameStudio's echoedSecrets idea).
+--           repeats the role's text 2 (12 characters or more, case-insensitive; GameStudio's echoedSecrets idea), in its files or in
+--           the texts learners read. The built game must come after the rows.
 -- content   private.game_content: concept, win, rounds {text, answer}, role {kind, about} or null (what the role knows is never
 --           copied, so no learner receives it), the leaderboard answer (Firm-wide when unanswered), the two files and 'ai'.
 --           gameContent in src/logic/gameContent.ts builds the same for the preview.
@@ -126,7 +127,10 @@ as $$
     and (select count(*) from r where label = 'AI role') <= 1
     and not exists (select 1 from r where label <> 'Concept' and label <> 'AI role' and label !~ '^Round [0-9]+$')
     and (select count(*) from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array') <= 1
-    and not exists (select 1 from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array' and not private.game_item_ok(e));
+    and not exists (select 1 from jsonb_array_elements(p_items) e where jsonb_typeof(e) <> 'array' and not private.game_item_ok(e))
+    -- the built game takes the last place: no row after it
+    and not exists (select 1 from jsonb_array_elements(p_items) with ordinality as a(e, n), jsonb_array_elements(p_items) with ordinality as b(e, n)
+                    where jsonb_typeof(a.e) <> 'array' and jsonb_typeof(b.e) = 'array' and b.n > a.n);
 $$;
 
 -- 4. A game's content (gameContent in src/logic/gameContent.ts builds the same for the preview); null until it is built.
@@ -290,6 +294,11 @@ begin
       v_knows := lower(private.trimmed(coalesce(v_row ->> 2, '')));
       if char_length(v_knows) >= 12 and (position(v_knows in lower(v_game -> 'files' ->> 'index.html')) > 0 or position(v_knows in lower(v_game -> 'files' ->> 'game.js')) > 0) then
         p := array_append(p, 'The game''s code repeats what the AI role hides');
+      end if;
+      -- nor may the texts learners read: the concept, win, rounds and who the AI plays (everything but the role's own text 2)
+      if char_length(v_knows) >= 12 and exists (select 1 from jsonb_array_elements(private.rows_of(c.items)) r
+          where position(v_knows in lower(r ->> 1)) > 0 or (r ->> 0 <> 'AI role' and position(v_knows in lower(coalesce(r ->> 2, ''))) > 0)) then
+        p := array_append(p, 'The game''s text repeats what the AI role hides');
       end if;
     end if;
   end if;
