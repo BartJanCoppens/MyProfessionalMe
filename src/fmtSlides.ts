@@ -2,7 +2,7 @@
 // captions at a reading pace), the template and transitions chosen, and completion: playing it to the end completes it (media).
 // With ?motion=off or reduced motion the panel fades between slides. The Slides Studio's preview and the review views run the
 // same view with nothing saved (studioPreviews.tsx).
-import { completedToast, detailOf, saveDetail } from './fmtShared';
+import { playedGuard, playedOpts } from './fmtShared';
 import { stillMotion } from './fmtMotion';
 import { slidesLine } from './logic/slidesContent';
 import { PACE } from './logic/narration';
@@ -19,14 +19,11 @@ export function slidesView(c: SlidesContent, o: SlidesOpts) {
     paths: voiced ? c.slides.map((s) => s.audio!.path) : [],
     sub: slidesLine(c) + ' · ' + (voiced ? 'AI voice · Made with AI' : 'Captions only'),
     way: voiced ? 'Narrated with an AI voice · Made with AI' : 'Captions only · no voice: each slide is read at ' + PACE + ' words a minute',
-    note: o.ro ? 'Viewing someone else: playing it completes nothing.' : '',
-    onEnd: () => { if (!o.ro && !o.done) o.onEnd(); },
+    ...playedGuard(o),
   };
 }
 export type SlidesView = ReturnType<typeof slidesView>;
 
 export function slidesVals(L: Logic, it: Item, c: SlidesContent) {
-  const saved = detailOf<'slides'>(L, it.id);
-  return slidesView(c, { ro: L.subject.readOnly, still: stillMotion(L), done: !!saved.last || it.state === 'accepted',
-    onEnd: () => saveDetail(L, it, { ...saved, last: true }, { complete: true, done: completedToast(it, 'Played to the end') }) });
+  return slidesView(c, { ...playedOpts<'slides'>(L, it, 'Played to the end'), still: stillMotion(L) });
 }

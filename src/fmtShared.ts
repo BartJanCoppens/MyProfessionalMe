@@ -28,6 +28,20 @@ export function saveDetail(L: Logic, it: Item, detail: LearningDetail, opts: { c
   const finish = !!opts.complete && it.state !== 'accepted';
   L.persist(() => saveProgress(L.subject.id, it.id, { ...(finish && { state: 'accepted' as const, pct: 100 }), detail }), finish ? opts.done : undefined);
 }
+
+// Completion by playing a media item through (Presentation, Slides, Podcast): ro is View as, done is already played
+// through. The guarded end counts nothing in View as and nothing twice; the note says why in View as.
+export type PlayedOpts = { ro: boolean; done: boolean; onEnd: () => void };
+export const playedGuard = (o: PlayedOpts) => ({
+  note: o.ro ? 'Viewing someone else: playing it completes nothing.' : '',
+  onEnd: () => { if (!o.ro && !o.done) o.onEnd(); },
+});
+// The learner's side of it: View as, played through before (detail.last or accepted), and saving the end with `what` in the toast.
+export function playedOpts<K extends keyof DetailOf>(L: Logic, it: Item, what: string): PlayedOpts {
+  const saved = detailOf<K>(L, it.id) as { last?: boolean };
+  return { ro: L.subject.readOnly, done: !!saved.last || it.state === 'accepted',
+    onEnd: () => saveDetail(L, it, { ...saved, last: true } as LearningDetail, { complete: true, done: completedToast(it, what) }) };
+}
 export const handedIn = (it: Item) => it.state === 'submitted' || it.state === 'accepted';
 export const completedToast = (it: Item, what: string) => what + ' · “' + it.title + '” counts toward your hours and levels';
 
