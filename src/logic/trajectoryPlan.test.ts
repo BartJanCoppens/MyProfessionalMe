@@ -89,7 +89,7 @@ describe('formats and source keys', () => {
   });
   it('gives each reference a key', () => {
     expect(refKey({ kind: 'kb', bundleId: 'b1', chunk: 3 })).toBe('kb:b1#3');
-    expect(refKey({ kind: 'file', sourceId: 's1', page: 2 })).toBe('file:s1#p2');
+    expect(refKey({ kind: 'file', sourceId: 's1', page: 2, passage: 3 })).toBe('file:s1#p2.3');
     expect(refKey({ kind: 'learning', learningId: 'L1' })).toBe('learning:L1');
   });
 });

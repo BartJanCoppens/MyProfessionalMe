@@ -22,10 +22,10 @@ export const PLAN_CAPS = {
   replyChars: 1200, questions: 3, removed: 30, messages: 60, messageChars: 4000, bundles: 12, sourcesPerTrajectory: 10,
 } as const;
 
-export type SourceRef = { kind: 'kb'; bundleId: string; chunk: number } | { kind: 'file'; sourceId: string; page: number } | { kind: 'learning'; learningId: string };
-// kb:<bundle>#<chunk>, file:<source>#p<page> or learning:<id>
+export type SourceRef = { kind: 'kb'; bundleId: string; chunk: number } | { kind: 'file'; sourceId: string; page: number; passage: number } | { kind: 'learning'; learningId: string };
+// kb:<bundle>#<chunk>, file:<source>#p<page>.<passage> (passage: its index among the source's passages) or learning:<id>
 export function refKey(r: SourceRef): string {
-  return r.kind === 'kb' ? `kb:${r.bundleId}#${r.chunk}` : r.kind === 'file' ? `file:${r.sourceId}#p${r.page}` : `learning:${r.learningId}`;
+  return r.kind === 'kb' ? `kb:${r.bundleId}#${r.chunk}` : r.kind === 'file' ? `file:${r.sourceId}#p${r.page}.${r.passage}` : `learning:${r.learningId}`;
 }
 export type CitedSource = { ref: SourceRef; label: string; quote: string };
 
