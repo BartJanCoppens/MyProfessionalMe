@@ -6,9 +6,9 @@ import type { AiAdmin, AiConnection, AiForm, AiUsage, AiUse, StockVoice, StockVo
 import type { StockLook, StockLookForm } from '../logic/stockLooks';
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
-// Calls an AI edge function (`ai`, `voice`). Throws the function's own error message (e.g. "This AI use is not live …")
+// Calls an AI edge function (`ai`, `voice`, `avatar`). Throws the function's own error message (e.g. "This AI use is not live …")
 // rather than "non-2xx status code".
-export async function invokeFunction<T>(name: 'ai' | 'voice', body: Record<string, unknown>): Promise<T> {
+export async function invokeFunction<T>(name: 'ai' | 'voice' | 'avatar', body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
     let message = (error as { message: string }).message;
@@ -16,6 +16,19 @@ export async function invokeFunction<T>(name: 'ai' | 'voice', body: Record<strin
     throw new Error(message);
   }
   return data as T;
+}
+
+// A last report that must still leave when the page is closing (pagehide, unmount): a raw request with keepalive, which supabase.functions.invoke cannot do.
+// Never throws; an answer is not read.
+export async function keepaliveFunction(name: 'avatar', body: Record<string, unknown>): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return;
+  await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
+    method: 'POST', keepalive: true,
+    headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  }).catch((): void => undefined);
 }
 
 export async function loadAiAdmin(): Promise<AiAdmin> {
