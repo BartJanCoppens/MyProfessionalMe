@@ -12,7 +12,7 @@ import { AI_VOICE, CAPTIONS, PRESENTER, SLIDES_MAX_SECONDS, bulletsOf, hasWords,
 import { studioContent } from './studioContent';
 import { itemsValid, questionsOf, stepsOf, studioById } from './studios';
 import type { StudioEntry, StudioItem } from './studios';
-import { CLIPS_MAX, CLIP_MARKS_MAX, CLIP_SECONDS_MAX, isVoiceItem } from './voiceItem';
+import { CLIPS_MAX, CLIP_MARKS_MAX, CLIP_SECONDS_MAX, CLIP_WORDS_MAX, isVoiceItem } from './voiceItem';
 import type { Clip, VoiceItem } from './voiceItem';
 
 const FOLDER = '0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7/';
@@ -28,6 +28,19 @@ describe('a voice-over item', () => {
   it('holds a clip per voiced slide: the slide, the words it was made from, the stored mp3, its length and its marks', () => {
     expect(isVoiceItem(VOICE())).toBe(true);
     expect(isVoiceItem({ kind: 'voice', clips: [clip(0, 'x')] })).toBe(true);
+  });
+  it('takes a clip with its word timings, and one without (made before Phase 5)', () => {
+    const timed = (words: unknown) => ({ kind: 'voice', clips: [{ ...clip(0, 'a', 4), words }] });
+    expect(isVoiceItem(timed([0, 0.5, 4]))).toBe(true);
+    expect(isVoiceItem(timed([]))).toBe(true);
+    expect(isVoiceItem({ kind: 'voice', clips: [clip(0, 'a')] })).toBe(true);
+    expect(isVoiceItem(timed([0.5, 0.2]))).toBe(false); // going back
+    expect(isVoiceItem(timed([0, 4.1]))).toBe(false); // past the 4-second clip
+    expect(isVoiceItem(timed([-1]))).toBe(false);
+    expect(isVoiceItem(timed(['0']))).toBe(false);
+    expect(isVoiceItem(timed(Array.from({ length: CLIP_WORDS_MAX + 1 }, () => 1)))).toBe(false);
+    expect(isVoiceItem(timed(Array.from({ length: CLIP_WORDS_MAX }, () => 1)))).toBe(true);
+    expect(isVoiceItem({ kind: 'voice', clips: [{ ...clip(0, 'a'), words: [], made: 'x' }] })).toBe(false);
   });
   it.each([
     ['another kind', { kind: 'motion' }], ['no clips', { clips: [] }], ['an extra key', { made: 'voice' }],
@@ -46,6 +59,7 @@ describe('a voice-over item', () => {
     expect(body).toContain("right(c ->> 'path', 4) = '.mp3'");
     expect(body).toContain('{1,64}$'); // VOICE_ID in supabase/functions/_shared/voiceRules.ts
     expect(body).toContain('between 0 and ' + (CLIPS_MAX - 1));
+    expect(latestMatch(/create (?:or replace )?function private\.words_ok\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1]).toContain('> ' + CLIP_WORDS_MAX); // at most CLIP_WORDS_MAX words
   });
 });
 

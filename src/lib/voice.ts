@@ -10,8 +10,9 @@ import { VOICE_USE } from '../../supabase/functions/_shared/voiceRules.ts';
 
 export { VOICE_USE };
 export const BROWSER_VOICE = 'Browser voice · not saved';
-// Stored audio made by the voice: its path in `media`, its length, and when its marks fall.
-export type StoredVoice = { path: string; seconds: number; marks: RunMark[]; made: 'voice' };
+// Stored audio made by the voice: its path in `media`, its length, when its marks fall and when each spoken word starts
+// (words: [] when the voice sent no timing; never invented).
+export type StoredVoice = { path: string; seconds: number; marks: RunMark[]; words: number[]; made: 'voice' };
 export type SpeakRequest = { contributionId: string; voiceId: string; text: string };
 
 // Whether the AI voice answers now (the use is in ai_live_uses()).
@@ -22,7 +23,7 @@ export const voiceOn = (o: { enabled: boolean; live: readonly string[] }) => o.e
 export async function speak(req: SpeakRequest): Promise<StoredVoice> {
   const data = await invokeFunction<Partial<StoredVoice>>('voice', { ...req });
   if (!data || typeof data.path !== 'string' || typeof data.seconds !== 'number') throw new Error('The voice function returned no audio');
-  return { path: data.path, seconds: data.seconds, marks: Array.isArray(data.marks) ? data.marks : [], made: 'voice' };
+  return { path: data.path, seconds: data.seconds, marks: Array.isArray(data.marks) ? data.marks : [], words: Array.isArray(data.words) ? data.words : [], made: 'voice' };
 }
 
 // A stock voice's own sample, as a data URL to play (System and General Admins, when the voice is live).

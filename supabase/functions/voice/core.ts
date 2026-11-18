@@ -55,6 +55,17 @@ export function markTimes(text: string, starts: number[], seconds: number): Mark
   return out;
 }
 
+// When each spoken word starts: its first character as ElevenLabs timed it; past the timings, at the end. Kept
+// non-decreasing within [0, seconds]. One per word of spoken(text), as private.spoken_words counts them.
+export function wordTimes(text: string, starts: number[], seconds: number): number[] {
+  let last = 0;
+  return [...spoken(text).matchAll(/\S+/g)].map((m) => {
+    const at = m.index! < starts.length ? starts[m.index!] : seconds;
+    last = Math.max(last, Math.min(seconds, Math.max(0, at)));
+    return last;
+  });
+}
+
 // The file's name follows the voice and the spoken words: voicing the same words again replaces the file.
 export async function voiceFileName(voiceId: string, text: string): Promise<string> {
   const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(voiceId + '\n' + spoken(text))));
@@ -111,7 +122,7 @@ export type SpeakDeps = {
 };
 
 // Voices the text, stores the mp3 in `media` at <caller>/<contribution>/voice-<hash>.mp3 and answers
-// { path, seconds, marks }. Every check that costs nothing comes before the count; the count comes before the call.
+// { path, seconds, marks, words }. Every check that costs nothing comes before the count; the count comes before the call.
 export async function speakResponse(body: unknown, d: SpeakDeps): Promise<Response> {
   const started = Date.now();
   const r = readSpeak(body);
@@ -144,7 +155,7 @@ export async function speakResponse(body: unknown, d: SpeakDeps): Promise<Respon
   const refused = await d.upload(path, fromBase64(b64));
   if (refused) { done(false); return fail(/row-level security|unauthorized/i.test(refused) ? 403 : 500, 'The audio could not be stored: ' + refused); }
   done(true);
-  return Response.json({ path, seconds, marks: markTimes(text, starts, seconds) }, { headers: AI_HEADER });
+  return Response.json({ path, seconds, marks: markTimes(text, starts, seconds), words: wordTimes(text, starts, seconds) }, { headers: AI_HEADER });
 }
 
 export type SampleDeps = {

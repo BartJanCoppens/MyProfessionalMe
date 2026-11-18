@@ -9,7 +9,7 @@ import { BROWSER_VOICE, hearStockVoice, speak, speakInBrowser, voiceLive } from 
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 const CID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
-const STORED = { path: 'u/' + CID + '/voice-0123456789abcdef.mp3', seconds: 4.2, marks: [{ kind: 'next', at: 2 }] };
+const STORED = { path: 'u/' + CID + '/voice-0123456789abcdef.mp3', seconds: 4.2, marks: [{ kind: 'next', at: 2 }], words: [0, 0.6, 2] };
 const refusal = (status: number, error: string) => ({ data: null, error: { message: 'Edge Function returned a non-2xx status code', context: new Response(JSON.stringify({ error }), { status }) } });
 
 // A speechSynthesis stand-in: records what it is asked to say; the test decides whether it starts and ends.
@@ -26,6 +26,11 @@ describe('speak', () => {
     db.client.functions.invoke.mockResolvedValueOnce({ data: STORED, error: null });
     expect(await speak({ contributionId: CID, voiceId: 'tVoiceWarm01', text: 'Hello ⟨next⟩ there' })).toEqual({ ...STORED, made: 'voice' });
     expect(db.client.functions.invoke).toHaveBeenCalledWith('voice', { body: { contributionId: CID, voiceId: 'tVoiceWarm01', text: 'Hello ⟨next⟩ there' } });
+  });
+  it('answers [] for words when the function sent none, and never invents any', async () => {
+    const { words: _w, ...old } = STORED;
+    db.client.functions.invoke.mockResolvedValueOnce({ data: old, error: null });
+    expect(await speak({ contributionId: CID, voiceId: 'tVoiceWarm01', text: 'Hi there' })).toEqual({ ...old, words: [], made: 'voice' });
   });
   it('says the function\'s refusal in words, and never falls through to the browser voice', async () => {
     db.client.functions.invoke.mockResolvedValueOnce(refusal(422, 'That voice is not on the stock list'));

@@ -4,18 +4,22 @@
 // contribution's folder, its length and where its ⟨next⟩ and ⟨cue⟩ marks fall. Mirrored by private.voice_ok in
 // supabase/migrations/20261117310000_podcast_studio.sql (slidesContent.test.ts and podcastContent.test.ts compare the limits).
 import type { RunMark } from './narration';
-import { CLIP_SECONDS_MAX, VOICE_ID } from '../../supabase/functions/_shared/voiceRules.ts';
-export { CLIP_SECONDS_MAX };
+import { CLIP_SECONDS_MAX, CLIP_WORDS_MAX, VOICE_ID } from '../../supabase/functions/_shared/voiceRules.ts';
+export { CLIP_SECONDS_MAX, CLIP_WORDS_MAX };
 import { MEDIA_PATH } from './mediaFiles';
 
+// words: when each spoken word starts (captions); clips stored before Phase 5 have none and stay valid.
 // voice: the stock voice's provider id; one voice for each speaker (boundClips), one for the whole deck of slides.
-export type Clip = { slide: number; text: string; voice: string; path: string; seconds: number; marks: RunMark[] };
+export type Clip = { slide: number; text: string; voice: string; path: string; seconds: number; marks: RunMark[]; words?: number[] };
 export type VoiceItem = { kind: 'voice'; clips: Clip[] };
 
 export const CLIPS_MAX = 49; // one per part (private.item_max('Podcast') less the place the voice-over takes: at most that many turns)
 export const CLIP_MARKS_MAX = 50;
 export const CLIP_TEXT_MAX = 600;
 const CLIP_KEYS = ['slide', 'text', 'voice', 'path', 'seconds', 'marks'];
+// Non-decreasing seconds, each within the clip.
+const isWords = (w: unknown, seconds: number) => Array.isArray(w) && w.length <= CLIP_WORDS_MAX
+  && w.every((t, i) => typeof t === 'number' && Number.isFinite(t) && t >= 0 && t <= seconds && (i === 0 || t >= w[i - 1]));
 
 const isMark = (m: unknown) => {
   const x = m as Record<string, unknown> | null;
@@ -34,7 +38,9 @@ const isClip = (c: unknown): c is Clip => {
   const x = c as Record<string, unknown> | null;
   if (!x || typeof x !== 'object' || Array.isArray(x)) return false;
   const keys = Object.keys(x);
-  return keys.length === CLIP_KEYS.length && CLIP_KEYS.every((k) => keys.includes(k))
+  const withWords = keys.length === CLIP_KEYS.length + 1 && keys.includes('words');
+  return (keys.length === CLIP_KEYS.length || withWords) && CLIP_KEYS.every((k) => keys.includes(k))
+    && (!withWords || isWords(x.words, x.seconds as number))
     && Number.isInteger(x.slide) && (x.slide as number) >= 0 && (x.slide as number) < CLIPS_MAX
     && typeof x.text === 'string' && x.text.trim() !== '' && x.text.length <= CLIP_TEXT_MAX && typeof x.voice === 'string' && VOICE_ID.test(x.voice) && isAudio(x);
 };

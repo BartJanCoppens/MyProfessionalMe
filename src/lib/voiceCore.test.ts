@@ -2,7 +2,7 @@
 // with-timestamps call, the marks' times, and the whole speak and sample answers with their outside steps as fakes.
 // The key never leaves; every answer made by the voice is marked X-AI-Generated.
 import { describe, expect, it, vi } from 'vitest';
-import { AI_HEADER, ELEVENLABS, markTimes, readSpeak, sampleResponse, speakResponse, ttsRequest, VOICE_LIMITS, voiceFileName } from '../../supabase/functions/voice/core.ts';
+import { AI_HEADER, ELEVENLABS, markTimes, readSpeak, sampleResponse, speakResponse, ttsRequest, VOICE_LIMITS, voiceFileName, wordTimes } from '../../supabase/functions/voice/core.ts';
 import type { SampleDeps, SpeakDeps } from '../../supabase/functions/voice/core.ts';
 import { MEDIA_KINDS, MEDIA_PATH } from '../logic/mediaFiles';
 import { CLIP_SECONDS_MAX } from '../logic/voiceItem';
@@ -50,6 +50,20 @@ describe('markTimes (copied from Horizon)', () => {
   });
 });
 
+describe('wordTimes', () => {
+  const S16 = Array.from({ length: 16 }, (_, i) => i / 10 + 0.05); // one per character of "Hello big world."
+  it('gives the start of each spoken word: the time of its first character', () => {
+    expect(wordTimes('Hello ⟨cue⟩ big world.', S16, 1.2)).toEqual([S16[0], S16[6], S16[10]]);
+  });
+  it('puts words past the timings at the end of the audio', () => {
+    expect(wordTimes('Hello ⟨cue⟩ big world.', S16.slice(0, 7), 1.2)).toEqual([S16[0], S16[6], 1.2]);
+  });
+  it('lifts a start that goes back to the one before, and keeps every start within the audio', () => {
+    expect(wordTimes('Hello big world.', [0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0.2, 0, 0, 0, 0, 0], 1.2)).toEqual([0, 0.9, 0.9]);
+    expect(wordTimes('Hi there', [-1, 0, 0, 5, 0, 0, 0, 0], 1.2)).toEqual([0, 1.2]);
+  });
+});
+
 describe('ttsRequest', () => {
   it('calls ElevenLabs with-timestamps with the key in a header only and the spoken text without marks', () => {
     const r = ttsRequest({ key: KEY, baseUrl: null, model: 'eleven_multilingual_v2' }, 'tVoiceWarm01', 'Hi ⟨cue⟩ there');
@@ -85,6 +99,12 @@ describe('speakResponse', () => {
     expect(d.uploads[0][0]).toBe(out.path);
     expect(new TextDecoder().decode(d.uploads[0][1])).toBe('mp3-bytes');
     expect(d.lines).toEqual([{ use: 'studio_voice', ok: true, chars: 25, ms: expect.any(Number) }]);
+  });
+  it('answers when each spoken word starts, one per word, and stays marked as AI', async () => {
+    const r = await speakResponse(ask({ text: 'Hello ⟨cue⟩ big world.' }), deps({ fetch: ok({ ...SPEECH, alignment: { character_start_times_seconds: STARTS.slice(0, 16), character_end_times_seconds: STARTS.slice(0, 16).map((s) => s + 0.1) } }) }));
+    expect(r.headers.get('X-AI-Generated')).toBe('true');
+    const out = await body(r);
+    expect(out.words).toEqual([STARTS[0], STARTS[6], STARTS[10]]);
   });
   it('refuses a voice that is not an active stock voice with 422, before anything is counted or sent', async () => {
     const count = vi.fn(async () => 'ok' as const), d = deps({ voiceOnList: async () => false, count });

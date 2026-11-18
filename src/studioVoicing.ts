@@ -49,7 +49,7 @@ export async function voiceParts({ L, nw, withFile }: Pick<BuildCtx, 'L' | 'nw' 
   const ok = await withFile(async (id) => {
     for (const k of todo) {
       const text = parts[k].text.trim();
-      try { const v = await speak({ contributionId: id, voiceId: parts[k].voice!, text }); made.push({ slide: k, text, voice: parts[k].voice!, path: v.path, seconds: v.seconds, marks: v.marks }); }
+      try { const v = await speak({ contributionId: id, voiceId: parts[k].voice!, text }); made.push({ slide: k, text, voice: parts[k].voice!, path: v.path, seconds: v.seconds, marks: v.marks, ...(v.words.length ? { words: v.words } : {}) }); }
       catch (e) { failure.error = e as Error; break; }
     }
     next = withClips(stepsOf(list), [...kept, ...made]) as StudioEntry[];

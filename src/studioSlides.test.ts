@@ -32,7 +32,7 @@ const nwOf = (o: Partial<NewDraft> = {}): NewDraft => ({ line: 'Consulting', aud
 const data = (): CreateData => ({ contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 });
 const BUILD = 3; // Idea & sources, Shape it, Draft, Produce
 let spoken = 0;
-const mockVoice = () => vi.mocked(voice.speak).mockImplementation(async () => { spoken++; return { path: FOLDER + 'voice-' + spoken + '.mp3', seconds: 5 + spoken, marks: [{ kind: 'next' as const, at: 2 }], made: 'voice' as const }; });
+const mockVoice = () => vi.mocked(voice.speak).mockImplementation(async () => { spoken++; return { path: FOLDER + 'voice-' + spoken + '.mp3', seconds: 5 + spoken, marks: [{ kind: 'next' as const, at: 2 }], words: [0, 1.5], made: 'voice' as const }; });
 
 const open = (o: { list?: StudioEntry[]; shape?: Record<string, string>; live?: boolean; voice?: string; how?: string; step?: number } = {}) => {
   stubWindow({});
@@ -92,6 +92,7 @@ describe('building a deck with the AI voice', () => {
     const clips = voiceOf(h.list())!.clips;
     expect(clips.map((c) => [c.slide, c.text, c.seconds])).toEqual([[0, ROWS[0][2], 6], [1, ROWS[1][2], 7], [2, ROWS[2][2], 8]]);
     expect(boundClips(h.list())).toHaveLength(3);
+    expect(clips.map((c) => c.words)).toEqual([[0, 1.5], [0, 1.5], [0, 1.5]]); // each clip stores when its words start
     // saved with the draft, the rows kept, the provenance of the rows kept (drafted by AI stays AI-assisted)
     const saved = vi.mocked(store.saveDraft).mock.calls.at(-1)![0] as { items: unknown[] };
     expect(saved.items).toHaveLength(4);
@@ -99,7 +100,7 @@ describe('building a deck with the AI voice', () => {
     expect(h.st().content).toMatchObject({ kind: 'slides', made: 'ai', seconds: 21 });
   });
   it('keeps the slides it voiced when one fails, says why on that step, and a retry voices only the slides still without audio', async () => {
-    vi.mocked(voice.speak).mockReset().mockImplementationOnce(async () => ({ path: FOLDER + 'voice-1.mp3', seconds: 6, marks: [], made: 'voice' as const }))
+    vi.mocked(voice.speak).mockReset().mockImplementationOnce(async () => ({ path: FOLDER + 'voice-1.mp3', seconds: 6, marks: [], words: [], made: 'voice' as const }))
       .mockRejectedValueOnce(new Error('Daily voice limit reached for you today (UTC)'));
     const h = open();
     await h.build();
@@ -149,6 +150,12 @@ describe('building a deck with the AI voice', () => {
 describe('one voice for the whole deck', () => {
   const clipOf = (k: number, voiceId: string) => ({ slide: k, text: ROWS[k][2] ?? '', voice: voiceId, path: FOLDER + 'old-' + k + '.mp3', seconds: 5, marks: [] });
   const voiced = (n: number, voiceId = 'EL1'): StudioEntry[] => [...ROWS, { kind: 'voice' as const, clips: ROWS.slice(0, n).map((_, k) => clipOf(k, voiceId)) }];
+  it('a clip stored before word timings (no words) still counts: it is not voiced again, and the clip is kept as it was', async () => {
+    const h = open({ list: voiced(3) });
+    await h.build();
+    expect(voice.speak).not.toHaveBeenCalled();
+    expect(voiceOf(h.list())!.clips.every((c) => c.words === undefined)).toBe(true);
+  });
   it('after a reload or an Edit, with no voice picked, a retry goes on in the voice the stored clips were made in', async () => {
     const h = open({ list: voiced(1) });
     h.L().setState({ nw: { ...h.state.nw, cast: {} } });

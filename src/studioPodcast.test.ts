@@ -33,7 +33,7 @@ const nwOf = (o: Partial<NewDraft> = {}): NewDraft => ({ line: 'Consulting', aud
 const data = (): CreateData => ({ contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 });
 const BUILD = 3; // Idea & sources, Shape it, Draft, Produce
 let spoken = 0;
-const mockVoice = () => vi.mocked(voice.speak).mockImplementation(async () => { spoken++; return { path: FOLDER + 'voice-' + spoken + '.mp3', seconds: 5 + spoken, marks: [], made: 'voice' as const }; });
+const mockVoice = () => vi.mocked(voice.speak).mockImplementation(async () => { spoken++; return { path: FOLDER + 'voice-' + spoken + '.mp3', seconds: 5 + spoken, marks: [], words: [0, 1.5], made: 'voice' as const }; });
 const CAST = { 'Host voice': 'Warm · Flemish English', 'Guest voice': 'Calm · Dutch' };
 
 const open = (o: { list?: StudioEntry[]; shape?: Record<string, string>; live?: boolean; cast?: Record<string, string>; step?: number } = {}) => {
@@ -78,12 +78,13 @@ describe('building an episode', () => {
       ['EL1', ROWS[1][1]], ['EL2', ROWS[2][1]], ['EL1', ROWS[4][1]], ['EL2', ROWS[5][1]]]);
     expect(voiceOf(h.list())!.clips.map((c) => [c.slide, c.voice, c.seconds])).toEqual([[0, 'EL1', 6], [1, 'EL2', 7], [2, 'EL1', 8], [3, 'EL2', 9]]);
     expect(boundClips(h.list())).toHaveLength(4);
+    expect(voiceOf(h.list())!.clips.every((c) => c.words?.length === 2)).toBe(true); // each clip stores when its words start
     const saved = vi.mocked(store.saveDraft).mock.calls.at(-1)![0] as { items: unknown[] };
     expect(saved.items).toHaveLength(ROWS.length + 1);
     expect(h.st().content).toMatchObject({ kind: 'podcast', made: 'ai', seconds: 30, chapters: [{ title: 'Why it lands in the close', start: 0, turn: 0 }, { title: 'What to fix first', start: 13, turn: 2 }] });
   });
   it('keeps the turns it voiced when one fails, says why on that step, and a retry voices only the turns still without audio', async () => {
-    vi.mocked(voice.speak).mockReset().mockImplementationOnce(async () => ({ path: FOLDER + 'voice-1.mp3', seconds: 6, marks: [], made: 'voice' as const }))
+    vi.mocked(voice.speak).mockReset().mockImplementationOnce(async () => ({ path: FOLDER + 'voice-1.mp3', seconds: 6, marks: [], words: [], made: 'voice' as const }))
       .mockRejectedValueOnce(new Error('Daily voice limit reached for you today (UTC)'));
     const h = open();
     await h.build();
@@ -110,6 +111,15 @@ describe('building an episode', () => {
     const h = open({ cast: { 'Host voice': 'Calm · Dutch', 'Guest voice': 'Calm · Dutch' } });
     await h.build();
     expect(h.st().build!.steps[1].error).toBe('Pick a different voice for each speaker');
+    expect(voice.speak).not.toHaveBeenCalled();
+  });
+  it('clips stored before word timings (no words) still count: nothing is voiced again', async () => {
+    const first = open();
+    await first.build();
+    const old = first.list().map((x) => (Array.isArray(x) ? x : { ...(x as object), clips: (x as { clips: object[] }).clips.map(({ words: _w, ...c }: { words?: number[] }) => c) })) as StudioEntry[];
+    const h = open({ list: old });
+    vi.mocked(voice.speak).mockClear();
+    await h.build();
     expect(voice.speak).not.toHaveBeenCalled();
   });
   it('after a reload or an Edit, with no voice picked, goes on in the voices the stored clips were made in', async () => {
