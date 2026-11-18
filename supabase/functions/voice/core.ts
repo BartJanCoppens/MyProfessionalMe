@@ -3,12 +3,12 @@
 // Vitest tests them (src/lib/voiceCore.test.ts). index.ts wires those steps to Supabase. Copied from Horizon's
 // server/voice.ts (markTimes, the with-timestamps call and its reading).
 // The key is only ever put in a request header to ElevenLabs; errors are scrubbed of it before they leave.
-import { fail, scrub } from '../_shared/aiGuard.ts';
+import { AI_HEADER, fail, scrub, UUID } from '../_shared/aiGuard.ts';
 import { CUE_MARK, NEXT_MARK, spoken, spokenWords } from '../_shared/narrationText.ts';
 import type { Mark } from '../_shared/narrationText.ts';
-import { CLIP_SECONDS_MAX, VOICE_ID, VOICE_USE } from '../_shared/voiceRules.ts';
+import { AVATAR_VOICE_USE, CLIP_SECONDS_MAX, VOICE_ID, VOICE_USE } from '../_shared/voiceRules.ts';
 
-export { VOICE_ID, VOICE_USE };
+export { AVATAR_VOICE_USE, VOICE_ID, VOICE_USE };
 export const ELEVENLABS = 'https://api.elevenlabs.io';
 export const VOICE_LIMITS = {
   chars: 5000, // per call (studios rule); longer narration is split by the caller
@@ -17,9 +17,7 @@ export const VOICE_LIMITS = {
   audioBytes: 25 * 1024 * 1024, // an audio file in `media` (MEDIA_KINDS.mp3 in src/logic/mediaFiles.ts)
   sampleBytes: 5_000_000,
 };
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-// EU AI Act Art. 50 marking, as Taxatar's: on every answer the voice made.
-export const AI_HEADER = { 'X-AI-Generated': 'true' } as const;
+export { AI_HEADER };
 
 export type { Mark };
 export type Speak = { contributionId: string; voiceId: string; text: string };
@@ -189,4 +187,43 @@ export async function sampleResponse(body: unknown, d: SampleDeps): Promise<Resp
     if (!res.ok || !bytes.length || bytes.length > VOICE_LIMITS.sampleBytes) return fail(502, 'The sample could not be fetched');
     return Response.json({ audio: 'data:audio/mpeg;base64,' + toBase64(bytes) }, { headers: AI_HEADER });
   } catch { return fail(502, 'The sample could not be fetched'); }
+}
+
+export type SayDeps = {
+  live: () => Promise<boolean>; // avatar_voice is in ai_live_uses()
+  input: (runId: string) => Promise<{ text: string; voice_id: string; language: string } | { refusal: string } | null>; // public.avatar_say_input
+  count: (use: string, chars: number) => Promise<'ok' | 'limit' | 'error'>;
+  target: () => Promise<VoiceTarget | null>; // the avatar_voice connection with its key
+  log: (line: Record<string, unknown>) => void;
+  fetch?: typeof fetch;
+};
+const SAY_REFUSALS: Record<string, [number, string]> = {
+  not_yours: [403, 'That is not your run'],
+  no_voice: [409, 'This scenario has no stock voice · the browser voice can speak it'],
+  no_line: [409, 'The character has not said anything yet'],
+};
+
+// { action: 'say', runId }: the portrait's voice. The text is the run's last character line as the database holds it (never one from the client), the
+// voice the scenario's stock voice. Counted under avatar_voice, answered as { audio: base64 mp3 } and stored nowhere.
+export async function sayResponse(body: unknown, d: SayDeps): Promise<Response> {
+  const started = Date.now(), b = record(body);
+  if (typeof b.runId !== 'string' || !UUID.test(b.runId)) return fail(400, 'Name the run (runId)');
+  if ('text' in b) return fail(400, 'The run sets what is said');
+  if (!(await d.live())) return fail(409, 'The avatar voice is not switched on');
+  const said = await d.input(b.runId);
+  if (!said) return fail(500, 'Could not read the run');
+  if ('refusal' in said) { const [status, text] = SAY_REFUSALS[said.refusal] || [409, 'Nothing to say for this run']; return fail(status, text); }
+  const chars = spoken(said.text).length;
+  const counted = await d.count(AVATAR_VOICE_USE, chars);
+  if (counted === 'limit') return fail(429, 'Your avatar voice for today is used up (UTC) · continue in text');
+  if (counted === 'error') return fail(500, 'Could not count the call');
+  const t = await d.target();
+  if (!t) return fail(409, 'The voice connection has no key');
+  const req = ttsRequest(t, said.voice_id, said.text);
+  const out = await callElevenLabs(t, req.url, req.init, d.fetch || fetch);
+  const done = (ok: boolean) => d.log({ use: AVATAR_VOICE_USE, ok, chars, ms: Date.now() - started });
+  const audio = out.ok && typeof out.json.audio_base64 === 'string' ? out.json.audio_base64 : '';
+  if (!audio || Math.floor(audio.length * 3 / 4) > VOICE_LIMITS.audioBytes) { done(false); return fail(out.ok ? 502 : out.status, out.ok ? 'ElevenLabs sent no audio' : out.error); }
+  done(true);
+  return Response.json({ audio }, { headers: AI_HEADER });
 }

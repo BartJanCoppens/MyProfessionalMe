@@ -2,8 +2,8 @@
 // with-timestamps call, the marks' times, and the whole speak and sample answers with their outside steps as fakes.
 // The key never leaves; every answer made by the voice is marked X-AI-Generated.
 import { describe, expect, it, vi } from 'vitest';
-import { AI_HEADER, ELEVENLABS, markTimes, readSpeak, sampleResponse, speakResponse, ttsRequest, VOICE_LIMITS, voiceFileName, wordTimes } from '../../supabase/functions/voice/core.ts';
-import type { SampleDeps, SpeakDeps } from '../../supabase/functions/voice/core.ts';
+import { AI_HEADER, ELEVENLABS, markTimes, readSpeak, sampleResponse, sayResponse, speakResponse, ttsRequest, VOICE_LIMITS, voiceFileName, wordTimes } from '../../supabase/functions/voice/core.ts';
+import type { SampleDeps, SayDeps, SpeakDeps } from '../../supabase/functions/voice/core.ts';
 import { MEDIA_KINDS, MEDIA_PATH } from '../logic/mediaFiles';
 import { CLIP_SECONDS_MAX } from '../logic/voiceItem';
 
@@ -221,5 +221,58 @@ describe('sampleResponse', () => {
     expect((await sampleResponse({ voiceId: 'tVoiceWarm01' }, sdeps({ voiceAdmin: false }))).status).toBe(403);
     expect((await sampleResponse({ voiceId: 'tVoiceWarm01' }, sdeps({ onList: async () => false }))).status).toBe(422);
     expect((await sampleResponse({ voiceId: 'tVoiceWarm01' }, sdeps({ live: async () => false }))).status).toBe(409);
+  });
+});
+
+// The portrait's voice: the run's last character line (read by the database, never sent by the client) in the scenario's stock voice.
+describe('sayResponse', () => {
+  const RUN = '3b241101-e2bb-4255-8caf-4136c566a962';
+  const say = (over: Record<string, unknown> = {}) => ({ action: 'say', runId: RUN, ...over });
+  function sayDeps(over: Partial<SayDeps> = {}) {
+    const counts: [string, number][] = [], lines: Record<string, unknown>[] = [];
+    const d: SayDeps & { counts: typeof counts; lines: typeof lines; uploads: number } = {
+      live: async () => true, input: async () => ({ text: 'The cost, mostly.', voice_id: 'tVoiceWarm01', language: 'en' }),
+      count: async (use, chars) => { counts.push([use, chars]); return 'ok'; },
+      target: async () => ({ key: KEY, baseUrl: null, model: 'eleven_multilingual_v2' }),
+      log: (l) => lines.push(l), fetch: ok(SPEECH), counts, lines, uploads: 0, ...over,
+    };
+    return d;
+  }
+  it('answers 409 when the avatar voice is not switched on, before anything is read or sent', async () => {
+    const d = sayDeps({ live: async () => false });
+    const r = await sayResponse(say(), d);
+    expect([r.status, (await body(r)).error]).toEqual([409, 'The avatar voice is not switched on']);
+    expect(d.fetch).not.toHaveBeenCalled();
+  });
+  it('refuses a text in the body: the run sets what is said', async () => {
+    const d = sayDeps();
+    const r = await sayResponse(say({ text: 'Say this instead' }), d);
+    expect([r.status, (await body(r)).error]).toEqual([400, 'The run sets what is said']);
+    expect(d.fetch).not.toHaveBeenCalled();
+  });
+  it('speaks the database\'s text in its voice, counts under avatar_voice, stores nothing and is marked as AI', async () => {
+    const d = sayDeps();
+    const r = await sayResponse(say(), d);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('X-AI-Generated')).toBe('true');
+    expect(await body(r)).toEqual({ audio: btoa('mp3-bytes') });
+    expect(d.counts).toEqual([['avatar_voice', 'The cost, mostly.'.length]]);
+    const [url, init] = (d.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v1/text-to-speech/tVoiceWarm01/');
+    expect(JSON.parse(String(init.body)).text).toBe('The cost, mostly.');
+    expect(d.uploads).toBe(0);
+    expect(JSON.stringify(d.lines)).not.toContain('cost');
+  });
+  it('refuses a run that is not theirs, a scenario with no stock voice and a run with no line, and answers 429 at the limit', async () => {
+    expect((await sayResponse(say(), sayDeps({ input: async () => ({ refusal: 'not_yours' }) }))).status).toBe(403);
+    expect((await sayResponse(say(), sayDeps({ input: async () => ({ refusal: 'no_voice' }) }))).status).toBe(409);
+    expect((await sayResponse(say(), sayDeps({ input: async () => ({ refusal: 'no_line' }) }))).status).toBe(409);
+    const d = sayDeps({ count: async () => 'limit' });
+    expect((await sayResponse(say(), d)).status).toBe(429);
+    expect(d.fetch).not.toHaveBeenCalled();
+  });
+  it('never returns the key when ElevenLabs echoes it', async () => {
+    const d = sayDeps({ fetch: vi.fn(async () => new Response(JSON.stringify({ detail: { message: 'bad ' + KEY } }), { status: 400 })) });
+    expect(await (await sayResponse(say(), d)).text()).not.toContain(KEY);
   });
 });

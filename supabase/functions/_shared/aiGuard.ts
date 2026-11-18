@@ -3,6 +3,9 @@
 
 // An error answer: { error } with the status.
 export const fail = (status: number, error: string) => Response.json({ error }, { status });
+// EU AI Act Art. 50 marking, as Taxatar's: on every answer the voice or the avatar made.
+export const AI_HEADER = { 'X-AI-Generated': 'true' } as const;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // Per-use ceilings on one answer, for the uses that write long text (the Game Studio's files, in parts). Every other use keeps the
 // default of 2048 tokens and 30 s. One call stays under the 150 s request limit of Supabase edge functions (confirm the plan's limit at deploy).

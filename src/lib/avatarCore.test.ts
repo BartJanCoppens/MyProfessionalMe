@@ -1,0 +1,126 @@
+// The pure core of the `avatar` edge function (supabase/functions/avatar/core.ts): the request checks, the LiveAvatar token request,
+// and the whole start and report answers with their outside steps (database, Vault, fetch) as fakes. The key never leaves.
+import { describe, expect, it, vi } from 'vitest';
+import { liveAvatarLanguage, readReport, readStart, readToken, reportResponse, startResponse, tokenRequest } from '../../supabase/functions/avatar/core.ts';
+import type { StartDeps } from '../../supabase/functions/avatar/core.ts';
+
+const KEY = 'hg-secret-key-4321';
+const UID = '0f8fad5b-d9cb-469f-a165-70867728950e', RID = '7c9e6679-7425-40de-944b-e07fc1f90ae7', SID = '3b241101-e2bb-4255-8caf-4136c566a962';
+const AVATAR = '11111111-2222-4333-8444-555555555555';
+const OPENED = { session_id: SID, max_seconds: 660, avatar_id: AVATAR, voice_id: null, language: 'nl' };
+const body = async (r: Response) => JSON.parse(await r.text());
+
+function deps(over: Partial<StartDeps> = {}): StartDeps & { reports: [string, number, boolean][]; lines: Record<string, unknown>[] } {
+  const reports: [string, number, boolean][] = [], lines: Record<string, unknown>[] = [];
+  return {
+    live: async () => true, open: async () => OPENED, target: async () => ({ key: KEY, baseUrl: null }),
+    report: async (id, seconds, final) => { reports.push([id, seconds, final]); return { ok: true, used: seconds }; },
+    log: (l) => lines.push(l), reports, lines,
+    fetch: vi.fn(async () => new Response(JSON.stringify({ data: { session_token: 'tok-1' } }), { status: 200 })), ...over,
+  };
+}
+
+describe('readStart and readReport', () => {
+  it('names the run', () => {
+    expect(readStart({ action: 'start', runId: 'x' })).toEqual({ ok: false, error: 'Name the run (runId)' });
+    expect(readStart({ action: 'start', runId: RID })).toEqual({ ok: true, runId: RID });
+  });
+  it('takes seconds 0 to 3,600 as integers', () => {
+    expect(readReport({ sessionId: SID, seconds: 90, final: true })).toEqual({ ok: true, report: { sessionId: SID, seconds: 90, final: true } });
+    expect(readReport({ sessionId: SID, seconds: 0 }).ok).toBe(true);
+    for (const seconds of [-1, 3601, 1.5, '5', null]) expect(readReport({ sessionId: SID, seconds }).ok).toBe(false);
+    expect(readReport({ sessionId: 'x', seconds: 5 }).ok).toBe(false);
+  });
+});
+
+describe('tokenRequest (Taxatar\'s body)', () => {
+  const s = { avatarId: AVATAR, voiceId: null, language: 'nl' as const, maxSeconds: 660 };
+  it('asks the LiveAvatar token URL with the key in X-API-KEY and the session settings', () => {
+    const r = tokenRequest({ key: KEY, baseUrl: null }, s);
+    expect(r.url).toBe('https://api.liveavatar.com/v1/sessions/token');
+    expect((r.init.headers as Record<string, string>)['X-API-KEY']).toBe(KEY);
+    const b = JSON.parse(r.init.body);
+    expect(b).toMatchObject({ mode: 'FULL', avatar_id: AVATAR, max_session_duration: 660, video_settings: { quality: 'high', encoding: 'H264' }, interactivity_type: 'CONVERSATIONAL', avatar_persona: { language: 'nl' } });
+    expect('voice_id' in b.avatar_persona).toBe(false);
+  });
+  it('adds the voice only when set, and takes another base URL', () => {
+    const r = tokenRequest({ key: KEY, baseUrl: 'https://alt.example/' }, { ...s, voiceId: 'v-1' });
+    expect(r.url).toBe('https://alt.example/v1/sessions/token');
+    expect(JSON.parse(r.init.body).avatar_persona.voice_id).toBe('v-1');
+  });
+});
+
+describe('liveAvatarLanguage and readToken (ported)', () => {
+  it('maps tags to the codes LiveAvatar accepts', () => {
+    expect([liveAvatarLanguage('nl-BE'), liveAvatarLanguage('nb'), liveAvatarLanguage('x')]).toEqual(['nl', 'no', 'en']);
+  });
+  it('reads the session token', () => {
+    expect(readToken({ data: { session_token: 't' } })).toBe('t');
+    expect(readToken({ token: 'u' })).toBe('u');
+    expect(readToken({})).toBeNull();
+  });
+});
+
+describe('startResponse', () => {
+  const start = { action: 'start', runId: RID };
+  it('answers 409 when the use is not live', async () => {
+    const r = await startResponse(start, deps({ live: async () => false }));
+    expect([r.status, (await body(r)).error]).toEqual([409, 'Live video is not switched on']);
+  });
+  it('answers 429 when the minutes of the day are used', async () => {
+    const r = await startResponse(start, deps({ open: async () => ({ refusal: 'minutes_used' }) }));
+    expect([r.status, (await body(r)).error]).toEqual([429, 'Your video minutes for today are used up · continue with the portrait or typing']);
+  });
+  it('maps the other refusals to words and opens nothing at HeyGen', async () => {
+    const d = deps({ open: async () => ({ refusal: 'open_elsewhere' }) });
+    const r = await startResponse(start, d);
+    expect(r.status).toBe(409);
+    expect(d.fetch).not.toHaveBeenCalled();
+    expect((await startResponse(start, deps({ open: async () => ({ refusal: 'no_video' }) }))).status).toBe(409);
+    expect((await startResponse(start, deps({ open: async () => ({ refusal: 'not_yours' }) }))).status).toBe(403);
+    expect((await startResponse(start, deps({ open: async () => null }))).status).toBe(500);
+  });
+  it('success: 200, marked, with the token, the session and the seconds, and the key sent only to HeyGen', async () => {
+    const d = deps();
+    const r = await startResponse(start, d);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('X-AI-Generated')).toBe('true');
+    expect(r.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(await body(r)).toEqual({ token: 'tok-1', sessionId: SID, maxSeconds: 660 });
+    expect(d.reports).toEqual([]);
+    expect(JSON.stringify(d.lines)).not.toContain(KEY);
+  });
+  it('HeyGen 402 returns the seconds once and answers 503 without echoing the key', async () => {
+    const d = deps({ fetch: vi.fn(async () => new Response(JSON.stringify({ message: 'bad key ' + KEY }), { status: 402 })) });
+    const r = await startResponse(start, d);
+    const text = await r.text();
+    expect(r.status).toBe(503);
+    expect(JSON.parse(text).error).toBe('Live video is unavailable right now · the portrait speaks instead');
+    expect(text).not.toContain(KEY);
+    expect(d.reports).toEqual([[SID, 0, true]]);
+    expect(JSON.stringify(d.lines)).not.toContain(KEY);
+  });
+  it('a transport error, a reply with no token and a missing key return the seconds too', async () => {
+    for (const over of [{ fetch: vi.fn(async () => { throw new Error('down ' + KEY); }) }, { fetch: vi.fn(async () => new Response('{}', { status: 200 })) }, { target: async () => null }]) {
+      const d = deps(over);
+      const r = await startResponse(start, d);
+      expect(r.status).toBeGreaterThanOrEqual(409);
+      expect(d.reports).toEqual([[SID, 0, true]]);
+      expect(await r.text()).not.toContain(KEY);
+    }
+  });
+});
+
+describe('reportResponse', () => {
+  it('refuses seconds out of 0 to 3,600', async () => {
+    for (const seconds of [-1, 3601]) expect((await reportResponse({ action: 'report', sessionId: SID, seconds, final: false }, deps())).status).toBe(400);
+  });
+  it('answers the seconds used', async () => {
+    const r = await reportResponse({ action: 'report', sessionId: SID, seconds: 42, final: true }, deps());
+    expect([r.status, await body(r)]).toEqual([200, { usedSeconds: 42 }]);
+  });
+  it('a closed session answers 409 in words', async () => {
+    const r = await reportResponse({ sessionId: SID, seconds: 5 }, deps({ report: async () => ({ ok: false, message: 'This video session has ended' }) }));
+    expect([r.status, (await body(r)).error]).toEqual([409, 'This video session has ended']);
+  });
+});
