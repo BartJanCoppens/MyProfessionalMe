@@ -3314,5 +3314,128 @@ insert into results (check_name, expected, actual) select 'RL completing a publi
 insert into results (check_name, expected, actual) select 'RL the timeline: 5 scenes of 4, 5, 6, 5.5 and 3.5 s run 25.2 s with 0.3 s between them', '25.2', private.reel_seconds(c.items, c.shape)::text
   from public.contributions c where c.title = 'T rl cards';
 insert into results (check_name, expected, actual) select 'RL without a voice a scene lasts its words at 140 a minute (14 words 6 s, a short line 2 s)', '6/2', round(private.own_seconds('one two three four five six seven eight nine ten eleven twelve thirteen fourteen'))||'/'||round(private.own_seconds('Hi'));
+-- ---------- Avatar Studio (AV) ----------
+-- An avatar is [label, text, text2] rows (private.avatar_ok): the five character rows, 1 to 4 "Learning point · N %" rows adding up to 100 and
+-- Quiz 1 to 3 (the question, then 2 to 4 options, the right one first). The check gate (private.avatar_row_problems, then the Avatar part of
+-- private.contribution_problems) refuses what is missing or unchosen and a public text that repeats what the character keeps back; it publishes as
+-- avatar content, which never holds Reveals or Hides. The quiz completes the learning (is_self_complete), 0.25 h.
+reset role;
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000aa','{Consulting}','{Avatar}');
+insert into public.review_policies (formats, peers, expert, quality) values ('{Avatar}', 0, false, false);
+insert into public.stock_voices (name, voice_id, language, active) values ('T av voice · calm, 40s', 'tAvVoice01', 'en', true), ('T av voice · switched off', 'tAvVoice02', 'en', false);
+select set_config('test.av_rows', '[["Persona","An HR director at a mid-sized manufacturer, 22 years in HR, wary of consultants."],["Situation","You present the business case for replacing three HR systems with one. She has ten minutes before her next meeting."],["Opening line","I have read your deck. Convince me this is not another IT project that HR ends up paying for."],["Reveals if asked","The current payroll vendor contract ends in 14 months."],["Hides unless probed","Two works-council members already oppose the change."],["Learning point · 30 %","Asks about her concerns before defending the numbers"],["Learning point · 40 %","Links the case to her goals, not to IT savings"],["Learning point · 30 %","Agrees a concrete next step before time runs out"],["Quiz 1","She says your numbers look too optimistic. What do you do first?","Ask which assumption worries her most · Defend the numbers again · Offer a discount"],["Quiz 2","How do you link the case to her goals?","Tie each benefit to a goal she named · List every IT saving · Skip to the price"],["Quiz 3","Her time is nearly up. How do you close?","Agree one concrete next step and a date · Promise a follow-up deck · Thank her and leave"]]', true);
+select set_config('test.av_shape', jsonb_build_object('Who does the learner talk to?', 'A colleague or junior', 'How is it scored?', 'AI scores, counsellor confirms', 'How long is a run?', '10 minutes', 'Language', 'Dutch', 'Difficulty', 'Tough',
+  'Look', (select id::text from public.stock_looks where name = 'HR director · 50s'), 'Voice', (select id::text from public.stock_voices where voice_id = 'tAvVoice01'))::text, true);
+select set_config('test.av_off', (select id::text from public.stock_looks where name = 'T rl switched-off look · 60s'), true);
+select set_config('test.av_voice_off', (select id::text from public.stock_voices where voice_id = 'tAvVoice02'), true);
+-- the design rows without the rows named in p_drop, with the row labelled p_label replaced by p_row, then p_extra
+create function pg_temp.av_rows(p_drop text[] default '{}', p_label text default null, p_row jsonb default null, p_extra jsonb default '[]') returns jsonb language sql as $f$
+  select coalesce(jsonb_agg(case when e ->> 0 = p_label then p_row else e end order by n), '[]'::jsonb) || p_extra
+  from jsonb_array_elements(current_setting('test.av_rows')::jsonb) with ordinality as t(e, n) where e ->> 0 <> all(p_drop) $f$;
+-- the design answers without the key p_minus, then p_set
+create function pg_temp.av_shape(p_minus text default null, p_set jsonb default '{}') returns jsonb language sql as $f$
+  select (current_setting('test.av_shape')::jsonb - coalesce(p_minus, '')) || p_set $f$;
+create function pg_temp.av_set(p_title text, p_items jsonb default pg_temp.av_rows()) returns void language sql as $f$
+  update public.contributions set items = p_items where title = p_title $f$;
+create function pg_temp.av_problems(p_title text) returns text language sql security invoker as $f$
+  select array_to_string(public.check_contribution((select id from public.contributions where title = p_title)), '|') $f$;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, shape) values
+ ('Consulting','Avatar','T av ok','prof','Ask before you defend.','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av nochar','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av nopoints','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av weights','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av quiz2','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av quizopts','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av label','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av dup','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av run','prof','x','avatar', pg_temp.av_shape('How long is a run?')),
+ ('Consulting','Avatar','T av lang','prof','x','avatar', pg_temp.av_shape('Language')),
+ ('Consulting','Avatar','T av diff','prof','x','avatar', pg_temp.av_shape('Difficulty')),
+ ('Consulting','Avatar','T av scoring','prof','x','avatar', pg_temp.av_shape('How is it scored?', '{"How is it scored?":"Self-assessment"}')),
+ ('Consulting','Avatar','T av nolook','prof','x','avatar', pg_temp.av_shape('Look')),
+ ('Consulting','Avatar','T av lookoff','prof','x','avatar', pg_temp.av_shape(null, jsonb_build_object('Look', current_setting('test.av_off')))),
+ ('Consulting','Avatar','T av voiceoff','prof','x','avatar', pg_temp.av_shape(null, jsonb_build_object('Voice', current_setting('test.av_voice_off')))),
+ ('Consulting','Avatar','T av novoice','prof','x','avatar', pg_temp.av_shape('Voice')),
+ ('Consulting','Avatar','T av echo','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av echoquiz','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av echoshape','prof','x','avatar', pg_temp.av_shape(null, '{"Who does the learner talk to?":"Someone whose works-council members oppose"}')),
+ ('Consulting','Avatar','T av many','prof','x','avatar', pg_temp.av_shape()) returning 1)
+  insert into results (check_name, expected, actual) select 'AV an Avatar is made in its studio', '20 rows', count(*)||' rows' from i;
+select pg_temp.av_set('T av ok');
+select pg_temp.av_set('T av nochar', pg_temp.av_rows(array['Hides unless probed']));
+select pg_temp.av_set('T av nopoints', pg_temp.av_rows(array['Learning point · 30 %', 'Learning point · 40 %']));
+select pg_temp.av_set('T av weights', pg_temp.av_rows(array[]::text[], 'Learning point · 40 %', '["Learning point · 30 %","Links the case to her goals, not to IT savings"]'));
+select pg_temp.av_set('T av quiz2', pg_temp.av_rows(array['Quiz 3']));
+select pg_temp.av_set('T av quizopts', pg_temp.av_rows(array[]::text[], 'Quiz 2', '["Quiz 2","How do you link the case to her goals?","Only one option"]'));
+select pg_temp.av_set('T av label', pg_temp.av_rows(p_extra => '[["Note","Something else"]]'));
+select pg_temp.av_set('T av dup', pg_temp.av_rows(p_extra => '[["Persona","A second persona"]]'));
+select pg_temp.av_set('T av run'); select pg_temp.av_set('T av lang'); select pg_temp.av_set('T av diff'); select pg_temp.av_set('T av scoring');
+select pg_temp.av_set('T av nolook'); select pg_temp.av_set('T av lookoff'); select pg_temp.av_set('T av voiceoff'); select pg_temp.av_set('T av novoice');
+select pg_temp.av_set('T av echo', pg_temp.av_rows(array[]::text[], 'Situation', '["Situation","Two Works-Council Members already oppose it, and she has ten minutes."]'));
+select pg_temp.av_set('T av echoquiz', pg_temp.av_rows(array[]::text[], 'Quiz 1', '["Quiz 1","q?","Ask about it · Say the vendor contract ends in 14 months"]'));
+select pg_temp.av_set('T av echoshape');
+insert into results (check_name, expected, actual) select 'AV the design example with three quiz rows, an active look and a voice passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T av ok'))::text;
+insert into results (check_name, expected, actual) select 'AV without a voice it still passes (the voice is optional)', '{}', public.check_contribution((select id from public.contributions where title = 'T av novoice'))::text;
+insert into results (check_name, expected, actual) select 'AV a missing character row is refused', 'Add the character: Persona, Situation, Opening line, Reveals if asked and Hides unless probed', pg_temp.av_problems('T av nochar');
+insert into results (check_name, expected, actual) select 'AV a second Persona row is refused', 'Persona: use each character row once', pg_temp.av_problems('T av dup');
+insert into results (check_name, expected, actual) select 'AV no learning point is refused', 'Add 1 to 4 learning points, each as “Learning point · N %”', pg_temp.av_problems('T av nopoints');
+insert into results (check_name, expected, actual) select 'AV learning points adding up to 90 are refused with their sum', 'Learning point weights add up to 90 %, not 100 %', pg_temp.av_problems('T av weights');
+insert into results (check_name, expected, actual) select 'AV two quiz rows are refused', 'Add the three quiz questions: each with 2 to 4 options, the right one first', pg_temp.av_problems('T av quiz2');
+insert into results (check_name, expected, actual) select 'AV a quiz row with one option is refused', 'Add the three quiz questions: each with 2 to 4 options, the right one first', pg_temp.av_problems('T av quizopts');
+insert into results (check_name, expected, actual) select 'AV a row with another label is refused with its label', 'Note: use a character row, “Learning point · N %” or Quiz 1 to 3 as the label', pg_temp.av_problems('T av label');
+insert into results (check_name, expected, actual) select 'AV a run that is not chosen is refused', 'Choose how long a run is', pg_temp.av_problems('T av run');
+insert into results (check_name, expected, actual) select 'AV a language that is not chosen is refused', 'Choose the language', pg_temp.av_problems('T av lang');
+insert into results (check_name, expected, actual) select 'AV a difficulty that is not chosen is refused', 'Choose the difficulty', pg_temp.av_problems('T av diff');
+insert into results (check_name, expected, actual) select 'AV the removed self-assessment scoring is refused', 'Choose how it is scored', pg_temp.av_problems('T av scoring');
+insert into results (check_name, expected, actual) select 'AV no look is refused', 'Choose a look in Produce', pg_temp.av_problems('T av nolook');
+insert into results (check_name, expected, actual) select 'AV a look switched off is refused', 'That look is not on the stock list', pg_temp.av_problems('T av lookoff');
+insert into results (check_name, expected, actual) select 'AV a voice switched off is refused', 'That voice is not on the stock list', pg_temp.av_problems('T av voiceoff');
+insert into results (check_name, expected, actual) select 'AV a situation that repeats what the character hides is refused, upper case too', 'The scenario''s public text repeats what the character keeps back', pg_temp.av_problems('T av echo');
+insert into results (check_name, expected, actual) select 'AV a quiz option that repeats what the character reveals is refused', 'The scenario''s public text repeats what the character keeps back', pg_temp.av_problems('T av echoquiz');
+insert into results (check_name, expected, actual) select 'AV who the learner talks to is read for it too', 'The scenario''s public text repeats what the character keeps back', pg_temp.av_problems('T av echoshape');
+do $$ declare r record; begin
+  -- items that break the row rules fail the check even when no specific line explains it
+  for r in select * from (values ('a blank text', current_setting('test.av_rows')::jsonb || '[["Learning point · 0 %"," "]]'::jsonb), ('an object', current_setting('test.av_rows')::jsonb || '[{"kind":"voice"}]'::jsonb)) as t(k, items) loop
+    update public.contributions set items = r.items where title = 'T av many';
+    insert into results (check_name, expected, actual) select 'AV items with '||r.k||' fail the check', 'Add the items first', pg_temp.av_problems('T av many');
+  end loop;
+  begin update public.contributions set items = pg_temp.av_rows(p_extra => '[["a","b"],["c","d"]]') where title = 'T av many';
+    insert into results (check_name, expected, actual) select 'AV more than 12 items are refused', 'blocked: 23514', 'allowed';
+  exception when others then insert into results (check_name, expected, actual) values ('AV more than 12 items are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+-- publishing: the avatar content holds neither hidden text, counts 0.25 h and is marked AI made
+insert into results (check_name, expected, actual) select 'AV the avatar is published', 'published', public.submit_contribution((select id from public.contributions where title = 'T av ok'));
+insert into results (check_name, expected, actual) select 'AV the avatar becomes avatar content with its points, quiz right-first, look and voice', 'true',
+  (l.content = jsonb_build_object('kind', 'avatar', 'persona', 'An HR director at a mid-sized manufacturer, 22 years in HR, wary of consultants.',
+    'situation', 'You present the business case for replacing three HR systems with one. She has ten minutes before her next meeting.',
+    'opening', 'I have read your deck. Convince me this is not another IT project that HR ends up paying for.',
+    'points', jsonb_build_array(jsonb_build_object('id', 'lp-1', 'text', 'Asks about her concerns before defending the numbers', 'weight', 30), jsonb_build_object('id', 'lp-2', 'text', 'Links the case to her goals, not to IT savings', 'weight', 40),
+      jsonb_build_object('id', 'lp-3', 'text', 'Agrees a concrete next step before time runs out', 'weight', 30)),
+    'quiz', jsonb_build_array(jsonb_build_object('q', 'She says your numbers look too optimistic. What do you do first?', 'opts', jsonb_build_array('Ask which assumption worries her most', 'Defend the numbers again', 'Offer a discount'), 'a', 0),
+      jsonb_build_object('q', 'How do you link the case to her goals?', 'opts', jsonb_build_array('Tie each benefit to a goal she named', 'List every IT saving', 'Skip to the price'), 'a', 0),
+      jsonb_build_object('q', 'Her time is nearly up. How do you close?', 'opts', jsonb_build_array('Agree one concrete next step and a date', 'Promise a follow-up deck', 'Thank her and leave'), 'a', 0)),
+    'look', (select jsonb_build_object('id', k.id, 'name', k.name, 'portrait', k.portrait, 'color', k.color) from public.stock_looks k where k.name = 'HR director · 50s'),
+    'voice', (select jsonb_build_object('id', v.id, 'name', v.name) from public.stock_voices v where v.voice_id = 'tAvVoice01'),
+    'language', 'Dutch', 'difficulty', 'Tough', 'minutes', 10, 'scoring', 'AI scores, counsellor confirms', 'counterpart', 'A colleague or junior', 'made', 'ai'))::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T av ok';
+insert into results (check_name, expected, actual) select 'AV the published content holds neither what the character reveals nor what it hides', 'false/false',
+  (l.content::text like '%payroll vendor contract%')||'/'||(l.content::text like '%works-council members%') from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T av ok';
+insert into results (check_name, expected, actual) select 'AV an avatar counts 0.25 h and is marked AI made', 'Avatar/0.25/true', l.format||'/'||l.hours||'/'||l.ai_made
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T av ok';
+-- a learner (not the author or a reviewer) reads neither the contribution nor, in it, what the character hides
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'AV a learner selects no avatar contribution (the hidden rows stay with the author)', '0', count(*)::text from public.contributions where title like 'T av %';
+insert into results (check_name, expected, actual) select 'AV a learner reads the published avatar and finds neither hidden text in it', '1/0', count(*)::text||'/'||count(*) filter (where content::text like '%payroll vendor contract%' or content::text like '%works-council members%') from public.learnings where format = 'Avatar' and title = 'T av ok';
+do $$ begin
+  begin perform private.avatar_ok('[]'::jsonb);
+    insert into results (check_name, expected, actual) values ('AV a signed-in user cannot call avatar_ok', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('AV a signed-in user cannot call avatar_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
+insert into results (check_name, expected, actual) select 'AV the contribution exists (so the learner case above is not vacuous)', '1', count(*)::text from public.contributions where title = 'T av ok';
+insert into results (check_name, expected, actual) select 'AV a published Avatar is self-completed by its quiz and its evidence rule is unchanged', 'true/none', private.is_self_complete(c.learning_id)::text||'/'||private.evidence_rule('Avatar')
+  from public.contributions c where c.title = 'T av ok';
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

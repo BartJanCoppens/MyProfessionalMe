@@ -1,4 +1,5 @@
 import { AUDS, BLS } from '../data';
+import { DIFFICULTIES, LANGUAGES, RUN_MINUTES, SCORINGS } from '../../supabase/functions/_shared/avatarRules.ts';
 import { LEADERBOARDS } from '../logic/gameContent';
 import { GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
 import { isHorizonItem } from '../logic/horizonItem';
@@ -50,6 +51,7 @@ export function parseFormatContent(raw: unknown): FormatContent | null {
     case 'game': return filled(c.concept) && isText(c.win) && listOf(c.rounds, (x) => isText(x.text) && isText(x.answer)) && LEADERBOARDS.includes(c.leaderboard) && c.made === 'ai'
       && (c.role === null || (!!c.role && (GAME_ROLES as readonly string[]).includes(c.role.kind) && isText(c.role.about))) && !!c.files && isText(c.files['index.html']) && isText(c.files['game.js']) ? c as FormatContent : null;
     case 'reel': return reelOk(c) ? c as FormatContent : null;
+    case 'avatar': return avatarOk(c) ? c as FormatContent : null;
     default: return null;
   }
 }
@@ -62,6 +64,14 @@ const lookOk = (l: any) => l === null || (!!l && typeof l === 'object' && filled
 const checkOk = (k: any) => !!k && typeof k === 'object' && filled(k.q) && Array.isArray(k.opts) && k.opts.length >= 2 && k.opts.length <= 4 && k.opts.every(filled) && Number.isInteger(k.a) && k.a >= 0 && k.a < k.opts.length;
 const reelOk = (c: any) => (c.size === SIZE_OF['9:16 vertical'] || c.size === SIZE_OF['1:1 square']) && num(c.seconds, 0) && c.seconds <= REEL_SECONDS_MAX && listOf(c.scenes, sceneOk) && videoOk(c.video)
   && typeof c.burned === 'boolean' && lookOk(c.look) && (MUSICS as readonly unknown[]).includes(c.music) && checkOk(c.check) && (c.made === 'ai' || c.made === 'scripted');
+
+// A published avatar: the character's three public texts, 1 to 4 weighted learning points, the three-question quiz (options right-first, a = 0), a stock look
+// and voice or none, the run, and who the learner talks to. It never carries what the character reveals or hides.
+const avatarOk = (c: any) => [c.persona, c.situation, c.opening].every(filled) && Array.isArray(c.points) && c.points.length >= 1 && c.points.length <= 4
+  && c.points.every((p: any) => !!p && filled(p.id) && filled(p.text) && num(p.weight, 0)) && Array.isArray(c.quiz) && c.quiz.length === 3
+  && c.quiz.every((q: any) => !!q && filled(q.q) && q.a === 0 && checkOk(q)) && lookOk(c.look) && (c.voice === null || (!!c.voice && filled(c.voice.id) && filled(c.voice.name)))
+  && Object.keys(LANGUAGES).includes(c.language) && (DIFFICULTIES as readonly unknown[]).includes(c.difficulty) && (RUN_MINUTES as readonly unknown[]).includes(c.minutes)
+  && (SCORINGS as readonly unknown[]).includes(c.scoring) && isText(c.counterpart) && (c.made === 'ai' || c.made === 'scripted');
 
 // A published slide: a title, at least one bullet, the talk-over, an optional drawing and the stored audio of its voice.
 const slideOk = (x: any) => isText(x.title) && isTexts(x.bullets) && x.bullets.length > 0 && isText(x.narration) && (x.svg === undefined || isText(x.svg)) && (x.audio === undefined || isAudio(x.audio));

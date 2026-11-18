@@ -105,7 +105,14 @@ export type GameContent = GameData & { kind: 'game'; role: { kind: 'Game master'
 export type ReelContent = { kind: 'reel'; size: '720x1280' | '1080x1080'; seconds: number; scenes: { label: string; text: string; onScreen: string; start: number; seconds: number; words: number[] | null }[];
   video: { path: string; mime: 'video/mp4' | 'video/webm' } | null; burned: boolean; look: { id: string; name: string; portrait: PortraitKey; color: string } | null;
   music: 'None' | 'Calm' | 'Upbeat'; check: { q: string; opts: string[]; a: number }; made: 'ai' | 'scripted' };
-export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent | ReelContent;
+// An avatar (studios plan, Task 6.1): the character a learner practises with, as learners may know it (never what it reveals if asked or hides unless
+// probed), the learning points it scores on, the quiz that completes the learning (options right-first, a = 0: the panel rotates them), the stock look
+// and voice, the run, and who made it.
+export type AvatarContent = { kind: 'avatar'; persona: string; situation: string; opening: string; points: { id: string; text: string; weight: number }[];
+  quiz: { q: string; opts: string[]; a: 0 }[]; look: { id: string; name: string; portrait: PortraitKey; color: string } | null; voice: { id: string; name: string } | null;
+  language: 'English' | 'Dutch' | 'French'; difficulty: 'Gentle' | 'Realistic' | 'Tough'; minutes: 5 | 10 | 15; scoring: 'AI scores, counsellor confirms' | 'Practice only';
+  counterpart: string; made: 'ai' | 'scripted' };
+export type FormatContent = AvatarContent | FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent | ReelContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
 export type View = 'constellation' | 'radar' | 'road';

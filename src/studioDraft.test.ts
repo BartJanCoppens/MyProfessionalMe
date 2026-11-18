@@ -70,9 +70,10 @@ describe('strict reading of the answer', () => {
     expect(parseStudioItems(d, 'Here: ' + JSON.stringify({ items: rows }))).toEqual([['Before', 'Confirm the scope'], ['Before', 'Map stakeholders'], ['During', 'Agree sign-off'], ['After', 'Send minutes']]);
   });
   it('refuses rows that break the studio schema (avatar weights not adding to 100)', () => {
-    const rows = [['Persona', 'a'], ['Situation', 'b'], ['Opening line', 'c'], ['Reveals if asked', 'd'], ['Hides unless probed', 'e'], ['Learning point · 30 %', 'f']];
-    expect(parseStudioItems(def('avatar'), JSON.stringify({ items: rows }))).toBeNull();
-    expect(parseStudioItems(def('avatar'), JSON.stringify({ items: rows.slice(0, 5).concat([['Learning point · 100 %', 'f']]) }))).toHaveLength(6);
+    const base = [['Persona', 'a'], ['Situation', 'b'], ['Opening line', 'c'], ['Reveals if asked', 'd'], ['Hides unless probed', 'e']], quiz = [['Quiz 1', 'q1', 'a · b'], ['Quiz 2', 'q2', 'a · b'], ['Quiz 3', 'q3', 'a · b']];
+    expect(parseStudioItems(def('avatar'), JSON.stringify({ items: [...base, ['Learning point · 30 %', 'f'], ...quiz] }))).toBeNull();
+    expect(parseStudioItems(def('avatar'), JSON.stringify({ items: [...base, ['Learning point · 100 %', 'f'], ...quiz] }))).toHaveLength(9);
+    expect(parseStudioItems(def('avatar'), JSON.stringify({ items: [...base, ['Learning point · 100 %', 'f'], ...quiz.slice(0, 2)] }))).toBeNull();
   });
   it('needs the third text where the studio has one', () => {
     const d = def('reel');
@@ -109,16 +110,17 @@ describe('scripted fallback per studio', () => {
     expect(rows.length).toBeLessThanOrEqual(rowsMax(d));
     expect(rows.flat().join(' ')).not.toContain('On screen:');
   });
-  it.each(IDS.filter((id) => id !== 'game' && id !== 'reel'))('%s: schema-valid rows from the passages, within the cap', (id) => {
+  it.each(IDS.filter((id) => !['game', 'reel', 'avatar'].includes(id)))('%s: schema-valid rows from the passages, within the cap', (id) => {
     const d = def(id), rows = scriptedItems(d, nw(d.format), PASSAGES)!;
     expect(itemsValid(d, rows)).toEqual([]);
     expect(rows.length).toBeLessThanOrEqual(rowsMax(def(id)));
     expect(rows.flat().join(' ')).toContain('supplier VAT number');
   });
   it('game has no sensible scripted draft', () => expect(scriptedItems(def('game'), nw('Game'), PASSAGES)).toBeNull());
-  it('avatar learning points add up to 100', () => {
+  it('avatar: learning points add up to 100, and no quiz question is invented: the creator writes the three', () => {
     const rows = scriptedItems(def('avatar'), nw('Avatar'), PASSAGES.slice(0, 1))!;
-    expect(itemsValid(def('avatar'), rows)).toEqual([]);
+    expect(itemsValid(def('avatar'), rows)).toEqual(['Add the three quiz questions: each with 2 to 4 options, the right one first']);
+    expect(rows.some((r) => r[0].startsWith('Quiz'))).toBe(false);
   });
 });
 
