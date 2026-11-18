@@ -4151,6 +4151,31 @@ update public.contributions set status = 'published', step = 4, learning_id = 'L
 update public.contributions set status = 'published', step = 4, learning_id = 'LP2', published_at = now() where title = 'PD wrong format';
 insert into results (check_name, expected, actual) select 'PD publishing links a placeholder whose step has no cid, through the contribution''s for_trajectory and for_step', 'learn/LP1', (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid') from public.trajectories where id = 'PD8';
 insert into results (check_name, expected, actual) select 'PD a published draft of another format than the placeholder''s does not link it', 'make', steps -> 0 ->> 'k' from public.trajectories where id = 'PD9';
+-- the link is never a choice: two candidates link nothing; a cid names the one; a lost planner links nothing; a step whose cid names another existing contribution is not taken
+insert into public.learnings (id, title, domain, level, format, hours, status) select 'LQ' || n, 'PD candidate ' || n, 'prof', 2, 'Flash cards', 0.5, 'published' from generate_series(1, 6) n;
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+ select 'PD' || n, 'T plan draft ' || n, 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting',
+  '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}]', '[]' from generate_series(10, 13) n;
+insert into public.contributions (author_id, business_line, type, title, domain, takeaway, for_trajectory, for_step) values
+  ('00000000-0000-0000-0000-0000000000a1', 'Consulting', 'Flash cards', 'PD two A', 'prof', 'x', 'PD10', 'm1'),
+  ('00000000-0000-0000-0000-0000000000a1', 'Consulting', 'Flash cards', 'PD two B', 'prof', 'x', 'PD10', 'm1'),
+  ('00000000-0000-0000-0000-0000000000a1', 'Consulting', 'Flash cards', 'PD cid named', 'prof', 'x', 'PD11', 'm1'),
+  ('00000000-0000-0000-0000-0000000000a1', 'Consulting', 'Flash cards', 'PD cid other', 'prof', 'x', 'PD11', 'm1'),
+  ('00000000-0000-0000-0000-0000000000a2', 'Consulting', 'Flash cards', 'PD lost planner', 'prof', 'x', 'PD12', 'm1'),
+  ('00000000-0000-0000-0000-0000000000a1', 'Consulting', 'Flash cards', 'PD cid is a draft', 'prof', 'x', 'PD13', 'm1'),
+  ('00000000-0000-0000-0000-0000000000a1', 'Consulting', 'Flash cards', 'PD cid elsewhere', 'prof', 'x', 'PD13', 'm1');
+update public.trajectories set steps = jsonb_set(steps, '{0,cid}', to_jsonb((select id::text from public.contributions where title = 'PD cid named'))) where id = 'PD11';
+update public.trajectories set steps = jsonb_set(steps, '{0,cid}', to_jsonb((select id::text from public.contributions where title = 'PD cid is a draft'))) where id = 'PD13';
+-- both in one statement: the row triggers run after both are published (one at a time, the first would be the only candidate and link)
+update public.contributions set status = 'published', step = 4, learning_id = case title when 'PD two A' then 'LQ1' else 'LQ2' end, published_at = now() where title in ('PD two A', 'PD two B');
+update public.contributions set status = 'published', step = 4, learning_id = 'LQ3', published_at = now() where title = 'PD cid other';
+update public.contributions set status = 'published', step = 4, learning_id = 'LQ4', published_at = now() + interval '1 second' where title = 'PD cid named';
+update public.contributions set status = 'published', step = 4, learning_id = 'LQ5', published_at = now() where title = 'PD lost planner';
+update public.contributions set status = 'published', step = 4, learning_id = 'LQ6', published_at = now() where title = 'PD cid elsewhere';
+insert into results (check_name, expected, actual) select 'PD two published candidates for a step with no cid link nothing', 'make', steps -> 0 ->> 'k' from public.trajectories where id = 'PD10';
+insert into results (check_name, expected, actual) select 'PD a step with a cid links only the contribution it names, whatever else is published for it', 'learn/LQ4', (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid') from public.trajectories where id = 'PD11';
+insert into results (check_name, expected, actual) select 'PD an author who can no longer plan the trajectory links nothing', 'make', steps -> 0 ->> 'k' from public.trajectories where id = 'PD12';
+insert into results (check_name, expected, actual) select 'PD a step whose cid names another existing contribution is not taken by a later one', 'make', steps -> 0 ->> 'k' from public.trajectories where id = 'PD13';
 -- the author also has a real creation rule for it: the normal (lax) requirement applies
 insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000a1', '{Consulting}', '{"Flash cards"}');
 set local role authenticated;

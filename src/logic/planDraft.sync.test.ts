@@ -29,6 +29,8 @@ describe('placeholder grant: TypeScript and the database agree', () => {
   it('links by the draft\'s own placeholder, relinks by for_trajectory, and keeps a link a stale save sends back as a make step', () => {
     expect(sql).toContain("update public.trajectories set steps = steps where id = new.for_trajectory;");
     expect(sql).toContain("o.v ->> 'k' = 'learn' and o.v ? 'linked_at'");
+    expect(sql).toContain("case when s.v ? 'cid' then c.id::text = s.v ->> 'cid' else private.plan_draft_matches(");
+    expect(sql).toContain('and public.plan_trajectory_allowed(c.author_id, new.id) end having count(*) = 1');
     expect(sql).not.toContain('[0-9a-f]{8}'); // the one uuid test is private.is_uuid (20261118240000)
   });
 });

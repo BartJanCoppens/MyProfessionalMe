@@ -241,7 +241,9 @@ end;
 $$;
 
 -- As before (20261118240000), linking only what was drafted for the step, found by the contribution's own for_trajectory / for_step / type (the
--- step's cid is only the "taken" marker, so a stale save that lost it cannot stop the link). A make step sent for a step that is already linked (a stale
+-- step's cid is the "taken" marker). A step that has a cid links only to the contribution it names. One that has none (a stale save lost it) links only when
+-- exactly one published contribution is the placeholder's grant draft (plan_draft_matches: the step is free or names that contribution, so never one whose cid names
+-- another existing contribution) and its author can still plan the trajectory; several candidates link nothing. A make step sent for a step that is already linked (a stale
 -- save from an editor opened before the link) keeps the stored learn step: the link is never undone and its linked_at never restamped.
 create or replace function private.link_made_steps()
 returns trigger
@@ -265,10 +267,13 @@ begin
         where s.v ->> 'k' = 'make' and o.v ->> 'id' = s.v ->> 'id' and o.v ->> 'k' = 'learn' and o.v ? 'linked_at' limit 1
       ) kept on true
       left join lateral (
-        select c.learning_id from public.contributions c
+        select (array_agg(c.learning_id))[1] as learning_id from public.contributions c
         where s.v ->> 'k' = 'make' and c.status = 'published' and c.learning_id is not null
           and c.for_trajectory = new.id and c.for_step = s.v ->> 'id' and c.type = s.v ->> 'fmt'
-        order by c.published_at limit 1
+          and case when s.v ? 'cid' then c.id::text = s.v ->> 'cid'
+            else private.plan_draft_matches(c.for_trajectory, c.for_step, c.business_line, c.type, c.domain, c.audience, c.id)
+                 and public.plan_trajectory_allowed(c.author_id, new.id) end
+        having count(*) = 1
       ) l on true
     );
   end if;
