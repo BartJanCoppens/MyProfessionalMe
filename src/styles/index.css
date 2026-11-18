@@ -23,6 +23,7 @@ a{color:#4c7a10;text-decoration:none}a:hover{text-decoration:underline}
 @keyframes pmDraw{from{stroke-dashoffset:240}}
 @keyframes pmFadeUp{from{opacity:0;transform:translateY(6px)}}
 @keyframes pmFade{from{opacity:0}}
+@keyframes pmFlyIn{from{transform:translateX(14%);opacity:0}}
 @keyframes pmPulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.6);opacity:0}}
 @keyframes pmDot{0%,100%{box-shadow:0 0 0 0 rgba(134,188,37,.55)}50%{box-shadow:0 0 0 5px rgba(134,188,37,0)}}
 [data-pm-motion="off"] *{animation:none!important}

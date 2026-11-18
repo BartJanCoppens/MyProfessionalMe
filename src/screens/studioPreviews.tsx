@@ -1,5 +1,5 @@
 // The preview step's registry: one preview per studio kind (StudioDef.pv). Flash plays its cards or questions; a studio
-// whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow) shows that format's own
+// whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow, Slides) shows that format's own
 // learner panel over studioContent. A preview is a play-test: never saved, never counted as progress. The same panels
 // show a saved studio contribution to its author and its reviewers (SavedContent), and a Presentation's file.
 import { useState } from 'react';
@@ -12,10 +12,12 @@ import { aidView, casePreview } from '../fmtVals';
 import { caseHours } from '../logic/studioContent';
 import type { VM } from '../model';
 import { horizonView } from '../fmtHorizon';
-import type { AidContent, ExplainerContent, FormatContent, HorizonContent, MotionContent } from '../types';
+import { slidesView } from '../fmtSlides';
+import type { AidContent, ExplainerContent, FormatContent, HorizonContent, MotionContent, SlidesContent } from '../types';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
 import ExplainerPanel from './ExplainerPanel';
 import PresentationPanel from './PresentationPanel';
+import SlidesPanel from './SlidesPanel';
 import { AidPanel, CasePanel } from './FormatWork';
 import { label } from './labelStyle';
 import StudioPlayTest from './StudioPlayTest';
@@ -45,6 +47,10 @@ const DeckTry = ({ content, still }: { content: HorizonContent; still: boolean }
 const FlowTry = ({ content, still }: { content: MotionContent; still: boolean }) =>
   <AnimatedFlowPanel fl={flowView(content, { ro: false, still, done: false, onEnd: () => {}, onRead: () => {} })} />;
 
+// The learner's deck; playing it to the end completes nothing.
+const SlidesTry = ({ content, still }: { content: SlidesContent; still: boolean }) =>
+  <SlidesPanel sl={slidesView(content, { ro: false, still, done: false, onEnd: () => {} })} />;
+
 // A studio piece's content and what its learner panel needs: the case's hours and whether motion is off.
 export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean };
 
@@ -58,6 +64,7 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
       {content.kind === 'explainer' && <ExplainerTry content={content} />}
       {content.kind === 'motion' && <FlowTry content={content} still={t.still} />}
       {content.kind === 'horizon' && <DeckTry content={content} still={t.still} />}
+      {content.kind === 'slides' && <SlidesTry content={content} still={t.still} />}
     </>
   );
 }
@@ -92,6 +99,7 @@ const PREVIEWS: Record<string, (p: { c: CS }) => ReactNode> = {
   case: ({ c }) => <Learner c={c} />,
   explainer: ({ c }) => <Learner c={c} />,
   motion: ({ c }) => <Learner c={c} />,
+  slides: ({ c }) => <Learner c={c} />,
 };
 
 export function Preview({ kind, c }: { kind: string; c: CS }) {
