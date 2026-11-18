@@ -2,6 +2,7 @@
 //
 //   { use, system?, messages, max_tokens? }  any signed-in user: answers a live text use (see ai_live_uses()) with the
 //                                            connection and model the System Admin chose for it -> { text }
+//                                            (use trajectory_ai also names trajectory_id: the caller must be allowed to plan it, public.plan_trajectory_allowed)
 //   { action: 'test', connection_id }        System Admins: one tiny call with that connection -> { ok, model } or { ok: false, error }
 //   { use: 'game_role', run_id, messages, state } the player of a run (their own, unfinished) of a game with an AI role: the role's reply -> { text };
 //                                            the role and what it knows are read by the database for the run (public.game_role_context), never sent by the client
@@ -25,7 +26,7 @@ import { withSupabase } from '@supabase/server';
 import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
 import type { Conn, UseRow } from '../_shared/aiUse.ts';
 import { countFirst, USE_LIMITS, UUID } from '../_shared/aiGuard.ts';
-import { callProvider, inputChars, LIMITS, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
+import { callProvider, inputChars, LIMITS, PLAN_USE, planAccess, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
 import { SCORE_TIMEOUT_MS } from '../_shared/avatarScore.ts';
 import { scoreAvatarRun } from './avatarScore.ts';
 import type { ScoreLoad } from './avatarScore.ts';
@@ -151,6 +152,9 @@ async function scoreAvatar(call: Call): Promise<Response> {
 async function answer({ admin, body, callerId, roles, started }: Call): Promise<Response> {
   const r = readAsk(body);
   if (!r.ok) return fail(400, r.error);
+  // Trajectory AI is for a trajectory the caller may plan: refused before anything is counted or sent.
+  const denied = r.use === PLAN_USE ? await planAccess(body.trajectory_id, async (id) => { const { data, error } = await admin.rpc('plan_trajectory_allowed', { p_user: callerId, p_trajectory: id }); return error ? null : data === true; }) : null;
+  if (denied) return fail(denied.status, denied.error);
   const opened = await openUse(admin, r.use, roles);
   if (opened instanceof Response) return opened;
   const { use } = opened;

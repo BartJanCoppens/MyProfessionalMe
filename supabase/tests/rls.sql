@@ -3990,6 +3990,20 @@ insert into results (check_name, expected, actual) select 'TP ... and the trajec
 set local role anon;
 select pg_temp.gr_blocked('TP anon cannot call delete_trajectory_returning_files', $q$select public.delete_trajectory_returning_files('TP1')$q$, 'blocked: 42501');
 reset role;
+-- plan_trajectory_allowed: the `ai` function's check that a caller may plan the trajectory their trajectory_ai call names (service role only)
+reset role;
+set local request.jwt.claims = '';
+insert into results (check_name, expected, actual) select 'TP a General Admin may plan a firm-wide draft (plan_trajectory_allowed)', 'true', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a7', 'TP2')::text;
+insert into results (check_name, expected, actual) select 'TP the Consulting Domain Admin may plan a Consulting draft (plan_trajectory_allowed)', 'true', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a1', 'TP1')::text;
+insert into results (check_name, expected, actual) select 'TP the Consulting Domain Admin may not plan a firm-wide draft (plan_trajectory_allowed)', 'false', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a1', 'TP2')::text;
+insert into results (check_name, expected, actual) select 'TP the Consulting Domain Admin may not plan a live mandatory trajectory (plan_trajectory_allowed)', 'false', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a1', 'TP3')::text;
+insert into results (check_name, expected, actual) select 'TP an Audit Domain Admin may not plan a Consulting draft (plan_trajectory_allowed)', 'false', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a4', 'TP1')::text;
+insert into results (check_name, expected, actual) select 'TP someone with no role may not plan (plan_trajectory_allowed)', 'false', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000ff', 'TP1')::text;
+insert into results (check_name, expected, actual) select 'TP an unknown trajectory is not plannable (plan_trajectory_allowed)', 'false', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a7', 'TP404')::text;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+select pg_temp.gr_blocked('TP a signed-in user cannot execute plan_trajectory_allowed', $q$select public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a7', 'TP2')$q$, 'blocked: 42501');
+reset role;
 -- the trajectory goes: plan and sources go with it
 reset role;
 set local request.jwt.claims = '';

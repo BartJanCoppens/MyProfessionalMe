@@ -47,7 +47,7 @@ export async function sendToPlan(L: Logic, trajectoryId: string, say: string, mo
   if (!text) return;
   if (text.length > PLAN_CAPS.messageChars) return failed(L, TOO_LONG);
   const record = L.latest().state.trjPlans[trajectoryId]?.record ?? blankRecord(trajectoryId);
-  const { request, numbering } = requestFor(L, t, record, text, focus, mode);
+  const built = requestFor(L, t, record, text, focus, mode), { numbering } = built, request = { ...built.request, trajectoryId };
   if (requestChars(request) > PLAN_ASK.budgetChars) return failed(L, 'The request is too large to send · remove a source or a bundle');
   L.setState((st) => ({ trjAi: { busy: 'send', error: null }, trjPanel: { ...st.trjPanel, say: '', focus: null } }));
   editRecord(L, trajectoryId, (r) => append(r, { role: 'admin', text, at: new Date().toISOString(), ...(focus ? { focus } : {}) }));

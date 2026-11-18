@@ -108,6 +108,11 @@ describe('the AI store', () => {
     db.client.functions.invoke.mockImplementation(async () => ({ data: {}, error: null }));
     await expect(askAi('kb_answer', req)).rejects.toThrow('The AI function returned no text');
   });
+  it('names the trajectory of a Trajectory AI call as trajectory_id', async () => {
+    db.client.functions.invoke.mockImplementation(async () => ({ data: { text: 'ok' }, error: null }));
+    await askAi('trajectory_ai', { ...req, trajectoryId: 'T1' });
+    expect(db.client.functions.invoke).toHaveBeenCalledWith('ai', { body: { use: 'trajectory_ai', ...req, trajectory_id: 'T1' } });
+  });
   it('tests a connection through the ai function', async () => {
     db.client.functions.invoke.mockImplementation(async () => ({ data: { ok: true, model: 'm1' }, error: null }));
     expect(await testConnection('c1')).toEqual({ ok: true, model: 'm1' });

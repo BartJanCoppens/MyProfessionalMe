@@ -118,11 +118,12 @@ export const testConnection = (id: string) => invokeFunction<{ ok: boolean; mode
 
 // run: a role's ask (use game_role or avatar_conversation): the run it is on, plus the game's state as text or the learner's one line (say). The function reads
 // the role, what it knows and (for the avatar) the earlier lines for that run; there is no system text. meta: what a role answers besides its text (the avatar's turn and held).
-export type AiRequest = { system?: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens?: number; run?: { run_id: string; state?: string; say?: string } };
+export type AiRequest = { system?: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens?: number; run?: { run_id: string; state?: string; say?: string }; trajectoryId?: string };
 export type AiAnswer = { text: string; cut: boolean; meta?: Record<string, unknown> };
 export async function askAi(use: string, req: AiRequest): Promise<AiAnswer> {
-  const { run, ...rest } = req;
-  const body = !run ? { use, ...rest } : run.say !== undefined ? { use, run_id: run.run_id, say: run.say } : { use, ...rest, run_id: run.run_id, state: run.state ?? '' };
+  const { run, trajectoryId, ...rest } = req;
+  // trajectoryId: the trajectory a Trajectory AI call is for; the function checks the caller may plan it.
+  const body = !run ? { use, ...rest, ...(trajectoryId ? { trajectory_id: trajectoryId } : {}) } : run.say !== undefined ? { use, run_id: run.run_id, say: run.say } : { use, ...rest, run_id: run.run_id, state: run.state ?? '' };
   const data = await invokeFunction<{ text?: string; cut?: boolean; say?: string }>('ai', body);
   if (data && run?.say !== undefined && typeof data.say === 'string') { const { say, ...meta } = data; return { text: say, cut: false, meta }; }
   if (!data || typeof data.text !== 'string') throw new Error('The AI function returned no text');

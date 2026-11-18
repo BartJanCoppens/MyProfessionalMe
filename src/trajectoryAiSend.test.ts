@@ -33,6 +33,7 @@ describe('sendToPlan', () => {
     await sendToPlan(h.L(), 'T1', 'Plan a VAT track', 'talk', null);
     expect(ask).toHaveBeenCalledTimes(1);
     expect(ask.mock.calls[0][0]).toBe('trajectory_ai');
+    expect(ask.mock.calls[0][1].trajectoryId).toBe('T1');
     expect(plan(h)!.messages.map((m) => [m.role, m.text])).toEqual([['admin', 'Plan a VAT track'], ['ai', 'Here is a plan.']]);
     expect(plan(h)!.plan.modules.map((m) => [m.title, m.accepted])).toEqual([['VAT basics', false]]);
     expect(plan(h)!.messages[1].dropped).toEqual({ sources: 1, learnings: 0, formats: 0 });

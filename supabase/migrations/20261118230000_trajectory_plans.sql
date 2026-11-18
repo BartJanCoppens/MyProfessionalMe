@@ -31,6 +31,23 @@ as $$
   select exists (select 1 from public.trajectories t where t.id = p_id and private.can_write_trajectory(t.business_line, t.status, t.maps));
 $$;
 
+-- The `ai` function (service role) asks whether a person may plan a trajectory before it counts or makes a trajectory_ai call: the same rule the
+-- policies use, run as that person (the helpers read auth.uid(), so the claim is set for this call only).
+create function public.plan_trajectory_allowed(p_user uuid, p_trajectory text)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', 'authenticated')::text, true);
+  return coalesce(private.can_plan_trajectory(p_trajectory), false);
+end;
+$$;
+revoke execute on function public.plan_trajectory_allowed(uuid, text) from public, anon, authenticated;
+grant execute on function public.plan_trajectory_allowed(uuid, text) to service_role;
+
 -- A plan is an object of version 1 with at most 12 modules and 30 removed titles, at most 120,000 bytes.
 create function private.trajectory_plan_ok(p jsonb)
 returns boolean

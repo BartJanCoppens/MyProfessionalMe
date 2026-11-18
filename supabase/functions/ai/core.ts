@@ -62,6 +62,16 @@ export function readAsk(body: unknown): { ok: true; use: string; ask: Ask } | { 
   return { ok: true, use, ask: { ...(b.system ? { system: b.system as string } : {}), messages, max_tokens } };
 }
 
+// The Trajectory AI call names the trajectory it is for, and the caller must be allowed to plan it (public.plan_trajectory_allowed, the rule of the
+// plan policies) before anything is counted or sent. null: go on; else the answer.
+export const PLAN_USE = 'trajectory_ai';
+export async function planAccess(trajectoryId: unknown, allowed: (id: string) => Promise<boolean | null>): Promise<{ status: number; error: string } | null> {
+  if (typeof trajectoryId !== 'string' || !trajectoryId || trajectoryId.length > 80) return { status: 400, error: 'Name the trajectory (trajectory_id)' };
+  const ok = await allowed(trajectoryId);
+  if (ok === null) return { status: 500, error: 'Could not check your access to the trajectory' };
+  return ok ? null : { status: 403, error: 'You cannot plan this trajectory' };
+}
+
 // A game's AI role (use game_role): { use, run_id, messages, state }. The game never sends a system text: the role is the game's, read by the
 // database for the run (public.game_role_context), not by the client. At most 20 messages of 1,000 characters and a state of 4,000.
 export { GAME_ASK };

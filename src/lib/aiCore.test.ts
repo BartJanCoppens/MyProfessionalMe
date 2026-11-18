@@ -2,13 +2,26 @@
 // requests for Anthropic and OpenAI-compatible services, reply and error parsing, and that the key never leaks.
 import { describe, expect, it, vi } from 'vitest';
 import { PLAN_ASK } from '../../supabase/functions/_shared/planAsk.ts';
-import { ANTHROPIC_MIN_TOKENS, ANTHROPIC_VERSION, buildRequest, callProvider, gameRoleSystem, inputChars, isLimitError, limitMessage, LIMITS, parseReply, readAsk, readGameAsk, scrub, TEST_ASK, withPreamble } from '../../supabase/functions/ai/core.ts';
+import { ANTHROPIC_MIN_TOKENS, ANTHROPIC_VERSION, buildRequest, callProvider, gameRoleSystem, inputChars, isLimitError, limitMessage, LIMITS, parseReply, planAccess, readAsk, readGameAsk, scrub, TEST_ASK, withPreamble } from '../../supabase/functions/ai/core.ts';
 import { countFirst, NO_SCRIPT, SERVER_ONLY_USES, USE_LIMITS, UUID } from '../../supabase/functions/_shared/aiGuard.ts';
 import type { Target } from '../../supabase/functions/ai/core.ts';
 
 const user = (content: string) => ({ role: 'user', content });
 const claude: Target = { provider: 'anthropic', baseUrl: null, model: 'claude-test', key: 'sk-ant-secret-1234' };
 const mistral: Target = { provider: 'openai_compatible', baseUrl: 'https://api.mistral.ai/v1/', model: 'mistral-large-latest', key: 'mi-secret-5678' };
+
+describe('planAccess', () => {
+  it('refuses a missing or oversize trajectory name without asking', async () => {
+    const allowed = vi.fn(async () => true);
+    for (const id of [undefined, '', 5, 'x'.repeat(81)]) expect(await planAccess(id, allowed)).toEqual({ status: 400, error: 'Name the trajectory (trajectory_id)' });
+    expect(allowed).not.toHaveBeenCalled();
+  });
+  it('lets an allowed caller go on, refuses one who may not plan it (403), and fails closed when it cannot check (500)', async () => {
+    expect(await planAccess('T1', async () => true)).toBeNull();
+    expect(await planAccess('T1', async () => false)).toEqual({ status: 403, error: 'You cannot plan this trajectory' });
+    expect(await planAccess('T1', async () => null)).toMatchObject({ status: 500 });
+  });
+});
 
 describe('readAsk', () => {
   it('refuses every server-only use: the generic path never answers the AI role or the character with a client-built request', () => {
