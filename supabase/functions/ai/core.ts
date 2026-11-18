@@ -55,7 +55,8 @@ export function readAsk(body: unknown): { ok: true; use: string; ask: Ask } | { 
   }
   if (messages[0].role !== 'user') return { ok: false, error: 'The first message must be from the user' };
   const chars = (b.system as string | undefined || '').length + messages.reduce((a, m) => a + m.content.length, 0);
-  if (chars > LIMITS.chars) return { ok: false, error: 'The request is too long (at most ' + LIMITS.chars + ' characters)' };
+  const most = USE_LIMITS[use]?.maxChars ?? LIMITS.chars;
+  if (chars > most) return { ok: false, error: 'The request is too long (at most ' + most + ' characters)' };
   const n = Number(b.max_tokens);
   const max_tokens = Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), USE_LIMITS[use]?.maxTokens ?? LIMITS.maxTokens) : LIMITS.defaultTokens;
   return { ok: true, use, ask: { ...(b.system ? { system: b.system as string } : {}), messages, max_tokens } };

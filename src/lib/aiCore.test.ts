@@ -1,6 +1,7 @@
 // The pure core of the `ai` edge function (supabase/functions/ai/core.ts): request checks and caps, provider
 // requests for Anthropic and OpenAI-compatible services, reply and error parsing, and that the key never leaks.
 import { describe, expect, it, vi } from 'vitest';
+import { PLAN_ASK } from '../../supabase/functions/_shared/planAsk.ts';
 import { ANTHROPIC_MIN_TOKENS, ANTHROPIC_VERSION, buildRequest, callProvider, gameRoleSystem, inputChars, isLimitError, limitMessage, LIMITS, parseReply, readAsk, readGameAsk, scrub, TEST_ASK, withPreamble } from '../../supabase/functions/ai/core.ts';
 import { countFirst, NO_SCRIPT, SERVER_ONLY_USES, USE_LIMITS, UUID } from '../../supabase/functions/_shared/aiGuard.ts';
 import type { Target } from '../../supabase/functions/ai/core.ts';
@@ -31,7 +32,7 @@ describe('readAsk', () => {
     expect(Object.keys(USE_LIMITS)).toEqual(['studio_game', 'trajectory_ai']);
   });
   it('gives the Trajectory AI 4,000 tokens and 90 s an answer, and no scripted plan', () => {
-    expect(USE_LIMITS.trajectory_ai).toEqual({ maxTokens: 4000, timeoutMs: 90_000 });
+    expect(USE_LIMITS.trajectory_ai).toEqual({ maxTokens: 4000, timeoutMs: 90_000, maxChars: 50_000 });
     expect(readAsk({ use: 'trajectory_ai', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 4000 } });
     expect(NO_SCRIPT).toContain('trajectory_ai');
     expect(limitMessage(40, !NO_SCRIPT.includes('trajectory_ai'), 1500000)).not.toContain('scripted');
@@ -53,6 +54,14 @@ describe('readAsk', () => {
     expect(readAsk({ use: 'kb_answer', system: 3, messages: [user('x')] })).toEqual({ ok: false, error: 'system must be text' });
     expect(readAsk({ use: 'kb_answer', messages: Array.from({ length: LIMITS.messages + 1 }, () => user('x')) }).ok).toBe(false);
     expect(readAsk({ use: 'kb_answer', messages: [user('x'.repeat(LIMITS.chars + 1))] })).toMatchObject({ ok: false, error: expect.stringContaining('too long') });
+  });
+  it('holds Trajectory AI to its own 50,000 characters a call (system and messages), and other uses to 60,000', () => {
+    const at = (n: number) => readAsk({ use: 'trajectory_ai', system: 'x'.repeat(1000), messages: [user('y'.repeat(n - 1000))] });
+    expect(at(PLAN_ASK.budgetChars).ok).toBe(true);
+    expect(at(PLAN_ASK.budgetChars + 1)).toEqual({ ok: false, error: 'The request is too long (at most 50000 characters)' });
+    expect(readAsk({ use: 'kb_answer', messages: [user('x'.repeat(55_000))] }).ok).toBe(true);
+    expect(USE_LIMITS.trajectory_ai.maxTokens).toBe(PLAN_ASK.maxTokens);
+    expect(readAsk({ use: 'trajectory_ai', messages: [user('hi')], max_tokens: 99_999 })).toMatchObject({ ok: true, ask: { max_tokens: 4000 } });
   });
 });
 

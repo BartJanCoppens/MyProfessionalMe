@@ -1,6 +1,8 @@
 // Guard rails both AI edge functions (`ai`, `voice`) apply to what leaves them, and their one error answer. Pure, so Vitest tests them through
 // src/lib/aiCore.test.ts and src/lib/voiceCore.test.ts.
 
+import { PLAN_ASK } from './planAsk.ts';
+
 // An error answer: { error } with the status.
 export const fail = (status: number, error: string) => Response.json({ error }, { status });
 // EU AI Act Art. 50 marking, as Taxatar's: on every answer the voice or the avatar made.
@@ -14,9 +16,10 @@ export const UUID = new RegExp('^' + UUID_PART + '$', 'i');
 
 // Per-use ceilings on one answer, for the uses that write long text (the Game Studio's files, in parts). Every other use keeps the
 // default of 2048 tokens and 30 s. One call stays under the 150 s request limit of Supabase edge functions (confirm the plan's limit at deploy).
-export const USE_LIMITS: Record<string, { maxTokens: number; timeoutMs: number }> = {
+// maxChars: the characters one request may hold (system and messages) when a use needs less than the general 60,000 (core.ts LIMITS.chars).
+export const USE_LIMITS: Record<string, { maxTokens: number; timeoutMs: number; maxChars?: number }> = {
   studio_game: { maxTokens: 5000, timeoutMs: 110_000 },
-  trajectory_ai: { maxTokens: 4000, timeoutMs: 90_000 }, // a plan edit: modules with goals, material and cited sources
+  trajectory_ai: { maxTokens: PLAN_ASK.maxTokens, timeoutMs: 90_000, maxChars: PLAN_ASK.budgetChars }, // a plan edit: modules with goals, material and cited sources
 };
 // A part that times out keeps no text, so the budget per part is what one call can surely write in the time: about 5000 tokens in 110 s (measure at deploy); MAX_PARTS (src/logic/continuation.ts) times this fits a full game.js.
 // Uses only the `ai` function answers, each with its own request shape (a run, not a system text): the AI role's and the character's hidden text is read
