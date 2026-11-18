@@ -10,6 +10,7 @@ import type { AiAdmin, AiForm, AiUseEdit, StockVoice, StockVoiceForm } from './l
 import type { StockLook, StockLookForm } from './logic/stockLooks';
 import type { HorizonItem } from './logic/horizonItem';
 import type { RunMark } from './logic/narration';
+import type { PortraitKey } from './reel/portraits';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
 export type Learn = [string, string, string, number, string, string, number, number, string, string];
 // learning id, stage, obligation
@@ -64,12 +65,10 @@ export type Access = { isSystem: boolean; isGeneral?: boolean; domains: string[]
 // Catalogue entry metadata: owning business line (null = firm-wide) and publication status.
 // The admin library form; numbers stay text while typing. line '' = firm-wide.
 export type LearnForm = { id: string | null; title: string; domain: string; level: string; format: string; source: string; hours: string; cpd: string; why: string; line: string; status: LearnMeta['status'] };
-// The v3 episodes' chapters (seeded, played as chapters on the step player) and the reel viewer (design v3)
+// The v3 episodes' chapters and reels (seeded; they play on the step player as podcastSteps and seededReel give them)
 export type PodMedia = { kind: 'pod'; by: string; len: string; dur: number; ch: [number, string][] };
 export type ReelMedia = { kind: 'reel'; by: string; len: string; dur: number; caps: string[]; take: string; q: string; opts: string[]; a: number };
 export type Media = PodMedia | ReelMedia;
-// owner: whose app playback started in; the clock stops when the viewed person changes
-export type MediaState = { playing: string | null; owner?: string | null; pos: Record<string, number> };
 // Interactive content of the v4 formats. Teach-back patterns are stored as strings and compiled when read.
 export type FlashContent = { kind: 'flash'; total: number; due: number; next: string; cards: [string, string][] };
 export type ExamQuestion = { t: string; q: string; o: string[]; a: number; why: string };
@@ -100,7 +99,13 @@ export type PodcastContent = { kind: 'podcast'; seconds: number; made: 'ai' | 's
 export type GameData = { concept: string; win: string; rounds: { text: string; answer: string }[] };
 export type GameContent = GameData & { kind: 'game'; role: { kind: 'Game master' | 'Opponent' | 'Suspect to question'; about: string } | null;
   leaderboard: 'Firm-wide' | 'My team only' | 'None'; files: { 'index.html': string; 'game.js': string }; made: 'ai' };
-export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent;
+// A reel (studios plan, Task 5.3): its scenes on the reel's clock (words: when each spoken word starts, in seconds from the scene's
+// start, or null for a scene nobody voiced), the rendered video when there is one, the stock look, the music, the creator's check
+// question (a, the right option in written order) and who made it ('ai' shows as Made with AI, 'scripted' as Scripted).
+export type ReelContent = { kind: 'reel'; size: '720x1280' | '1080x1080'; seconds: number; scenes: { label: string; text: string; onScreen: string; start: number; seconds: number; words: number[] | null }[];
+  video: { path: string; mime: 'video/mp4' | 'video/webm' } | null; burned: boolean; look: { id: string; name: string; portrait: PortraitKey; color: string } | null;
+  music: 'None' | 'Calm' | 'Upbeat'; check: { q: string; opts: string[]; a: number }; made: 'ai' | 'scripted' };
+export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent | ReelContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
 export type View = 'constellation' | 'radar' | 'road';
@@ -137,8 +142,8 @@ export type AppState = {
   reads: Record<string, Read>; readBusy: boolean;
   // growth map: the domain zoomed into (domain key), or null for all domains
   zoom: string | null;
-  // the reel viewer: what plays, positions this session; reel answers and whose they are
-  media: MediaState; answers: Record<string, number>; answersFor: string | null;
+  // the reel panel's check: the option picked per reel this session and whose it is
+  answers: Record<string, number>; answersFor: string | null;
   // admin library: the learning being added or edited in the drawer
   libForm: LearnForm | null;
   // Knowledge library (admin): bundles are in memory this session, like the learning catalogue

@@ -12,13 +12,13 @@ import * as content from '../lib/contentStore';
 import * as learner from '../lib/learnerStore';
 import * as record from '../lib/recordStore';
 import * as attendance from '../lib/attendanceStore';
-import { AVATAR_QUIZ } from '../data';
+import { AVATAR_QUIZ, LEARN_BY } from '../data';
 import type { Subject } from '../lib/useSubject';
 import type { Member } from '../logic/team';
 import { cfg, emptyData, person, systemAdmin, withProgress } from '../test/harness';
 import type { Access, AppState, Project, Test } from '../types';
 import MapScreen from './Map';
-import { DetailScreen } from './Library';
+import { DetailScreen, LibraryScreen } from './Library';
 import ProfileScreen from './Profile';
 import ProjectsScreen from './Projects';
 import TeamScreen from './Team';
@@ -55,7 +55,7 @@ const PROJECTS: Project[] = [
     ];
 const TESTS: Test[] = [{ id: 'T1', name: 'Four Colours', provider: 'Insights', date: 'Oct 2026', headline: 'Cool blue first', unit: '%', bars: [['Blue', 60, '#2f7fc1'], ['Red', 20]], reading: 'Prefers facts.', sugg: [['L37', 'Practise the story.']] }];
 
-beforeEach(() => { vi.clearAllMocks(); window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; });
+beforeEach(() => { vi.clearAllMocks(); vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null); window.scrollTo = vi.fn() as unknown as typeof window.scrollTo; });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('the growth map screen', () => {
@@ -111,6 +111,14 @@ describe('the growth map screen', () => {
   });
 });
 
+describe('the library screen', () => {
+  it('lists the seeded reels L44 to L47 in the quick-learning strip', () => {
+    show((vm) => <LibraryScreen vm={vm} />, { screen: 'library' });
+    expect(screen.getByText('Quick learning')).toBeTruthy();
+    ['L44', 'L45', 'L46', 'L47'].forEach((id) => expect(screen.getAllByText(LEARN_BY[id][1]).length).toBeGreaterThan(0));
+  });
+});
+
 describe('the learning detail screen', () => {
   const detail = (id: string, subject = person(), access: Access = { isSystem: false, domains: [], userId: subject.id }) => show((vm) => <DetailScreen vm={vm} />, { screen: 'detail', detailId: id }, subject, access);
   it('introduces the avatar of a practice learning and starts a session', () => {
@@ -119,6 +127,16 @@ describe('the learning detail screen', () => {
     expect(screen.queryByText(/^Share best run with/)).toBeNull();
     click('Start a session');
     expect(toast()).toMatch(/^Coming with the avatar studio$/);
+  });
+  it('plays a seeded reel (L44) on the step player and completes it on the right answer, with no app clock', async () => {
+    const interval = vi.spyOn(window, 'setInterval');
+    detail('L44');
+    expect(screen.getByText(/Step 1 of 3/)).toBeTruthy();
+    act(() => { click('Play'); });
+    expect(interval.mock.calls.length).toBe(1); // the step player's own clock; the app has none
+    await act(async () => { click('Groups with €750m or more consolidated turnover'); });
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L44', { state: 'accepted', pct: 100 });
+    interval.mockRestore();
   });
   it('asks for approval of a learning in progress', () => {
     const data = withProgress({ L18: ['in-progress', 40] });

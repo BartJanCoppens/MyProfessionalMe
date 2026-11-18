@@ -10,6 +10,7 @@ import ExplainerPanel from './ExplainerPanel';
 import GamePanel from './GamePanel';
 import PresentationPanel from './PresentationPanel';
 import PodcastPanel from './PodcastPanel';
+import ReelPanel from './ReelPanel';
 import SlidesPanel from './SlidesPanel';
 import { WorkPanels } from './FormatWork';
 import QuestionRound from './QuestionRound';
@@ -125,6 +126,7 @@ export function FormatPanels({ vm }: { vm: VM }) {
       {det.hz && <PresentationPanel hz={det.hz} />}
       {det.sl && <SlidesPanel sl={det.sl} />}
       {det.pc && <PodcastPanel pc={det.pc} />}
+      {det.rl && <ReelPanel rl={det.rl} />}
       {det.gm && <GamePanel key={det.gm.key} gm={det.gm} />}
       <WorkPanels det={det} />
     </>

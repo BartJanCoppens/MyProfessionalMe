@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEARN, LEARN_BY, MEDIA } from '../data';
+import { LEARN, LEARN_BY, LEARN_META, MEDIA } from '../data';
 import { COVER_KIND, cover, formatTiles, reelStrip } from './covers';
 
 const row = (id: string) => LEARN_BY[id];
@@ -53,6 +53,13 @@ describe('reelStrip', () => {
     expect(strip.map((r) => r.id)).toEqual(LEARN.filter((r) => r[4] === 'Reel').map((r) => r[0]));
     expect(strip.find((r) => r.id === 'L44')).toMatchObject({ done: true, len: MEDIA.L44.len, by: MEDIA.L44.by });
     expect(strip.find((r) => r.id === 'L46')!.done).toBe(false);
+  });
+  it('also lists a published studio reel, with its length from the content', () => {
+    const made: typeof LEARN[number] = ['L995', 'Close in a day', 'corp', 2, 'Reel', 'Peer contribution', 0.025, 0, '', ''];
+    LEARN_META.L995 = { line: null, status: 'published', content: { kind: 'reel', size: '720x1280', seconds: 52, scenes: [], video: null, burned: true, look: null, music: 'None', check: { q: 'q', opts: ['a', 'b'], a: 0 }, made: 'ai' } };
+    try {
+      expect(reelStrip([...LEARN, made], {}, () => {}).find((r) => r.id === 'L995')).toMatchObject({ len: '0:52', by: 'Peer contribution' });
+    } finally { delete LEARN_META.L995; }
   });
 });
 

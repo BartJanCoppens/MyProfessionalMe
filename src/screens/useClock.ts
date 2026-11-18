@@ -1,6 +1,7 @@
-// The one playback clock for panels that play on their own: the Animated flow and the narration step player. It keeps
-// where it is and whether it runs, ticking every 200 ms from the wall clock; what it drives (an SVG's SMIL clock, an
-// audio element) follows through the hooks. Only reels run on the app's media tick instead (Logic.tick).
+// The one playback clock for panels that play on their own: the Animated flow and the narration step player (podcasts,
+// slides, presentations and seeded reels). It keeps where it is and whether it runs, ticking every 200 ms from the wall
+// clock; what it drives (an SVG's SMIL clock, an audio element) follows through the hooks. The app has no other clock;
+// a rendered reel plays in the browser's own video element.
 // rate (1 by default, read live) scales how fast the clock runs; what it drives follows through the hooks.
 // The hooks of the latest render are called, so an end is told to the view-model of that moment.
 import { useEffect, useRef, useState } from 'react';

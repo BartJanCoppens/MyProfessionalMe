@@ -1,5 +1,6 @@
 // Library card covers, format tiles and the quick-learning reels strip (design v3).
-import { MEDIA } from '../data';
+import { LEARN_META, MEDIA } from '../data';
+import { fmtTime } from './media';
 import type { Learn } from '../types';
 import type { LearnState } from './learner';
 
@@ -64,9 +65,17 @@ export function formatTiles(rows: Learn[], selected: string, pick: (format: stri
   return formats.map((f) => tile(f, f, rows.filter((r) => r[4] === f).length));
 }
 
-// Reels as vertical cards above the grid.
+// The length and the maker of a reel: a seeded one from MEDIA, a published studio reel from its content; null for neither.
+function reelFacts(r: Learn) {
+  const M = MEDIA[r[0]], c = LEARN_META[r[0]]?.content;
+  if (M?.kind === 'reel') return { len: M.len, by: M.by };
+  return c?.kind === 'reel' ? { len: fmtTime(c.seconds), by: r[5] } : null;
+}
+
+// Reels (seeded and published by colleagues) as vertical cards above the grid.
 export function reelStrip(rows: Learn[], states: Record<string, LearnState | undefined>, open: (id: string) => void) {
-  return rows.filter((r) => r[4] === 'Reel' && MEDIA[r[0]]).map((r) => ({
-    id: r[0], title: r[1], len: MEDIA[r[0]].len, by: MEDIA[r[0]].by, done: states[r[0]] === 'accepted', open: () => open(r[0]),
-  }));
+  return rows.flatMap((r) => {
+    const facts = r[4] === 'Reel' ? reelFacts(r) : null;
+    return facts ? [{ id: r[0], title: r[1], ...facts, done: states[r[0]] === 'accepted', open: () => open(r[0]) }] : [];
+  });
 }

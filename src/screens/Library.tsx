@@ -115,7 +115,6 @@ export function DetailScreen({ vm }: { vm: VM }) {
           <FormatPanels vm={vm} />
           {vm.rec.showEvidence && <EvidenceCard rec={vm.rec} />}
           {vm.rec.hasHistory && <RecordCard rec={vm.rec} />}
-          {det.reel && <ReelViewer reel={det.reel} />}
           {det.av && <AvatarPractice av={det.av} counsellorFirst={vm.counsellorFirst} />}
           {vm.done.quiz && <QuizCard quiz={vm.done.quiz} />}
           {vm.done.feedback && <FeedbackCard fb={vm.done.feedback} />}
@@ -317,7 +316,6 @@ function AvatarPractice({ av, counsellorFirst }: { av: NonNullable<VM['det']['av
   );
 }
 
-const caps: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
 // A fieldset that disables every control inside it (View as, rows already completed), without a frame of its own.
 const bare: CSSProperties = { border: 0, padding: 0, margin: 0, minWidth: 0 };
 type Done = VM['done'];
@@ -411,33 +409,6 @@ function AttendanceCard({ att }: { att: NonNullable<Done['attendance']> }) {
           <div><Button disabled={!att.canSave} onClick={att.save}>{att.busy ? 'Registering…' : 'Register attendance'}</Button></div>
         )}
         <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>Registering completes the classroom for each person ticked, without a counsellor. Someone already completed stays as they are.</div>
-      </div>
-    </Card>
-  );
-}
-
-function ReelViewer({ reel }: { reel: NonNullable<VM['det']['reel']> }) {
-  return (
-    <Card title="Watch" subtitle={reel.sub}>
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div onClick={reel.toggle} style={{ flex: 'none', width: 210, aspectRatio: '9/16', borderRadius: 6, background: '#171a16', color: '#fff', position: 'relative', overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '14px 12px 16px' }}>
-          <div style={{ position: 'absolute', left: 8, right: 8, top: 6, height: 3, borderRadius: 999, background: 'rgba(255,255,255,.16)', overflow: 'hidden' }}><div style={{ height: '100%', width: reel.w, background: '#86BC25', transition: 'width .25s linear' }} /></div>
-          <div style={{ fontSize: 11, color: '#a9b0a5', marginTop: 6 }}>{reel.by}</div>
-          <div style={{ alignSelf: 'center', width: 54, height: 54, borderRadius: '50%', border: '1px solid rgba(255,255,255,.25)', background: 'rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>{reel.playIcon}</div>
-          <div key={reel.caption} style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty', animation: 'pmFadeUp .3s ease-out' }}>{reel.caption}</div>
-        </div>
-        <div style={{ flex: '1 1 260px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div><div style={caps}>The one takeaway</div><p style={{ margin: '4px 0 0', textWrap: 'pretty' }}>{reel.takeaway}</p></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={caps}>Check yourself · completes the reel</div>
-            <div style={{ fontWeight: 600, textWrap: 'pretty' }}>{reel.q}</div>
-            {reel.opts.map((ro) => (
-              <Hover key={ro.label} as="button" type="button" onClick={ro.pick} hoverStyle={{ borderColor: '#1a1d18' }}
-                style={{ textAlign: 'left', padding: '9px 12px', borderRadius: 6, border: '1px solid ' + ro.bd, background: ro.bg, color: '#1a1d18', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>{ro.label}</Hover>
-            ))}
-            {reel.hasFb && <div style={{ fontSize: 12.5, color: reel.fbColor, fontWeight: 500 }}>{reel.fb}</div>}
-          </div>
-        </div>
       </div>
     </Card>
   );

@@ -26,7 +26,6 @@ import { blankDraft } from './createSave';
 import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
-import { currentPos, reelView, startPos, step } from './logic/media';
 import { completionOf, completionText, completionTodo, lastActivity, lastActivityLabel, openChanges } from './logic/record';
 import { logHour, recordVals, submit } from './recordVals';
 import { fmtCover } from './fmtCover';
@@ -52,8 +51,6 @@ const lensOf = (aud: string) => LENSES.find((l) => l[0] === AUD_INFO[aud].lens)!
 type Evidence = { id: string; text: string; src: string };
 type ChatReply = { reply: string; interests?: { label: string; domain: string }[]; ambition?: Proposal['ambition'] };
 
-// Podcast and reel progress saved per person and learning, until the reload lands (so a tick never repeats a save).
-const MEDIA_SAVED = new Map<string, number>();
 // Saves in flight (learning form, publishing); a second click while one runs does nothing.
 const BUSY = new Set<string>();
 // Publication status in the admin library: chip status and label.
@@ -68,7 +65,7 @@ export function initState(cfg: Config): AppState {
     libQ: '', libOb: 'all', libLevel: '0', libFormat: 'all', libDom: 'all',
     teamTab: 'roster', adminQ: '', adminStatus: 'all', drawerOpen: false, importQ: '',
     blState: null, maps: JSON.parse(JSON.stringify({ ...MAPS0, ...AUD_MAPS0 })), pending: {}, mapSel: null, overStage: null,
-    mapLens: 'bl', mapAud: null, mapStage: null, trjs: [], trjUsed: null, trjDelete: null, trjView: null, trjOrigin: 'library', trjMine: null, trjLeave: null, stepDraft: {}, credForm: null, renewForm: null, mapMode: 'learn', trjSel: null, trjStep: null, trjAud: '', trjStage: STAGES[0], sigDone: {}, sigAll: false, reads: {}, readBusy: false, zoom: null, libForm: null, media: { playing: null, pos: {} }, answers: {}, answersFor: null,
+    mapLens: 'bl', mapAud: null, mapStage: null, trjs: [], trjUsed: null, trjDelete: null, trjView: null, trjOrigin: 'library', trjMine: null, trjLeave: null, stepDraft: {}, credForm: null, renewForm: null, mapMode: 'learn', trjSel: null, trjStep: null, trjAud: '', trjStage: STAGES[0], sigDone: {}, sigAll: false, reads: {}, readBusy: false, zoom: null, libForm: null, answers: {}, answersFor: null,
     bundles: BUNDLES0.map((b) => ({ ...b, sources: b.sources.slice(), models: b.models.map((m) => ({ ...m })) })), kbSel: 'B1', kbOpen: false, kbTopic: 'all', kbSearch: '', kbTagF: null, kbSort: 'recent',
     kbTab: 'overview', kbFile: 'index.md', kbModel: null, kbTestModel: null, kbTagIn: '', kbValid: null, kbEdit: false, kbAdd: { conn: 'upload', name: '', sens: 'internal' }, kbQ: '', kbBusy: false, kbAnswerAi: false, kbHits: null, kbAnswer: '', cpInput: '', cpBusy: false, cpReply: '', cpOpsP: null,
     toast: null, noteOpen: false, myRating: '4',
@@ -122,37 +119,6 @@ export class Logic {
   async persist(write: () => Promise<unknown>, done?: string) {
     if (this.readOnly()) return;
     try { await write(); await this.reloadSubject(); if (done) this.say(done); } catch (err) { this.say((err as Error).message); }
-  }
-  // The reel viewer. Playback lives in app state; progress is saved for the learner only, never in View as. (Podcasts play on the
-  // step player, fmtPodcast.ts.) Saves are remembered per person and learning until the reload lands, so a tick never repeats one.
-  mediaSaved(id: string) {
-    const own = this.subject.data.progress[id], last = MEDIA_SAVED.get(this.subject.id + '|' + id);
-    if (last === 100 || own?.state === 'accepted') return { state: 'accepted' as LearnState, pct: 100 };
-    return own ? { state: own.state, pct: Math.max(own.pct, last || 0) } : last != null ? { state: 'in-progress' as LearnState, pct: last } : undefined;
-  }
-  saveMedia(id: string, patch: { state: LearnState; pct: number }, done?: string) {
-    const key = this.subject.id + '|' + id; MEDIA_SAVED.set(key, patch.pct);
-    this.persist(() => saveProgress(this.subject.id, id, patch).catch((err) => { MEDIA_SAVED.delete(key); throw err; }), done);
-  }
-  tick() {
-    const m = this.state.media, id = m.playing; if (!id) return;
-    if (m.owner !== this.subject.id) { this.setState({ media: { ...m, playing: null } }); return; }
-    const next = step(m); this.setState({ media: next });
-    if (this.subject.readOnly) return;
-    if (next.pos[id] >= MEDIA[id].dur && !this.mediaSaved(id)) this.saveMedia(id, { state: 'in-progress', pct: 0 });
-  }
-  mediaVals(it: Item) {
-    const M = MEDIA[it.id]; if (!M || M.kind !== 'reel') return { isReel: false, reel: null };
-    // Session positions and answers belong to the person they were made for; another person starts from their own progress.
-    const mine = (st: AppState) => (st.media.owner === this.subject.id ? st.media.pos : {});
-    const m = this.state.media, on = m.playing === it.id && m.owner === this.subject.id, pos = currentPos(mine(this.state)[it.id]);
-    const play = () => this.setState((st) => ({ media: { ...st.media, playing: st.media.playing === it.id && st.media.owner === this.subject.id ? null : it.id, owner: this.subject.id, pos: { ...mine(st), [it.id]: startPos(M, mine(st)[it.id]) } } }));
-    const ans = this.state.answersFor === this.subject.id ? this.state.answers[it.id] : undefined, v = reelView(M, pos, on, ans, it.title);
-    return { isReel: true, reel: { ...v, toggle: () => play(),
-      opts: v.opts.map((o, k) => ({ ...o, pick: () => {
-        this.setState((st) => ({ answers: { ...(st.answersFor === this.subject.id ? st.answers : {}), [it.id]: k }, answersFor: this.subject.id }));
-        if (o.right && ans !== M.a && this.mediaSaved(it.id)?.state !== 'accepted') this.saveMedia(it.id, { state: 'accepted', pct: 100 }, 'Reel complete · added to your year');
-      } })) } };
   }
   myStage() { return stageIndex(this.subject.stage); }
   // Ambitions, interests and personality are private to the person (owner, Q8); nobody viewing them sees these.
@@ -500,7 +466,7 @@ export class Logic {
       .filter((x): x is { bl: string; stage: string; ob: string } => !!x);
     if (!paths.length) paths = [{ bl: 'No path', stage: 'open to everyone', ob: '' }];
     const det = {
-      ...d0, ...this.mediaVals(d0), ...fmtVals(this, d0),
+      ...d0, ...fmtVals(this, d0),
       outcomes: OUTCOMES[d0.dom].map((t) => ({ t })),
       levelSub: LEVELS[d0.lvl - 1] + ' · L' + d0.lvl + ' in ' + d0.domLabel + '. You are at L' + myLvl + '; ' + this.nextStage() + ' expects L' + TARGET[d0.di] + '.',
       ladder: LEVELS.map((lab, i) => {

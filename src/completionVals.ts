@@ -1,6 +1,6 @@
 // Completion per learning type (owner's rules, 2 Nov 2026), split out of Logic.renderVals() like recordVals.
 // E-learning: "Mark as completed". Classroom: the learner's feedback form, and for admins the Attendance card.
-// Avatar: the evaluation quiz after the practice session. Podcasts and reels complete in their players (Logic.mediaVals).
+// Avatar: the evaluation quiz after the practice session. Podcasts and reels complete in their players (fmtPodcast.ts, fmtReel.ts).
 // Learner writes go through Logic.persist() (refused in View as, where the form and quiz are disabled too). Attendance
 // is the signed-in admin's own action, like a decision: it works in View as and reloads the viewed person.
 import type { ChangeEvent } from 'react';
