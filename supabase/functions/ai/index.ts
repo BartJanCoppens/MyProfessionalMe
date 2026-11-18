@@ -3,6 +3,8 @@
 //   { use, system?, messages, max_tokens? }  any signed-in user: answers a live text use (see ai_live_uses()) with the
 //                                            connection and model the System Admin chose for it -> { text }
 //   { action: 'test', connection_id }        System Admins: one tiny call with that connection -> { ok, model } or { ok: false, error }
+//   { use: 'game_role', run_id, messages, state } the player of a run (their own, unfinished) of a game with an AI role: the role's reply -> { text };
+//                                            the role and what it knows are read by the database for the run (public.game_role_context), never sent by the client
 //   { action: 'review_game', contribution_id } the author of a built Game: the house-rules review (use studio_game) of the files the
 //                                            database holds for that contribution -> { passed, reasons }, recorded by the database
 //                                            for those files (public.record_game_review); the verdict is never the client's
@@ -16,7 +18,9 @@ import { withSupabase } from '@supabase/server';
 import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
 import type { Conn, UseRow } from '../_shared/aiUse.ts';
 import { NO_SCRIPT, USE_LIMITS } from '../_shared/aiGuard.ts';
-import { callProvider, inputChars, limitMessage, LIMITS, readAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
+import { callProvider, inputChars, limitMessage, LIMITS, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
+import { GAME_ROLE_USE, playRole } from './gameRole.ts';
+import type { RoleContext } from './gameRole.ts';
 import { GAME_USE, reviewGame } from './review.ts';
 import type { ReviewLoad } from './review.ts';
 
@@ -33,6 +37,16 @@ async function openUse(admin: Admin, key: string, roles: string[]): Promise<{ us
   if (use.kind !== 'text') return fail(409, 'This is not a text use: the voice function serves it');
   if (use.admins_only && !roles.length) return fail(403, 'Only admins use this assistant');
   return { use };
+}
+
+// The provider call's target for a live use: its connection, the use's model (else the connection's) and the key.
+const targetOf = (use: UseRow, key: string) => ({ provider: use.connection!.provider, baseUrl: use.connection!.base_url, model: use.model || use.connection!.default_model!, key });
+// The use as the caller may use it now, with its target (the key read from Vault), or the answer that says why not.
+async function openTarget(admin: Admin, key: string, roles: string[]): Promise<{ use: UseRow; target: ReturnType<typeof targetOf> } | Response> {
+  const opened = await openUse(admin, key, roles);
+  if (opened instanceof Response) return opened;
+  const secret = await connectionKey(admin, opened.use.connection!.id);
+  return secret ? { use: opened.use, target: targetOf(opened.use, secret) } : fail(409, 'The connection has no key');
 }
 
 export default {
@@ -63,12 +77,9 @@ export default {
     }
 
     if (body.action === 'review_game') {
-      const opened = await openUse(admin, GAME_USE, roles);
+      const opened = await openTarget(admin, GAME_USE, roles);
       if (opened instanceof Response) return opened;
-      const { use } = opened, conn = use.connection!, contribution = String(body.contribution_id || '');
-      const key = await connectionKey(admin, conn.id);
-      if (!key) return fail(409, 'The connection has no key');
-      const target = { provider: conn.provider, baseUrl: conn.base_url, model: use.model || conn.default_model!, key };
+      const { use, target } = opened, contribution = String(body.contribution_id || '');
       const out = await reviewGame({
         preamble: use.preamble, dailyLimit: use.daily_limit,
         load: async () => ((await admin.rpc('game_review_input', { p_user: callerId, p_contribution: contribution })).data as ReviewLoad | null) ?? null,
@@ -77,6 +88,22 @@ export default {
         record: async (hash, v) => (await admin.rpc('record_game_review', { p_contribution: contribution, p_review_hash: hash, p_passed: v.passed, p_reasons: v.reasons })).error?.message ?? null,
       });
       console.log(JSON.stringify({ action: 'review_game', status: out.status, ms: Date.now() - started }));
+      return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
+    }
+
+    if (body.use === GAME_ROLE_USE) {
+      const g = readGameAsk(body);
+      if (!g.ok) return fail(400, g.error);
+      const opened = await openTarget(admin, GAME_ROLE_USE, roles);
+      if (opened instanceof Response) return opened;
+      const { use, target } = opened;
+      const out = await playRole({
+        preamble: use.preamble, dailyLimit: use.daily_limit,
+        context: async () => ((await admin.rpc('game_role_context', { p_user: callerId, p_run: g.runId })).data as RoleContext | null) ?? null,
+        count: (chars) => countCall(admin, callerId, GAME_ROLE_USE, chars),
+        call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_ROLE_USE]?.timeoutMs),
+      }, g);
+      console.log(JSON.stringify({ use: GAME_ROLE_USE, status: out.status, ms: Date.now() - started }));
       return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
     }
 
@@ -91,7 +118,7 @@ export default {
     if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit, !NO_SCRIPT.includes(r.use))) : fail(500, 'Could not count the call');
     const key = await connectionKey(admin, use.connection!.id);
     if (!key) return fail(409, 'The connection has no key');
-    const out = await callProvider({ provider: use.connection!.provider, baseUrl: use.connection!.base_url, model: use.model || use.connection!.default_model!, key }, ask, fetch, USE_LIMITS[r.use]?.timeoutMs);
+    const out = await callProvider(targetOf(use, key), ask, fetch, USE_LIMITS[r.use]?.timeoutMs);
     console.log(JSON.stringify({ use: r.use, ok: out.ok, ms: Date.now() - started }));
     return out.ok ? Response.json({ text: out.text, cut: out.cut }) : fail(502, out.error);
   }),

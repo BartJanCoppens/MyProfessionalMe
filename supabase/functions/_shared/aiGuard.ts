@@ -9,7 +9,7 @@ export const fail = (status: number, error: string) => Response.json({ error }, 
 export const USE_LIMITS: Record<string, { maxTokens: number; timeoutMs: number }> = { studio_game: { maxTokens: 5000, timeoutMs: 110_000 } };
 // A part that times out keeps no text, so the budget per part is what one call can surely write in the time: about 5000 tokens in 110 s (measure at deploy); MAX_PARTS (src/logic/continuation.ts) times this fits a full game.js.
 // Uses with no scripted answer: a reached daily limit does not fall back to a script for them.
-export const NO_SCRIPT = ['studio_game'];
+export const NO_SCRIPT = ['studio_game', 'game_role'];
 
 export type Provider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'heygen' | 'other';
 

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { reviewGame } from '../../supabase/functions/ai/review.ts';
 import type { ReviewDeps } from '../../supabase/functions/ai/review.ts';
 
-const input = { title: 'Invoice detective', review_hash: 'h1', content: { concept: 'c', win: 'w', rounds: [{ text: 't', answer: 'a' }], role: null, files: { 'index.html': '<main></main>', 'game.js': 'GameStudio.ready();' } } };
+const input = { title: 'Invoice detective', takeaway: 'Check the VAT number first.', knows: 'the supplier is the CFO’s brother', review_hash: 'h1', content: { concept: 'c', win: 'w', rounds: [{ text: 't', answer: 'a' }], role: null, files: { 'index.html': '<main></main>', 'game.js': 'GameStudio.ready();' } } };
 const verdict = (v: unknown) => ({ ok: true as const, text: JSON.stringify(v), cut: false });
 const deps = (o: Partial<ReviewDeps> = {}): ReviewDeps => ({
   preamble: 'HOUSE RULES', load: vi.fn(async () => input), count: vi.fn(async () => 'ok' as const),
@@ -19,6 +19,14 @@ describe('reviewGame', () => {
     expect(ask.messages[0].content).toContain('<<<Invoice detective>>>');
     expect(d.record).toHaveBeenCalledWith('h1', { passed: false, reasons: ['Round 2 names a real company'] });
     expect(d.count).toHaveBeenCalledWith(ask.system!.length + ask.messages[0].content.length);
+  });
+  it('shows the model what the AI role knows and the takeaway, as data (server side only: the verdict is for them too)', async () => {
+    const d = deps({ load: vi.fn(async () => ({ ...input, content: { ...input.content, role: { kind: 'Suspect to question', about: 'A manager.' } } })) });
+    await reviewGame(d);
+    const ask = vi.mocked(d.call).mock.calls[0][0];
+    expect(ask.messages[0].content).toContain('<<<the supplier is the CFO’s brother>>>');
+    expect(ask.messages[0].content).toContain('<<<Check the VAT number first.>>>');
+    expect(ask.system).toMatch(/hides|hidden|knows/);
   });
   it('records a pass', async () => {
     const d = deps();

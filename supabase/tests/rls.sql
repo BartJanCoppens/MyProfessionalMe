@@ -822,6 +822,12 @@ with u as (update public.ai_uses set connection_id = current_setting('test.ai1')
 insert into results (check_name, expected, actual) select 'AI studio_game is live with a text connection that has a key and a model', 'true', ('studio_game' = any(public.ai_live_uses()))::text;
 update public.ai_uses set enabled = false where key = 'studio_game';
 insert into results (check_name, expected, actual) select 'AI studio_game is not live once switched off', 'false', ('studio_game' = any(public.ai_live_uses()))::text;
+insert into results (check_name, expected, actual) select 'AI game_role is seeded as a text use, off, 60 a day', 'text/false/60', kind||'/'||enabled||'/'||daily_limit from public.ai_uses where key = 'game_role';
+insert into results (check_name, expected, actual) select 'AI game_role is not live without a connection', 'false', ('game_role' = any(public.ai_live_uses()))::text;
+with u as (update public.ai_uses set connection_id = current_setting('test.ai1')::uuid, enabled = true where key = 'game_role' returning 1) insert into results (check_name, expected, actual) select 'AI SA gives game_role the text connection', '1 rows', count(*)||' rows' from u;
+insert into results (check_name, expected, actual) select 'AI game_role is live with a text connection that has a key and a model', 'true', ('game_role' = any(public.ai_live_uses()))::text;
+update public.ai_uses set enabled = false where key = 'game_role';
+insert into results (check_name, expected, actual) select 'AI game_role is not live once switched off', 'false', ('game_role' = any(public.ai_live_uses()))::text;
 update public.ai_uses set enabled = false where key = 'profile_chat';
 insert into results (check_name, expected, actual) select 'AI disabled use is not live', 'false', ('profile_chat' = any(public.ai_live_uses()))::text;
 update public.ai_uses set enabled = true where key = 'profile_chat';
@@ -2700,14 +2706,14 @@ create function pg_temp.gm_game(p_js text default 'GameStudio.ready();', p_html 
   select jsonb_build_object('kind', 'game', 'files', jsonb_build_object('index.html', p_html, 'game.js', p_js), 'for', jsonb_build_object('role', p_role)) $f$;
 -- records a verdict as the `ai` function would (service role); gm_check records a pass for the files as they are and then checks
 create function pg_temp.gm_review(p_title text, p_passed boolean default true, p_reasons text[] default '{}') returns void language sql security definer as $f$
-  select public.record_game_review(c.id, private.game_review_hash(c.title, c.items, c.shape), p_passed, p_reasons) from public.contributions c where c.title = p_title $f$;
+  select public.record_game_review(c.id, private.game_review_hash(c.title, c.items, c.shape, c.takeaway), p_passed, p_reasons) from public.contributions c where c.title = p_title $f$;
 create function pg_temp.gm_unreview(p_title text) returns void language sql security definer as $f$
   delete from public.game_reviews where contribution_id = (select id from public.contributions where title = p_title) $f$;
 create function pg_temp.gm_check(p_title text) returns text[] language plpgsql security definer as $f$
 declare c public.contributions;
 begin
   select * into c from public.contributions where title = p_title;
-  if jsonb_typeof(c.items) = 'array' and private.game_review_hash(c.title, c.items, c.shape) is not null and private.items_ok('Game', c.items) then perform public.record_game_review(c.id, private.game_review_hash(c.title, c.items, c.shape), true, '{}'); end if;
+  if jsonb_typeof(c.items) = 'array' and private.game_review_hash(c.title, c.items, c.shape, c.takeaway) is not null and private.items_ok('Game', c.items) then perform public.record_game_review(c.id, private.game_review_hash(c.title, c.items, c.shape, c.takeaway), true, '{}'); end if;
   return public.check_contribution(c.id);
 end $f$;
 create function pg_temp.gm_items(p_game jsonb default pg_temp.gm_game(), p_role boolean default false) returns jsonb language sql as $f$
@@ -2832,7 +2838,7 @@ select pg_temp.gm_blocked('GM a client cannot update a review', $q$update public
 select pg_temp.gm_blocked('GM a client cannot read the review table', $q$select count(*) from public.game_reviews$q$, 'blocked: 42501');
 select pg_temp.gm_blocked('GM a client cannot execute record_game_review', format($q$select public.record_game_review(%L, 'x', true, '{}')$q$, (select id from public.contributions where title = 'T gm bad')), 'blocked: 42501');
 select pg_temp.gm_blocked('GM a client cannot execute game_review_input', format($q$select public.game_review_input('00000000-0000-0000-0000-0000000000aa', %L)$q$, (select id from public.contributions where title = 'T gm bad')), 'blocked: 42501');
-select pg_temp.gm_blocked('GM a client cannot execute game_review_hash', $q$select private.game_review_hash('t', '[]', '{}')$q$, 'blocked: 42501');
+select pg_temp.gm_blocked('GM a client cannot execute game_review_hash', $q$select private.game_review_hash('t', '[]', '{}', 'x')$q$, 'blocked: 42501');
 insert into results (check_name, expected, actual) select 'GM the author reads the verdict, for the files as they are', 'true/true', (public.game_review_status(id) ->> 'passed')||'/'||(public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm ok';
 update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_js => 'GameStudio.ready(); // edited after')) where title = 'T gm bad';
 insert into results (check_name, expected, actual) select 'GM and sees it is no longer current once the code changes', 'true/false', (public.game_review_status(id) ->> 'passed')||'/'||(public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm bad';
@@ -2842,11 +2848,11 @@ insert into results (check_name, expected, actual) select 'GM a learner selects 
 insert into results (check_name, expected, actual) select 'GM and the published learning holds nothing the AI role knows', '1/0', count(*)||'/'||count(*) filter (where content::text like '%CFO’s brother%') from public.learnings where format = 'Game' and title = 'T gm ok';
 insert into results (check_name, expected, actual) select 'GM a learner reads no verdict of someone else''s game', '0', count(public.game_review_status(id))::text from public.contributions where title = 'T gm bad' or title = 'T gm ok';
 reset role;
-select set_config('test.gm_rv_id', (select id::text from public.contributions where title = 'T gm role'), true), set_config('test.gm_rv_hash', (select private.game_review_hash(title, items, shape) from public.contributions where title = 'T gm role'), true);
+select set_config('test.gm_rv_id', (select id::text from public.contributions where title = 'T gm role'), true), set_config('test.gm_rv_hash', (select private.game_review_hash(title, items, shape, takeaway) from public.contributions where title = 'T gm role'), true);
 -- the service role (the `ai` function) loads the author's own game and records a verdict for exactly those files
 set local role service_role;
-insert into results (check_name, expected, actual) select 'GM the service role loads the author''s game: title, files hash and content without what the AI role knows', 'T gm role/true/true',
-  (j ->> 'title')||'/'||(j ->> 'review_hash' = current_setting('test.gm_rv_hash'))::text||'/'||(position('brother' in j::text) = 0)::text
+insert into results (check_name, expected, actual) select 'GM the service role loads the author''s game: title, files hash and what the AI role knows (the review reads it, server side only)', 'T gm role/true/a short one',
+  (j ->> 'title')||'/'||(j ->> 'review_hash' = current_setting('test.gm_rv_hash'))::text||'/'||(j ->> 'knows')
   from (select public.game_review_input('00000000-0000-0000-0000-0000000000aa', current_setting('test.gm_rv_id')::uuid) as j) x;
 insert into results (check_name, expected, actual) select 'GM it loads nothing for someone who is not the author', 'null', coalesce(public.game_review_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.gm_rv_id')::uuid)::text, 'null');
 select pg_temp.gm_blocked('GM it cannot record a verdict for files that changed meanwhile', format($q$select public.record_game_review(%L, 'stale-hash', true, '{}')$q$, current_setting('test.gm_rv_id')), 'blocked: P0001');
@@ -2854,6 +2860,21 @@ select pg_temp.gm_blocked('GM it cannot record more than 10 reasons', format($q$
 select public.record_game_review(current_setting('test.gm_rv_id')::uuid, current_setting('test.gm_rv_hash'), false, array['Round 2 names a real company']);
 reset role;
 insert into results (check_name, expected, actual) select 'GM a verdict recorded by the service role replaces the earlier one', 'false/Round 2 names a real company', passed||'/'||reasons[1] from public.game_reviews where contribution_id = current_setting('test.gm_rv_id')::uuid;
+-- what the AI role knows and the takeaway are part of what the verdict is for: change only one of them after a pass and it is stale
+reset role;
+select pg_temp.gm_review('T gm role');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'GM a passed review is current before any change', 'true/true', (public.game_review_status(id) ->> 'passed')||'/'||(public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm role';
+update public.contributions set items = jsonb_set(items, '{5,2}', '"a different short one"') where title = 'T gm role';
+insert into results (check_name, expected, actual) select 'GM changing only what the AI role knows makes the verdict stale', 'true/false', (public.game_review_status(id) ->> 'passed')||'/'||(public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm role';
+update public.contributions set items = jsonb_set(items, '{5,2}', '"a short one"') where title = 'T gm role';
+insert into results (check_name, expected, actual) select 'GM and current again when it is put back', 'true', (public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm role';
+update public.contributions set takeaway = 'Another takeaway.' where title = 'T gm role';
+insert into results (check_name, expected, actual) select 'GM changing only the takeaway makes the verdict stale', 'true/false', (public.game_review_status(id) ->> 'passed')||'/'||(public.game_review_status(id) ->> 'current') from public.contributions where title = 'T gm role';
+insert into results (check_name, expected, actual) select 'GM and the check gate asks for the review again', 'true', (array_to_string(public.check_contribution(id), '|') like '%Run the house-rules check again%')::text from public.contributions where title = 'T gm role';
+reset role;
+update public.contributions set takeaway = 'x' where title = 'T gm role';
 insert into results (check_name, expected, actual) select 'GM a Game stays a counsellor-accepted reflection: evidence rule unchanged, never self-completed', 'reflection/false',
   private.evidence_rule('Game')||'/'||private.is_self_complete((select learning_id from public.contributions where title = 'T gm ok'));
 -- ---------- Game runs and leaderboards (GR) ----------
@@ -2958,5 +2979,51 @@ insert into results (check_name, expected, actual) select 'GR first_and_initial 
     (E'a@b.test', 'Player'), (E'Jan <jan@x.test>', 'Player'), (E'Cher', 'Cher'), (E'Jan\u2003van\u3000Peeters', 'Jan P.'), (E'\ufeffJan Peeters\ufeff', 'Jan P.'),
     (E' ann  de vries ', 'ann V.')) as v(s, e);
 insert into results (check_name, expected, actual) select 'GR first_and_initial of null is Player', 'Player', private.first_and_initial(null);
+-- ---------- The AI role: asks need a real, unfinished run of the caller's (GA) ----------
+-- game_role (use): text, off, 60 a day. game_role_context (service role only, read by the `ai` function): the role of the game a run is on,
+-- or why there is none. What the role knows is only there; ask counting is ai_count_call (before the call), 60 a person a day by default.
+reset role;
+set local request.jwt.claims = '';
+select set_config('test.ga_learning', (select learning_id from public.contributions where title = 'T gm ok'), true);
+select set_config('test.ga_test_run', (select id::text from public.game_runs where user_id = '00000000-0000-0000-0000-0000000000aa' and test limit 1), true),
+  set_config('test.ga_rev_run', (select id::text from public.game_runs where user_id = '00000000-0000-0000-0000-000000000a07' and test limit 1), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a01","role":"authenticated"}';
+with i as (insert into public.game_runs (learning_id, test) values (current_setting('test.ga_learning'), false) returning id) select set_config('test.ga_run', (select id::text from i), true);
+with i as (insert into public.game_runs (learning_id, test) values ('LGR1', false) returning id) select set_config('test.ga_run_norole', (select id::text from i), true);
+select pg_temp.gr_blocked('GA a learner cannot execute game_role_context', format($q$select public.game_role_context('00000000-0000-0000-0000-000000000a01', %L)$q$, current_setting('test.ga_run')), 'blocked: 42501');
+insert into results (check_name, expected, actual) select 'GA a learner cannot read a role''s knowledge: the contribution is 0 rows, the learning holds none', '0/0', (select count(*) from public.contributions where title = 'T gm ok')||'/'||(select count(*) from public.learnings where id = current_setting('test.ga_learning') and content::text like '%brother%');
+set local role anon;
+select pg_temp.gr_blocked('GA anon cannot execute game_role_context', format($q$select public.game_role_context('00000000-0000-0000-0000-000000000a01', %L)$q$, current_setting('test.ga_run')), 'blocked: 42501');
+reset role;
+set local role service_role;
+create function pg_temp.ga(p_user text, p_run text) returns text language sql as $f$
+  select coalesce(j ->> 'refusal', (j ->> 'kind')||'/'||(j ->> 'about')||'/'||(j ->> 'knows')||'/'||(j ->> 'concept')) from (select public.game_role_context(p_user::uuid, p_run::uuid) as j) x $f$;
+insert into results (check_name, expected, actual) select 'GA an unfinished real run of the caller on a published game with a role gives the role, what it knows and the concept', 'Suspect to question/The supplier’s manager, defensive and in a hurry./the supplier is the CFO’s brother/You audit a supplier suspected of a fake-invoice scheme. Every invoice hides one flaw.',
+  pg_temp.ga('00000000-0000-0000-0000-000000000a01', current_setting('test.ga_run'));
+insert into results (check_name, expected, actual) select 'GA an ask on another person''s run is refused', 'not_yours', pg_temp.ga('00000000-0000-0000-0000-000000000a02', current_setting('test.ga_run'));
+insert into results (check_name, expected, actual) select 'GA an ask without a run (no such run) is refused', 'not_yours', pg_temp.ga('00000000-0000-0000-0000-000000000a01', gen_random_uuid()::text);
+insert into results (check_name, expected, actual) select 'GA a real run on a game without an AI role is refused', 'no_role', pg_temp.ga('00000000-0000-0000-0000-000000000a01', current_setting('test.ga_run_norole'));
+insert into results (check_name, expected, actual) select 'GA the author''s play-test run reads the role of the contribution', 'Suspect to question', split_part(pg_temp.ga('00000000-0000-0000-0000-0000000000aa', current_setting('test.ga_test_run')), '/', 1);
+insert into results (check_name, expected, actual) select 'GA an assigned reviewer''s play-test run reads it too', 'Suspect to question', split_part(pg_temp.ga('00000000-0000-0000-0000-000000000a07', current_setting('test.ga_rev_run')), '/', 1);
+reset role;
+delete from public.contribution_reviews where reviewer_id = '00000000-0000-0000-0000-000000000a07' and contribution_id = (select id from public.contributions where title = 'T gm ok');
+set local role service_role;
+insert into results (check_name, expected, actual) select 'GA a play-test run of someone who is no longer author or reviewer is refused', 'not_allowed', pg_temp.ga('00000000-0000-0000-0000-000000000a07', current_setting('test.ga_rev_run'));
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a01","role":"authenticated"}';
+select public.finish_game_run(current_setting('test.ga_run')::uuid, 5);
+reset role;
+set local role service_role;
+insert into results (check_name, expected, actual) select 'GA an ask on a finished run is refused', 'finished', pg_temp.ga('00000000-0000-0000-0000-000000000a01', current_setting('test.ga_run'));
+-- metering: counted before the call, 60 a person a day by default, refused beyond the limit
+reset role;
+update public.ai_uses set daily_limit = 2 where key = 'game_role';
+set local role service_role;
+select public.ai_count_call('00000000-0000-0000-0000-000000000a01', 'game_role', 100), public.ai_count_call('00000000-0000-0000-0000-000000000a01', 'game_role', 100);
+select pg_temp.gr_blocked('GA the call beyond the daily limit is refused', $q$select public.ai_count_call('00000000-0000-0000-0000-000000000a01', 'game_role', 100)$q$, 'blocked: 23514');
+insert into results (check_name, expected, actual) select 'GA another person''s count is their own', '1', public.ai_count_call('00000000-0000-0000-0000-000000000a02', 'game_role', 100)::text;
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

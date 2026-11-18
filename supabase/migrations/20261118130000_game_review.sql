@@ -33,26 +33,28 @@ as $$
   end;
 $$;
 
--- 2. What the review reads, and its hash: the title and the game's content (concept, win, rounds with answers, who the AI plays, the
+-- 2. What the review reads, and its hash: the title, the takeaway, what the AI role knows (text 2 of its row: server-side only, the model reads it
+-- to check the game against it; no client and no frame ever does) and the game's content (concept, win, rounds with answers, who the AI plays, the
 -- leaderboard answer and the two files), exactly what game_review_input hands the model. The one implementation: the load, the
 -- record, the status and the check gate all use it, so a change to any reviewed text makes the verdict stale. Null without a built game.
-create function private.game_review_basis(p_title text, p_items jsonb, p_shape jsonb)
+create function private.game_review_basis(p_title text, p_items jsonb, p_shape jsonb, p_takeaway text)
 returns jsonb
 language sql
 immutable
 set search_path = ''
 as $$
-  select jsonb_build_object('title', p_title, 'content', private.game_content(p_items, p_shape))
+  select jsonb_build_object('title', p_title, 'takeaway', p_takeaway, 'knows', private.trimmed(coalesce(private.game_role_row(p_items) ->> 2, '')),
+    'content', private.game_content(p_items, p_shape))
   where jsonb_typeof(p_items) = 'array' and private.game_content(p_items, p_shape) is not null;
 $$;
 
-create function private.game_review_hash(p_title text, p_items jsonb, p_shape jsonb)
+create function private.game_review_hash(p_title text, p_items jsonb, p_shape jsonb, p_takeaway text)
 returns text
 language sql
 immutable
 set search_path = ''
 as $$
-  select encode(sha256(convert_to(private.game_review_basis(p_title, p_items, p_shape)::text, 'UTF8')), 'hex');
+  select encode(sha256(convert_to(private.game_review_basis(p_title, p_items, p_shape, p_takeaway)::text, 'UTF8')), 'hex');
 $$;
 
 -- 3. The verdicts: one per contribution, the latest.
@@ -67,8 +69,8 @@ create table public.game_reviews (
 alter table public.game_reviews enable row level security;
 revoke all on public.game_reviews from anon, authenticated;
 
--- What the `ai` function reviews for the author: the title, the game's content (concept, win, rounds, who the AI plays, the two
--- files; never what the AI role knows) and the hash of those files. Null unless the caller is the author of a Game that is still theirs to edit and built.
+-- What the `ai` function reviews for the author: the basis above (title, takeaway, what the AI role knows, the game's content) and its hash.
+-- Service role only, so what the role knows reaches the model and nothing else. Null unless the caller is the author of a Game that is still theirs to edit and built.
 create function public.game_review_input(p_user uuid, p_contribution uuid)
 returns jsonb
 language sql
@@ -76,10 +78,10 @@ stable
 security definer
 set search_path = ''
 as $$
-  select private.game_review_basis(c.title, c.items, c.shape) || jsonb_build_object('review_hash', private.game_review_hash(c.title, c.items, c.shape))
+  select private.game_review_basis(c.title, c.items, c.shape, c.takeaway) || jsonb_build_object('review_hash', private.game_review_hash(c.title, c.items, c.shape, c.takeaway))
   from public.contributions c
   where c.id = p_contribution and c.type = 'Game' and c.author_id = p_user and c.status in ('draft', 'changes')
-    and jsonb_typeof(c.items) = 'array' and private.items_ok('Game', c.items) and private.game_review_hash(c.title, c.items, c.shape) is not null;
+    and jsonb_typeof(c.items) = 'array' and private.items_ok('Game', c.items) and private.game_review_hash(c.title, c.items, c.shape, c.takeaway) is not null;
 $$;
 
 -- Records the verdict for the hash the function was given; refuses when the files changed meanwhile.
@@ -93,8 +95,8 @@ declare
   c public.contributions;
 begin
   select * into c from public.contributions where id = p_contribution and type = 'Game' for update;
-  if not found or jsonb_typeof(c.items) <> 'array' or private.game_review_hash(c.title, c.items, c.shape) is null then raise exception 'That game is not built'; end if;
-  if p_review_hash is distinct from private.game_review_hash(c.title, c.items, c.shape) then raise exception 'The game changed during the review · run it again'; end if;
+  if not found or jsonb_typeof(c.items) <> 'array' or private.game_review_hash(c.title, c.items, c.shape, c.takeaway) is null then raise exception 'That game is not built'; end if;
+  if p_review_hash is distinct from private.game_review_hash(c.title, c.items, c.shape, c.takeaway) then raise exception 'The game changed during the review · run it again'; end if;
   if p_passed is null or cardinality(coalesce(p_reasons, '{}')) > 10
     or exists (select 1 from unnest(coalesce(p_reasons, '{}')) r where r is null or char_length(r) > 300) then raise exception 'The verdict is not valid'; end if;
   insert into public.game_reviews (contribution_id, review_hash, passed, reasons, reviewed_at)
@@ -111,7 +113,7 @@ stable
 security definer
 set search_path = ''
 as $$
-  select jsonb_build_object('passed', r.passed, 'reasons', to_jsonb(r.reasons), 'current', r.review_hash is not distinct from private.game_review_hash(c.title, c.items, c.shape))
+  select jsonb_build_object('passed', r.passed, 'reasons', to_jsonb(r.reasons), 'current', r.review_hash is not distinct from private.game_review_hash(c.title, c.items, c.shape, c.takeaway))
   from public.game_reviews r join public.contributions c on c.id = r.contribution_id
   where r.contribution_id = p_contribution and (private.is_contribution_author(p_contribution) or private.is_contribution_reviewer(p_contribution));
 $$;
@@ -204,7 +206,7 @@ begin
       select * into v_review from public.game_reviews where contribution_id = c.id;
       if not found then
         p := array_append(p, 'The house-rules check has not passed');
-      elsif v_review.review_hash is distinct from private.game_review_hash(c.title, c.items, c.shape) then
+      elsif v_review.review_hash is distinct from private.game_review_hash(c.title, c.items, c.shape, c.takeaway) then
         p := array_append(p, 'Run the house-rules check again');
       elsif not v_review.passed then
         p := array_append(p, 'The house-rules check has not passed' || coalesce(': ' || nullif(v_review.reasons[1], ''), ''));
@@ -241,7 +243,7 @@ begin
 end;
 $$;
 
-revoke execute on function private.game_review_basis(text, jsonb, jsonb), private.game_review_hash(text, jsonb, jsonb) from public, anon, authenticated;
+revoke execute on function private.game_review_basis(text, jsonb, jsonb, text), private.game_review_hash(text, jsonb, jsonb, text) from public, anon, authenticated;
 revoke execute on function public.game_review_input(uuid, uuid), public.record_game_review(uuid, text, boolean, text[]) from public, anon, authenticated;
 grant execute on function public.game_review_input(uuid, uuid), public.record_game_review(uuid, text, boolean, text[]) to service_role;
 revoke execute on function public.game_review_status(uuid) from public, anon;
