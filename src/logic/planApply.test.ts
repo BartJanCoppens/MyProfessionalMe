@@ -31,6 +31,11 @@ describe('applyPlan', () => {
     expect(steps.filter((x) => x.k !== 'make').every((x) => !('dom' in x))).toBe(true);
     expect(apply(noExam(), plan([m2])).steps.find((x) => x.k === 'make')).not.toHaveProperty('dom');
   });
+  it('stores a brief domain on a make step only when it is a domain code', () => {
+    const brief = (domain: string) => ({ ...plan([m2]), brief: { goal: '', credential: '', issuer: '', audience: '', stage: null, line: null, level: '', hoursBudget: null, deadline: null, bodyRules: '', constraints: '', domain } });
+    expect(apply(noExam(), brief('Indirect tax')).steps.find((x) => x.k === 'make')).not.toHaveProperty('dom');
+    expect(apply(noExam(), brief('lead')).steps.find((x) => x.k === 'make')).toMatchObject({ dom: 'lead' });
+  });
   it('appends, in plan order, a learn step, a make step with its sign-off, an evidence step and the final exam', () => {
     setCatalogue([[learn('L1', 'VAT in practice'), { line: null, status: 'published' }]]);
     const r = apply(noExam(), full);

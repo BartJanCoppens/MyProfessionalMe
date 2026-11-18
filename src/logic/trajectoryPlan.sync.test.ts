@@ -2,7 +2,8 @@
 // 20261118230000_trajectory_plans.sql. This reads the migration and pins the numbers both sides share.
 import { describe, expect, it } from 'vitest';
 import { migrationText } from '../test/migrations';
-import { emptyPlan, PLAN_CAPS } from './trajectoryPlan';
+import { STAGES } from '../data';
+import { DOMAIN_CODES, emptyPlan, PLAN_CAPS } from './trajectoryPlan';
 
 const sql = migrationText('_trajectory_plans.sql').replace(/\s+/g, ' ');
 
@@ -31,5 +32,12 @@ describe('plan caps: TypeScript and the database agree', () => {
     expect(sql).toContain("null, true, false, 'Help a learning admin");
     expect(sql).toContain(', 40, 1500000)');
     expect(sql).toContain("allowed_mime_types || 'application/pdf'");
+  });
+  it('names the domain codes of the contributions check and the career stages of the enum, the two lists an AI brief is cut to', () => {
+    const codes = /domain text not null check \(domain in \(([^)]*)\)\)/.exec(migrationText('_content_tables.sql'))![1].replace(/'/g, '').split(', ');
+    expect(DOMAIN_CODES).toEqual(codes);
+    const enumStages = /create type public\.career_stage as enum \(([^)]*)\)/.exec(migrationText('_learner_data.sql'))![1].replace(/'/g, '').split(', ');
+    expect(STAGES).toEqual([...enumStages, 'Director', 'Partner']);
+    expect(migrationText('_director_partner_stages.sql')).toContain("add value if not exists 'Director' after 'Senior manager'");
   });
 });

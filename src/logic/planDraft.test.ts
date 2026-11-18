@@ -44,6 +44,7 @@ describe('briefDraft', () => {
     expect(briefDraft(args({ plan: brief })).stage).toBe('Manager');
     expect(briefDraft(args({ step: { ...step, dom: 'reg' } })).dom).toBe('reg');
     expect(briefDraft(args()).stage).toBe('Consultant');
+    expect(briefDraft(args({ plan: { ...brief, brief: { ...brief.brief, stage: 'Senior Consultant' } }, step: { ...step, dom: 'Indirect tax' } }))).toMatchObject({ stage: 'Consultant', dom: 'prof' });
     expect(briefDraft(args()).dom).toBe('prof');
     expect(briefDraft(args({ t: { ...T, business_line: null } })).line).toBe('Consulting');
   });

@@ -74,9 +74,15 @@ describe('readPlanReply', () => {
     expect(read(body({ finalExam: { title: 'Exam', hours: 'two', reason: 'x' } }))).toBeNull();
   });
   it('reads a brief, with its numbers and nulls', () => {
-    const brief = { goal: 'g', credential: 'c', issuer: 'i', audience: 'a', stage: null, line: 'Audit', level: 'applied', hoursBudget: 40, deadline: null, bodyRules: '', constraints: '', domain: 'tax' };
+    const brief = { goal: 'g', credential: 'c', issuer: 'i', audience: 'a', stage: 'Manager', line: 'Audit', level: 'applied', hoursBudget: 40, deadline: null, bodyRules: '', constraints: '', domain: 'reg' };
     expect(read(body({ brief }))!.brief).toEqual(brief);
     expect(read(body({ brief: { ...brief, hoursBudget: '40' } }))).toBeNull();
+  });
+  it('keeps a brief domain or stage only when it is a code the database accepts; any other becomes none, and the reply stays usable', () => {
+    const brief = { goal: 'g', credential: 'c', issuer: 'i', audience: 'a', stage: 'Senior Consultant', line: null, level: '', hoursBudget: null, deadline: null, bodyRules: '', constraints: '', domain: 'Indirect tax' };
+    expect(read(body({ brief }))!.brief).toMatchObject({ stage: null, domain: '' });
+    expect(read(body({ brief: { ...brief, stage: 'Senior consultant', domain: 'lead' } }))!.brief).toMatchObject({ stage: 'Senior consultant', domain: 'lead' });
+    expect(read(body({ brief: { ...brief, stage: 7, domain: 3 } }))).toBeNull();
   });
   it('stays within the plan caps', () => { expect(PLAN_CAPS.modules).toBe(12); });
 });

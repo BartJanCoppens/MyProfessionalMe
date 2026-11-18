@@ -7,7 +7,7 @@ import { noItems, marked } from './items';
 import type { RuleParts } from './contribution';
 import { citedPassage, liveIndex } from './planPool';
 import type { PlanModule, PlanSource, TrajectoryPlan } from './trajectoryPlan';
-import { DEPTH_LEVEL } from './trajectoryPlan';
+import { DEPTH_LEVEL, domainCode, stageName } from './trajectoryPlan';
 import type { Trajectory, TrjStep } from './trajectory';
 import { studioFormats } from './studios';
 
@@ -23,8 +23,8 @@ export function briefDraft({ t, step, module, plan, line, bundles, sources, key 
   const format = step.fmt ?? '', live = liveIndex(bundles, sources);
   const found = module.sources.flatMap((c) => { const p = citedPassage(c, live); return p ? [p] : []; });
   const brief: DraftBrief = { trajectoryId: t.id, stepId: step.id, goals: module.goals.slice(), depth: module.depth, passages: found.map((p) => p.text).slice(0, BRIEF_PASSAGES), sources: module.sources.map((c) => c.label) };
-  return { line: t.business_line ?? line, aud: '', type: format, title: module.title.slice(0, 120), dom: step.dom ?? PLACEHOLDER_DOMAIN, lvl: String(DEPTH_LEVEL[module.depth]),
-    stage: plan.brief?.stage || 'Consultant', take: (module.goals[0] ?? '').slice(0, 400), outline: module.goals.slice(), sources: brief.sources, ai: false, aiNote: '', items: noItems(),
+  return { line: t.business_line ?? line, aud: '', type: format, title: module.title.slice(0, 120), dom: domainCode(step.dom) || PLACEHOLDER_DOMAIN, lvl: String(DEPTH_LEVEL[module.depth]),
+    stage: stageName(plan.brief?.stage) ?? 'Consultant', take: (module.goals[0] ?? '').slice(0, 400), outline: module.goals.slice(), sources: brief.sources, ai: false, aiNote: '', items: noItems(),
     shape: {}, produce: {}, cast: {}, key, brief };
 }
 

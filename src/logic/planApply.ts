@@ -4,6 +4,7 @@
 // there are skipped too (they catch a module the AI proposed again after Start over). Apply only adds: new steps go before an exam the trajectory
 // already has, and that exam then waits for them; nothing is removed and no other step changes.
 import { LEARN_BY } from '../data';
+import { domainCode } from './trajectoryPlan';
 import type { PlanMaterial, PlanModule, TrajectoryPlan } from './trajectoryPlan';
 import type { Trajectory, TrjStep } from './trajectory';
 import { nextStepId } from './trajectoryEdit';
@@ -75,7 +76,7 @@ function applyModule(r: Run, m: PlanModule, win: number, from: string): void {
 export function applyPlan(t: Trajectory, p: TrajectoryPlan, ids: string[], used: Used, stamp?: string): Applied {
   const queue = ids.slice(), titles = new Set([...used.titles].map(norm)), fresh: TrjStep[] = [], skipped: Skipped[] = [];
   const run: Run = {
-    dom: p.brief?.domain || undefined,
+    dom: domainCode(p.brief?.domain) || undefined,
     learnings: new Set(used.learnings),
     skip: (module, why) => { if (!skipped.some((s) => s.module === module && s.why === why)) skipped.push({ module, why }); },
     taken: (title) => !!title && titles.has(norm(title)),

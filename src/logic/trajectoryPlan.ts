@@ -2,6 +2,7 @@
 // goals, hours, material and cited sources, then a final exam. Pure: types, caps, the problems a plan can have and the edits
 // of curating it. The database keeps the shallow caps (private.trajectory_plan_ok, trajectory_plans checks); the deep rules are
 // planProblems here. trajectoryPlan.sync.test.ts pins the numbers both sides share.
+import { DOMAINS, STAGES } from '../data';
 import { STUDIOS } from '../studioData';
 import { studioFormats } from './studios';
 
@@ -16,6 +17,12 @@ export const CHECK_POINTS = ['evidence', 'signoff'] as const;
 export type CheckPoint = (typeof CHECK_POINTS)[number];
 // Derived from the studios, never listed by hand.
 export const PLAN_FORMATS: string[] = STUDIOS.flatMap(studioFormats);
+
+// The codes the database accepts for a draft's domain (contributions.domain check) and stage (the career_stage enum): the AI's free text is kept only
+// when it is one of them (DOMAINS and STAGES are the one source; trajectoryPlan.sync.test.ts compares the check list).
+export const DOMAIN_CODES: string[] = DOMAINS.map((d) => d[0]);
+export const domainCode = (v: unknown): string => (typeof v === 'string' && DOMAIN_CODES.includes(v) ? v : '');
+export const stageName = (v: unknown): string | null => (typeof v === 'string' && STAGES.includes(v) ? v : null);
 
 export const PLAN_CAPS = {
   modules: 12, goals: 5, goalChars: 200, titleChars: 120, reasonChars: 240, material: 3, sources: 6, quoteChars: 160, hoursMin: 0.25, hoursMax: 80,

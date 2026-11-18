@@ -6,7 +6,7 @@ import { LEARN_BY } from '../data';
 import { jsonObject } from './json';
 import type { Numbering } from './planPrompt';
 import { isCount, isObject, isText, isTexts } from './values';
-import { CHECK_POINTS, DEPTHS, emptyPlan, MANUAL_FORMATS, PLAN_CAPS, planProblems, refKey } from './trajectoryPlan';
+import { CHECK_POINTS, DEPTHS, domainCode, emptyPlan, MANUAL_FORMATS, PLAN_CAPS, planProblems, refKey, stageName } from './trajectoryPlan';
 import type { CheckPoint, CitedSource, Depth, Dropped, FinalExam, ModuleSuggestion, PlanBrief, PlanMaterial, PlanModule, TrajectoryPlan } from './trajectoryPlan';
 
 export type PlanReply = { reply: string; questions: string[]; brief: PlanBrief | null; modules: PlanModule[] | null; finalExam?: FinalExam | null; dropped: Dropped };
@@ -69,10 +69,11 @@ function briefOf(v: unknown): PlanBrief | null {
   if (v === null || v === undefined) return null;
   const o = rec(v), chars = PLAN_CAPS.briefChars;
   const text = (k: string) => { const t = o[k] ?? ''; return need(isText(t) && t.length <= chars, t as string); };
-  const budget = o.hoursBudget ?? null;
+  const budget = o.hoursBudget ?? null, texts = Object.fromEntries(BRIEF_TEXTS.map((k) => [k, text(k)])) as Pick<PlanBrief, (typeof BRIEF_TEXTS)[number]>;
+  const stage = textOrNull(o.stage, chars); // not text: the reply is unusable; text that is no stage name: dropped (stageName)
   return {
-    ...(Object.fromEntries(BRIEF_TEXTS.map((k) => [k, text(k)])) as Pick<PlanBrief, (typeof BRIEF_TEXTS)[number]>),
-    stage: textOrNull(o.stage, chars), line: textOrNull(o.line, chars), deadline: textOrNull(o.deadline, chars), hoursBudget: budget === null ? null : need(isCount(budget), budget as number),
+    ...texts, domain: domainCode(texts.domain),
+    stage: stageName(stage), line: textOrNull(o.line, chars), deadline: textOrNull(o.deadline, chars), hoursBudget: budget === null ? null : need(isCount(budget), budget as number),
   };
 }
 function finalExamOf(v: unknown): FinalExam {

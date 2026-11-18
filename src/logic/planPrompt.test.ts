@@ -2,6 +2,7 @@
 // and a hard bound on the whole request (client side; the ai function refuses over-size too).
 import { describe, expect, it } from 'vitest';
 import { PLAN_ASK } from '../../supabase/functions/_shared/planAsk.ts';
+import { DOMAINS, STAGES } from '../data';
 import { marked } from './items';
 import { planRequest, PLAN_PROMPT_VERSION, requestChars } from './planPrompt';
 import type { CatalogueRow, PoolPassage } from './planPool';
@@ -22,8 +23,10 @@ const everyMarked = (text: string) => text.split('\n').every((l) => (l.match(/<<
 
 describe('planRequest', () => {
   it('has a version, the stages, the rules, the formats and the reply shape', () => {
-    expect(PLAN_PROMPT_VERSION).toBe('1.0.0');
+    expect(PLAN_PROMPT_VERSION).toBe('1.1.0');
     const { system } = ask().request;
+    for (const code of DOMAINS.map((d) => d[0])) expect(system).toContain(code);
+    for (const stage of STAGES) expect(system).toContain(stage);
     expect(system).toContain('Never invent a source');
     expect(system).toContain('No web');
     expect(system).toContain('Brief');
