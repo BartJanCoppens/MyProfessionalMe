@@ -2,7 +2,6 @@
 // The learner adds evidence and submits through Logic.persist() (refused in View as). A counsellor, managing admin or
 // General or System Admin decides through decide_learning(): from the learning's detail in View as, or from the
 // approvals queue, which belongs to the signed-in person whoever is being viewed.
-import type { ChangeEvent } from 'react';
 import { LEARN_BY, LEARN_META } from './data';
 import type { Item, Logic } from './model';
 import {
@@ -13,13 +12,11 @@ import type { Evidence } from './logic/record';
 import { fmtDate } from './logic/contribution';
 import { saveProgress } from './lib/learnerStore';
 import { decideLearning, loadQueue } from './lib/recordStore';
+import { BUSY, commentBox, first, initialsOf } from './queueHelpers';
+import type { Field } from './queueHelpers';
+import { reloadShared, sharedRunRows } from './sharedRunVals';
 
-type Field = ChangeEvent<HTMLInputElement | HTMLTextAreaElement>;
-// Decisions in flight, per person and learning; a second click while one runs does nothing.
-const BUSY = new Set<string>();
 export const recKey = (userId: string, learningId: string) => userId + '|' + learningId;
-const first = (name: string) => name.split(/[\s.@]+/)[0] || name;
-const initialsOf = (name: string) => name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 const without = <T,>(o: Record<string, T>, k: string) => { const n = { ...o }; delete n[k]; return n; };
 const trimmed = (e: Evidence): Evidence => ({ note: e.note.trim(), link: e.link.trim(), ref: e.ref.trim() });
 
@@ -36,7 +33,10 @@ const changedEvidence = (L: Logic, id: string) => {
 };
 
 export function reloadQueue(L: Logic) {
-  return loadQueue().then((queue) => L.setState({ queue, queueError: null }), (err) => L.setState({ queueError: (err as Error).message }));
+  return Promise.all([
+    loadQueue().then((queue) => L.setState({ queue, queueError: null }), (err) => L.setState({ queueError: (err as Error).message })),
+    reloadShared(L),
+  ]).then(() => undefined);
 }
 
 // Log one hour. The last hour submits the learning when the format's evidence rule is met; otherwise it stops at 100%
@@ -95,11 +95,6 @@ export async function decide(L: Logic, t: Target, verdict: 'accepted' | 'changes
   finally { BUSY.delete(key); }
 }
 
-const commentBox = (L: Logic, key: string) => ({
-  comment: L.state.decideNote[key] || '',
-  setComment: (e: Field) => { const v = e.target.value; L.setState((s) => ({ decideNote: { ...s.decideNote, [key]: v } })); },
-  commentCount: (L.state.decideNote[key] || '').trim().length + ' / ' + COMMENT_MAX,
-});
 const evidenceView = (e: Evidence, format: string) => ({
   note: e.note, link: e.link, ref: e.ref,
   none: hasEvidence(e) ? '' : evidenceRule(format) === 'none' ? 'No evidence needed for ' + ((f) => (/^[aeiou]/.test(f) ? 'an ' : 'a ') + f)((format || 'learning').toLowerCase()) : 'No evidence attached',
@@ -157,7 +152,7 @@ function approvals(L: Logic) {
   return {
     lead: 'Submissions you decide on: your counsellees’ and, if you are an admin, those of people without a counsellor. Accept, or request changes with a comment the learner sees. Amber: waiting more than five working days.',
     loading: s.queue === null && !s.queueError, error: s.queueError, retry: () => { L.setState({ queue: null, queueError: null }); reloadQueue(L); },
-    empty: !!s.queue && s.queue.length === 0, rows,
+    empty: !!s.queue && s.queue.length === 0 && !(s.sharedRuns || []).length, rows, shared: sharedRunRows(L), sharedError: s.sharedError,
   };
 }
 
@@ -166,7 +161,7 @@ export function recordVals(L: Logic, it: Item) {
   return {
     rec: detailRecord(L, it),
     appr: s.screen === 'approvals' ? approvals(L) : null,
-    approvalsBadge: (s.queue || []).length,
+    approvalsBadge: (s.queue || []).length + (s.sharedRuns || []).filter((r) => !r.confirmed).length,
     navApprovals: s.screen === 'approvals' || (s.screen === 'detail' && s.origin === 'approvals'),
     goApprovals: () => { L.go('approvals'); reloadQueue(L); },
   };

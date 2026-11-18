@@ -2,6 +2,7 @@
 // activity. Accept, or request changes with a comment, right here; "Open" shows the learning in the person's app.
 import { Avatar, Button, Input, LinkButton, PageTitle, Tag } from '../ds';
 import type { VM } from '../model';
+import SharedRuns from './SharedRuns';
 
 type Appr = NonNullable<VM['appr']>;
 const box = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6 } as const;
@@ -13,7 +14,8 @@ export default function ApprovalsScreen({ appr, onOpen }: { appr: Appr; onOpen: 
       <PageTitle title="Waiting for you" lead={appr.lead} />
       {appr.error && <div style={note}><div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>The approvals did not load</div>{appr.error} · <LinkButton onClick={appr.retry}>Try again</LinkButton></div>}
       {appr.loading && <div style={note}>Loading what waits for you</div>}
-      {appr.empty && <div style={note}><div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>Nothing waits for you</div>Submissions of your counsellees appear here, and for admins those of people without a counsellor.</div>}
+      {appr.empty && <div style={note}><div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>Nothing waits for you</div>Submissions of your counsellees appear here, and for admins those of people without a counsellor, and practice runs your counsellees share with you.</div>}
+      {appr.sharedError && <div style={note}><div style={{ fontWeight: 600, color: '#1a1d18', marginBottom: 2 }}>The shared practice runs did not load</div>{appr.sharedError}</div>}
       {appr.rows.map((r) => (
         <div key={r.key} style={{ ...box, padding: '16px 18px', display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ flex: '1 1 380px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -47,6 +49,7 @@ export default function ApprovalsScreen({ appr, onOpen }: { appr: Appr; onOpen: 
           </div>
         </div>
       ))}
+      <SharedRuns rows={appr.shared} />
     </>
   );
 }

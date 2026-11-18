@@ -30,6 +30,7 @@ import { LEARN_BY } from './data';
 import { useTeam } from './lib/useTeam';
 import { loadCreate } from './lib/contributionStore';
 import { loadQueue } from './lib/recordStore';
+import { sharedAvatarRuns } from './lib/avatarStore';
 import { loadTrajectories, loadTrajectoriesInUse } from './lib/trajectoryStore';
 import { loadMine } from './trajectoryCtx';
 import { certResetPatch } from './trajectoryMap';
@@ -105,10 +106,11 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
     loadCreate(me).then((d) => { if (live) setRaw((s) => ({ ...s, create: d, createError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, createError: (err as Error).message })); });
     return () => { live = false; };
   }, [me]);
-  // What waits for the signed-in person to decide (approvals badge); reloads after each decision and on opening the screen.
+  // What waits for the signed-in person to decide (approvals badge): submissions and the practice runs shared with them; reloads after each decision and on opening the screen.
   useEffect(() => {
     let live = true;
     loadQueue().then((q) => { if (live) setRaw((s) => ({ ...s, queue: q, queueError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, queueError: (err as Error).message })); });
+    sharedAvatarRuns().then((r) => { if (live) setRaw((s) => ({ ...s, sharedRuns: r, sharedError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, sharedError: (err as Error).message })); });
     return () => { live = false; };
   }, [me]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);

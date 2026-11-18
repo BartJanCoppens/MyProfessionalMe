@@ -1,7 +1,7 @@
 // Avatar practice runs against the in-memory Supabase fake (studios plan, Task 6.2): start, say, end, read. A run on a contribution is a test.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, has, op } from '../test/fakeSupabase';
-import { endAvatarRun, myAvatarRuns, sayToCharacter, startAvatarRun } from './avatarStore';
+import { confirmAvatarRun, endAvatarRun, myAvatarRuns, sayToCharacter, scoreAvatarRun, sharedAvatarRuns, shareAvatarRun, startAvatarRun } from './avatarStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 
@@ -64,3 +64,47 @@ describe('avatar runs', () => {
     expect(has(c, 'eq', 'learning_id', 'L70') && has(c, 'eq', 'user_id', 'me') && has(c, 'order', 'started_at', { ascending: false })).toBe(true);
   });
 });
+
+describe('scoring, sharing and confirming', () => {
+  const score = { overall: 50, band: 'Mediocre', points: [{ id: 'lp-1', text: 'Asks first', weight: 100, score: 50, band: 'Mediocre', comment: 'c', turns: [1] }], strengths: [], missed: [], summary: 's', version: '1.0.0', flags: [] };
+  it('scores a run through the ai function with the run only: the server reads the conversation', async () => {
+    db.client.functions.invoke.mockImplementation(async () => ({ data: score, error: null }));
+    expect(await scoreAvatarRun('run-1')).toEqual(score);
+    expect(db.client.functions.invoke).toHaveBeenCalledWith('ai', { body: { action: 'score_avatar', run_id: 'run-1' } });
+  });
+  it('throws the function\'s own words, and never a scripted score', async () => {
+    db.client.functions.invoke.mockImplementation(async () => ({ data: null, error: { message: 'AI did not return a usable score · try again' } }));
+    await expect(scoreAvatarRun('run-1')).rejects.toThrow('AI did not return a usable score · try again');
+    db.client.functions.invoke.mockImplementation(async () => ({ data: { overall: 'high' }, error: null }));
+    await expect(scoreAvatarRun('run-1')).rejects.toThrow('AI did not return a usable score · try again');
+  });
+  it('shares and confirms through their functions, with the database\'s refusals', async () => {
+    await shareAvatarRun('run-1');
+    expect(db.calls[0]).toEqual({ table: 'rpc:share_avatar_run', steps: [['args', [{ p_run: 'run-1' }]]] });
+    await confirmAvatarRun('run-1', 'A fair reading');
+    expect(db.calls[1]).toEqual({ table: 'rpc:confirm_avatar_run', steps: [['args', [{ p_run: 'run-1', p_note: 'A fair reading' }]]] });
+    db.answer(() => ({ error: { message: 'Score the run before sharing it' } }));
+    await expect(shareAvatarRun('run-2')).rejects.toThrow('Score the run before sharing it');
+    await expect(confirmAvatarRun('run-2', 'x')).rejects.toThrow('Score the run before sharing it');
+  });
+  it('reads the runs shared with me, not mine: shared, not a practice, newest first, with names and titles', async () => {
+    db.client.auth.getSession.mockImplementation(async () => ({ data: { session: { user: { id: 'me' } } } }));
+    db.answer((c) => c.table === 'avatar_runs' ? { data: [
+      { id: 'r1', user_id: 'u1', learning_id: 'L70', score, turns: [{ who: 'learner', text: 'Hi', guard: null }], shared_at: '2026-11-18T10:00:00Z', confirmed_by: 'me', confirmed_at: '2026-11-18T11:00:00Z', counsellor_note: 'Good' },
+      { id: 'r2', user_id: 'u2', learning_id: 'L70', score, turns: [], shared_at: '2026-11-17T10:00:00Z', confirmed_by: null, confirmed_at: null, counsellor_note: null }] }
+      : c.table === 'profiles' ? { data: [{ id: 'u1', full_name: 'Kim Learner' }, { id: 'u2', full_name: null }, { id: 'me', full_name: 'Sam Counsellor' }] }
+      : { data: [{ id: 'L70', title: 'Selling an HR system' }] });
+    const runs = await sharedAvatarRuns();
+    expect(runs).toEqual([
+      { runId: 'r1', userId: 'u1', name: 'Kim Learner', learningId: 'L70', title: 'Selling an HR system', score, turns: [{ who: 'learner', text: 'Hi', guard: null }], sharedAt: '2026-11-18T10:00:00Z', confirmed: { by: 'Sam Counsellor', at: '2026-11-18T11:00:00Z', note: 'Good' } },
+      { runId: 'r2', userId: 'u2', name: 'A learner', learningId: 'L70', title: 'Selling an HR system', score, turns: [], sharedAt: '2026-11-17T10:00:00Z', confirmed: null }]);
+    const c = db.calls[0];
+    expect(c.table).toBe('avatar_runs');
+    expect(has(c, 'eq', 'test', false) && has(c, 'neq', 'user_id', 'me') && has(c, 'not', 'shared_at', 'is', null) && has(c, 'order', 'shared_at', { ascending: false })).toBe(true);
+  });
+  it('reads nothing when nobody is signed in', async () => {
+    expect(await sharedAvatarRuns()).toEqual([]);
+    expect(db.calls).toHaveLength(0);
+  });
+});
+

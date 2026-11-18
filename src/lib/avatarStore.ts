@@ -2,9 +2,11 @@
 // contribution, is a test and never counts), each line goes to the character through the `ai` function (the server holds the conversation and
 // what the character keeps back), and the run ends once through finish_avatar_run.
 import type { GuardCode } from '../../supabase/functions/_shared/avatarGuard.ts';
+import type { AvatarScore } from '../../supabase/functions/_shared/avatarScore.ts';
 import { runRow } from './runTarget';
 import type { RunTarget } from './runTarget';
 import { completeOrThrow } from './ai';
+import { invokeFunction } from './aiStore';
 import type { CompleteOpts } from './ai';
 import { supabase } from './supabase';
 
@@ -41,6 +43,48 @@ export async function sayToCharacter(runId: string, say: string, opts: Pick<Comp
 export async function endAvatarRun(runId: string): Promise<void> {
   const { error } = await supabase.rpc('finish_avatar_run', { p_run: runId });
   fail(error);
+}
+
+const NO_SCORE = 'AI did not return a usable score · try again';
+// The AI's reading of what I said, in the run's own conversation (the function reads it, never the client) and recorded by the database, which ends the run.
+// It is advice: it never completes a learning. A failure is thrown with the function's words; no scripted score stands in.
+export async function scoreAvatarRun(runId: string): Promise<AvatarScore> {
+  const data = await invokeFunction<Partial<AvatarScore> | null>('ai', { action: 'score_avatar', run_id: runId });
+  if (!data || typeof data.overall !== 'number' || !Array.isArray(data.points)) throw new Error(NO_SCORE);
+  return data as AvatarScore;
+}
+
+// My choice to show a scored run (not a practice in the studio) to my counsellor.
+export async function shareAvatarRun(runId: string): Promise<void> {
+  fail((await supabase.rpc('share_avatar_run', { p_run: runId })).error);
+}
+
+// The counsellor's note on a run shared with them: never completion.
+export async function confirmAvatarRun(runId: string, note: string): Promise<void> {
+  fail((await supabase.rpc('confirm_avatar_run', { p_run: runId, p_note: note })).error);
+}
+
+export type SharedRun = { runId: string; userId: string; name: string; learningId: string; title: string; score: AvatarScore; turns: AvatarTurn[]; sharedAt: string; confirmed: { by: string; at: string; note: string } | null };
+type SharedRow = { id: string; user_id: string; learning_id: string; score: AvatarScore; turns: AvatarTurn[]; shared_at: string; confirmed_by: string | null; confirmed_at: string | null; counsellor_note: string | null };
+
+// The runs people shared with me (the read policy shows only those I may see the track of), newest first, with who and which learning.
+export async function sharedAvatarRuns(): Promise<SharedRun[]> {
+  const me = (await supabase.auth.getSession()).data.session?.user.id;
+  if (!me) return [];
+  const { data, error } = await supabase.from('avatar_runs').select('id, user_id, learning_id, score, turns, shared_at, confirmed_by, confirmed_at, counsellor_note')
+    .not('shared_at', 'is', null).eq('test', false).neq('user_id', me).order('shared_at', { ascending: false });
+  fail(error);
+  const rows = (data || []) as SharedRow[];
+  if (!rows.length) return [];
+  const people = [...new Set(rows.flatMap((r) => [r.user_id, r.confirmed_by].filter((x): x is string => !!x)))];
+  const [names, titles] = await Promise.all([supabase.from('profiles').select('id, full_name').in('id', people), supabase.from('learnings').select('id, title').in('id', [...new Set(rows.map((r) => r.learning_id))])]);
+  fail(names.error); fail(titles.error);
+  const nameOf = new Map(((names.data || []) as { id: string; full_name: string | null }[]).map((p) => [p.id, p.full_name]));
+  const titleOf = new Map(((titles.data || []) as { id: string; title: string }[]).map((l) => [l.id, l.title]));
+  return rows.map((r) => ({
+    runId: r.id, userId: r.user_id, name: nameOf.get(r.user_id) || 'A learner', learningId: r.learning_id, title: titleOf.get(r.learning_id) || r.learning_id, score: r.score, turns: r.turns, sharedAt: r.shared_at,
+    confirmed: r.confirmed_at ? { by: (r.confirmed_by && nameOf.get(r.confirmed_by)) || 'A counsellor', at: r.confirmed_at, note: r.counsellor_note || '' } : null,
+  }));
 }
 
 // Mine only: the read policy also shows a shared run of someone whose track I may see (a counsellee's), which is not mine.

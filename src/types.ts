@@ -5,6 +5,7 @@ import type { CreateData } from './logic/contribution';
 import type { Trajectory } from './logic/trajectory';
 import type { TrjMine } from './logic/trajectoryLearner';
 import type { QueueRow } from './lib/recordStore';
+import type { SharedRun } from './lib/avatarStore';
 import type { RosterRow } from './lib/attendanceStore';
 import type { AiAdmin, AiForm, AiUseEdit, StockVoice, StockVoiceForm } from './logic/ai';
 import type { StockLook, StockLookForm } from './logic/stockLooks';
@@ -173,6 +174,8 @@ export type AppState = {
   trjTalk: Record<string, string>;
   // Approvals (F3): what waits for the signed-in person (not the viewed one), from waiting_submissions().
   queue: QueueRow[] | null; queueError: string | null;
+  // Practice runs shared with the signed-in person (Task 6.4), the second kind of row of the queue.
+  sharedRuns: SharedRun[] | null; sharedError: string | null;
   // Completion per type (v0.7.2): the classroom feedback being written and the avatar quiz's picks, for one learning of
   // one person (key subject|learning), so View as never shows another person's draft.
   fbDraft: { key: string; rating: number | null; text: string } | null;
