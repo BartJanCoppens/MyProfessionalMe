@@ -26,7 +26,9 @@ export function applyToTrajectory(L: Logic, trajectoryId: string): void {
   if (now.readOnly() || now.state.trjAi.busy) return;
   const t = now.state.trjs.find((x) => x.id === trajectoryId), plan = now.state.trjPlans[trajectoryId]?.record?.plan;
   if (!t || !plan) return;
-  const ids = planStepIds(t, plan), run = (x: Trajectory) => applyPlan(x, plan, ids, usedOf(x)), result = run(t);
+  // On a live trajectory the steps carry the moment of Apply: people already enrolled see them as optional, people who enrol later as required.
+  const ids = planStepIds(t, plan), stamp = t.status === 'live' ? new Date().toISOString() : undefined;
+  const run = (x: Trajectory) => applyPlan(x, plan, ids, usedOf(x), stamp), result = run(t);
   panel(now, { applying: false });
   if (!result.added) return now.say(appliedToast(result));
   if (patch(now, trajectoryId, (x) => { const r = run(x); return r.added ? { ...x, steps: r.steps } : x; })) now.say(appliedToast(result));
@@ -41,6 +43,7 @@ export function applyVals(L: Logic, t: Trajectory, plan: TrajectoryPlan) {
     label: 'Apply ' + plural(accepted, 'accepted module', 'accepted modules'), off: !accepted ? 'Accept a module first' : busy ? 'Wait for the AI to answer' : null,
     open: L.state.trjPanel.applying, ask: () => panel(L, { applying: true }), cancel: () => panel(L, { applying: false }), run: () => applyToTrajectory(L, t.id),
     added, skipped: preview.skipped.map((s) => s.module + ' · ' + s.why),
-    note: 'Apply adds steps; it never removes or changes one.',
+    note: 'Apply adds steps; it never removes one. New steps go before the exam, which then waits for them.',
+    liveNote: t.status === 'live' ? 'This trajectory is live: people already enrolled see the new steps as optional; people who enrol later have them as set.' : null,
   };
 }

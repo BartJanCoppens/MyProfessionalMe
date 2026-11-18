@@ -105,7 +105,8 @@ describe('placeholder steps: TypeScript and the database agree', () => {
     expect(steps).toContain("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
   });
   it('linking keeps id, win, req, pre and from, drops cid, fmt, title and hours, and records linked_at', () => {
-    expect(steps).toContain("(s.v - 'cid' - 'fmt' - 'title' - 'hours') || jsonb_build_object('k', 'learn', 'lid', l.learning_id, 'linked_at', now())");
+    expect(steps).toContain("(s.v - 'cid' - 'fmt' - 'title' - 'hours') || jsonb_build_object('k', 'learn', 'lid', l.learning_id, 'linked_at', to_jsonb(coalesce(l.was, now())))");
+    expect(steps).toContain("o ->> 'id' = s.v ->> 'id' and o ->> 'k' = 'learn'"); // a stale save keeps the first linked_at
     expect(steps).toContain('before insert or update of steps on public.trajectories');
     expect(steps).toContain('after update of learning_id on public.contributions');
   });
@@ -115,3 +116,11 @@ describe('placeholder steps: TypeScript and the database agree', () => {
     expect(isRequired(linked, { status: 'enrolled', start_month: 0, steps: {}, created_at: '2026-06-11T00:00:00+00:00' })).toBe(true);
   });
 });
+
+describe('who counts a step as required', () => {
+  it('no SQL rule reads req: submitting and deciding never look at it, so isRequired is the one place (optional for earlier enrolments)', () => {
+    const fn = (name: string) => flat.slice(flat.indexOf('create function public.' + name));
+    for (const name of ['submit_trajectory_step', 'decide_trajectory']) expect(fn(name).slice(0, fn(name).indexOf('$$; ', 200))).not.toMatch(/'req'|"req"/);
+  });
+});
+

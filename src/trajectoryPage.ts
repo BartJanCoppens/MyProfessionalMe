@@ -55,6 +55,11 @@ function stepAct(c: Ctx, t: Trajectory, st: TrjStep, p: StepProgress, enrolled: 
   };
 }
 
+function lockText(t: Trajectory, st: TrjStep): string {
+  const i = t.steps.findIndex((x) => x.id === st.pre);
+  return t.steps[i]?.k === 'make' ? 'Waits for step ' + (i + 1) + ': its material is being made.' : 'Unlocks when step ' + (i + 1) + ' is done.';
+}
+
 function stepVm(c: Ctx, t: Trajectory, i: number, p: StepProgress, enrolled: boolean, next: number, start: number, e: Enrolment | null) {
   const st = t.steps[i], [kind, tone] = STEP_KINDS[st.k], it = st.lid ? c.byId[st.lid] : undefined, h = stepHours(st, c.byId), isNext = enrolled && i === next;
   const chip: [string, string] = st.k === 'make' ? ['na', 'Not available yet'] : p.missing ? ['na', 'No longer in the library'] : p.locked ? ['na', 'Locked']
@@ -69,7 +74,7 @@ function stepVm(c: Ctx, t: Trajectory, i: number, p: StepProgress, enrolled: boo
     meta: [it ? it.format + ' · ' + it.source : null, h ? fmtHours(h) + (st.k === 'elect' ? ' at least' : '') : null, 'target ' + monthLabel(start + (st.win || 1)), st.k === 'exam' ? examHint(c, t) || null : null, optional].filter(Boolean).join(' · '),
     cBg: done ? '#86BC25' : isNext ? '#1a1d18' : '#fff', cFg: done ? '#10180a' : isNext ? '#fff' : '#1a1d18', cBd: required ? '1.5px solid #1a1d18' : '1.5px dashed #8b918a',
     lineBg: done ? '#86BC25' : '#e1e5dc', bg: isNext ? '#fbfdf6' : '#fff', op: p.locked ? 0.7 : 1,
-    lockText: p.locked ? 'Unlocks when step ' + (t.steps.findIndex((x) => x.id === st.pre) + 1) + ' is done.' : '',
+    lockText: p.locked ? lockText(t, st) : '',
     opts: st.k === 'elect' ? (st.opts || []).filter((id) => c.byId[id]).map((id) => ({ title: c.byId[id].title, sub: c.byId[id].format + ' · ' + c.byId[id].hoursLabel + ' · ' + c.byId[id].stateLabel, open: () => c.L.openDetail(id, 'trajectory') })) : [],
     act: stepAct(c, t, st, p, enrolled, isNext),
     // the counsellor's "talk first" comment on this step, until it is sent again (read-only, also in View as)

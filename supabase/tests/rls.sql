@@ -4035,6 +4035,9 @@ reset role;
 update public.contributions set status = 'published', step = 4, learning_id = 'LM1', published_at = now() where id = current_setting('test.tm_c1')::uuid;
 insert into results (check_name, expected, actual) select 'TM publishing the contribution turns the step into learn with its learning, keeping id, win, req, pre and from', 'learn/LM1/m1/3/true/p:mx',
   (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid')||'/'||(steps -> 0 ->> 'id')||'/'||(steps -> 0 ->> 'win')||'/'||(steps -> 0 ->> 'req')||'/'||(steps -> 0 ->> 'from') from public.trajectories where id = 'TM1';
+-- an old link time (now() is constant inside this test's transaction), so a re-stamp would show
+update public.trajectories set steps = jsonb_set(steps, '{0,linked_at}', '"2020-01-01T00:00:00+00:00"') where id = 'TM1';
+select set_config('test.tm_linked', '2020-01-01T00:00:00+00:00', true);
 insert into results (check_name, expected, actual) select 'TM ... drops cid, fmt, title and hours, and records when it was linked', 'false/false/false/false/true',
   ((steps -> 0) ? 'cid')::text||'/'||((steps -> 0) ? 'fmt')::text||'/'||((steps -> 0) ? 'title')::text||'/'||((steps -> 0) ? 'hours')::text||'/'||((steps -> 0) ? 'linked_at')::text from public.trajectories where id = 'TM1';
 insert into results (check_name, expected, actual) select 'TM ... and the other step, whose contribution is in review, stays make', 'make', steps -> 1 ->> 'k' from public.trajectories where id = 'TM1';
@@ -4044,6 +4047,7 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","r
 select set_config('test.tm_steps', format('[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx","cid":"%s"}]', current_setting('test.tm_c1')), true);
 update public.trajectories set steps = current_setting('test.tm_steps')::jsonb where id = 'TM1';
 insert into results (check_name, expected, actual) select 'TM an update that sends the stale make step stores learn', 'learn/LM1', (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid') from public.trajectories where id = 'TM1';
+insert into results (check_name, expected, actual) select 'TM ... and keeps the first linked_at', 'true', (extract(epoch from (steps -> 0 ->> 'linked_at')::timestamptz) = extract(epoch from current_setting('test.tm_linked')::timestamptz))::text from public.trajectories where id = 'TM1';
 -- learners: the make step shows on a live trajectory, and cannot be submitted
 reset role;
 set local request.jwt.claims = '';

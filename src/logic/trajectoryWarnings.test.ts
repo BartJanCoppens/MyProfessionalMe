@@ -47,4 +47,10 @@ describe('adminWarnings', () => {
     expect(adminWarnings(two, byId, 200)).toContain('2 steps are being made · learners see them as Being made · when their material is published each links and becomes required');
     expect(adminWarnings(good, byId, 200).join(' ')).not.toMatch(/being made/);
   });
+  it('says what waits for a placeholder and how to unblock it', () => {
+    const make = { id: 'm1', k: 'make' as const, title: 'Flash cards', fmt: 'Flash cards', hours: 1, win: 3, req: true, pre: null };
+    const t = { ...good, steps: [make, { id: 's9', k: 'check' as const, title: 'Sign-off', win: 4, req: true, pre: 'm1' }, ...good.steps] };
+    expect(adminWarnings(t, byId, 200)).toContain('Step 2 waits for step 1, which is being made; mark step 1 optional or remove it to unblock.');
+    expect(adminWarnings({ ...t, steps: [{ ...make, req: false }, ...t.steps.slice(1)] }, byId, 200).join(' ')).not.toMatch(/waits for step/);
+  });
 });

@@ -9,8 +9,11 @@ export type TrjMine = { userId: string; enrols: Record<string, Enrolment>; creds
 
 // The stored row, or (a mandatory auto-enrolment) an enrolment that has no row until the person's first action.
 export function effectiveEnrolment(t: Trajectory, row: Enrolment | undefined, person: Person, now: Date): Enrolment | null {
-  if (row) return row;
-  return autoEnrolled(t, person) ? { status: 'enrolled', start_month: startMonth(t, true, now), steps: {} } : null;
+  const bound = autoEnrolled(t, person), since = bound ? t.published_at : null;
+  // A bound person is enrolled from the publication (D6), whenever their row was written: the earlier of the two dates, so a step linked after the
+  // publication is optional for them (isRequired).
+  if (row) return since && (!row.created_at || Date.parse(since) < Date.parse(row.created_at)) ? { ...row, created_at: since } : row;
+  return bound ? { status: 'enrolled', start_month: startMonth(t, true, now), steps: {}, created_at: since } : null;
 }
 
 // A request, or an enrolment with no signed-off step; never a mandatory auto-enrolment.

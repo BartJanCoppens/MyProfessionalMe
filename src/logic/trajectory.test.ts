@@ -169,3 +169,19 @@ describe('a linked placeholder is required for new enrolments only', () => {
     expect(isRequired({ ...linked, k: 'exam' }, early)).toBe(true);
   });
 });
+
+describe('what waits for a placeholder', () => {
+  const make = { id: 'm1', k: 'make' as const, title: 'Flash cards', fmt: 'Flash cards', hours: 6, win: 6, req: true, pre: null };
+  const chain = (req: boolean): Trajectory => ({ ...base, steps: [{ ...make, req }, { id: 'c1', k: 'check', title: 'Sign-off', win: 6, req: true, pre: 'm1' }, { id: 'x1', k: 'exam', title: 'Exam', hours: 2, win: 12, req: true, pre: 'c1' }] });
+  it('a required placeholder locks the sign-off and the exam behind it, so the credential cannot be earned before the material exists', () => {
+    const pg = trajectoryProgress(chain(true), enrol(), byId);
+    expect(pg.steps.map((x) => x.locked)).toEqual([false, true, true]);
+    expect(pg.next).toBe(-1);
+    expect(pg.complete).toBe(false);
+  });
+  it('marking the placeholder optional unblocks them', () => {
+    const pg = trajectoryProgress(chain(false), enrol(), byId);
+    expect(pg.steps.map((x) => x.locked)).toEqual([false, false, true]);
+    expect(pg.next).toBe(1);
+  });
+});

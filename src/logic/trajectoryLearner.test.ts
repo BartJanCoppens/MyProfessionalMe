@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isRequired } from './trajectory';
 import type { Credential, Enrolment, Trajectory, TrjDecision } from './trajectory';
 import { blankTrajectory } from './trajectoryEdit';
 import { canRenew, canWithdraw, credentialHeld, credentialLook, dayLabel, effectiveEnrolment, renewedExpiry, RENEW_DAYS, stepAction, talkNote } from './trajectoryLearner';
@@ -16,7 +17,21 @@ describe('effectiveEnrolment', () => {
     expect(effectiveEnrolment(trj({ enrol: 'auto', maps: [['Audit', 'Consultant', 'advised']] }), undefined, person, NOW)).toBeNull();
   });
   it('enrols a mandatory auto person without a row, from the publication month', () => {
-    expect(effectiveEnrolment(auto, undefined, person, NOW)).toEqual({ status: 'enrolled', start_month: 2026 * 12 + 8, steps: {} });
+    expect(effectiveEnrolment(auto, undefined, person, NOW)).toMatchObject({ status: 'enrolled', start_month: 2026 * 12 + 8, steps: {} });
+  });
+  it('dates a mandatory auto person from the publication, so a step linked later is optional for them, with or without a row', () => {
+    const linked = { id: 's9', k: 'learn' as const, lid: 'x', win: 3, req: true, pre: null, linked_at: '2026-10-01T00:00:00+00:00' };
+    const t = { ...auto, steps: [linked] };
+    expect(isRequired(linked, effectiveEnrolment(t, undefined, person, NOW))).toBe(false);
+    // the row written at their first action is later than the link
+    expect(isRequired(linked, effectiveEnrolment(t, row({ created_at: '2026-11-01T00:00:00+00:00' }), person, NOW))).toBe(false);
+    // the earlier of the row and the publication wins
+    expect(effectiveEnrolment(t, row({ created_at: '2026-09-01T00:00:00+00:00' }), person, NOW)?.created_at).toBe('2026-09-01T00:00:00+00:00');
+  });
+  it('leaves a person who is not bound by a mandatory map as their row says: a step linked before they enrol is required', () => {
+    const linked = { id: 's9', k: 'learn' as const, lid: 'x', win: 3, req: true, pre: null, linked_at: '2026-10-01T00:00:00+00:00' };
+    const t = trj({ steps: [linked] });
+    expect(isRequired(linked, effectiveEnrolment(t, row({ created_at: '2026-11-01T00:00:00+00:00' }), person, NOW))).toBe(true);
   });
 });
 

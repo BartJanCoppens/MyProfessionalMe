@@ -19,6 +19,10 @@ export function adminWarnings(t: Trajectory, byId: Record<string, LearningRef | 
   const making = t.steps.filter((st) => st.k === 'make').length;
   if (making) warns.push(plural(making, 'step', 'steps') + (making === 1 ? ' is' : ' are') + ' being made · learners see ' + (making === 1 ? 'it' : 'them') + ' as Being made · when '
     + (making === 1 ? 'its' : 'their') + ' material is published ' + (making === 1 ? 'it' : 'each') + ' links and becomes required');
+  t.steps.forEach((st, i) => {
+    const pre = t.steps.findIndex((x) => x.id === st.pre);
+    if (pre >= 0 && t.steps[pre].k === 'make' && t.steps[pre].req) warns.push('Step ' + (i + 1) + ' waits for step ' + (pre + 1) + ', which is being made; mark step ' + (pre + 1) + ' optional or remove it to unblock.');
+  });
   if (!t.steps.some((st) => st.k === 'exam')) warns.push('No exam or assessment step: add one before the credential.');
   const year1 = totals(t, byId).perYear[0];
   if (year1 > goal / 2) warns.push('Year 1 asks ' + fmtHours(year1) + ', more than half of the ' + goal + ' h yearly budget.');

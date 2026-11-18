@@ -25,6 +25,7 @@ export default function PlanApply({ a }: { a: Tai['apply'] }) {
             </>
           )}
           <div style={{ fontSize: 12, color: '#5a6058' }}>{a.note}</div>
+          {a.liveNote && <div style={{ fontSize: 12, color: '#7a5000' }}>{a.liveNote}</div>}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <Button size="sm" onClick={a.run}>{a.added.length ? 'Add ' + a.added.length + (a.added.length === 1 ? ' step' : ' steps') : 'Close'}</Button>
             <LinkButton tone="muted" onClick={a.cancel}>Cancel</LinkButton>

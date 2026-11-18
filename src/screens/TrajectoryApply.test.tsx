@@ -64,7 +64,7 @@ describe('Apply', () => {
   it('asks first, listing what is added, and changes nothing until confirmed', () => {
     show([mod('m1', { checks: ['signoff'] }), mod('m2')]);
     click('Apply 2 accepted modules');
-    expect(screen.getByText('Apply adds steps; it never removes or changes one.')).toBeTruthy();
+    expect(screen.getByText('Apply adds steps; it never removes one. New steps go before the exam, which then waits for them.')).toBeTruthy();
     expect(screen.getByText('Steps to add · 4')).toBeTruthy();
     expect(current.trjs[0].steps).toHaveLength(1);
     expect(save).not.toHaveBeenCalled();
@@ -113,3 +113,24 @@ describe('Apply', () => {
     expect(screen.getByText(/Module m1 · A step with this title is already in the trajectory/)).toBeTruthy();
   });
 });
+
+describe('Apply on a live trajectory', () => {
+  const live = () => trajectory({ status: 'live', enrol: 'open' });
+  it('says people already enrolled see the new steps as optional, and stamps them so', () => {
+    show([mod('m1', { material: [{ kind: 'manual', format: 'Book', reason: 'r' }] })], {}, live());
+    click('Apply 1 accepted module');
+    expect(screen.getByText(/people already enrolled see the new steps as optional/)).toBeTruthy();
+    click(/^Add \d+ steps?$/);
+    const evidence = current.trjs[0].steps.find((s) => s.from === 'p:m1')!;
+    expect(evidence.linked_at).toBeTruthy();
+    expect(current.trjs[0].steps.find((s) => s.k === 'exam')?.linked_at).toBeUndefined();
+  });
+  it('a draft trajectory gets no stamp and no live note', () => {
+    show([mod('m1', { material: [{ kind: 'manual', format: 'Book', reason: 'r' }] })]);
+    click('Apply 1 accepted module');
+    expect(screen.queryByText(/people already enrolled/)).toBeNull();
+    click(/^Add \d+ steps?$/);
+    expect(current.trjs[0].steps.some((s) => s.linked_at)).toBe(false);
+  });
+});
+

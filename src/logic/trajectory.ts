@@ -107,7 +107,9 @@ export function trajectoryProgress(t: Trajectory, e: Enrolment | null, byId: Lib
   const raw = new Map(t.steps.map((st) => [st.id, rawState(st, e, byId)]));
   const steps: StepProgress[] = t.steps.map((st) => {
     const r = raw.get(st.id)!, pre = st.pre ? raw.get(st.pre) : undefined;
-    const preOptionalMissing = !!pre && pre.missing && !isRequired(t.steps.find((x) => x.id === st.pre)!, e);
+    // A missing optional prerequisite blocks nothing, except a placeholder not marked optional: what follows it waits for its material.
+    const preStep = t.steps.find((x) => x.id === st.pre);
+    const preOptionalMissing = !!pre && pre.missing && !isRequired(preStep!, e) && !(preStep!.k === 'make' && preStep!.req);
     return { id: st.id, state: r.state, pct: r.pct, missing: r.missing, locked: r.state !== 'done' && !!pre && pre.state !== 'done' && !preOptionalMissing };
   });
   const required = t.steps.map((st, i) => (isRequired(st, e) ? i : -1)).filter((i) => i >= 0);

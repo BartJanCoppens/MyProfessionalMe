@@ -188,7 +188,7 @@ function StepEditor({ vm }: { vm: VM }) {
         </div>
       )}
       {se.canReq && <Checkbox checked={se.req} onChange={se.toggleReq}>Required to earn the credential</Checkbox>}
-      {se.isMake && <div style={{ fontSize: 12, color: '#5a6058' }}>Not counted for learners until its material is published. Then it links to that learning and becomes required, for people who enrol after that.</div>}
+      {se.isMake && <div style={{ fontSize: 12, color: '#5a6058' }}>Not counted for learners until its material is published. Then it links to that learning and becomes required, for people who enrol after that. The sign-off and exam after it wait for that material; mark it optional or remove it to unblock them.</div>}
       {se.isExam && <div style={{ fontSize: 12, color: '#5a6058' }}>An exam is always required. Set “Only after” so nobody books it before the learnings are done.</div>}
     </div>
   );

@@ -14,7 +14,7 @@ const mod = (id: string, title: string, material: PlanMaterial[], over: Partial<
 const plan = (modules: PlanModule[], finalExam: TrajectoryPlan['finalExam'] = { title: 'Final assessment', hours: 3, reason: 'r' }): TrajectoryPlan => ({ ...emptyPlan(), modules, finalExam });
 const trajectory = (steps: TrjStep[] = []): Trajectory => ({ ...blankTrajectory('Audit'), id: 'T1', months: 12, steps });
 const idsFor = (n = 20) => Array.from({ length: n }, (_, i) => 'n' + i);
-const apply = (t: Trajectory, p: TrajectoryPlan, ids = idsFor()) => applyPlan(t, p, ids, usedOf(t));
+const apply = (t: Trajectory, p: TrajectoryPlan, ids = idsFor(), stamp?: string) => applyPlan(t, p, ids, usedOf(t), stamp);
 
 const m1 = mod('m1', 'VAT basics', [{ kind: 'existing', learningId: 'L1', reason: 'r' }]);
 const m2 = mod('m2', 'Reverse charge', [{ kind: 'studio', format: 'Flash cards', reason: 'r' }], { hours: 5, checks: ['signoff'] });
@@ -70,7 +70,7 @@ describe('applyPlan', () => {
   });
   it('skips the final exam when the trajectory already has an exam, and says Already applied when it came from here', () => {
     const exam: TrjStep = { id: 's1', k: 'exam', title: 'Own exam', hours: 2, win: 12, req: true, pre: null };
-    expect(apply(trajectory([exam]), full).skipped).toContainEqual({ module: 'Final exam', why: 'The trajectory already ends in an exam' });
+    expect(apply(trajectory([exam]), full).skipped).toContainEqual({ module: 'Final exam', why: "Already has a final exam; the plan's exam was not added" });
     const first = apply(noExam(), full);
     expect(apply(trajectory(first.steps), full).skipped).toContainEqual({ module: 'Final exam', why: 'Already applied' });
   });
@@ -89,3 +89,36 @@ describe('applyPlan', () => {
     expect(JSON.stringify(t)).toBe(before);
   });
 });
+
+describe('applyPlan on a trajectory that already has an exam', () => {
+  const exam: TrjStep = { id: 'x0', k: 'exam', title: 'Final assessment', hours: 2, win: 12, req: true, pre: null };
+  const log: TrjStep = { id: 's1', k: 'evidence', title: 'Log', hours: 0, win: 1, req: true, pre: null };
+  it('puts the new steps before the exam, which then waits for the last of them', () => {
+    const r = apply(trajectory([log, exam]), plan([m2, m3], null));
+    expect(r.steps.map((s) => s.id)).toEqual(['s1', 'n0', 'n1', 'n2', 'x0']);
+    expect(r.steps[4]).toMatchObject({ id: 'x0', pre: 'n2', title: 'Final assessment' });
+    expect(r.added).toBe(3);
+  });
+  it('is idempotent and leaves the exam alone when nothing is added', () => {
+    const once = apply(trajectory([log, exam]), plan([m2], null));
+    const twice = apply(trajectory(once.steps), plan([m2], null));
+    expect(twice.steps).toEqual(once.steps);
+    expect(twice.added).toBe(0);
+  });
+  it('a later Apply adds before the exam it made itself, which moves its wait', () => {
+    const first = apply(noExam(), plan([m2], { title: 'Final assessment', hours: 3, reason: 'r' }));
+    const second = apply(trajectory(first.steps), plan([m2, m3], { title: 'Final assessment', hours: 3, reason: 'r' }), idsFor().map((i) => 'z' + i));
+    expect(second.steps[second.steps.length - 1].k).toBe('exam');
+    expect(second.steps[second.steps.length - 1].pre).toBe(second.steps[second.steps.length - 2].id);
+  });
+});
+
+describe('applyPlan on a live trajectory (a stamp)', () => {
+  it('stamps the steps that can be required with the moment, so people already enrolled see them optional; not a make step, not the exam', () => {
+    const stamp = '2026-11-18T10:00:00.000Z';
+    const r = apply(noExam(), full, idsFor(), stamp);
+    expect(r.steps.map((s) => [s.k, s.linked_at])).toEqual([['learn', stamp], ['make', undefined], ['check', stamp], ['evidence', stamp], ['exam', undefined]]);
+    expect(apply(noExam(), full).steps.some((s) => s.linked_at)).toBe(false);
+  });
+});
+

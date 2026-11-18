@@ -8,6 +8,7 @@
 --                             with a learning becomes {k: 'learn', lid, linked_at: now()}, keeping id, win, req, pre and from. So a stale save
 --                             from an open editor that still sends the make step is converted again: no client write can undo the link.
 -- relink_trajectories         after the contribution gets its learning: touches the trajectories that hold its cid, so the trigger above runs.
+-- link_made_steps keeps the first linked_at when a stale save sends the make step again (taken from the stored step with that id).
 -- linked_at                   when the material was linked. A step that was optional-by-being-made becomes required only for people who enrol
 --                             AFTER that moment; for an enrolment begun before it the step counts as optional (src/logic/trajectory.ts,
 --                             isRequired). The database stores the moment; no SQL rule reads req (the credential comes with the accepted exam).
@@ -42,16 +43,20 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  prev jsonb := '[]'::jsonb;
 begin
+  if tg_op = 'UPDATE' and jsonb_typeof(old.steps) = 'array' then prev := old.steps; end if;
   if jsonb_typeof(new.steps) = 'array' and exists (select 1 from jsonb_array_elements(new.steps) s where s ->> 'k' = 'make' and s ? 'cid') then
     new.steps := (
       select coalesce(jsonb_agg(
         case when l.learning_id is null then s.v
-          else (s.v - 'cid' - 'fmt' - 'title' - 'hours') || jsonb_build_object('k', 'learn', 'lid', l.learning_id, 'linked_at', now()) end
+          else (s.v - 'cid' - 'fmt' - 'title' - 'hours') || jsonb_build_object('k', 'learn', 'lid', l.learning_id, 'linked_at', to_jsonb(coalesce(l.was, now()))) end
         order by s.ord), '[]'::jsonb)
       from jsonb_array_elements(new.steps) with ordinality s(v, ord)
       left join lateral (
-        select c.learning_id from public.contributions c
+        select c.learning_id, (select (o ->> 'linked_at')::timestamptz from jsonb_array_elements(prev) o where o ->> 'id' = s.v ->> 'id' and o ->> 'k' = 'learn' limit 1) as was
+        from public.contributions c
         where s.v ->> 'k' = 'make' and c.status = 'published' and c.learning_id is not null
           and c.id = case when s.v ->> 'cid' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then (s.v ->> 'cid')::uuid end
       ) l on true

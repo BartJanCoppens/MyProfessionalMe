@@ -1,7 +1,8 @@
-// Apply (Studios Phase 7): the accepted modules of a trajectory plan as trajectory steps. Pure and deterministic: the step ids are made by the caller
-// (planStepIds, outside the editor's `patch`, whose change may run twice) and the change is computed from the trajectory as it is when it runs.
+// Apply (Studios Phase 7): the accepted modules of a trajectory plan as trajectory steps. Pure and deterministic: the step ids (and the stamp) are made by
+// the caller (planStepIds, outside the editor's `patch`, whose change may run twice) and the change is computed from the trajectory as it is when it runs.
 // Idempotent: every step made here carries from 'p:<module id>', so a module already there is skipped; a learning already used and a step title already
-// there are skipped too (they catch a module the AI proposed again after Start over). Apply only appends: it never removes or changes a step.
+// there are skipped too (they catch a module the AI proposed again after Start over). Apply only adds: new steps go before an exam the trajectory
+// already has, and that exam then waits for them; nothing is removed and no other step changes.
 import { LEARN_BY } from '../data';
 import type { PlanMaterial, PlanModule, TrajectoryPlan } from './trajectoryPlan';
 import type { Trajectory, TrjStep } from './trajectory';
@@ -14,6 +15,7 @@ export type Applied = { steps: TrjStep[]; added: number; skipped: Skipped[] };
 
 const norm = (text: string) => text.trim().toLowerCase();
 const learningTitle = (id: string) => LEARN_BY[id]?.[1] ?? id;
+const TITLE_TAKEN = 'A step with this title is already in the trajectory';
 export const EXAM_FROM = 'p:exam';
 export const fromModule = (id: string) => 'p:' + id;
 export const isApplied = (t: Trajectory, moduleId: string) => t.steps.some((s) => s.from === fromModule(moduleId));
@@ -31,57 +33,72 @@ export function planStepIds(t: Trajectory, p: TrajectoryPlan): string[] {
   return ids;
 }
 
-type Piece = { step: Omit<TrjStep, 'id' | 'win' | 'req' | 'pre' | 'from'> };
+type Draft = Omit<TrjStep, 'id'>;
 // A piece of material as a step. Studio and manual pieces share the module's hours (a quarter-hour each at least).
-function pieceOf(x: PlanMaterial, m: PlanModule, made: number): Piece {
+function pieceOf(x: PlanMaterial, m: PlanModule, made: number): Draft {
   const hours = Math.max(0.25, Math.round((m.hours / made) * 4) / 4), title = made > 1 ? m.title + ' · ' + (x.kind === 'existing' ? '' : x.format) : m.title;
-  if (x.kind === 'existing') return { step: { k: 'learn', lid: x.learningId } };
-  if (x.kind === 'studio') return { step: { k: 'make', title, fmt: x.format, hours } };
-  return { step: { k: 'evidence', title: x.format + ' · ' + title, hours } };
+  const base = { win: 0, req: true, pre: null };
+  if (x.kind === 'existing') return { ...base, k: 'learn', lid: x.learningId };
+  if (x.kind === 'studio') return { ...base, k: 'make', title, fmt: x.format, hours };
+  return { ...base, k: 'evidence', title: x.format + ' · ' + title, hours };
 }
 
-export function applyPlan(t: Trajectory, p: TrajectoryPlan, ids: string[], used: Used): Applied {
-  const queue = ids.slice(), learnings = new Set(used.learnings), titles = new Set([...used.titles].map(norm));
-  const steps = t.steps.slice(), skipped: Skipped[] = [];
-  const skip = (module: string, why: string) => { if (!skipped.some((s) => s.module === module && s.why === why)) skipped.push({ module, why }); };
-  const taken = (title: string | undefined) => !!title && titles.has(norm(title));
-  const add = (step: Omit<TrjStep, 'id'>): TrjStep => {
-    const id = queue.shift();
-    if (!id) throw new Error('Apply was given too few step ids');
-    const made = { ...step, id } as TrjStep;
-    steps.push(made);
-    if (made.title) titles.add(norm(made.title));
-    return made;
-  };
+// What one Apply run shares: the steps made so far (add), what is skipped (skip) and what is already taken.
+type Run = { add: (d: Draft) => TrjStep; skip: (module: string, why: string) => void; taken: (title: string | undefined) => boolean; learnings: Set<string> };
 
+// One module's steps: its material, then its evidence and sign-off steps.
+function applyModule(r: Run, m: PlanModule, win: number, from: string): void {
+  const common = { win, req: true, from }, made = m.material.filter((x) => x.kind !== 'existing').length;
+  let last: TrjStep | null = null, placed = 0, manual = false;
+  for (const x of m.material) {
+    const piece = pieceOf(x, m, made);
+    if (x.kind === 'existing' && r.learnings.has(x.learningId)) { r.skip(m.title, learningTitle(x.learningId) + ' is already in the trajectory'); continue; }
+    if (r.taken(piece.title)) { r.skip(m.title, TITLE_TAKEN); continue; }
+    if (x.kind === 'existing') r.learnings.add(x.learningId);
+    last = r.add({ ...piece, ...common }); placed++; manual = manual || x.kind === 'manual';
+  }
+  if (m.material.length && !placed) return; // nothing of its material went in: no evidence or sign-off for it alone
+  let evidence: TrjStep | null = null;
+  if (m.checks.includes('evidence') && !manual) {
+    if (r.taken('Evidence · ' + m.title)) r.skip(m.title, TITLE_TAKEN);
+    else evidence = r.add({ k: 'evidence', title: 'Evidence · ' + m.title, hours: 0, ...common, pre: last?.id ?? null });
+  }
+  if (m.checks.includes('signoff')) {
+    if (r.taken('Sign-off · ' + m.title)) r.skip(m.title, TITLE_TAKEN);
+    else r.add({ k: 'check', title: 'Sign-off · ' + m.title, hours: 0, ...common, pre: (evidence ?? last)?.id ?? null });
+  }
+}
+
+// stamp: on a live trajectory, the moment of Apply. Steps that can be required carry it as linked_at, so people already enrolled see them as optional
+// (isRequired), as for a placeholder once linked. A make step is not stamped (the database stamps it when it links); the exam is always required.
+export function applyPlan(t: Trajectory, p: TrajectoryPlan, ids: string[], used: Used, stamp?: string): Applied {
+  const queue = ids.slice(), titles = new Set([...used.titles].map(norm)), fresh: TrjStep[] = [], skipped: Skipped[] = [];
+  const run: Run = {
+    learnings: new Set(used.learnings),
+    skip: (module, why) => { if (!skipped.some((s) => s.module === module && s.why === why)) skipped.push({ module, why }); },
+    taken: (title) => !!title && titles.has(norm(title)),
+    add: (draft) => {
+      const id = queue.shift();
+      if (!id) throw new Error('Apply was given too few step ids');
+      const step = { ...draft, id, ...(stamp && draft.k !== 'make' && draft.k !== 'exam' ? { linked_at: stamp } : {}) } as TrjStep;
+      fresh.push(step);
+      if (step.title) titles.add(norm(step.title));
+      return step;
+    },
+  };
   p.modules.forEach((m, i) => {
     if (!m.accepted) return;
-    const from = fromModule(m.id), win = Math.ceil(((i + 1) * t.months) / p.modules.length);
-    if (isApplied(t, m.id)) return skip(m.title, 'Already applied');
-    const common = { win, req: true, from }, made = m.material.filter((x) => x.kind !== 'existing').length;
-    let last: TrjStep | null = null, placed = 0, manual = false;
-    for (const x of m.material) {
-      const { step } = pieceOf(x, m, made);
-      if (x.kind === 'existing' && learnings.has(x.learningId)) { skip(m.title, learningTitle(x.learningId) + ' is already in the trajectory'); continue; }
-      if (taken(step.title)) { skip(m.title, 'A step with this title is already in the trajectory'); continue; }
-      if (x.kind === 'existing') learnings.add(x.learningId);
-      last = add({ ...step, ...common, pre: null }); placed++; manual = manual || x.kind === 'manual';
-    }
-    if (m.material.length && !placed) return; // nothing of its material went in: no evidence or sign-off for it alone
-    let evidence: TrjStep | null = null;
-    if (m.checks.includes('evidence') && !manual) {
-      if (taken('Evidence · ' + m.title)) skip(m.title, 'A step with this title is already in the trajectory');
-      else evidence = add({ k: 'evidence', title: 'Evidence · ' + m.title, hours: 0, ...common, pre: last?.id ?? null });
-    }
-    if (m.checks.includes('signoff')) {
-      if (taken('Sign-off · ' + m.title)) skip(m.title, 'A step with this title is already in the trajectory');
-      else add({ k: 'check', title: 'Sign-off · ' + m.title, hours: 0, ...common, pre: (evidence ?? last)?.id ?? null });
-    }
+    if (isApplied(t, m.id)) return run.skip(m.title, 'Already applied');
+    applyModule(run, m, Math.ceil(((i + 1) * t.months) / p.modules.length), fromModule(m.id));
   });
 
-  const exam = p.finalExam, has = steps.find((s) => s.k === 'exam');
-  if (exam && has) skip('Final exam', has.from === EXAM_FROM ? 'Already applied' : 'The trajectory already ends in an exam');
-  else if (exam && taken(exam.title)) skip('Final exam', 'A step with this title is already in the trajectory');
-  else if (exam) add({ k: 'exam', title: exam.title, hours: exam.hours, win: t.months, req: true, pre: steps[steps.length - 1]?.id ?? null, from: EXAM_FROM });
-  return { steps, added: steps.length - t.steps.length, skipped };
+  const at = t.steps.findIndex((s) => s.k === 'exam'), has = at >= 0 ? t.steps[at] : null, exam = p.finalExam;
+  if (exam && has) run.skip('Final exam', has.from === EXAM_FROM ? 'Already applied' : "Already has a final exam; the plan's exam was not added");
+  else if (exam && run.taken(exam.title)) run.skip('Final exam', TITLE_TAKEN);
+  else if (exam) run.add({ k: 'exam', title: exam.title, hours: exam.hours, win: t.months, req: true, pre: (fresh[fresh.length - 1] ?? t.steps[t.steps.length - 1])?.id ?? null, from: EXAM_FROM });
+  // New steps go before an exam that was already there, which then waits for the last of them.
+  const steps = has && fresh.length
+    ? [...t.steps.slice(0, at), ...fresh, { ...has, pre: fresh[fresh.length - 1].id }, ...t.steps.slice(at + 1)]
+    : [...t.steps, ...fresh];
+  return { steps, added: fresh.length, skipped };
 }
