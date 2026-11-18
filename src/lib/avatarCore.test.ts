@@ -131,7 +131,7 @@ describe('reportResponse', () => {
 describe('the final report never refunds from the client\'s number', () => {
   const final = { action: 'report', sessionId: SID, seconds: 1, final: true };
   it('stops the session at LiveAvatar with its own id, then reports stopped', async () => {
-    const d = deps({ fetch: vi.fn(async () => new Response('{}', { status: 200 })) });
+    const d = deps({ fetch: vi.fn(async () => new Response(JSON.stringify({ code: 1000, message: 'ok' }), { status: 200 })) });
     const r = await reportResponse(final, d);
     expect(r.status).toBe(200);
     const [url, init] = (d.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
@@ -140,12 +140,17 @@ describe('the final report never refunds from the client\'s number', () => {
     expect((init.headers as Record<string, string>)['X-API-KEY']).toBe(KEY);
     expect(d.reports).toEqual([[SID, 1, true, true]]);
   });
-  it('a 2xx whose body code is not a success code is not a stop (the reference shows 100, the SDK checks 1000)', async () => {
-    for (const [code, stopped] of [[100, true], [1000, true], [undefined, true], [4000, false]] as const) {
+  it('a 2xx counts as a stop only when its body code is 100 or 1000: no code, another code or a body that is not JSON fails closed (reservation and lock hold until the window ends)', async () => {
+    for (const [code, stopped] of [[100, true], [1000, true], [undefined, false], [4000, false], ['1000', false], [null, false]] as const) {
       const d = deps({ fetch: vi.fn(async () => new Response(JSON.stringify(code === undefined ? {} : { code, message: 'x' }), { status: 200 })) });
       await reportResponse(final, d);
       expect(d.reports).toEqual([[SID, 1, true, stopped]]);
     }
+  });
+  it('a 2xx whose body is not JSON is not a stop either', async () => {
+    const d = deps({ fetch: vi.fn(async () => new Response('ok', { status: 200 })) });
+    await reportResponse(final, d);
+    expect(d.reports).toEqual([[SID, 1, true, false]]);
   });
   it('a 404 does not count as stopped: the reservation and the open session stay (fail closed)', async () => {
     const d = deps({ fetch: vi.fn(async () => new Response('{}', { status: 404 })) });

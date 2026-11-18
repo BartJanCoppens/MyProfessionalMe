@@ -129,7 +129,7 @@ async function stopUpstream(sessionId: string, d: StartDeps): Promise<boolean> {
     const res = await (d.fetch || fetch)(req.url, { ...req.init, signal: AbortSignal.timeout(AVATAR_LIMITS.timeoutMs) });
     if (!res.ok) return false;
     const code = record(await res.json().catch(() => ({}))).code; // LiveAvatar answers { code, message }: the reference shows 100, the SDK checks 1000
-    return code === undefined || code === 100 || code === 1000;
+    return code === 100 || code === 1000; // fail closed: a 2xx with no code or another code is not a confirmed stop
   } catch { return false; }
 }
 
