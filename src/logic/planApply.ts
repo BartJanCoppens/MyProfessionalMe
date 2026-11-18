@@ -35,23 +35,23 @@ export function planStepIds(t: Trajectory, p: TrajectoryPlan): string[] {
 
 type Draft = Omit<TrjStep, 'id'>;
 // A piece of material as a step. Studio and manual pieces share the module's hours (a quarter-hour each at least).
-function pieceOf(x: PlanMaterial, m: PlanModule, made: number): Draft {
+function pieceOf(x: PlanMaterial, m: PlanModule, made: number, dom?: string): Draft {
   const hours = Math.max(0.25, Math.round((m.hours / made) * 4) / 4), title = made > 1 ? m.title + ' · ' + (x.kind === 'existing' ? '' : x.format) : m.title;
   const base = { win: 0, req: true, pre: null };
   if (x.kind === 'existing') return { ...base, k: 'learn', lid: x.learningId };
-  if (x.kind === 'studio') return { ...base, k: 'make', title, fmt: x.format, hours };
+  if (x.kind === 'studio') return { ...base, k: 'make', title, fmt: x.format, hours, ...(dom ? { dom } : {}) };
   return { ...base, k: 'evidence', title: x.format + ' · ' + title, hours };
 }
 
 // What one Apply run shares: the steps made so far (add), what is skipped (skip) and what is already taken.
-type Run = { add: (d: Draft) => TrjStep; skip: (module: string, why: string) => void; taken: (title: string | undefined) => boolean; learnings: Set<string> };
+type Run = { dom?: string; add: (d: Draft) => TrjStep; skip: (module: string, why: string) => void; taken: (title: string | undefined) => boolean; learnings: Set<string> };
 
 // One module's steps: its material, then its evidence and sign-off steps.
 function applyModule(r: Run, m: PlanModule, win: number, from: string): void {
   const common = { win, req: true, from }, made = m.material.filter((x) => x.kind !== 'existing').length;
   let last: TrjStep | null = null, placed = 0, manual = false;
   for (const x of m.material) {
-    const piece = pieceOf(x, m, made);
+    const piece = pieceOf(x, m, made, r.dom);
     if (x.kind === 'existing' && r.learnings.has(x.learningId)) { r.skip(m.title, learningTitle(x.learningId) + ' is already in the trajectory'); continue; }
     if (r.taken(piece.title)) { r.skip(m.title, TITLE_TAKEN); continue; }
     if (x.kind === 'existing') r.learnings.add(x.learningId);
@@ -74,6 +74,7 @@ function applyModule(r: Run, m: PlanModule, win: number, from: string): void {
 export function applyPlan(t: Trajectory, p: TrajectoryPlan, ids: string[], used: Used, stamp?: string): Applied {
   const queue = ids.slice(), titles = new Set([...used.titles].map(norm)), fresh: TrjStep[] = [], skipped: Skipped[] = [];
   const run: Run = {
+    dom: p.brief?.domain || undefined,
     learnings: new Set(used.learnings),
     skip: (module, why) => { if (!skipped.some((s) => s.module === module && s.why === why)) skipped.push({ module, why }); },
     taken: (title) => !!title && titles.has(norm(title)),

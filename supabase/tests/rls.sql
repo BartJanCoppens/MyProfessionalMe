@@ -4075,6 +4075,10 @@ delete from public.creator_rules where user_id in ('00000000-0000-0000-0000-0000
 insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps) values
  ('PD1', 'T plan draft', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting',
   '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"},{"id":"m2","k":"make","title":"Exam on VAT","fmt":"Practice exam","hours":1,"win":4,"req":true,"pre":"m1","from":"p:my"},{"id":"e1","k":"evidence","title":"Evidence","hours":0,"win":4,"req":true,"pre":null}]', '[]');
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+ select 'PD' || n, 'T plan draft ' || n, 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting',
+  '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}]', '[]' from generate_series(2, 4) n;
+-- a lax review requirement for Flash cards: no peers, no expert, quality only. A draft made under the grant must NOT get it.
 insert into public.review_policies (formats, peers, expert, quality) values ('{"Flash cards"}', 0, false, true);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
@@ -4089,6 +4093,8 @@ insert into results (check_name, expected, actual) select 'PD an editor without 
 select pg_temp.gr_blocked('PD ... but not for a format the placeholder does not name', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Reel', 'PD wrong format', 'prof', 'x', 'reel', 'PD1', 'm1')$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('PD ... nor for another step''s format', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Practice exam', 'PD other step', 'prof', 'x', 'flash', 'PD1', 'm1')$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('PD ... nor for a step that is not a placeholder', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD evidence step', 'prof', 'x', 'flash', 'PD1', 'e1')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('PD ... nor with a domain other than the placeholder''s (it would pick another review requirement)', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD other domain', 'reg', 'x', 'flash', 'PD1', 'm1')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('PD ... nor with an audience', $q$insert into public.contributions (business_line, audience, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'ind:energy', 'Flash cards', 'PD audience', 'prof', 'x', 'flash', 'PD1', 'm1')$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('PD ... nor for another business line than the trajectory''s', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Audit', 'Flash cards', 'PD other line', 'prof', 'x', 'flash', 'PD1', 'm1')$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('PD ... nor for a trajectory that does not exist', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD no trajectory', 'prof', 'x', 'flash', 'PDX', 'm1')$q$, 'blocked');
 select pg_temp.gr_blocked('PD a step without its trajectory is refused', $q$insert into public.contributions (business_line, type, title, domain, takeaway, for_step) values ('Consulting', 'Flash cards', 'PD half', 'prof', 'x', 'm1')$q$, 'blocked');
@@ -4103,18 +4109,61 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","r
 select pg_temp.gr_blocked('PD a Domain Admin of another line cannot draft the placeholder''s material', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD other admin', 'prof', 'x', 'flash', 'PD1', 'm1')$q$, 'blocked: 42501');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}';
 select pg_temp.gr_blocked('PD a consultant who cannot edit the trajectory cannot draft its material', $q$insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step) values ('Consulting', 'Flash cards', 'PD consultant', 'prof', 'x', 'flash', 'PD1', 'm1')$q$, 'blocked: 42501');
--- the reviewer approves: publishing needs no creation rule of the author, and the placeholder links
+-- a grant draft gets the full default review (2 peers, expert, quality & risk) although a lax requirement matches Flash cards
 reset role;
-insert into results (check_name, expected, actual) select 'PD the draft waits for the quality review', '1/review', (select count(*) from public.contribution_reviews where contribution_id = current_setting('test.pd_c1')::uuid and verdict = 'pending')||'/'||status from public.contributions where id = current_setting('test.pd_c1')::uuid;
+insert into results (check_name, expected, actual) select 'PD a draft under the grant gets the full review, not the lax requirement', '2/1/1',
+  (select count(*) from public.contribution_reviews where contribution_id = current_setting('test.pd_c1')::uuid and step = 1)||'/'||(select count(*) from public.contribution_reviews where contribution_id = current_setting('test.pd_c1')::uuid and step = 2)||'/'||(select count(*) from public.contribution_reviews where contribution_id = current_setting('test.pd_c1')::uuid and step = 3);
 update public.trajectories set steps = jsonb_set(steps, '{0,cid}', to_jsonb(current_setting('test.pd_c1'))) where id = 'PD1';
 insert into results (check_name, expected, actual) select 'PD the placeholder still waits while the draft is in review', 'make', steps -> 0 ->> 'k' from public.trajectories where id = 'PD1';
-select set_config('test.pd_rev', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.pd_c1')::uuid and verdict = 'pending' limit 1), true);
-set local role authenticated;
-select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', current_setting('test.pd_rev')), true);
-insert into results (check_name, expected, actual) select 'PD the reviewer approves and it is published without the author''s rule', 'published', public.review_contribution(current_setting('test.pd_c1')::uuid, 'approved', '{t,t,t,t}', '');
-reset role;
+create function pg_temp.pd_approve_all(p_id uuid) returns text language plpgsql as $f$
+declare r record; last text := 'none';
+begin
+  for i in 1..6 loop
+    select * into r from public.contribution_reviews where contribution_id = p_id and verdict = 'pending' order by step limit 1;
+    exit when not found;
+    perform set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', r.reviewer_id), true);
+    last := public.review_contribution(p_id, 'approved', '{t,t,t,t}', '');
+  end loop;
+  perform set_config('request.jwt.claims', '', true);
+  return last;
+end $f$;
+insert into results (check_name, expected, actual) select 'PD the reviewers approve and it is published without the author''s rule', 'published', pg_temp.pd_approve_all(current_setting('test.pd_c1')::uuid);
 insert into results (check_name, expected, actual) select 'PD publishing links the placeholder it was drafted for', 'learn', steps -> 0 ->> 'k' from public.trajectories where id = 'PD1';
 insert into results (check_name, expected, actual) select 'PD ... and the other placeholder is untouched', 'make', steps -> 1 ->> 'k' from public.trajectories where id = 'PD1';
+-- the author also has a real creation rule for it: the normal (lax) requirement applies
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000a1', '{Consulting}', '{"Flash cards"}');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step, items) values ('Consulting', 'Flash cards', 'PD with a rule', 'prof', 'Know the VAT rates.', 'flash', 'PD2', 'm1', '[["Standard rate?","25 %"],["SME rate?","20 %"],["Pillar Two rate?","15 %"],["Advance payments?","Four instalments"]]') returning id)
+  select set_config('test.pd_c2', (select id::text from i), true);
+select public.check_contribution(current_setting('test.pd_c2')::uuid);
+select set_config('test.pd_s2', public.submit_contribution(current_setting('test.pd_c2')::uuid), true);
+insert into results (check_name, expected, actual) select 'PD an author who also has a creation rule gets the normal requirement (quality & risk only)', 'review/0/0/1', current_setting('test.pd_s2')||'/'||
+  (select count(*) from public.contribution_reviews where contribution_id = current_setting('test.pd_c2')::uuid and step = 1)||'/'||(select count(*) from public.contribution_reviews where contribution_id = current_setting('test.pd_c2')::uuid and step = 2)||'/'||(select count(*) from public.contribution_reviews where contribution_id = current_setting('test.pd_c2')::uuid and step = 3);
+reset role;
+delete from public.creator_rules where user_id = '00000000-0000-0000-0000-0000000000a1';
+-- an editor who is removed: the draft cannot be submitted or published under the grant
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step, items) values ('Consulting', 'Flash cards', 'PD removed editor sent', 'prof', 'Know the VAT rates.', 'flash', 'PD3', 'm1', '[["Standard rate?","25 %"],["SME rate?","20 %"],["Pillar Two rate?","15 %"],["Advance payments?","Four instalments"]]') returning id)
+  select set_config('test.pd_c3', (select id::text from i), true);
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, for_trajectory, for_step, items) values ('Consulting', 'Flash cards', 'PD removed editor draft', 'prof', 'Know the VAT rates.', 'flash', 'PD4', 'm1', '[["Standard rate?","25 %"],["SME rate?","20 %"],["Pillar Two rate?","15 %"],["Advance payments?","Four instalments"]]') returning id)
+  select set_config('test.pd_c4', (select id::text from i), true);
+select public.check_contribution(current_setting('test.pd_c3')::uuid), public.check_contribution(current_setting('test.pd_c4')::uuid);
+insert into results (check_name, expected, actual) select 'PD a grant draft is sent while its author can plan', 'review', public.submit_contribution(current_setting('test.pd_c3')::uuid);
+reset role;
+delete from public.user_roles where user_id = '00000000-0000-0000-0000-0000000000a1' and role = 'domain_admin';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select pg_temp.gr_blocked('PD a removed editor cannot send the draft under the grant', format($q$select public.submit_contribution(%L)$q$, current_setting('test.pd_c4')), 'blocked: 42501');
+select pg_temp.gr_blocked('PD ... nor edit it', format($q$update public.contributions set title = 'PD edited' where id = %L$q$, current_setting('test.pd_c4')), 'blocked');
+reset role;
+do $$ begin
+  begin perform pg_temp.pd_approve_all(current_setting('test.pd_c3')::uuid);
+    insert into results (check_name, expected, actual) values ('PD a removed editor''s draft in review is not published under the grant', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('PD a removed editor''s draft in review is not published under the grant', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+select set_config('request.jwt.claims', '', true);
 -- the trajectory goes: plan and sources go with it
 reset role;
 set local request.jwt.claims = '';

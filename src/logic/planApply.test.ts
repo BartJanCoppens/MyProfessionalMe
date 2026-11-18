@@ -24,6 +24,13 @@ const full = plan([m1, m2, m3, m4]);
 const noExam = () => trajectory([]);
 
 describe('applyPlan', () => {
+  it('stores the plan brief\'s domain on a make step, and on no other step', () => {
+    const p = { ...plan([m2]), brief: { goal: '', credential: '', issuer: '', audience: '', stage: null, line: null, level: '', hoursBudget: null, deadline: null, bodyRules: '', constraints: '', domain: 'reg' } };
+    const steps = apply(noExam(), p).steps;
+    expect(steps.filter((x) => x.k === 'make').map((x) => x.dom)).toEqual(['reg']);
+    expect(steps.filter((x) => x.k !== 'make').every((x) => !('dom' in x))).toBe(true);
+    expect(apply(noExam(), plan([m2])).steps.find((x) => x.k === 'make')).not.toHaveProperty('dom');
+  });
   it('appends, in plan order, a learn step, a make step with its sign-off, an evidence step and the final exam', () => {
     setCatalogue([[learn('L1', 'VAT in practice'), { line: null, status: 'published' }]]);
     const r = apply(noExam(), full);

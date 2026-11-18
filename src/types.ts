@@ -4,7 +4,7 @@ import type { BuildStepState } from './logic/studioBuild';
 import type { CreateData } from './logic/contribution';
 import type { Trajectory } from './logic/trajectory';
 import type { TrjMine } from './logic/trajectoryLearner';
-import type { TrjPlanState } from './logic/trajectoryPlan';
+import type { Depth, TrjPlanState } from './logic/trajectoryPlan';
 import type { QueueRow } from './lib/recordStore';
 import type { SharedRun } from './lib/avatarStore';
 import type { RosterRow } from './lib/attendanceStore';
@@ -203,12 +203,17 @@ export type CredDraft = { name: string; issuer: string; earned: string; expires:
 // The renewal of credential `id`: a link or certificate number, and the new expiry (external credentials only).
 export type RenewDraft = { id: string; link: string; ref: string; expires: string };
 
+// What a draft made from a placeholder step carries (Studios Phase 7): which placeholder it is for, and what the plan says about the module (goals, depth,
+// passages of its cited sources, their labels). A draft opened again from My contributions has the placeholder only (no goals, no passages).
+export type DraftBrief = { trajectoryId: string; stepId: string; goals: string[]; depth: Depth; passages: string[]; sources: string[] };
 // The New content form. line and aud are '' for none; type is the format; lvl stays text for the select; outline and
 // sources come from Draft with AI.
 export type NewDraft = { line: string; aud: string; type: string; title: string; dom: string; lvl: string; stage: string; take: string; outline: string[]; sources: string[]; ai: boolean; aiNote: string; items?: DraftItems;
   // Generic studios (Task 1.2): the Shape answers (question to answer), the Produce choices (row label to option), the picked stock look and voices
   // (role label to stock name) and the build steps' state. A studio's rows live in `items` like every format's.
   shape?: Record<string, string>; produce?: Record<string, string>; cast?: Record<string, string>; build?: BuildStepState[];
+  // The placeholder step this draft is the material for, with its module's brief (see DraftBrief).
+  brief?: DraftBrief;
   // The row this draft was saved as while it is on screen (a studio check saves it); the studio and the upload form both continue it.
   // A new draft (blankDraft) has none.
   savedId?: string;

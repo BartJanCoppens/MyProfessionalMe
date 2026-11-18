@@ -13,7 +13,7 @@ export type StepKind = (typeof STEP_KIND_NAMES)[number];
 // the database turned a make step into a learn step (see isRequired).
 export type TrjStep = {
   id: string; k: StepKind; lid?: string; opts?: string[]; pick?: number; title?: string; hours?: number; win: number; req: boolean; pre: string | null;
-  fmt?: string; cid?: string; from?: string; linked_at?: string;
+  fmt?: string; dom?: string; cid?: string; from?: string; linked_at?: string;
 };
 // [audience, career stage, obligation]. Audience: a business line, or ind:/tec:/amb:/pro:<key>.
 export type TrjMap = [string, string, 'mandatory' | 'advised'];
