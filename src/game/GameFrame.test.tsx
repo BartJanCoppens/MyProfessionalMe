@@ -146,6 +146,21 @@ describe('GameFrame', () => {
     expect(askAI).toHaveBeenCalledWith({ messages: [{ role: 'player', text: 'hi' }], state: { s: 1 } });
   });
 
+  it('limits askAI to 30 calls per run: the 31st is refused before it reaches the platform', async () => {
+    const askAI = vi.fn(async () => ({ say: 'I signed nothing.', action: null }));
+    const { send } = setup({ askAI });
+    const turn = () => send(ask('askAI', { messages: [{ role: 'player', text: 'hi' }], state: null }));
+    for (let i = 0; i < 30; i++) expect(await turn()).toMatchObject({ ok: true, value: { say: 'I signed nothing.', action: null } });
+    expect(await turn()).toMatchObject({ ok: false, error: 'Limit reached' });
+    expect(askAI).toHaveBeenCalledTimes(30);
+  });
+
+  it('says why when the role cannot answer (not live, no run, a limit): the game gets the platform\'s words', async () => {
+    const askAI = vi.fn(async () => { throw new Error('The AI role is not available right now'); });
+    const { send } = setup({ askAI });
+    expect(await send(ask('askAI', { messages: [{ role: 'player', text: 'hi' }], state: null }))).toMatchObject({ ok: false, error: 'The AI role is not available right now' });
+  });
+
   it('shows a game only first names and initials, never an email', async () => {
     expect(await setup({ player: 'jan.peeters@firm.example' }).send(ask('getPlayer'))).toMatchObject({ value: { name: 'Player' } });
     cleanup();

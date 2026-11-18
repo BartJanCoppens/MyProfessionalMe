@@ -53,7 +53,7 @@ function voiceChoice(L: Logic, nw: NewDraft, setNw: SetNw, key: string, options:
 
 // A question's options, without the ones only Draft with AI (or the live AI voice) delivers while it cannot run (and why), but
 // never hiding the answer already chosen.
-function offered(on: Record<'draft' | 'voice', boolean>, q: string, options: string[], chosen: string | undefined) {
+function offered(on: Record<'draft' | 'voice' | 'role', boolean>, q: string, options: string[], chosen: string | undefined) {
   const only = AI_ONLY[q], cut = !!only && !on[only.needs];
   return { options: cut ? options.filter((o) => !only.options.includes(o) || o === chosen) : options, note: cut ? only.why : '' };
 }
@@ -65,7 +65,7 @@ function built(def: StudioDef, nw: NewDraft, list: StudioEntry[]) {
 }
 
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
-  const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list), aiOn = L.aiCan('studio_draft'), on = { draft: aiOn, voice: voiceOn(L.aiOpts()) };
+  const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list), aiOn = L.aiCan('studio_draft'), on = { draft: aiOn, voice: voiceOn(L.aiOpts()), role: L.aiCan('game_role') };
   // Editing the rows keeps the items' provenance and any check after them; a hand-made list says 'manual'.
   const change = (f: (rows: StudioItem[], check: ExamQuestion[]) => StudioEntry[]) => setNw((cur) => { const it = cur.items ?? noItems(), all = it.list as StudioEntry[];
     return { items: { ...it, list: [...f(stepsOf(all), questionsOf(all)), ...all.filter((x) => isVoiceItem(x) || isGameItem(x))] as Item[], how: it.how || 'manual', problems: [] } }; });

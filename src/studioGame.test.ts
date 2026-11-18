@@ -51,6 +51,23 @@ const calls = () => vi.mocked(aiStore.askAi).mock.calls;
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(gameStore.loadGameReview).mockResolvedValue(null); vi.mocked(aiStore.reviewGame).mockResolvedValue({ passed: true, reasons: [] }); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
+describe('"Does the AI play a role?"', () => {
+  const asked = (o: Parameters<typeof open>[0]) => open(o).st().shape.find((g) => g.key === ROLE_QUESTION)!;
+  it('offers the three roles only while the AI role is live; otherwise only "No AI role", with the reason', () => {
+    const off = asked({ uses: ['studio_game'] });
+    expect(off.chips.map((c) => c.label)).toEqual([NO_ROLE]);
+    expect(off.hint).toMatch(/AI role is not switched on/);
+    const on = asked({ uses: ['studio_game', 'game_role'] });
+    expect(on.chips.map((c) => c.label)).toEqual(['Game master', 'Opponent', 'Suspect to question', NO_ROLE]);
+    expect(on.hint).not.toMatch(/not switched on/);
+  });
+  it('keeps a role already chosen on screen, with the reason, even when it is no longer live', () => {
+    const chosen = asked({ uses: ['studio_game'], shape: { [ROLE_QUESTION]: 'Opponent' } });
+    expect(chosen.chips.map((c) => [c.label, c.on])).toEqual([['Opponent', true], [NO_ROLE, false]]);
+    expect(chosen.hint).toMatch(/not switched on/);
+  });
+});
+
 describe('the four build steps', () => {
   it('are the design\'s, and step 1 checks the rows with no AI call', async () => {
     const h = open();
@@ -269,7 +286,7 @@ describe('gameBuilt: how many steps the draft shows done', () => {
     expect(gameBuilt(rows, {})).toBe(0);
     expect(gameBuilt([...rows, item('')], {})).toBe(2);
     expect(gameBuilt([...rows, item(JS)], {})).toBe(3);
-    const all = [...rows, item(JS)], reviewed = (r: GameReviewStatus) => nwOf({ gameReview: r, gameReviewFor: reviewBasis('Invoice detective', all, {}) });
+    const all = [...rows, item(JS)], reviewed = (r: GameReviewStatus) => nwOf({ gameReview: r, gameReviewFor: reviewBasis('Invoice detective', all, {}, 'Spot the flaw.') });
     expect(gameBuilt(all, {}, reviewed(PASSED))).toBe(4);
     expect(gameBuilt(all, {}, reviewed({ ...PASSED, current: false }))).toBe(3);
     expect(gameBuilt(all, {}, reviewed({ passed: false, reasons: ['x'], current: true }))).toBe(3);

@@ -1,10 +1,11 @@
 // One way for the app to ask AI for text. Order:
-//   1. window.claude.complete, inside Claude Design;
+//   1. window.claude.complete, inside Claude Design (not for a server-only use: game_role);
 //   2. the `ai` edge function, when this use is live (a System Admin gave it a connection with a key and a model);
 //   3. otherwise null, and the caller shows its scripted reply (and says so).
 // `enabled` is false with ?live=off. A failure at step 1 or 2 also returns null; nothing falls through to another source.
 import { askAi } from './aiStore';
 import type { AiRequest } from './aiStore';
+import { SERVER_ONLY_USES } from '../logic/ai';
 import type { AiUseKey } from '../logic/ai';
 import { USE_LIMITS } from '../../supabase/functions/_shared/aiGuard.ts';
 
@@ -18,9 +19,9 @@ declare global {
   interface Window { claude?: { complete?: (req: unknown) => Promise<string> } }
 }
 
-export const designAi = () => typeof window !== 'undefined' && typeof window.claude?.complete === 'function';
+export const designAi = (use?: string) => typeof window !== 'undefined' && typeof window.claude?.complete === 'function' && !(use && SERVER_ONLY_USES.includes(use));
 // Whether a use would be answered by AI right now (before trying).
-export const canComplete = (use: AiUseKey, opts: Pick<CompleteOpts, 'enabled' | 'live'>) => opts.enabled && (designAi() || opts.live.includes(use));
+export const canComplete = (use: AiUseKey, opts: Pick<CompleteOpts, 'enabled' | 'live'>) => opts.enabled && (designAi(use) || opts.live.includes(use));
 
 const within = <T>(p: Promise<T>, ms: number) => new Promise<T>((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('timeout')), ms);
@@ -34,7 +35,7 @@ export async function complete(use: AiUseKey, req: AiRequest, opts: CompleteOpts
   if (!opts.enabled) return null;
   const ms = opts.timeoutMs ?? waitFor(use);
   try {
-    if (designAi()) return { text: String(await within(window.claude!.complete!(req), ms)), via: 'design', cut: false };
+    if (designAi(use)) return { text: String(await within(window.claude!.complete!(req), ms)), via: 'design', cut: false };
     if (opts.live.includes(use)) {
       const got = await within((opts.ask || askAi)(use, req), ms);
       return typeof got === 'string' ? { text: got, via: 'connection', cut: false } : { text: got.text, via: 'connection', cut: !!got.cut };

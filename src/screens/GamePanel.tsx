@@ -42,10 +42,11 @@ export default function GamePanel({ gm }: { gm: GameView }) {
     <Card title="Play the game" subtitle={gm.sub}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={muted}>{gm.note}</div>
+        {gm.roleNote && <div style={muted}>{gm.roleNote}</div>}
         <div style={muted}>{gm.completion}</div>
         {run.error && <div role="alert"><Banner tone="warning">{run.error}</Banner></div>}
         {run.phase === 'playing' && (
-          <GameFrame files={gm.files} test={gm.test} runId={run.id} data={gm.data} player={gm.player} height={460} leaderboard={gm.board} askAI={null}
+          <GameFrame files={gm.files} test={gm.test} runId={run.id} data={gm.data} player={gm.player} height={460} leaderboard={gm.board} askAI={gm.ask(run.id)}
             onScore={async (score) => { if (run.id) await gm.finish(run.id, score); }} onFinished={ended} />
         )}
         {run.phase === 'done' && <div style={{ fontWeight: 600 }}>{run.score === null ? 'The game ended without a score.' : 'Your score: ' + run.score}</div>}

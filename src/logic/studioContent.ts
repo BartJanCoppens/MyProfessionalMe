@@ -3,7 +3,8 @@
 // private.explainer_content, private.motion_content); the studio's preview uses this so the creator tries exactly what
 // learners will get. Pure.
 import type { FormatContent } from '../types';
-import { gameContent, gameProblems } from './gameContent';
+import { ROLE_QUESTION, gameContent, gameProblems } from './gameContent';
+import { GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
 import type { GameReviewStatus } from './gameContent';
 import { ALT_MAX, drawingOf } from './motionSvg';
 import { podcastContent, podcastProblems } from './podcastContent';
@@ -68,10 +69,11 @@ export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Reco
   (def.format === 'Animated flow' ? motionProblems(items, shape) : def.format === 'Slides' ? slidesProblems(items, shape, voiceOn)
     : def.format === 'Podcast' ? podcastProblems(items, shape, voiceOn) : def.format === 'Game' ? gameProblems(items, shape, review) : []);
 
-// Answers only Draft with AI (or, for the voice, the live AI voice) can deliver (question to answers): offered only while it can run, with the reason otherwise;
-// an answer already chosen stays on screen, with the reason.
-export const AI_ONLY: Record<string, { options: string[]; why: string; needs: 'draft' | 'voice' }> = {
+// Answers only Draft with AI (or, for the voice, the live AI voice, and for a game's roles the live AI role) can deliver (question to answers): offered only while it can run,
+// with the reason otherwise; an answer already chosen stays on screen, with the reason.
+export const AI_ONLY: Record<string, { options: string[]; why: string; needs: 'draft' | 'voice' | 'role' }> = {
   [END_QUESTION]: { options: [END_CHECK], why: 'A three-question check is written by Draft with AI, which is not switched on', needs: 'draft' },
+  [ROLE_QUESTION]: { options: [...GAME_ROLES], why: 'The AI role is not switched on · only "No AI role" can be chosen until a System Admin gives it a connection', needs: 'role' },
   [PRESENTER]: { options: [AI_VOICE], why: 'The AI voice is not switched on · the browser voice can preview the talk-over in Produce, but nothing is stored', needs: 'voice' },
 };
 

@@ -61,12 +61,28 @@ describe('complete: the fallback order', () => {
     await vi.advanceTimersByTimeAsync(46_000);
     expect(await other).toBeNull();
   });
+  it('never gives a server-only use to Claude Design: the AI role is played by the ai function, with knowledge Design never sees', async () => {
+    const design = vi.fn(async () => 'from design');
+    vi.stubGlobal('window', { claude: { complete: design } });
+    const ask = vi.fn(async () => 'from connection');
+    const role = { enabled: true, live: ['game_role'], ask };
+    expect(await complete('game_role', req, role)).toEqual({ text: 'from connection', via: 'connection', cut: false });
+    expect(design).not.toHaveBeenCalled();
+    expect(await complete('game_role', req, { enabled: true, live: [], ask })).toBeNull();
+    expect(canComplete('game_role', { enabled: true, live: [] })).toBe(false);
+    expect(canComplete('game_role', role)).toBe(true);
+  });
   it('says beforehand whether AI would answer', () => {
     expect(canComplete('profile_chat', live)).toBe(true);
     expect(canComplete('kb_answer', live)).toBe(false);
     expect(canComplete('profile_chat', { enabled: false, live: ['profile_chat'] })).toBe(false);
     vi.stubGlobal('window', { claude: { complete: async () => '' } });
     expect(canComplete('kb_answer', live)).toBe(true);
+  });
+  it('sends a game role ask as run_id and state, and no system text', async () => {
+    db.client.functions.invoke.mockImplementation(async () => ({ data: { text: '{"say":"No."}' }, error: null }));
+    await complete('game_role', { messages: [{ role: 'user', content: 'Q' }], game: { run_id: 'r1', state: '{"round":1}' } }, { enabled: true, live: ['game_role'] });
+    expect(db.client.functions.invoke).toHaveBeenCalledWith('ai', { body: { use: 'game_role', messages: [{ role: 'user', content: 'Q' }], run_id: 'r1', state: '{"round":1}' } });
   });
   it('reaches the ai edge function through the store by default', async () => {
     db.client.functions.invoke.mockImplementation(async () => ({ data: { text: 'Hello' }, error: null }));

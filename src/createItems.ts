@@ -2,6 +2,7 @@
 // bundles' passages (use draft_items) with a scripted fallback for cards, imported from a CSV, checked and removed by
 // the creator. Split out of createVals.ts; every write goes through the form's setNw.
 import type { ChangeEvent } from 'react';
+import type { GameOpts } from './fmtGame';
 import type { Logic } from './model';
 import type { Bundle, NewDraft } from './types';
 import type { Contribution } from './logic/contribution';
@@ -59,14 +60,14 @@ export function itemsPanel(L: Logic, nw: NewDraft, bundles: Bundle[], setNw: Set
 
 // What a saved contribution shows its author and its reviewers: how many items, each of them, a studio's "Shape it"
 // answers (question and answer) and, once its rows are complete (a Presentation: once its file is added), its content in
-// the learner's panel (still: motion off).
-export function viewItems(c: Contribution, suffix: string, still: boolean) {
+// the learner's panel (still: motion off; ai: whether a game's AI role can answer).
+export function viewItems(c: Contribution, suffix: string, still: boolean, ai?: GameOpts['ai']) {
   const list = itemsFromSaved(c.type, c.items), answers = Object.entries(c.shape ?? {}), def = c.studio ? studioById(c.studio) : null;
   // A Presentation's item is its content (its file, played as learners will); a studio piece's rows make its content.
   const content = list.find(isHorizonItem) ?? (def && !itemsValid(def, list as StudioEntry[]).length ? studioContent(c.type, list as StudioEntry[], c.shape ?? {}) : null);
   return { itemsHead: list.length ? countText(c.type, list.length) + suffix : '', itemRows: itemRows(c.type, list),
     answersHead: answers.length ? 'Studio answers' : '', answerRows: answers.map(([q, a]) => ({ front: q, back: a })),
-    asLearner: content && { key: c.id, contributionId: c.id, content, hours: caseHours(c.shape ?? {}), still } };
+    asLearner: content && { key: c.id, contributionId: c.id, content, hours: caseHours(c.shape ?? {}), still, ai } };
 }
 // The refusal when a card or exam has no items yet; `then` says where to get them.
 export const addFirst = (type: string, then: string) => 'Add the ' + noun(type) + ' first · ' + then;

@@ -24,6 +24,8 @@ export interface BridgeContext {
 /** The sandboxed srcdoc frame's origin is opaque, which a message reports as the string "null". */
 const FRAME_ORIGIN = 'null';
 const LEADERBOARD_CALLS = 30;
+/** Asks of the AI role per run: each is a metered call (the server counts them per person and day too). */
+const ASK_CALLS = 30;
 
 /**
  * Only messages from this frame's window, with the frame's opaque origin, that parse are handled, and only
@@ -36,6 +38,7 @@ export function useBridgeHost(frame: RefObject<HTMLIFrameElement | null>, ctx: B
   const scoreFailed = useRef(false);
   const left = useRef(false);
   const leaderboardQueue = useRef(limitedQueue(LEADERBOARD_CALLS));
+  const askQueue = useRef(limitedQueue(ASK_CALLS));
 
   // The iframe's onLoad (attached at commit, so even a first load that fires at once is counted): the first load is
   // the game's own page; any further load means it navigated away.
@@ -70,7 +73,7 @@ export function useBridgeHost(frame: RefObject<HTMLIFrameElement | null>, ctx: B
         case 'submitScore': return submitScore(req.score);
         case 'askAI':
           if (!c.askAI) throw new Error('This game has no AI role');
-          return c.askAI({ messages: req.messages, state: req.state });
+          return askQueue.current(() => c.askAI!({ messages: req.messages, state: req.state }));
         case 'finish':
           // After a failed save the player stays where the message is, not on results without this game.
           if (!scoreFailed.current) c.onFinished(submitted.current);

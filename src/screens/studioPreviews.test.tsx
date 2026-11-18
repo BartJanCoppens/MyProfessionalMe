@@ -89,11 +89,12 @@ describe('Flash studio preview of a practice exam', () => {
 describe('Game preview', () => {
   const ROWS: StudioItem[] = [['Concept', 'You audit a supplier.', 'Find two flaws'], ['Round 1', 'No VAT number.', 'VAT missing'], ['Round 2', 'No date.', 'Date missing']];
   const GAME = { kind: 'game', files: { 'index.html': '<main></main>', 'game.js': 'GameStudio.ready();' }, for: { role: 'No AI role' } };
-  const game = (o: { savedId?: string; review?: GameReviewStatus | null } = {}) => {
-    const h = harness({ access: member('u1'), subject: person(), state: { screen: 'create', createTab: 'new', nwKb: [], studio: { view: 'studio', step: 4, id: 'game' },
+  const game = (o: { savedId?: string; review?: GameReviewStatus | null; role?: 'live' | 'off' } = {}) => {
+    const role = o.role ? 'Suspect to question' : 'No AI role', rows = o.role ? [...ROWS, ['AI role', 'A manager.', 'the supplier is the CFO’s brother']] : ROWS, built = { ...GAME, for: { role } };
+    const h = harness({ access: member('u1'), subject: person(), config: { liveAssistant: o.role === 'live' }, state: { screen: 'create', aiLive: o.role === 'live' ? ['game_role'] : [], createTab: 'new', nwKb: [], studio: { view: 'studio', step: 4, id: 'game' },
       create: { contributions: [], reviews: [], rules: [{ id: 1, user_id: 'u1', ...emptyParts(), lines: ['Consulting'] }], policies: [], peers: 3 },
-      nw: { line: 'Consulting', aud: '', type: 'Game', title: 'T', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'x', outline: [], sources: [], ai: false, aiNote: '', shape: { 'Does the AI play a role?': 'No AI role' },
-        savedId: o.savedId, gameReview: o.review, gameReviewFor: reviewBasis('T', [...ROWS, GAME] as never, { 'Does the AI play a role?': 'No AI role' }), items: { list: [...ROWS, GAME] as never, how: 'manual', problems: [], note: '' } } } });
+      nw: { line: 'Consulting', aud: '', type: 'Game', title: 'T', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'x', outline: [], sources: [], ai: false, aiNote: '', shape: { 'Does the AI play a role?': role },
+        savedId: o.savedId, gameReview: o.review, gameReviewFor: reviewBasis('T', [...rows, built] as never, { 'Does the AI play a role?': role }, 'x'), items: { list: [...rows, built] as never, how: 'manual', problems: [], note: '' } } } });
     render(<Preview kind="game" c={h.vm().create!} />);
     return h;
   };
@@ -110,6 +111,15 @@ describe('Game preview', () => {
     await play();
     expect(gameStore.startRun).not.toHaveBeenCalled();
     expect(frame.props!.runId).toBeNull();
+  });
+  it('with an AI role, says it counts toward the daily limit while live, and that it is not available while not, and asks on the test run', async () => {
+    game({ savedId: 'c-1', role: 'live' });
+    expect(screen.getByText('The AI role counts toward your daily AI limit · Made with AI')).toBeTruthy();
+    await play();
+    expect(typeof frame.props!.askAI).toBe('function');
+    cleanup();
+    game({ savedId: 'c-1', role: 'off' });
+    expect(screen.getByText('The AI role is not available right now')).toBeTruthy();
   });
   it('says so when the server\'s house-rules verdict failed or is out of date, and not when it passed or is unknown', () => {
     game({ review: { passed: false, reasons: ['Round 2 names a real company'], current: true } });

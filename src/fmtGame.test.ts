@@ -61,6 +61,38 @@ describe('the learner\'s game', () => {
   });
 });
 
+describe('the AI role in the game view', () => {
+  const withRole = { ...(parseFormatContent(RAW) as GameContent), role: { kind: 'Suspect to question', about: 'A manager.' } } as GameContent;
+  const o = { ro: false, learningId: 'L969', contributionId: null, player: 'Jan P.', accepter: 'x' };
+  const ask = vi.fn(async () => '{"say": "I signed nothing.", "action": null}');
+  const req = { messages: [{ role: 'player' as const, text: 'Who signed?' }], state: null };
+  it('offers no ask without a role, so the game says "This game has no AI role"', () => {
+    expect(gameView(parseFormatContent(RAW) as GameContent, { ...o, ai: { enabled: true, live: ['game_role'] } }).ask('run-1')).toBeNull();
+    expect(gameView(parseFormatContent(RAW) as GameContent, o).roleNote).toBe('');
+  });
+  it('asks on the run it is given, through the one AI path, and the learner is told AI plays the role', async () => {
+    const v = gameView(withRole, { ...o, ai: { enabled: true, live: ['game_role'], ask } });
+    expect(v.roleNote).toBe('The AI role is played by AI · Made with AI');
+    expect(await v.ask('run-7')!(req)).toEqual({ say: 'I signed nothing.', action: null });
+    expect(ask).toHaveBeenCalledWith('game_role', { messages: [{ role: 'user', content: 'Who signed?' }], game: { run_id: 'run-7', state: '' } });
+  });
+  it('a play-test says the role counts toward the creator\'s daily AI limit', () => {
+    const v = gameView(withRole, { ...o, learningId: null, contributionId: 'c-1', ai: { enabled: true, live: ['game_role'], ask } });
+    expect(v.roleNote).toBe('The AI role counts toward your daily AI limit · Made with AI');
+  });
+  it('says so, and refuses the ask, while the role is not live', async () => {
+    ask.mockClear();
+    const v = gameView(withRole, { ...o, ai: { enabled: true, live: [], ask } });
+    expect(v.roleNote).toBe('The AI role is not available right now');
+    await expect(v.ask('run-1')!(req)).rejects.toThrow('The AI role is not available right now');
+    expect(ask).not.toHaveBeenCalled();
+  });
+  it('has no run to ask on in View as or in an unsaved preview, and says so', async () => {
+    const v = gameView(withRole, { ...o, learningId: null, ai: { enabled: true, live: ['game_role'], ask } });
+    await expect(v.ask(null)!(req)).rejects.toThrow(/needs a saved run/);
+  });
+});
+
 describe('gameView targets', () => {
   const content = parseFormatContent(RAW) as GameContent;
   const o = { ro: false, learningId: null, contributionId: null, player: 'Player', accepter: 'your counsellor' };

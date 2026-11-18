@@ -6,7 +6,7 @@ import { roleOf, GAME_ROLES } from '../../supabase/functions/_shared/gameRules.t
 import { parseFormatContent } from '../lib/contentStore';
 import { STUDIOS } from '../studioData';
 import type { GameItem, GameReviewStatus } from './gameContent';
-import { LEADERBOARD_QUESTION, NO_ROLE, ROLE_QUESTION, gameContent, gameData, gameOf, gameProblems, isGameItem } from './gameContent';
+import { LEADERBOARD_QUESTION, NO_ROLE, ROLE_QUESTION, gameContent, gameData, gameOf, gameProblems, isGameItem, reviewBasis } from './gameContent';
 import { itemRows, itemsFromSaved, itemsText } from './items';
 import { studioContent, outputProblems } from './studioContent';
 import { scriptedItems, studioRequest } from './studioItems';
@@ -77,6 +77,13 @@ describe('what a Game publishes as', () => {
   it('never carries what the AI role knows', () => {
     expect(JSON.stringify(content)).not.toContain(SECRET);
     expect(content && 'knows' in (content.role ?? {})).toBe(false);
+  });
+  it('is stale on screen, as on the server, when only what the AI role knows or the takeaway changes (reviewBasis)', () => {
+    const all = [...ROWS, ROLE_ROW, item({ for: { role: 'Suspect to question' } })] as StudioEntry[], basis = (items: StudioEntry[], take = 'Spot the flaw.') => reviewBasis('T', items, WITH_ROLE, take);
+    expect(basis(all)).toBe(basis([...all]));
+    expect(basis([...ROWS, ['AI role', ROLE_ROW[1], 'another secret text'], all[all.length - 1]] as StudioEntry[])).not.toBe(basis(all));
+    expect(basis(all, 'Another takeaway.')).not.toBe(basis(all));
+    expect(JSON.parse(basis(all))).toEqual(expect.arrayContaining([SECRET, 'Spot the flaw.']));
   });
   it('is what getData gives the game, and is read back by the library', () => {
     expect(gameData([...ROWS])).toEqual({ concept: content!.concept, win: content!.win, rounds: content!.rounds });

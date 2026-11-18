@@ -101,6 +101,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     reviewNote: parts.game?.problem ?? '',
     // Why there is nothing to preview yet.
     still: stillMotion(L), // the Animated flow's preview holds its last frame with motion off
+    ai: L.aiOpts(), // a game's play-test asks the AI role only while it is live
     previewNote: parts.problems.length ? 'Fix the items in the Draft step first; the preview shows them as learners will.' : unsent[0] ?? '',
     // Send for review opens once the automatic check (check_contribution) passed on the draft on screen.
     send: { checks: src.checks, blocked: src.blocked || unsent.length > 0 || !passed, problems: [...unsent, ...reasons],

@@ -34,6 +34,30 @@ afterEach(cleanup);
 
 const play = async () => { fireEvent.click(screen.getByRole('button', { name: 'Play' })); await screen.findByTestId('frame'); };
 
+describe('Game panel: the AI role', () => {
+  const role = { kind: 'Suspect to question' as const, about: 'A manager.' };
+  const ask = vi.fn(async () => '{"say": "I signed nothing.", "action": null}');
+  it('hands the frame no ask for a game without a role, so the game hears "This game has no AI role"', async () => {
+    render(<GamePanel gm={view({ ai: { enabled: true, live: ['game_role'], ask } })} />);
+    await play();
+    expect(frame.props!.askAI).toBeNull();
+    expect(screen.queryByText(/The AI role/)).toBeNull();
+  });
+  it('hands the frame an ask on the run it started, and tells the learner AI plays the role', async () => {
+    render(<GamePanel gm={view({ ai: { enabled: true, live: ['game_role'], ask } }, { role })} />);
+    expect(screen.getByText('The AI role is played by AI · Made with AI')).toBeTruthy();
+    await play();
+    expect(await frame.props!.askAI({ messages: [{ role: 'player', text: 'Who signed?' }], state: null })).toEqual({ say: 'I signed nothing.', action: null });
+    expect(ask).toHaveBeenCalledWith('game_role', expect.objectContaining({ game: { run_id: 'run-1', state: '' } }));
+  });
+  it('says while the role is not live that it is not available, and the ask is refused', async () => {
+    render(<GamePanel gm={view({ ai: { enabled: true, live: [], ask } }, { role })} />);
+    expect(screen.getByText('The AI role is not available right now')).toBeTruthy();
+    await play();
+    await expect(frame.props!.askAI({ messages: [{ role: 'player', text: 'hi' }], state: null })).rejects.toThrow('The AI role is not available right now');
+  });
+});
+
 describe('Game panel', () => {
   it('Play starts a run on the learning and shows the frame with that run', async () => {
     render(<GamePanel gm={view()} />);

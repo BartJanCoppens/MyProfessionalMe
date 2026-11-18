@@ -5,6 +5,8 @@
 // and never counts. The Game Studio's preview and the review views run the same view (studioPreviews.tsx).
 import { firstNameInitial } from './game/protocol';
 import type { LeaderRow } from './game/protocol';
+import type { CompleteOpts } from './lib/ai';
+import { roleAsker, ROLE_UNAVAILABLE } from './lib/gameRole';
 import { finishRun, leaderboard, myBest, startRun } from './lib/gameStore';
 import type { RunTarget } from './lib/gameStore';
 import { fmtTime } from './logic/media';
@@ -13,14 +15,15 @@ import type { Item, Logic } from './model';
 import type { GameContent } from './types';
 
 // learningId: the learner's game (a real run); contributionId: a saved contribution's play-test (a test run); neither: an unsaved
-// preview (no run). ro: View as.
-export type GameOpts = { ro: boolean; learningId: string | null; contributionId: string | null; player: string; accepter: string };
+// preview (no run). ro: View as. ai: whether the AI role can answer now (the live uses, ?live=off); none: it cannot.
+export type GameOpts = { ro: boolean; learningId: string | null; contributionId: string | null; player: string; accepter: string; ai?: Pick<CompleteOpts, 'enabled' | 'live' | 'ask'> };
 
 export const rowLine = (r: LeaderRow) => r.name + ' · ' + r.score + ' · ' + fmtTime(r.seconds);
 
 export function gameView(c: GameContent, o: GameOpts) {
   const target: RunTarget | null = o.ro ? null : o.learningId ? { learningId: o.learningId } : o.contributionId ? { contributionId: o.contributionId } : null;
-  const learning = o.learningId;
+  const learning = o.learningId, ai = o.ai ?? { enabled: true, live: [] };
+  const roleLive = ai.enabled && ai.live.includes('game_role');
   return {
     // Changes when the standings to show change (the learning, View as); the closures below are new on every render.
     key: (learning ?? '') + (o.ro ? ':ro' : ''), content: c, files: c.files, player: o.player, test: !learning,
@@ -28,6 +31,10 @@ export function gameView(c: GameContent, o: GameOpts) {
     sub: c.rounds.length + ' rounds · ' + (c.role ? 'an AI plays ' + c.role.kind.toLowerCase() : 'no AI role') + ' · ' + (c.leaderboard === 'None' ? 'no leaderboard' : c.leaderboard + ' leaderboard') + ' · Made with AI',
     note: o.ro ? 'Viewing someone else: playing saves nothing' : !learning ? 'A play-test never counts and never shows on a leaderboard.'
       : c.leaderboard === 'None' ? 'There is no leaderboard; only your reflection completes the learning.' : 'A finished run goes on the leaderboard; only your reflection completes the learning.',
+    // The AI role: said where it is AI (a learner), that it is metered (a play-test) or that it is not there (not live): never silent.
+    roleNote: !c.role ? '' : !roleLive ? ROLE_UNAVAILABLE : learning ? 'The AI role is played by AI · Made with AI' : 'The AI role counts toward your daily AI limit · Made with AI',
+    // What the game's askAI calls on this run: none without a role (the bridge says "This game has no AI role").
+    ask: (runId: string | null) => (c.role ? roleAsker(runId, ai) : null),
     completion: completionText('Game', o.accepter, true),
     // The run to play on: null when nothing is saved.
     start: async (): Promise<string | null> => (target ? startRun(target) : null),
@@ -40,4 +47,4 @@ export function gameView(c: GameContent, o: GameOpts) {
 export type GameView = ReturnType<typeof gameView>;
 
 export const gameVals = (L: Logic, it: Item, c: GameContent) =>
-  gameView(c, { ro: L.subject.readOnly, learningId: it.id, contributionId: null, player: firstNameInitial(L.subject.name), accepter: L.counsellorFull() });
+  gameView(c, { ro: L.subject.readOnly, learningId: it.id, contributionId: null, player: firstNameInitial(L.subject.name), accepter: L.counsellorFull(), ai: L.aiOpts() });

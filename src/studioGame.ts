@@ -86,7 +86,7 @@ async function reviewed(ctx: BuildCtx, game: GameItem) {
   const { list, nw } = saved as { list: StudioEntry[]; nw: NewDraft };
   const held = await loadGameReview(id);
   const status = held?.current && held.passed ? held : { ...(await reviewGame(id)), current: true };
-  ctx.setNw({ gameReview: status, gameReviewFor: reviewBasis(nw.title, list, nw.shape ?? {}) });
+  ctx.setNw({ gameReview: status, gameReviewFor: reviewBasis(nw.title, list, nw.shape ?? {}, nw.take) });
   if (!status.passed) throw new Error(status.reasons[0] ?? 'The house-rules check did not pass');
 }
 

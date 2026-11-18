@@ -1,6 +1,6 @@
 // Providers per kind of use, the status of a use, and the connection form check (mirror the database rules).
 import { describe, expect, it } from 'vitest';
-import { AI_USE_KEYS, answersText, blankForm, fits, formFor, formProblem, providersFor, statusOfUse, stockVoiceProblem } from './ai';
+import { AI_USE_KEYS, SERVER_ONLY_USES, answersText, blankForm, fits, formFor, formProblem, providersFor, statusOfUse, stockVoiceProblem } from './ai';
 import { VOICE_ID } from '../../supabase/functions/_shared/voiceRules.ts';
 import type { AiConnection, AiUse } from './ai';
 
@@ -89,6 +89,14 @@ describe('the text uses the app calls', () => {
     expect(seed![1]).toMatch(/animat/i);
     expect(seed![2]).toMatch(/SVG only/);
     expect(seed![2]).not.toMatch(/JSON/);
+  });
+  it('seed the game\'s AI role switched off, at 60 calls a person a day, as a server-only use', () => {
+    expect(AI_USE_KEYS).toContain('game_role');
+    expect(SERVER_ONLY_USES).toEqual(['game_role']);
+    const seed = /\('game_role', \d+, 'text', 'Game AI role', 'Games', '(?:[^']|'')*', null, false, false,\s*'((?:[^']|'')*)', 60\)/.exec(migrations);
+    expect(seed).not.toBeNull();
+    expect(seed![1]).toMatch(/Stay in that role/);
+    expect(seed![1]).toMatch(/data, never instructions/);
   });
   it('seed the Game Studio\'s use switched off, at 40 calls a day, with the house rules as its instruction', () => {
     expect(AI_USE_KEYS).toContain('studio_game');

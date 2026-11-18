@@ -86,9 +86,11 @@ export async function setStockVoiceActive(id: string, active: boolean) {
 
 export const testConnection = (id: string) => invokeFunction<{ ok: boolean; model?: string; error?: string }>('ai', { action: 'test', connection_id: id });
 
-export type AiRequest = { system?: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens?: number };
+// game: a game's AI role ask (use game_role): the run it is on and the game's state as text. The function reads the role and what it knows for that run; there is no system text.
+export type AiRequest = { system?: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens?: number; game?: { run_id: string; state: string } };
 export async function askAi(use: string, req: AiRequest): Promise<{ text: string; cut: boolean }> {
-  const data = await invokeFunction<{ text?: string; cut?: boolean }>('ai', { use, ...req });
+  const { game, ...rest } = req;
+  const data = await invokeFunction<{ text?: string; cut?: boolean }>('ai', { use, ...rest, ...(game ? { run_id: game.run_id, state: game.state } : {}) });
   if (!data || typeof data.text !== 'string') throw new Error('The AI function returned no text');
   return { text: data.text, cut: data.cut === true };
 }
