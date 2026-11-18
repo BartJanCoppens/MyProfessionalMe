@@ -8,16 +8,25 @@ export type OkfFile = { path: string; type: string; front: string; body: string 
 // A source whose passages a creator or the retriever may use: never client-confidential or licensed ones.
 export const usablePassage = (src: BundleSource) => src[5] !== 'client' && src[5] !== 'licensed';
 
+// Keyword scoring of passages against a query (words over 3 letters; a shared 5-letter start counts half): the items that match, best first.
+export function rankPassages<T extends { text: string }>(items: T[], q: string): (T & { score: number })[] {
+  const words = q.toLowerCase().split(/[^\p{L}\p{N}€%]+/u).filter((w) => w.length > 3);
+  const out: (T & { score: number })[] = [];
+  items.forEach((it) => {
+    const tx = it.text.toLowerCase();
+    const sc = words.reduce((a, w) => a + (tx.includes(w) ? 1 : tx.includes(w.slice(0, 5)) ? 0.5 : 0), 0);
+    if (sc > 0) out.push({ ...it, score: sc / Math.max(3, words.length) });
+  });
+  return out.sort((a, b) => b.score - a.score);
+}
+
 // Keyword match over every passage; client-confidential and licensed sources are never read.
 export function retrieve(bundles: Bundle[], q: string): Hit[] {
-  const words = q.toLowerCase().replace(/[^a-z0-9€% ]/g, ' ').split(/\s+/).filter((w) => w.length > 3);
-  const hits: Hit[] = [];
-  bundles.forEach((b) => b.chunks.forEach((c) => {
-    const src = b.sources[c[0]]; if (!src || !usablePassage(src)) return; const tx = c[1].toLowerCase();
-    const sc = words.reduce((a, w) => a + (tx.includes(w) ? 1 : tx.includes(w.slice(0, 5)) ? 0.5 : 0), 0);
-    if (sc > 0) hits.push({ text: c[1], src: src[0] + ' · ' + b.name, score: sc / Math.max(3, words.length) });
+  const items = bundles.flatMap((b) => b.chunks.flatMap((c) => {
+    const src = b.sources[c[0]];
+    return src && usablePassage(src) ? [{ text: c[1], src: src[0] + ' · ' + b.name }] : [];
   }));
-  return hits.sort((a, b) => b.score - a.score);
+  return rankPassages(items, q);
 }
 
 // The passages a retrieval profile would pass to the model: displayed similarity, threshold, top-k.

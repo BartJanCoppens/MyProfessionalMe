@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUNDLES0, RAG_PRESETS } from '../data';
-import { importBundle, okfFiles, parseOkf, rankHits, retrieve, tarBytes } from './okf';
+import { importBundle, okfFiles, parseOkf, rankHits, rankPassages, retrieve, tarBytes } from './okf';
 
 const b2 = BUNDLES0.find((b) => b.id === 'B2')!;
 
@@ -75,5 +75,17 @@ describe('importBundle keys', () => {
     const f = (n: number) => ({ file: 'c' + n + '.md', text: '---\ntype: concept\ntitle: Same title\n---\nA paragraph that is long enough to become a passage of its own.' });
     const slugs = importBundle([f(1), f(2)], 'cons.opm', 'B1').bundle.concepts.map((c) => c[0]);
     expect(new Set(slugs).size).toBe(2);
+  });
+});
+
+describe('rankPassages', () => {
+  it('scores a passage by the words of the query, accents and all', () => {
+    const hits = rankPassages([{ text: 'La fiscalité des sociétés' }, { text: 'Nothing here' }], 'fiscalité');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].score).toBeGreaterThan(0);
+  });
+  it('keeps the other fields of an item and puts the best match first', () => {
+    const hits = rankPassages([{ text: 'VAT returns', id: 'a' }, { text: 'VAT returns and exports', id: 'b' }], 'returns exports');
+    expect(hits.map((h) => h.id)).toEqual(['b', 'a']);
   });
 });
