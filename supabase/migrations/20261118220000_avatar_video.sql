@@ -21,7 +21,7 @@ grant update (daily_seconds) on public.ai_uses to authenticated;
 alter table public.ai_usage add column seconds int not null default 0;
 
 update public.ai_uses set waiting_for = null, daily_limit = 10, daily_seconds = 1800, enabled = false where key = 'avatar_video';
-update public.ai_uses set waiting_for = null, label = 'Avatar voice (portrait)', daily_limit = 300, daily_chars = 30000, enabled = false where key = 'avatar_voice';
+update public.ai_uses set waiting_for = null, label = 'Avatar voice (portrait)', description = 'Speaks the character''s lines with the scenario''s stock voice when the live video is not used or fails (the portrait).', daily_limit = 300, daily_chars = 30000, enabled = false where key = 'avatar_voice';
 
 -- 2. The sessions.
 create table public.avatar_sessions (

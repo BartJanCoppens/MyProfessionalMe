@@ -140,6 +140,13 @@ describe('the final report never refunds from the client\'s number', () => {
     expect((init.headers as Record<string, string>)['X-API-KEY']).toBe(KEY);
     expect(d.reports).toEqual([[SID, 1, true, true]]);
   });
+  it('a 2xx whose body code is not a success code is not a stop (the reference shows 100, the SDK checks 1000)', async () => {
+    for (const [code, stopped] of [[100, true], [1000, true], [undefined, true], [4000, false]] as const) {
+      const d = deps({ fetch: vi.fn(async () => new Response(JSON.stringify(code === undefined ? {} : { code, message: 'x' }), { status: 200 })) });
+      await reportResponse(final, d);
+      expect(d.reports).toEqual([[SID, 1, true, stopped]]);
+    }
+  });
   it('a 404 does not count as stopped: the reservation and the open session stay (fail closed)', async () => {
     const d = deps({ fetch: vi.fn(async () => new Response('{}', { status: 404 })) });
     await reportResponse(final, d);

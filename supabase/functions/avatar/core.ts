@@ -2,14 +2,13 @@
 // answers with their outside steps (database, Vault, fetch) passed in, so Vitest tests them (src/lib/avatarCore.test.ts). index.ts wires
 // those steps to Supabase. The token request and language mapping are copied from Taxatar's heygen-token function.
 // The key is only ever put in a header to LiveAvatar; nothing HeyGen answers is passed on, so nothing can echo it.
-import { AI_HEADER, fail, scrub, UUID } from '../_shared/aiGuard.ts';
+import { AI_HEADER, fail, record, scrub, UUID } from '../_shared/aiGuard.ts';
+import type { Read } from '../_shared/aiGuard.ts';
 
 export const AVATAR_USE = 'avatar_video';
 export const LIVEAVATAR = 'https://api.liveavatar.com';
 export const AVATAR_LIMITS = { body: 2000, timeoutMs: 15_000, reportMax: 3600 };
 const UNAVAILABLE = 'Live video is unavailable right now · the portrait speaks instead';
-type Read<T> = ({ ok: true } & T) | { ok: false; error: string };
-const record = (b: unknown) => (b && typeof b === 'object' ? b : {}) as Record<string, unknown>;
 
 export function readStart(body: unknown): Read<{ runId: string }> {
   const runId = record(body).runId;
@@ -128,7 +127,9 @@ async function stopUpstream(sessionId: string, d: StartDeps): Promise<boolean> {
   const req = stopRequest(t, id);
   try {
     const res = await (d.fetch || fetch)(req.url, { ...req.init, signal: AbortSignal.timeout(AVATAR_LIMITS.timeoutMs) });
-    return res.ok;
+    if (!res.ok) return false;
+    const code = record(await res.json().catch(() => ({}))).code; // LiveAvatar answers { code, message }: the reference shows 100, the SDK checks 1000
+    return code === undefined || code === 100 || code === 1000;
   } catch { return false; }
 }
 

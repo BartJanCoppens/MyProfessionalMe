@@ -271,6 +271,12 @@ describe('sayResponse', () => {
     expect((await sayResponse(say(), d)).status).toBe(429);
     expect(d.fetch).not.toHaveBeenCalled();
   });
+  it('refuses a line over the 5,000 characters of one call, before counting or calling', async () => {
+    const d = sayDeps({ input: async () => ({ text: 'x'.repeat(VOICE_LIMITS.chars + 1), voice_id: 'tVoiceWarm01', language: 'en' }) });
+    expect((await sayResponse(say(), d)).status).toBe(422);
+    expect(d.counts).toEqual([]);
+    expect(d.fetch).not.toHaveBeenCalled();
+  });
   it('never returns the key when ElevenLabs echoes it', async () => {
     const d = sayDeps({ fetch: vi.fn(async () => new Response(JSON.stringify({ detail: { message: 'bad ' + KEY } }), { status: 400 })) });
     expect(await (await sayResponse(say(), d)).text()).not.toContain(KEY);

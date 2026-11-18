@@ -5,6 +5,9 @@
 export const fail = (status: number, error: string) => Response.json({ error }, { status });
 // EU AI Act Art. 50 marking, as Taxatar's: on every answer the voice or the avatar made.
 export const AI_HEADER = { 'X-AI-Generated': 'true' } as const;
+// A request read: the value, or the error in words. record() reads a body that may be anything as an object.
+export type Read<T> = ({ ok: true } & T) | { ok: false; error: string };
+export const record = (b: unknown) => (b && typeof b === 'object' ? b : {}) as Record<string, unknown>;
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // Per-use ceilings on one answer, for the uses that write long text (the Game Studio's files, in parts). Every other use keeps the

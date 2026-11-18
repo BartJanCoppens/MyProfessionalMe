@@ -3751,11 +3751,19 @@ select pg_temp.gr_blocked('AL a HeyGen id that is not a uuid is refused', $q$upd
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
 with u as (update public.stock_looks set heygen_avatar_id = '11111111-2222-4333-8444-555555555556' where name = 'HR director · 50s' returning 1)
   insert into results (check_name, expected, actual) select 'AL a creator sets no HeyGen avatar', '0 rows', count(*)||' rows' from u;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with u as (update public.stock_looks set heygen_avatar_id = '11111111-2222-4333-8444-555555555556' where name = 'HR director · 50s' returning 1)
+  insert into results (check_name, expected, actual) select 'AL a Domain Admin sets no HeyGen avatar', '0 rows', count(*)||' rows' from u;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
 select pg_temp.gr_blocked('AL a creator cannot read avatar_sessions', $q$select count(*) from public.avatar_sessions$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_open', format($q$select public.avatar_session_open('00000000-0000-0000-0000-0000000000ab', %L)$q$, current_setting('test.ar_run')), 'blocked: 42501');
 select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_report', $q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', gen_random_uuid(), 0, true, true)$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('AL authenticated cannot execute avatar_say_input', format($q$select public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', %L)$q$, current_setting('test.ar_run')), 'blocked: 42501');
+select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_attach', $q$select public.avatar_session_attach('00000000-0000-0000-0000-0000000000ab', gen_random_uuid(), 'x')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_provider', $q$select public.avatar_session_provider('00000000-0000-0000-0000-0000000000ab', gen_random_uuid())$q$, 'blocked: 42501');
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+with u as (update public.stock_looks set heygen_avatar_id = '11111111-2222-4333-8444-555555555557', heygen_voice_id = '66666666-7777-4888-8999-000000000001' where name = 'CFO · 40s' returning 1) insert into results (check_name, expected, actual) select 'AL a System Admin sets a look''s HeyGen ids', '1 rows', count(*)||' rows' from u;
+with u as (update public.stock_looks set heygen_avatar_id = null, heygen_voice_id = null where name = 'CFO · 40s' returning 1) insert into results (check_name, expected, actual) select 'AL and clears them again (portrait only)', '1 rows', count(*)||' rows' from u;
 with i as (insert into public.ai_connections (name, provider) values ('T HeyGen', 'heygen') returning id) select set_config('test.al_conn', (select id::text from i), true);
 with i as (insert into public.ai_connections (name, provider) values ('T HeyGen no key', 'heygen') returning id) select set_config('test.al_nokey', (select id::text from i), true);
 select public.ai_set_key(current_setting('test.al_conn')::uuid, 'hg-test-key-4321');

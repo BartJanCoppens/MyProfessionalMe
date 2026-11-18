@@ -3,7 +3,8 @@
 // Vitest tests them (src/lib/voiceCore.test.ts). index.ts wires those steps to Supabase. Copied from Horizon's
 // server/voice.ts (markTimes, the with-timestamps call and its reading).
 // The key is only ever put in a request header to ElevenLabs; errors are scrubbed of it before they leave.
-import { AI_HEADER, fail, scrub, UUID } from '../_shared/aiGuard.ts';
+import { AI_HEADER, fail, record, scrub, UUID } from '../_shared/aiGuard.ts';
+import type { Read } from '../_shared/aiGuard.ts';
 import { CUE_MARK, NEXT_MARK, spoken, spokenWords } from '../_shared/narrationText.ts';
 import type { Mark } from '../_shared/narrationText.ts';
 import { AVATAR_VOICE_USE, CLIP_SECONDS_MAX, VOICE_ID, VOICE_USE } from '../_shared/voiceRules.ts';
@@ -22,9 +23,6 @@ export { AI_HEADER };
 export type { Mark };
 export type Speak = { contributionId: string; voiceId: string; text: string };
 export type VoiceTarget = { key: string; baseUrl: string | null; model: string };
-type Read<T> = { ok: true } & T | { ok: false; error: string };
-
-const record = (b: unknown) => (b && typeof b === 'object' ? b : {}) as Record<string, unknown>;
 
 // { contributionId, voiceId, text }: a saved contribution, a voice id and up to 5,000 characters with words.
 export function readSpeak(body: unknown): Read<{ speak: Speak }> {
@@ -214,6 +212,7 @@ export async function sayResponse(body: unknown, d: SayDeps): Promise<Response> 
   if (!said) return fail(500, 'Could not read the run');
   if ('refusal' in said) { const [status, text] = SAY_REFUSALS[said.refusal] || [409, 'Nothing to say for this run']; return fail(status, text); }
   const chars = spoken(said.text).length;
+  if (chars > VOICE_LIMITS.chars) return fail(422, 'At most 5,000 characters per call');
   const counted = await d.count(AVATAR_VOICE_USE, chars);
   if (counted === 'limit') return fail(429, 'Your avatar voice for today is used up (UTC) · continue in text');
   if (counted === 'error') return fail(500, 'Could not count the call');
