@@ -15,7 +15,7 @@ export type StepAt = { step: RunStep; index: number; t: number; marks: RunMark[]
 type Props = { steps: RunStep[]; note?: string; onEnd?: () => void; children?: (at: StepAt) => ReactNode };
 
 // The one speed control of every stepped item: audio plays at it (playbackRate) and a clock-only step runs at it.
-export const SPEEDS = [1, 1.5, 2];
+const SPEEDS = [1, 1.5, 2];
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 
 export default function StepPlayer({ steps, note, onEnd, children }: Props) {
