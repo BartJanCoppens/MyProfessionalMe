@@ -1,11 +1,12 @@
 // The one playback clock for panels that play on their own: the Animated flow and the narration step player. It keeps
 // where it is and whether it runs, ticking every 200 ms from the wall clock; what it drives (an SVG's SMIL clock, an
-// audio element) follows through the hooks. Podcasts and reels run on the app's media tick instead (Logic.tick).
+// audio element) follows through the hooks. Only reels run on the app's media tick instead (Logic.tick).
+// rate (1 by default, read live) scales how fast the clock runs; what it drives follows through the hooks.
 // The hooks of the latest render are called, so an end is told to the view-model of that moment.
 import { useEffect, useRef, useState } from 'react';
 
 const TICK_MS = 200;
-export type ClockHooks = { onSeek?: (t: number) => void; onPlay?: () => void; onPause?: () => void; onEnd: () => void };
+export type ClockHooks = { onSeek?: (t: number) => void; onPlay?: () => void; onPause?: () => void; onEnd: () => void; rate?: number };
 
 export function useClock(seconds: number, start: number, hooks: ClockHooks) {
   const timer = useRef<number | null>(null), latest = useRef(hooks);
@@ -17,9 +18,11 @@ export function useClock(seconds: number, start: number, hooks: ClockHooks) {
   const pause = () => { halt(); latest.current.onPause?.(); setPlaying(false); };
   const play = (from: number) => {
     halt(); seek(from); latest.current.onPlay?.(); setPlaying(true);
-    const since = Date.now();
+    let ran = 0, last = Date.now();
     timer.current = window.setInterval(() => {
-      const now = from + (Date.now() - since) / 1000;
+      const tickAt = Date.now();
+      ran += (tickAt - last) * (latest.current.rate ?? 1); last = tickAt;
+      const now = from + ran / 1000;
       if (now < seconds) { setT(now); return; }
       pause(); seek(seconds); latest.current.onEnd();
     }, TICK_MS);

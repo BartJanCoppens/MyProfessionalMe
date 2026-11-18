@@ -14,32 +14,37 @@ import { useClock } from './useClock';
 export type StepAt = { step: RunStep; index: number; t: number; marks: RunMark[]; jump: (index: number) => void };
 type Props = { steps: RunStep[]; note?: string; onEnd?: () => void; children?: (at: StepAt) => ReactNode };
 
+// The one speed control of every stepped item: audio plays at it (playbackRate) and a clock-only step runs at it.
+export const SPEEDS = [1, 1.5, 2];
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 
 export default function StepPlayer({ steps, note, onEnd, children }: Props) {
-  const [at, setAt] = useState({ index: 0, auto: false }), played = useRef(new Set<number>()), told = useRef(false);
+  const [at, setAt] = useState({ index: 0, auto: false }), [speed, setSpeed] = useState(1), played = useRef(new Set<number>()), told = useRef(false);
   const index = Math.min(at.index, Math.max(steps.length - 1, 0));
   if (!steps.length) return <div style={muted}>Nothing to play yet</div>;
   const go = (i: number, auto: boolean) => setAt({ index: Math.max(0, Math.min(steps.length - 1, i)), auto });
   // Another step is a new run of the clock: it starts at 0, playing when the last one was.
-  return <StepRun key={index} step={steps[index]} index={index} count={steps.length} auto={at.auto} note={note}
+  return <StepRun key={index} step={steps[index]} index={index} count={steps.length} auto={at.auto} note={note} speed={speed} setSpeed={setSpeed}
     go={go} onPlayed={(i) => { played.current.add(i); if (!told.current && played.current.size >= steps.length) { told.current = true; onEnd?.(); } }} show={children} />;
 }
 
-type RunProps = { step: RunStep; index: number; count: number; auto: boolean; note?: string; go: (i: number, auto: boolean) => void; onPlayed: (index: number) => void; show?: Props['children'] };
+type RunProps = { step: RunStep; index: number; count: number; auto: boolean; note?: string; speed: number; setSpeed: (s: number) => void; go: (i: number, auto: boolean) => void; onPlayed: (index: number) => void; show?: Props['children'] };
 
-function StepRun({ step, index, count, auto, note, go, onPlayed, show }: RunProps) {
+function StepRun({ step, index, count, auto, note, speed, setSpeed, go, onPlayed, show }: RunProps) {
   const sound = useRef<HTMLAudioElement | null>(null), [held, setHeld] = useState(false);
   const audio = () => (step.audio ? (sound.current ??= new Audio(step.audio)) : null);
+  const tune = (a: HTMLAudioElement | null) => { if (a) a.playbackRate = speed; return a; };
   const c = useClock(step.seconds, 0, {
+    rate: speed,
     onSeek: (v) => { const a = audio(); if (a) a.currentTime = v; },
-    onPlay: () => { setHeld(false); audio()?.play()?.catch(() => { c.pause(); setHeld(true); }); },
+    onPlay: () => { setHeld(false); tune(audio())?.play()?.catch(() => { c.pause(); setHeld(true); }); },
     onPause: () => sound.current?.pause(),
     onEnd: () => { onPlayed(index); if (index < count - 1) go(index + 1, true); },
   });
   // A step reached by playing on starts playing, once; leaving a step silences it.
   const start = useRef(auto ? c.play : null);
   useEffect(() => { start.current?.(); return () => sound.current?.pause(); }, []);
+  useEffect(() => { if (sound.current) sound.current.playbackRate = speed; }, [speed]);
   const marks = step.marks.filter((m) => m.at <= c.t);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -48,6 +53,7 @@ function StepRun({ step, index, count, auto, note, go, onPlayed, show }: RunProp
         <Button size="sm" variant="secondary" onClick={() => go(index - 1, c.playing)} disabled={index === 0}>Previous</Button>
         {c.playing ? <Button size="sm" variant="secondary" onClick={c.pause}>Pause</Button> : <Button size="sm" onClick={c.play}>Play</Button>}
         <Button size="sm" variant="secondary" onClick={() => go(index + 1, c.playing)} disabled={index === count - 1}>Next</Button>
+        <Button size="sm" variant="secondary" onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}>Speed {speed}×</Button>
         <span style={{ ...muted, fontVariantNumeric: 'tabular-nums' }}>Step {index + 1} of {count} · {Math.floor(c.t)} / {Math.round(step.seconds)} s</span>
       </div>
       {note && <div style={muted}>{note}</div>}

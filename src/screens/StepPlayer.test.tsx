@@ -97,6 +97,31 @@ describe('the step player', () => {
     expect(screen.getByText('The browser held the sound back · press Play again')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy();
   });
+  it('has one speed control (1x, 1.5x, 2x) that sets the clock rate and keeps across steps', () => {
+    render(<StepPlayer steps={TIMED} note="n">{show}</StepPlayer>);
+    expect(screen.getAllByRole('button', { name: /^Speed/ })).toHaveLength(1);
+    click('Speed 1×');
+    click('Play');
+    tick(2000);
+    expect(screen.getByText('Step 1 of 1 · 3 / 4 s')).toBeTruthy();
+    click('Speed 1.5×');
+    click('Speed 2×');
+    expect(screen.getByRole('button', { name: 'Speed 1×' })).toBeTruthy();
+  });
+  it('sets the audio element\'s playbackRate and counts a step finished at 2x as played', () => {
+    const rates: number[] = [];
+    audio.play.mockImplementation(async function (this: HTMLAudioElement) { rates.push(this.playbackRate); });
+    const onEnd = vi.fn();
+    render(<StepPlayer steps={STEPS} onEnd={onEnd}>{show}</StepPlayer>);
+    click('Speed 1×'); click('Speed 1.5×');
+    click('Play');
+    expect(rates).toEqual([2]);
+    tick(1700);
+    expect(screen.getByText('Showing s2 · 0 marks passed')).toBeTruthy();
+    expect(rates).toEqual([2, 2]);
+    tick(1200);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
   it('says when there is nothing to play', () => {
     render(<StepPlayer steps={[]}>{show}</StepPlayer>);
     expect(screen.getByText('Nothing to play yet')).toBeTruthy();
