@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The live talking head hook with the LiveAvatar SDK faked: it speaks only text it is given, never opens the microphone, falls back cleanly
-// when the video fails or stops, and stops the session (with one final keepalive report) on unmount, page hide and three idle minutes.
+// when the video fails or stops, and stops the session (with one final report) on unmount, page hide and three idle minutes.
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDLE_STOP_MS, useLiveAvatar } from './useLiveAvatar';
@@ -35,6 +35,9 @@ async function live(onFallback = vi.fn()) {
   return { ...hook, onFallback, session: sessions[sessions.length - 1] };
 }
 
+// The final reports that went out as an ordinary awaited call (not keepalive).
+const finals = () => invoke.mock.calls.filter((c) => c[0] === 'avatar' && (c[1] as { final?: boolean }).final === true);
+
 beforeEach(() => {
   vi.useFakeTimers();
   sessions.length = 0;
@@ -65,7 +68,8 @@ describe('useLiveAvatar', () => {
     await act(async () => { session.handlers['session.disconnected'](); });
     expect(result.current.status).toBe('ended');
     expect(onFallback).toHaveBeenCalledWith('The video stopped · the portrait speaks instead');
-    expect(keepalive).toHaveBeenCalledTimes(1);
+    expect(finals()).toHaveLength(1);
+    expect(keepalive).not.toHaveBeenCalled();
   });
   it('a refused session fails cleanly, with the function\'s words, and speaking does nothing', async () => {
     invoke.mockRejectedValueOnce(new Error('Your video minutes for today are used up · continue with the portrait or typing'));
@@ -80,23 +84,27 @@ describe('useLiveAvatar', () => {
     const { result, onFallback } = await live();
     expect(result.current.status).toBe('failed');
     expect(onFallback).toHaveBeenCalledWith(expect.stringMatching(/out of credits/));
-    expect(keepalive).toHaveBeenCalledTimes(1);
-    expect(keepalive).toHaveBeenCalledWith('avatar', expect.objectContaining({ seconds: 0, final: true }));
+    expect(finals()).toHaveLength(1);
+    expect(finals()[0][1]).toEqual(expect.objectContaining({ seconds: 0, final: true }));
+    expect(keepalive).not.toHaveBeenCalled();
   });
-  it('unmount stops the session and sends one final keepalive report', async () => {
+  it('unmount stops the session and sends one final report with the normal awaited call', async () => {
     const { unmount, session } = await live();
     unmount();
     await flush();
     expect(session.stop).toHaveBeenCalledTimes(1);
-    expect(keepalive).toHaveBeenCalledTimes(1);
-    expect(keepalive).toHaveBeenCalledWith('avatar', expect.objectContaining({ action: 'report', sessionId: SID, final: true }));
+    expect(finals()).toHaveLength(1);
+    expect(finals()[0][1]).toEqual(expect.objectContaining({ action: 'report', sessionId: SID, final: true }));
+    expect(keepalive).not.toHaveBeenCalled();
   });
-  it('pagehide stops it too, once', async () => {
+  it('pagehide stops it too, once, and only then is the final report a keepalive request', async () => {
     const { session } = await live();
     act(() => { window.dispatchEvent(new Event('pagehide')); window.dispatchEvent(new Event('pagehide')); });
     await flush();
     expect(session.stop).toHaveBeenCalledTimes(1);
     expect(keepalive).toHaveBeenCalledTimes(1);
+    expect(keepalive).toHaveBeenCalledWith('avatar', expect.objectContaining({ final: true }));
+    expect(finals()).toHaveLength(0);
   });
   it('three minutes without a line stop it, saying it paused to save minutes; a line before that keeps it', async () => {
     const { result, session, onFallback } = await live();

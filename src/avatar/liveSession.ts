@@ -14,13 +14,14 @@ export async function openLiveVideo(runId: string): Promise<LiveSessionStart> {
   return { token: d.token, sessionId: d.sessionId, maxSeconds: d.maxSeconds };
 }
 
-// Seconds so far (the server clamps them to the wall clock). A final report is a keepalive request so it leaves while the page closes. Never throws:
-// a report that fails leaves the reservation, which ends by itself.
-export async function reportLiveSeconds(sessionId: string, seconds: number, final: boolean): Promise<void> {
+// Seconds so far (the server clamps them to the wall clock). Every report is the normal awaited call; only the final report on page hide (`keepalive`) is a
+// keepalive request, so it can leave while the page closes (a keepalive request that needs a CORS preflight may not be sent, so it is not the usual path).
+// Never throws: a report that fails leaves the reservation, which ends by itself.
+export async function reportLiveSeconds(sessionId: string, seconds: number, final: boolean, keepalive = false): Promise<void> {
   const body = { action: 'report', sessionId, seconds: Math.max(0, Math.round(seconds)), final };
   try {
-    if (final) await keepaliveFunction('avatar', body);
-    else { await invokeFunction('avatar', body); void warmKeepalive(); } // a heartbeat also refreshes the token the last report will use
+    if (final && keepalive) await keepaliveFunction('avatar', body);
+    else { await invokeFunction('avatar', body); if (!final) void warmKeepalive(); } // a heartbeat also refreshes the token the hide report will use
   } catch { /* the reservation ends by itself */ }
 }
 
@@ -36,7 +37,7 @@ export function classifyLiveError(e: unknown): LiveError {
   return { reason: 'unknown', message: msg || 'Live video failed to start.' };
 }
 
-export type UsageMeter = { start(): void; stop(): Promise<void> };
+export type UsageMeter = { start(): void; stop(keepalive?: boolean): Promise<void> };
 
 /** Meters one video session: a heartbeat while live, one final report on stop (also when it never started: the reservation is returned). */
 export function createUsageMeter(sessionId: string, report: typeof reportLiveSeconds = reportLiveSeconds, now: () => number = () => Date.now()): UsageMeter {
@@ -49,11 +50,11 @@ export function createUsageMeter(sessionId: string, report: typeof reportLiveSec
       timer = setInterval(() => { void report(sessionId, elapsed(), false); }, USAGE_HEARTBEAT_MS);
     },
     // Resolves when the final report has been sent (the server stops the session at LiveAvatar then), so the caller can stop its own end after it.
-    async stop() {
+    async stop(keepalive = false) {
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
-      await report(sessionId, elapsed(), true);
+      await report(sessionId, elapsed(), true, keepalive);
     },
   };
 }

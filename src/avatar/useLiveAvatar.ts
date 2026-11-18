@@ -2,7 +2,7 @@
 // LiveAvatar session that speaks only the text it is given (repeat) and never opens the microphone: nothing the learner says is recorded or sent here (typing is
 // always the way to answer; browser speech recognition, if the panel offers it, is the panel's own). A session that cannot start, is refused (limits), stops by itself
 // or goes idle hands over to the portrait through onFallback; the learner is never stuck on video (S4). The session is stopped, and its seconds finally reported with
-// a keepalive request, on stop, unmount, page hide, idle and run end, so no session is left running unreported.
+// an ordinary request (a keepalive request only on page hide), on stop, unmount, page hide, idle and run end, so no session is left running unreported.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LiveAvatarSession, SessionEvent } from '@heygen/liveavatar-web-sdk';
 import { warmKeepalive } from '../lib/aiStore';
@@ -23,14 +23,14 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
   useEffect(() => { fallback.current = onFallback; });
 
   // Stops everything once: the meter's final report (which also returns the seconds of a session that never started) and the SDK session.
-  const release = useCallback(async () => {
+  const release = useCallback(async (hiding = false) => {
     generation.current += 1;
     live.current = false;
     if (idle.current) clearTimeout(idle.current);
     const [s, m] = [session.current, meter.current];
     session.current = null; meter.current = null;
     // The final report goes first: the server stops the session at LiveAvatar and only a confirmed stop releases the reserved minutes. Then our own end (3 s at most).
-    if (m) await Promise.race([m.stop(), new Promise((r) => setTimeout(r, 3000))]);
+    if (m) await Promise.race([m.stop(hiding), new Promise((r) => setTimeout(r, 3000))]);
     if (s) await s.stop().catch((): void => undefined);
   }, []);
 
@@ -95,7 +95,7 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
     return () => { void release(); };
   }, [enabled, connect, release]);
   useEffect(() => {
-    const onHide = () => { void release(); };
+    const onHide = () => { void release(true); };
     window.addEventListener('pagehide', onHide);
     return () => window.removeEventListener('pagehide', onHide);
   }, [release]);

@@ -27,7 +27,12 @@ describe('createUsageMeter', () => {
     const meter = createUsageMeter(SID, report, () => 0);
     meter.stop();
     meter.stop();
-    expect(report.mock.calls).toEqual([[SID, 0, true]]);
+    expect(report.mock.calls).toEqual([[SID, 0, true, false]]);
+  });
+  it('stop(true), on page hide, asks for the keepalive report', () => {
+    const report = vi.fn().mockResolvedValue(undefined);
+    createUsageMeter(SID, report, () => 0).stop(true);
+    expect(report.mock.calls).toEqual([[SID, 0, true, true]]);
   });
   it('heartbeats every 30 s with the seconds so far, and two stops send one final report', () => {
     vi.useFakeTimers();
@@ -41,7 +46,7 @@ describe('createUsageMeter', () => {
     t += 12_000;
     meter.stop();
     meter.stop();
-    expect(report).toHaveBeenLastCalledWith(SID, 42, true);
+    expect(report).toHaveBeenLastCalledWith(SID, 42, true, false);
     expect(report.mock.calls.filter((c) => c[2] === true)).toHaveLength(1);
     vi.advanceTimersByTime(USAGE_HEARTBEAT_MS * 3);
     expect(report).toHaveBeenCalledTimes(2);
@@ -58,12 +63,16 @@ describe('openLiveVideo and reportLiveSeconds', () => {
     invoke.mockResolvedValueOnce({});
     await expect(openLiveVideo('run-1')).rejects.toThrow(/no session/i);
   });
-  it('a heartbeat goes through the function client; a final report is a keepalive request; neither throws', async () => {
+  it('a heartbeat and a final report go through the function client; only a final report on page hide is a keepalive request; none throws', async () => {
     invoke.mockRejectedValueOnce(new Error('down'));
     await expect(reportLiveSeconds(SID, 30.4, false)).resolves.toBeUndefined();
     expect(invoke).toHaveBeenLastCalledWith('avatar', { action: 'report', sessionId: SID, seconds: 30, final: false });
-    keepalive.mockRejectedValueOnce(new Error('down'));
+    invoke.mockRejectedValueOnce(new Error('down'));
     await expect(reportLiveSeconds(SID, 42, true)).resolves.toBeUndefined();
+    expect(invoke).toHaveBeenLastCalledWith('avatar', { action: 'report', sessionId: SID, seconds: 42, final: true });
+    expect(keepalive).not.toHaveBeenCalled();
+    keepalive.mockRejectedValueOnce(new Error('down'));
+    await expect(reportLiveSeconds(SID, 42, true, true)).resolves.toBeUndefined();
     expect(keepalive).toHaveBeenCalledWith('avatar', { action: 'report', sessionId: SID, seconds: 42, final: true });
   });
 });
