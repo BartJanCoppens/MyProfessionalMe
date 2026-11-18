@@ -6,8 +6,8 @@
 -- ai_uses.daily_seconds                            seconds of live video per person per day (null: no limit). avatar_video: 10 sessions and 1,800 s a day.
 -- ai_usage.seconds                                 seconds reserved or used today, per person and use.
 -- avatar_sessions                                  one row per live session (service role only: no grant, no policy). max_seconds is what HeyGen is told to allow.
--- avatar_session_open / avatar_session_report      reserve the seconds before a token is issued; the report is clamped to the wall clock and a final report
---                                                  returns the unused part of the reservation. One open session per person; an unreported session keeps its
+-- avatar_session_open / avatar_session_report      reserve the seconds before a token is issued; the client's seconds never lower the charge: a final report that
+--                                                  stopped the upstream session charges the wall clock and returns the rest, one that did not stop it keeps the whole reservation. One open session per person; an unreported session keeps its
 --                                                  reservation until its maximum has passed.
 -- avatar_say_input                                 what the portrait voice says: the run's last character line, with the scenario's stock voice (never a text from the client).
 -- ai_live_uses()                                   as before (20261117280000), and an avatar use is live on a HeyGen connection with a key (no model needed).
@@ -31,6 +31,7 @@ create table public.avatar_sessions (
   opened_at timestamptz not null default now(),
   max_seconds int not null check (max_seconds between 60 and 3600),
   used_seconds int not null default 0 check (used_seconds between 0 and max_seconds),
+  provider_session_id text,
   closed_at timestamptz
 );
 create index avatar_sessions_user_id_idx on public.avatar_sessions (user_id);
@@ -86,9 +87,11 @@ begin
 end;
 $$;
 
--- 4. A report of the seconds used so far. Never more than the wall clock allows (plus 5 s), never less than before, never more than the maximum.
--- A final report closes the session and gives the unused part of the reservation back. Returns the seconds used.
-create function public.avatar_session_report(p_user uuid, p_session uuid, p_seconds integer, p_final boolean)
+-- 4. Reporting. The client's seconds are never a reason to charge less: a heartbeat is only recorded (never more than the wall clock allows, plus 5 s, and
+-- never less than before). A final report names whether the upstream (HeyGen) session was stopped by the function: stopped, the session closes and is charged
+-- the wall-clock time since it opened (at most max_seconds), the rest of the reservation returns; not stopped, the whole reservation stays charged and the session
+-- stays open, so open_elsewhere holds until opened_at + max_seconds. Returns the seconds charged (used_seconds records the time seen, for the log).
+create function public.avatar_session_report(p_user uuid, p_session uuid, p_seconds integer, p_final boolean, p_stopped boolean)
 returns integer
 language plpgsql
 security definer
@@ -96,20 +99,41 @@ set search_path = ''
 as $$
 declare
   s public.avatar_sessions;
+  v_wall integer;
   v_used integer;
 begin
   if p_seconds is null or p_seconds < 0 or p_seconds > 3600 then raise exception 'Seconds are 0 to 3,600'; end if;
   select * into s from public.avatar_sessions where id = p_session and user_id = p_user for update;
   if not found then raise exception 'That is not your video session'; end if;
   if s.closed_at is not null then raise exception 'This video session has ended'; end if;
-  v_used := greatest(s.used_seconds, least(p_seconds, floor(extract(epoch from now() - s.opened_at))::integer + 5, s.max_seconds));
-  update public.avatar_sessions set used_seconds = v_used, closed_at = case when p_final then now() end where id = p_session;
-  if p_final then
+  v_wall := floor(extract(epoch from now() - s.opened_at))::integer;
+  v_used := case when p_final then greatest(s.used_seconds, least(v_wall, s.max_seconds)) else greatest(s.used_seconds, least(p_seconds, v_wall + 5, s.max_seconds)) end;
+  update public.avatar_sessions set used_seconds = v_used, closed_at = case when p_final and p_stopped then now() end where id = p_session;
+  if p_final and p_stopped then
     update public.ai_usage set seconds = greatest(0, seconds - (s.max_seconds - v_used))
       where user_id = p_user and use_key = 'avatar_video' and day = (s.opened_at at time zone 'utc')::date;
   end if;
-  return v_used;
+  return case when p_final and not p_stopped then s.max_seconds else v_used end;
 end;
+$$;
+
+-- The provider's session id (HeyGen) the function saved when it issued the token, so a final report can stop that session; and the saving of it.
+create function public.avatar_session_attach(p_user uuid, p_session uuid, p_provider text)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  update public.avatar_sessions set provider_session_id = left(p_provider, 200) where id = p_session and user_id = p_user and closed_at is null;
+$$;
+create function public.avatar_session_provider(p_user uuid, p_session uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select provider_session_id from public.avatar_sessions where id = p_session and user_id = p_user;
 $$;
 
 -- 5. What the portrait says: the last character line of the caller's own run, the scenario's active stock voice and the language code, or a refusal.
@@ -156,5 +180,5 @@ as $$
 $$;
 
 -- 7. Who may execute what: the service role only (the `avatar` and `voice` functions).
-revoke execute on function public.avatar_session_open(uuid, uuid), public.avatar_session_report(uuid, uuid, integer, boolean), public.avatar_say_input(uuid, uuid) from public, anon, authenticated;
-grant execute on function public.avatar_session_open(uuid, uuid), public.avatar_session_report(uuid, uuid, integer, boolean), public.avatar_say_input(uuid, uuid) to service_role;
+revoke execute on function public.avatar_session_open(uuid, uuid), public.avatar_session_report(uuid, uuid, integer, boolean, boolean), public.avatar_session_attach(uuid, uuid, text), public.avatar_session_provider(uuid, uuid), public.avatar_say_input(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.avatar_session_open(uuid, uuid), public.avatar_session_report(uuid, uuid, integer, boolean, boolean), public.avatar_session_attach(uuid, uuid, text), public.avatar_session_provider(uuid, uuid), public.avatar_say_input(uuid, uuid) to service_role;

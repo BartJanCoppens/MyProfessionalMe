@@ -54,11 +54,26 @@ export function readToken(json: unknown): string | null {
   return typeof token === 'string' && token ? token : null;
 }
 
+// LiveAvatar's own id of the session, saved so a final report can stop it (not the token: that one is the learner's).
+export function readSessionId(json: unknown): string | null {
+  const j = record(json), d = record(j.data);
+  const id = d.session_id ?? j.session_id;
+  return typeof id === 'string' && id ? id : null;
+}
+// Stops the session at LiveAvatar. UNCONFIRMED against LiveAvatar's reference: POST <base>/v1/sessions/stop with { session_id } and the key in X-API-KEY
+// (check at the first live run, docs/testing/functional-test-cases.md). A session LiveAvatar no longer knows (404: the client's own stop got there first) counts as stopped.
+export function stopRequest(t: TokenTarget, providerSessionId: string) {
+  return { url: (t.baseUrl || LIVEAVATAR).replace(/\/+$/, '') + '/v1/sessions/stop', init: { method: 'POST' as const, headers: { 'Content-Type': 'application/json', 'X-API-KEY': t.key }, body: JSON.stringify({ session_id: providerSessionId }) } };
+}
+
 export type Opened = { session_id: string; max_seconds: number; avatar_id: string; voice_id: string | null; language: 'en' | 'nl' | 'fr' };
 export type StartDeps = {
   live: () => Promise<boolean>; // avatar_video is in ai_live_uses()
   open: (runId: string) => Promise<Opened | { refusal: string } | null>; // public.avatar_session_open: reserves the seconds; null when it could not be asked
-  report: (sessionId: string, seconds: number, final: boolean) => Promise<{ ok: true; used: number } | { ok: false; message: string }>; // public.avatar_session_report
+  // public.avatar_session_report: the client's seconds only record a heartbeat; a final report charges the wall clock when stopped, the whole reservation when not
+  report: (sessionId: string, seconds: number, final: boolean, stopped: boolean) => Promise<{ ok: true; used: number } | { ok: false; message: string }>;
+  attach: (sessionId: string, providerSessionId: string) => Promise<void>; // public.avatar_session_attach
+  provider: (sessionId: string) => Promise<string | null>; // public.avatar_session_provider
   target: () => Promise<TokenTarget | null>; // the use's HeyGen connection with its key from Vault; null without a key
   log: (line: Record<string, unknown>) => void;
   fetch?: typeof fetch;
@@ -84,7 +99,7 @@ export async function startResponse(body: unknown, d: StartDeps): Promise<Respon
   if (!opened) return fail(500, 'Could not reserve the video minutes');
   if ('refusal' in opened) { const [status, text] = REFUSALS[opened.refusal] || [409, 'Live video is not available for this run']; return fail(status, text); }
   const done = async (status: number, error: string) => {
-    await d.report(opened.session_id, 0, true);
+    await d.report(opened.session_id, 0, true, true); // nothing was started at LiveAvatar: the wall clock (a moment) is charged
     d.log({ action: 'start', status, ms: Date.now() - started });
     return fail(status, error);
   };
@@ -93,9 +108,12 @@ export async function startResponse(body: unknown, d: StartDeps): Promise<Respon
   const req = tokenRequest(t, { avatarId: opened.avatar_id, voiceId: opened.voice_id, language: opened.language, maxSeconds: opened.max_seconds });
   try {
     const res = await (d.fetch || fetch)(req.url, { ...req.init, signal: AbortSignal.timeout(AVATAR_LIMITS.timeoutMs) });
-    const token = res.ok ? readToken(await res.json().catch(() => ({}))) : null;
+    const json = res.ok ? await res.json().catch(() => ({})) : null;
+    const token = readToken(json);
     if (!token) return done(503, UNAVAILABLE);
-    d.log({ action: 'start', status: 200, ms: Date.now() - started });
+    const providerId = readSessionId(json);
+    if (providerId) await d.attach(opened.session_id, providerId);
+    d.log({ action: 'start', status: 200, ms: Date.now() - started, stoppable: !!providerId });
     return Response.json({ token, sessionId: opened.session_id, maxSeconds: opened.max_seconds }, { headers: { ...AI_HEADER, 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     d.log({ action: 'start', error: scrub((err as Error).name, t.key) });
@@ -103,13 +121,28 @@ export async function startResponse(body: unknown, d: StartDeps): Promise<Respon
   }
 }
 
-// { action: 'report', sessionId, seconds, final }: the seconds used so far (the database clamps them to the wall clock); final closes the session.
+// Stops the LiveAvatar session; true when it is stopped or already gone. Without the provider's id or the key it cannot be stopped.
+async function stopUpstream(sessionId: string, d: StartDeps): Promise<boolean> {
+  const [t, id] = await Promise.all([d.target(), d.provider(sessionId)]);
+  if (!t || !id) return false;
+  const req = stopRequest(t, id);
+  try {
+    const res = await (d.fetch || fetch)(req.url, { ...req.init, signal: AbortSignal.timeout(AVATAR_LIMITS.timeoutMs) });
+    return res.ok || res.status === 404;
+  } catch { return false; }
+}
+
+// { action: 'report', sessionId, seconds, final }: the seconds so far are only a heartbeat; the database never charges less than the wall clock because of them.
+// A final report first stops the session at LiveAvatar. When that cannot be confirmed the whole reservation stays charged and the session stays open
+// (one session per person until its maximum has passed), so a client that reports 1 s cannot keep a session running for free.
 export async function reportResponse(body: unknown, d: StartDeps): Promise<Response> {
   const started = Date.now();
   const r = readReport(body);
   if (!r.ok) return fail(400, r.error);
-  const out = await d.report(r.report.sessionId, r.report.seconds, r.report.final);
-  d.log({ action: 'report', status: out.ok ? 200 : 409, ms: Date.now() - started });
+  const { sessionId, seconds, final } = r.report;
+  const stopped = final ? await stopUpstream(sessionId, d) : false;
+  const out = await d.report(sessionId, seconds, final, stopped);
+  d.log({ action: 'report', status: out.ok ? 200 : 409, ms: Date.now() - started, ...(final ? { stopped } : {}) });
   if (out.ok) return Response.json({ usedSeconds: out.used }, { headers: { 'Cache-Control': 'private, no-store' } });
   return fail(/not your/i.test(out.message) ? 403 : 409, /has ended|not your|0 to 3,600/i.test(out.message) ? out.message : 'Could not record the video seconds');
 }

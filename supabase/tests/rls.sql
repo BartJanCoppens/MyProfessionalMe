@@ -3753,7 +3753,7 @@ with u as (update public.stock_looks set heygen_avatar_id = '11111111-2222-4333-
   insert into results (check_name, expected, actual) select 'AL a creator sets no HeyGen avatar', '0 rows', count(*)||' rows' from u;
 select pg_temp.gr_blocked('AL a creator cannot read avatar_sessions', $q$select count(*) from public.avatar_sessions$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_open', format($q$select public.avatar_session_open('00000000-0000-0000-0000-0000000000ab', %L)$q$, current_setting('test.ar_run')), 'blocked: 42501');
-select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_report', $q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', gen_random_uuid(), 0, true)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AL authenticated cannot execute avatar_session_report', $q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', gen_random_uuid(), 0, true, true)$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('AL authenticated cannot execute avatar_say_input', format($q$select public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', %L)$q$, current_setting('test.ar_run')), 'blocked: 42501');
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
 with i as (insert into public.ai_connections (name, provider) values ('T HeyGen', 'heygen') returning id) select set_config('test.al_conn', (select id::text from i), true);
@@ -3778,7 +3778,7 @@ reset role;
 create function pg_temp.al_open(p_user text, p_run text) returns text language sql as $f$
   select coalesce(j ->> 'refusal', (j ->> 'max_seconds')||'/'||(j ->> 'avatar_id')||'/'||(j ->> 'voice_id')||'/'||(j ->> 'language')) from (select public.avatar_session_open(p_user::uuid, p_run::uuid) as j) x $f$;
 create function pg_temp.al_usage() returns text language sql security definer as $f$ select calls||'/'||seconds from public.ai_usage where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video' $f$;
-create function pg_temp.al_session(p_run text) returns uuid language sql security definer as $f$ select id from public.avatar_sessions where run_id = p_run::uuid order by opened_at desc, id limit 1 $f$;
+create function pg_temp.al_session(p_run text) returns uuid language sql security definer as $f$ select id from public.avatar_sessions where run_id = p_run::uuid order by (closed_at is null) desc, opened_at desc, id limit 1 $f$;
 set local role service_role;
 insert into results (check_name, expected, actual) select 'AL another person''s run is not_yours', 'not_yours', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_other'));
 insert into results (check_name, expected, actual) select 'AL a 10-minute run reserves 660 s and gives the look''s avatar, voice and the language code', '660/11111111-2222-4333-8444-555555555555/66666666-7777-4888-8999-000000000000/nl', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_a'));
@@ -3789,21 +3789,33 @@ insert into results (check_name, expected, actual) select 'AL the refused open c
 reset role;
 update public.avatar_sessions set opened_at = now() - interval '60 seconds' where id = pg_temp.al_session(current_setting('test.al_a'));
 set local role service_role;
-insert into results (check_name, expected, actual) select 'AL a report of 90 s on a session opened 60 s ago keeps 65, and a later report of 50 keeps 65', '65/65', public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 90, false)||'/'||public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 50, false);
-select pg_temp.gr_blocked('AL a report of more than 3,600 s is refused', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', %L, 3601, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: Seconds are 0 to 3,600');
-select pg_temp.gr_blocked('AL a report on another person''s session is refused', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ad', %L, 5, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: That is not your video session');
+insert into results (check_name, expected, actual) select 'AL a report of 90 s on a session opened 60 s ago keeps 65, and a later report of 50 keeps 65', '65/65', public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 90, false, false)||'/'||public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 50, false, false);
+select pg_temp.gr_blocked('AL a report of more than 3,600 s is refused', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', %L, 3601, false, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: Seconds are 0 to 3,600');
+select pg_temp.gr_blocked('AL a report on another person''s session is refused', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ad', %L, 5, false, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: That is not your video session');
 -- final: 120 s used of 660 gives 540 back
 reset role;
 update public.avatar_sessions set opened_at = now() - interval '300 seconds' where id = pg_temp.al_session(current_setting('test.al_a'));
 set local role service_role;
-insert into results (check_name, expected, actual) select 'AL a final report of 120 on 660 returns 540 to today''s seconds', '120/120', public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 120, true)||'/'||split_part(pg_temp.al_usage(), '/', 2);
-select pg_temp.gr_blocked('AL a report on a closed session raises', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', %L, 130, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: This video session has ended');
+insert into results (check_name, expected, actual) select 'AL a final report of 1 s after 300 s on the wall clock charges 300 s, not 1, and returns the rest of the 660 to today''s seconds', '300/300', public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_a')), 120, true, true)||'/'||split_part(pg_temp.al_usage(), '/', 2);
+select pg_temp.gr_blocked('AL a report on a closed session raises', format($q$select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', %L, 130, false, false)$q$, pg_temp.al_session(current_setting('test.al_a'))), 'blocked: This video session has ended');
+-- a final report that did not stop the upstream session keeps the whole reservation and the session open (open_elsewhere holds)
+reset role;
+update public.ai_usage set seconds = 0 where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video';
+set local role service_role;
+select pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
+reset role;
+update public.avatar_sessions set opened_at = now() - interval '120 seconds' where id = pg_temp.al_session(current_setting('test.al_b'));
+set local role service_role;
+select public.avatar_session_attach('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 'hg-session-1');
+insert into results (check_name, expected, actual) select 'AL the provider session id is kept for the final report, and is another person''s to nobody', 'hg-session-1/null', public.avatar_session_provider('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')))||'/'||coalesce(public.avatar_session_provider('00000000-0000-0000-0000-0000000000ad', pg_temp.al_session(current_setting('test.al_b'))), 'null');
+insert into results (check_name, expected, actual) select 'AL a final report 1 s after 120 s on the wall clock, upstream not stopped, charges the whole 660 and leaves the session open', '660/660/open_elsewhere', public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 1, true, false)||'/'||split_part(pg_temp.al_usage(), '/', 2)||'/'||pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
+insert into results (check_name, expected, actual) select 'AL the same session reported final again with the upstream stopped closes it and charges the wall clock (120 s)', '120/120', public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 1, true, true)||'/'||split_part(pg_temp.al_usage(), '/', 2);
 -- today's seconds: 1,500 used leaves 300; 1,770 leaves 30: minutes_used
 reset role;
 update public.ai_usage set seconds = 1500 where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video';
 set local role service_role;
 insert into results (check_name, expected, actual) select 'AL with 1,500 s used today a 10-minute run reserves 300', '300', split_part(pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b')), '/', 1);
-select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 0, true);
+select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 0, true, true);
 reset role;
 update public.ai_usage set seconds = 1770 where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video';
 set local role service_role;
@@ -3812,7 +3824,7 @@ reset role;
 update public.ai_usage set seconds = 0, calls = 9 where user_id = '00000000-0000-0000-0000-0000000000ab' and use_key = 'avatar_video';
 set local role service_role;
 select pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
-select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 0, true);
+select public.avatar_session_report('00000000-0000-0000-0000-0000000000ab', pg_temp.al_session(current_setting('test.al_b')), 0, true, true);
 insert into results (check_name, expected, actual) select 'AL the tenth session is allowed, the eleventh is sessions_used (10 a day)', 'sessions_used', pg_temp.al_open('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_b'));
 -- no live look, or a finished run
 reset role;

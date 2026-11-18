@@ -1,22 +1,24 @@
 // The pure core of the `avatar` edge function (supabase/functions/avatar/core.ts): the request checks, the LiveAvatar token request,
 // and the whole start and report answers with their outside steps (database, Vault, fetch) as fakes. The key never leaves.
 import { describe, expect, it, vi } from 'vitest';
-import { liveAvatarLanguage, readReport, readStart, readToken, reportResponse, startResponse, tokenRequest } from '../../supabase/functions/avatar/core.ts';
+import { liveAvatarLanguage, readReport, readStart, readToken, reportResponse, startResponse, stopRequest, tokenRequest } from '../../supabase/functions/avatar/core.ts';
 import type { StartDeps } from '../../supabase/functions/avatar/core.ts';
 
 const KEY = 'hg-secret-key-4321';
 const UID = '0f8fad5b-d9cb-469f-a165-70867728950e', RID = '7c9e6679-7425-40de-944b-e07fc1f90ae7', SID = '3b241101-e2bb-4255-8caf-4136c566a962';
 const AVATAR = '11111111-2222-4333-8444-555555555555';
 const OPENED = { session_id: SID, max_seconds: 660, avatar_id: AVATAR, voice_id: null, language: 'nl' };
+const PID = 'hg-session-77';
 const body = async (r: Response) => JSON.parse(await r.text());
 
-function deps(over: Partial<StartDeps> = {}): StartDeps & { reports: [string, number, boolean][]; lines: Record<string, unknown>[] } {
-  const reports: [string, number, boolean][] = [], lines: Record<string, unknown>[] = [];
+function deps(over: Partial<StartDeps> = {}): StartDeps & { reports: [string, number, boolean, boolean][]; attached: string[]; lines: Record<string, unknown>[] } {
+  const reports: [string, number, boolean, boolean][] = [], attached: string[] = [], lines: Record<string, unknown>[] = [];
   return {
     live: async () => true, open: async () => OPENED, target: async () => ({ key: KEY, baseUrl: null }),
-    report: async (id, seconds, final) => { reports.push([id, seconds, final]); return { ok: true, used: seconds }; },
-    log: (l) => lines.push(l), reports, lines,
-    fetch: vi.fn(async () => new Response(JSON.stringify({ data: { session_token: 'tok-1' } }), { status: 200 })), ...over,
+    report: async (id, seconds, final, stopped) => { reports.push([id, seconds, final, stopped]); return { ok: true, used: seconds }; },
+    attach: async (_id, provider) => { attached.push(provider); }, provider: async () => PID,
+    log: (l) => lines.push(l), reports, attached, lines,
+    fetch: vi.fn(async () => new Response(JSON.stringify({ data: { session_token: 'tok-1', session_id: PID } }), { status: 200 })), ...over,
   };
 }
 
@@ -88,6 +90,7 @@ describe('startResponse', () => {
     expect(r.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await body(r)).toEqual({ token: 'tok-1', sessionId: SID, maxSeconds: 660 });
     expect(d.reports).toEqual([]);
+    expect(d.attached).toEqual([PID]);
     expect(JSON.stringify(d.lines)).not.toContain(KEY);
   });
   it('HeyGen 402 returns the seconds once and answers 503 without echoing the key', async () => {
@@ -97,7 +100,7 @@ describe('startResponse', () => {
     expect(r.status).toBe(503);
     expect(JSON.parse(text).error).toBe('Live video is unavailable right now · the portrait speaks instead');
     expect(text).not.toContain(KEY);
-    expect(d.reports).toEqual([[SID, 0, true]]);
+    expect(d.reports).toEqual([[SID, 0, true, true]]);
     expect(JSON.stringify(d.lines)).not.toContain(KEY);
   });
   it('a transport error, a reply with no token and a missing key return the seconds too', async () => {
@@ -105,7 +108,7 @@ describe('startResponse', () => {
       const d = deps(over);
       const r = await startResponse(start, d);
       expect(r.status).toBeGreaterThanOrEqual(409);
-      expect(d.reports).toEqual([[SID, 0, true]]);
+      expect(d.reports).toEqual([[SID, 0, true, true]]);
       expect(await r.text()).not.toContain(KEY);
     }
   });
@@ -122,5 +125,37 @@ describe('reportResponse', () => {
   it('a closed session answers 409 in words', async () => {
     const r = await reportResponse({ sessionId: SID, seconds: 5 }, deps({ report: async () => ({ ok: false, message: 'This video session has ended' }) }));
     expect([r.status, (await body(r)).error]).toEqual([409, 'This video session has ended']);
+  });
+});
+
+describe('the final report never refunds from the client\'s number', () => {
+  const final = { action: 'report', sessionId: SID, seconds: 1, final: true };
+  it('stops the session at LiveAvatar with its own id, then reports stopped', async () => {
+    const d = deps({ fetch: vi.fn(async () => new Response('{}', { status: 200 })) });
+    const r = await reportResponse(final, d);
+    expect(r.status).toBe(200);
+    const [url, init] = (d.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(stopRequest({ key: KEY, baseUrl: null }, PID).url);
+    expect(JSON.parse(String(init.body))).toEqual({ session_id: PID });
+    expect((init.headers as Record<string, string>)['X-API-KEY']).toBe(KEY);
+    expect(d.reports).toEqual([[SID, 1, true, true]]);
+  });
+  it('a session LiveAvatar no longer knows (404) counts as stopped', async () => {
+    const d = deps({ fetch: vi.fn(async () => new Response('{}', { status: 404 })) });
+    await reportResponse(final, d);
+    expect(d.reports).toEqual([[SID, 1, true, true]]);
+  });
+  it('when the stop fails, errors or cannot be asked (no id or key), the report says not stopped, so the database keeps the whole reservation', async () => {
+    for (const over of [{ fetch: vi.fn(async () => new Response('{}', { status: 500 })) }, { fetch: vi.fn(async () => { throw new Error('down'); }) }, { provider: async () => null }, { target: async () => null }]) {
+      const d = deps(over);
+      expect((await reportResponse(final, d)).status).toBe(200);
+      expect(d.reports).toEqual([[SID, 1, true, false]]);
+    }
+  });
+  it('a heartbeat stops nothing', async () => {
+    const d = deps();
+    await reportResponse({ action: 'report', sessionId: SID, seconds: 30, final: false }, d);
+    expect(d.fetch).not.toHaveBeenCalled();
+    expect(d.reports).toEqual([[SID, 30, false, false]]);
   });
 });
