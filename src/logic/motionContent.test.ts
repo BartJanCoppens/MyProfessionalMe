@@ -136,7 +136,7 @@ describe('the database repeats the Animated flow rules', () => {
   });
   it('private.contribution_problems counts only the stages toward the minimum and names what an Animated flow lacks', () => {
     const p = body('private.contribution_problems');
-    expect(p).toContain("c.type not in ('Interactive explainer', 'Animated flow', 'Slides', 'Podcast') or jsonb_typeof(e) = 'array'");
+    expect(p).toContain("c.type not in ('Interactive explainer', 'Animated flow', 'Slides', 'Podcast', 'Game') or jsonb_typeof(e) = 'array'");
     expect(p).toContain("when 'Animated flow' then 'Add the stages, build the animation and write its text alternative first'");
   });
   it('publishes an Animated flow as a short media learning', () => {

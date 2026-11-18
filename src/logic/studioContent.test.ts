@@ -184,7 +184,7 @@ describe('the database repeats these rules', () => {
     [END_CHECK, END_SUMMARY, END_NONE, 'Overview', 'With technical detail'].forEach((w) => expect(c).toContain("'" + w + "'"));
     const p = body('private.contribution_problems');
     [NEEDS_CHECK, UNUSED_CHECK].forEach((m) => expect(p).toContain("'" + m.replace(/'/g, "''") + "'"));
-    expect(p).toContain("c.type not in ('Interactive explainer', 'Animated flow', 'Slides', 'Podcast') or jsonb_typeof(e) = 'array'");
+    expect(p).toContain("c.type not in ('Interactive explainer', 'Animated flow', 'Slides', 'Podcast', 'Game') or jsonb_typeof(e) = 'array'");
   });
   it('private.contribution_content publishes every format whose studio is available', () => {
     const b = body('private.contribution_content');

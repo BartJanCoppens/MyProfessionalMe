@@ -2681,5 +2681,115 @@ insert into results (check_name, expected, actual) select 'PD is_chapter accepts
   private.is_chapter('Chapter 1 · 0:00')||'/'||private.is_chapter('Chapter 1 · 0:60')||'/'||private.is_chapter('Chapter 1 · 0:00 ')||'/'||private.is_chapter('Host')||'/'||private.is_chapter(null);
 -- the older voice-over use is the Reel Studio's alone
 insert into results (check_name, expected, actual) select 'VO media_voice is narrowed to reels', 'Reel voice-over/the Reel Studio', label||'/'||waiting_for from public.ai_uses where key = 'media_voice';
+-- ---------- Game Studio (GM) ----------
+-- A game is [label, text, text2] rows (private.game_ok): one Concept first, Rounds, at most one "AI role" row (text who the AI plays, text2 what
+-- it knows), then one built game {kind, files, for, review, made} (private.game_item_ok). The scan of its two files runs here too
+-- (private.game_scan), so a crafted write is refused as the browser would. It publishes as game content without what the AI role knows.
+reset role;
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000aa','{Consulting}','{Game}');
+insert into public.review_policies (formats, peers, expert, quality) values ('{Game}', 0, false, false);
+select set_config('test.gm_rows', '[["Concept","You audit a supplier suspected of a fake-invoice scheme. Every invoice hides one flaw.","Win: find four flaws before the supplier’s manager leaves"],["Round 1","Invoice 2026-031 shows the supplier’s name and address, but no VAT number.","Supplier VAT number missing"],["Round 2","Invoice 2026-032 carries the delivery date but no invoice date.","Invoice date missing"],["Round 3","Two invoices carry the same number, 2026-033.","Invoice number not unique"],["Round 4","A book is invoiced at 21 % VAT.","Wrong rate: books are taxed at 6 %"]]', true);
+select set_config('test.gm_role', '["AI role","The supplier’s manager, defensive and in a hurry.","the supplier is the CFO’s brother"]', true);
+create function pg_temp.gm_game(p_js text default 'GameStudio.ready();', p_html text default '<main id="app"></main>', p_role text default 'No AI role', p_review jsonb default '{"passed":true,"reasons":[]}') returns jsonb language sql as $f$
+  select jsonb_build_object('kind', 'game', 'files', jsonb_build_object('index.html', p_html, 'game.js', p_js), 'for', jsonb_build_object('role', p_role), 'review', p_review, 'made', 'ai') $f$;
+create function pg_temp.gm_items(p_game jsonb default pg_temp.gm_game(), p_role boolean default false) returns jsonb language sql as $f$
+  select current_setting('test.gm_rows')::jsonb || case when p_role then jsonb_build_array(current_setting('test.gm_role')::jsonb) else '[]'::jsonb end || case when p_game is null then '[]'::jsonb else jsonb_build_array(p_game) end $f$;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, shape) values
+ ('Consulting','Game','T gm ok','reg','Spot the flaw.','game','{"Does the AI play a role?":"Suspect to question","Leaderboard?":"My team only"}'),
+ ('Consulting','Game','T gm bad','reg','x','game','{"Does the AI play a role?":"No AI role"}'),
+ ('Consulting','Game','T gm role','reg','x','game','{"Does the AI play a role?":"Suspect to question"}') returning 1)
+  insert into results (check_name, expected, actual) select 'GM a Game is made in its studio', '3 rows', count(*)||' rows' from i;
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_role => 'Suspect to question'), true) where title = 'T gm ok';
+insert into results (check_name, expected, actual) select 'GM a built game that passed its review, with its AI role, passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T gm ok'))::text;
+do $$ declare r record; begin
+  -- the scan: each rule, in game.js (problem texts as scanGameFiles gives them)
+  for r in select * from (values ('fetch("x")', 'game.js contacts another website (fetch()'), ('localStorage.setItem("a", 1)', 'game.js uses browser storage (localStorage)'),
+    ('var u = "https://x.test";', 'game.js contains a web address (https://)'), ('location.href = "x";', 'game.js leaves the page (location.href =)'),
+    ('document.body.innerHTML = "<iframe>";', 'game.js loads code from elsewhere (<iframe)'), ('new XMLHttpRequest()', 'game.js contacts another website (XMLHttpRequest)'),
+    ('window.open("x")', 'game.js leaves the page (window.open(')) as t(js, problem) loop
+    update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_js => r.js)) where title = 'T gm bad';
+    insert into results (check_name, expected, actual) select 'GM the check refuses game.js with '||r.js, r.problem, array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+  end loop;
+  update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_html => '<!-- see https://x.test --><p></p>')) where title = 'T gm bad';
+  insert into results (check_name, expected, actual) select 'GM a web address in index.html, comments included', 'index.html contains a web address (https://)', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+  update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_html => '<SCRIPT SRC="x.js"></SCRIPT>')) where title = 'T gm bad';
+  insert into results (check_name, expected, actual) select 'GM the case-insensitive rules read upper case too', 'index.html loads code from elsewhere (<SCRIPT SRC=)', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+  update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_js => 'location == 1; a.location.hash; fetchData(); myeval(1)')) where title = 'T gm bad';
+  insert into results (check_name, expected, actual) select 'GM comparisons and look-alikes pass the scan', '{}', public.check_contribution((select id from public.contributions where title = 'T gm bad'))::text;
+  -- the game item's shape and limits
+  for r in select * from (values ('a file named style.css', pg_temp.gm_game() || jsonb_build_object('files', jsonb_build_object('index.html', 'x', 'style.css', 'y'))),
+    ('index.html at 16,001 characters', pg_temp.gm_game(p_html => repeat('x', 16001))), ('game.js at 32,001 characters', pg_temp.gm_game(p_js => repeat('x', 32001))),
+    ('an extra key', pg_temp.gm_game() || '{"extra":1}'), ('made by a person', pg_temp.gm_game() || '{"made":"person"}'), ('an AI role answer that does not exist', pg_temp.gm_game(p_role => 'Judge')),
+    ('a review that is not an object', pg_temp.gm_game(p_review => '"passed"')), ('a review with 11 reasons', pg_temp.gm_game(p_review => jsonb_build_object('passed', true, 'reasons', (select jsonb_agg('x'::text) from generate_series(1, 11))))),
+    ('a reason of 301 characters', pg_temp.gm_game(p_review => jsonb_build_object('passed', true, 'reasons', jsonb_build_array(repeat('x', 301))))),
+    ('a file that is not text', pg_temp.gm_game() || '{"files":{"index.html":1,"game.js":"x"}}')) as t(k, v) loop
+    update public.contributions set items = pg_temp.gm_items(r.v) where title = 'T gm bad';
+    insert into results (check_name, expected, actual) select 'GM a game with '||r.k||' fails the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+  end loop;
+  -- the rows
+  for r in select * from (values ('two Concepts', '[["Concept","a","b"],["Concept","a","b"],["Round 1","a","b"],["Round 2","a","b"]]'::jsonb), ('no Concept first', '[["Round 1","a","b"],["Concept","a","b"],["Round 2","a","b"]]'),
+    ('one Round', '[["Concept","a","b"],["Round 1","a","b"]]'), ('a label that is none of them', '[["Concept","a","b"],["Round 1","a","b"],["Round 2","a","b"],["Twist","a","b"]]'),
+    ('a Round without a number', '[["Concept","a","b"],["Round 1","a","b"],["Round","a","b"]]'), ('two AI roles', '[["Concept","a","b"],["Round 1","a","b"],["Round 2","a","b"],["AI role","a","b"],["AI role","a","b"]]'),
+    ('10 rows (the game takes the last place)', (select jsonb_agg(jsonb_build_array(case when g = 1 then 'Concept' else 'Round ' || (g - 1) end, 'a', 'b')) from generate_series(1, 10) g))) as t(k, v) loop
+    update public.contributions set items = case when jsonb_array_length(r.v) >= 10 then r.v else r.v || jsonb_build_array(pg_temp.gm_game()) end where title = 'T gm bad'; -- ten rows leave no place for the game: the cap of 10 items holds first
+    insert into results (check_name, expected, actual) select 'GM rows with '||r.k||' fail the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+  end loop;
+  update public.contributions set items = pg_temp.gm_items() || jsonb_build_array(pg_temp.gm_game()) where title = 'T gm bad';
+  insert into results (check_name, expected, actual) select 'GM two built games fail the check', 'Add the items first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+end $$;
+-- what the check says about the build
+update public.contributions set items = pg_temp.gm_items(null) where title = 'T gm bad';
+insert into results (check_name, expected, actual) select 'GM the check refuses a game that was not built', 'Build the game in Produce first', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_review => '{"passed":false,"reasons":["Nothing can be lost","x"]}')) where title = 'T gm bad';
+insert into results (check_name, expected, actual) select 'GM a review that did not pass is refused with its first reason', 'The house-rules check has not passed: Nothing can be lost', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_review => 'null')) where title = 'T gm bad';
+insert into results (check_name, expected, actual) select 'GM a game that was never reviewed is refused', 'The house-rules check has not passed', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_role => 'Opponent')) where title = 'T gm bad';
+insert into results (check_name, expected, actual) select 'GM changing the AI role after the build is refused', 'You changed the AI role after the build · build the game again', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_role => 'Suspect to question')) where title = 'T gm role';
+insert into results (check_name, expected, actual) select 'GM a chosen AI role needs its row', 'Add the AI role: who it plays and what it knows', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm role')), '|');
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(), true) where title = 'T gm bad';
+insert into results (check_name, expected, actual) select 'GM an AI role row without a chosen role is refused', 'Remove the AI role row, or choose a role in Shape it', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm bad')), '|');
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_js => 'const s = "THE SUPPLIER IS THE CFO’S BROTHER";', p_role => 'Suspect to question'), true) where title = 'T gm role';
+insert into results (check_name, expected, actual) select 'GM code that repeats what the AI role hides is refused, in any case', 'The game''s code repeats what the AI role hides', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm role')), '|');
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_html => '<p>The supplier is the CFO’s brother</p>', p_role => 'Suspect to question'), true) where title = 'T gm role';
+insert into results (check_name, expected, actual) select 'GM and in index.html too', 'The game''s code repeats what the AI role hides', array_to_string(public.check_contribution((select id from public.contributions where title = 'T gm role')), '|');
+update public.contributions set items = current_setting('test.gm_rows')::jsonb || '[["AI role","A manager.","a short one"]]'::jsonb || jsonb_build_array(pg_temp.gm_game(p_js => 'a short one', p_role => 'Opponent')),
+  shape = '{"Does the AI play a role?":"Opponent"}' where title = 'T gm role';
+insert into results (check_name, expected, actual) select 'GM a hidden text under 12 characters is not looked for', '{}', public.check_contribution((select id from public.contributions where title = 'T gm role'))::text;
+-- publishing: the content, hours and AI mark; the secret stays out of it
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_role => 'Suspect to question'), true) where title = 'T gm ok';
+select public.check_contribution((select id from public.contributions where title = 'T gm ok'));
+insert into results (check_name, expected, actual) select 'GM a game is published', 'published', public.submit_contribution((select id from public.contributions where title = 'T gm ok'));
+insert into results (check_name, expected, actual) select 'GM the game becomes game content: concept, win, four rounds with answers, the role without what it knows, the leaderboard and the two files', 'true',
+  (l.content = jsonb_build_object('kind', 'game', 'made', 'ai', 'leaderboard', 'My team only', 'files', jsonb_build_object('index.html', '<main id="app"></main>', 'game.js', 'GameStudio.ready();'),
+    'concept', 'You audit a supplier suspected of a fake-invoice scheme. Every invoice hides one flaw.', 'win', 'Win: find four flaws before the supplier’s manager leaves',
+    'rounds', jsonb_build_array(jsonb_build_object('text', 'Invoice 2026-031 shows the supplier’s name and address, but no VAT number.', 'answer', 'Supplier VAT number missing'),
+      jsonb_build_object('text', 'Invoice 2026-032 carries the delivery date but no invoice date.', 'answer', 'Invoice date missing'),
+      jsonb_build_object('text', 'Two invoices carry the same number, 2026-033.', 'answer', 'Invoice number not unique'),
+      jsonb_build_object('text', 'A book is invoiced at 21 % VAT.', 'answer', 'Wrong rate: books are taxed at 6 %')),
+    'role', jsonb_build_object('kind', 'Suspect to question', 'about', 'The supplier’s manager, defensive and in a hurry.')))::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T gm ok';
+insert into results (check_name, expected, actual) select 'GM kind game, 4 rounds, the AI role''s secret is nowhere in the content, AI made, 0.25 h', 'game/4/true/true/0.25', l.content ->> 'kind'||'/'||jsonb_array_length(l.content -> 'rounds')||'/'||(position('brother' in l.content::text) = 0)||'/'||l.ai_made||'/'||l.hours
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T gm ok';
+-- a crafted write with a script load is refused at submit, as the check refuses it
+update public.contributions set items = pg_temp.gm_items(pg_temp.gm_game(p_js => 'fetch("https://x.test")')) where title = 'T gm bad';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T gm bad'));
+    insert into results (check_name, expected, actual) values ('GM a crafted game that fetches is not submitted', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('GM a crafted game that fetches is not submitted', 'blocked', 'blocked: '||sqlstate); end;
+  begin perform private.game_scan('{}'::jsonb);
+    insert into results (check_name, expected, actual) values ('GM a signed-in user cannot call game_scan', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('GM a signed-in user cannot call game_scan', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- a learner (not the author, not a reviewer) cannot read the contribution, which holds what the AI role knows; the learning has no secret
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'GM a learner selects the contribution and gets 0 rows', '0', count(*)::text from public.contributions where title = 'T gm ok';
+insert into results (check_name, expected, actual) select 'GM and the published learning holds nothing the AI role knows', '1/0', count(*)||'/'||count(*) filter (where content::text like '%CFO’s brother%') from public.learnings where format = 'Game' and title = 'T gm ok';
+reset role;
+insert into results (check_name, expected, actual) select 'GM a Game stays a counsellor-accepted reflection: evidence rule unchanged, never self-completed', 'reflection/false',
+  private.evidence_rule('Game')||'/'||private.is_self_complete((select learning_id from public.contributions where title = 'T gm ok'));
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
