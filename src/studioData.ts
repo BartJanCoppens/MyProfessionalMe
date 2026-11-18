@@ -2,7 +2,6 @@
 import type { StudioDef } from './logic/studios';
 
 export const STUDIO_STEPS = ['Idea & sources', 'Shape it', 'Draft', 'Produce', 'Preview & test', 'Check & send'];
-export const STOCK_LOOKS: { role: string; color: string }[] = [{ role: 'HR director · 50s', color: '#8a5a8c' }, { role: 'CFO · 40s', color: '#2f7fc1' }, { role: 'Consultant · 30s', color: '#4c7a10' }, { role: 'Engineer · 50s', color: '#b5762a' }];
 export const STUDIOS: StudioDef[] = [
  { id: 'avatar', name: 'Avatar Studio', out: 'Avatar', format: 'Avatar', available: false, compact: false, glyph: 'AV', time: 'about 20 min', dom: 'prof', lvl: 3, min: 6, cast: 'look', pv: 'avatar',
    tag: 'A talking AI character people practise a hard conversation with',

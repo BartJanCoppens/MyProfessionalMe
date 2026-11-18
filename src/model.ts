@@ -79,7 +79,7 @@ export function initState(cfg: Config): AppState {
     studio: { view: 'hub', step: 0 },
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
     evDraft: null, decideNote: {}, trjTalk: {}, queue: null, queueError: null, fbDraft: null, quiz: null, fmt: null, att: null,
-    aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {}, stockVoices: null, voiceForm: null, voiceHearing: null,
+    aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {}, stockVoices: null, voiceForm: null, voiceHearing: null, stockLooks: null, lookForm: null,
   };
 }
 

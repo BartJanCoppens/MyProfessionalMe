@@ -7,6 +7,7 @@ import type { TrjMine } from './logic/trajectoryLearner';
 import type { QueueRow } from './lib/recordStore';
 import type { RosterRow } from './lib/attendanceStore';
 import type { AiAdmin, AiForm, AiUseEdit, StockVoice, StockVoiceForm } from './logic/ai';
+import type { StockLook, StockLookForm } from './logic/stockLooks';
 import type { HorizonItem } from './logic/horizonItem';
 import type { RunMark } from './logic/narration';
 // id, title, dom, lvl, format, source, hours, cpd, due, why
@@ -174,6 +175,7 @@ export type AppState = {
   aiAdmin: AiAdmin | null; aiError: string | null; aiBusy: boolean; aiForm: AiForm | null; aiConfirm: string | null; aiUseEdit: AiUseEdit | null; aiTests: Record<string, { ok: boolean | null; text: string }>;
   // Stock voices (System and General Admins, same page): the list, the add form, and the voice whose sample is loading.
   stockVoices: StockVoice[] | null; voiceForm: StockVoiceForm | null; voiceHearing: string | null;
+  stockLooks: StockLook[] | null; lookForm: StockLookForm | null;
 };
 
 export type StepDraft = { link: string; ref: string; note: string };

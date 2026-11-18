@@ -1,12 +1,12 @@
 // AI connections view-model (Administration), split out of Logic.renderVals(). System Admins see the whole page; a
-// General Admin its stock voices only (voiceVals.ts). The data lives in Supabase (src/lib/aiStore.ts) and is loaded into
+// General Admin its stock voices and looks only (voiceVals.ts). The data lives in Supabase (src/lib/aiStore.ts) and is loaded into
 // AppState when the page opens; keys go to Vault and never come back.
 import type { ChangeEvent, FocusEvent, KeyboardEvent } from 'react';
 import type { Logic } from './model';
 import { answersText, blankForm, fits, formFor, formProblem, KIND_LABEL, KINDS, PREAMBLE_MAX, PROVIDER_KEYS, PROVIDERS, statusOfUse, aiUseEditProblem } from './logic/ai';
 import type { AiForm, AiProvider, AiUse } from './logic/ai';
-import { deleteConnection, loadAiAdmin, loadLiveUses, loadStockVoices, saveConnection, setKey, testConnection, updateUse } from './lib/aiStore';
-import { stockVoicesVals } from './voiceVals';
+import { deleteConnection, loadAiAdmin, loadLiveUses, loadStockLooks, loadStockVoices, saveConnection, setKey, testConnection, updateUse } from './lib/aiStore';
+import { stockLooksVals, stockVoicesVals } from './voiceVals';
 
 type Field = ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
 const times = (n: number) => n + (n === 1 ? ' call' : ' calls');
@@ -21,13 +21,18 @@ export async function refreshStockVoices(L: Logic) {
   try { L.setState({ stockVoices: await loadStockVoices() }); } catch { /* the studio then says it has no stock voices */ }
 }
 
-// The page's data: connections and uses for a System Admin (RLS returns nothing to anyone else), stock voices for System
+// The stock looks a creator may choose (RLS lets everyone read the active ones), for the Reel Studio's look. A failure leaves none.
+export async function refreshStockLooks(L: Logic) {
+  try { L.setState({ stockLooks: await loadStockLooks() }); } catch { /* the studio then says it has no stock looks */ }
+}
+
+// The page's data: connections and uses for a System Admin (RLS returns nothing to anyone else), stock voices and looks for System
 // and General Admins.
 export async function loadAiPage(L: Logic) {
   if (!L.access.isSystem && !L.access.isGeneral) return;
   try {
-    const [d, voices] = await Promise.all([L.access.isSystem ? loadAiAdmin() : null, loadStockVoices()]);
-    L.setState({ ...(d ? { aiAdmin: d } : {}), stockVoices: voices, aiError: null });
+    const [d, voices, looks] = await Promise.all([L.access.isSystem ? loadAiAdmin() : null, loadStockVoices(), loadStockLooks()]);
+    L.setState({ ...(d ? { aiAdmin: d } : {}), stockVoices: voices, stockLooks: looks, aiError: null });
   } catch (err) { L.setState({ aiError: (err as Error).message }); }
 }
 
@@ -133,8 +138,8 @@ function aiScreen(L: Logic) {
 
   const system = L.access.isSystem;
   return {
-    system, voices: stockVoicesVals(L, write),
-    lead: !system ? 'The stock voices creators may choose for narration. Name each voice as a role, never as a person; a voice is deactivated, never deleted. A System Admin manages the connections and keys.' : 'Store the API keys of the AI providers and choose which connection serves each place the app uses AI. Keys go into the Supabase vault: nobody can read them back, only their last four characters. A use that is not live keeps its scripted reply, labelled as scripted.',
+    system, voices: stockVoicesVals(L, write), looks: stockLooksVals(L, write),
+    lead: !system ? 'The stock voices and looks creators may choose. Name each as a role, never as a person; one is deactivated, never deleted. A System Admin manages the connections and keys.' : 'Store the API keys of the AI providers and choose which connection serves each place the app uses AI. Keys go into the Supabase vault: nobody can read them back, only their last four characters. A use that is not live keeps its scripted reply, labelled as scripted.',
     loading: system && !a && !s.aiError, error: s.aiError, retry: () => { L.setState({ aiError: null }); loadAiPage(L); }, busy: s.aiBusy,
     summary: a ? live.length + ' of ' + uses.length + ' uses live · ' + conns.length + ' connection' + (conns.length === 1 ? '' : 's') : '',
     designNote: typeof window !== 'undefined' && window.claude?.complete ? 'Inside Claude Design its own model answers first; these settings apply everywhere else.' : '',

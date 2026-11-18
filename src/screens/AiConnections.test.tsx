@@ -11,12 +11,14 @@ import * as voice from '../lib/voice';
 import { cfg, generalAdmin, person, systemAdmin } from '../test/harness';
 import type { AppState } from '../types';
 import type { AiAdmin, StockVoice } from '../logic/ai';
+import type { StockLook } from '../logic/stockLooks';
 import AiConnectionsScreen from './AiConnections';
 
 vi.mock('../lib/aiStore', () => ({
   loadAiAdmin: vi.fn(), loadLiveUses: vi.fn(async () => []), saveConnection: vi.fn(async () => 'c9'), setKey: vi.fn(async () => {}),
   deleteConnection: vi.fn(async () => {}), updateUse: vi.fn(async () => {}), testConnection: vi.fn(async () => ({ ok: true, model: 'claude-opus-5-5' })), askAi: vi.fn(),
   loadStockVoices: vi.fn(async () => []), addStockVoice: vi.fn(async () => {}), setStockVoiceActive: vi.fn(async () => {}),
+  loadStockLooks: vi.fn(async () => []), addStockLook: vi.fn(async () => {}), setStockLookActive: vi.fn(async () => {}),
 }));
 vi.mock('../lib/voice', async (orig) => ({ ...(await orig<typeof import('../lib/voice')>()), hearStockVoice: vi.fn(async () => 'data:audio/mpeg;base64,AAA') }));
 
@@ -32,9 +34,10 @@ const data = (): AiAdmin => ({
 });
 
 const VOICES: StockVoice[] = [{ id: 'v1', name: 'Narrator · warm, 40s', voice_id: 'tVoiceWarm01', language: 'en', accent: 'British', active: true }];
+const LOOKS: StockLook[] = [{ id: 'l1', name: 'CFO · 40s', portrait: 'p2', color: '#2f7fc1', licence: 'Drawn in code for MyProfessionalMe · no real person · no third-party image', active: true }];
 let current: AppState;
 function Live({ access = systemAdmin(), live = [] as string[] }) {
-  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'adminAi', aiAdmin: access.isSystem ? data() : null, stockVoices: VOICES, aiLive: live }));
+  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'adminAi', aiAdmin: access.isSystem ? data() : null, stockVoices: VOICES, stockLooks: LOOKS, aiLive: live }));
   useEffect(() => { current = st; });
   const refs = { toastTimer: { current: undefined }, drag: { current: null }, file: { current: null }, chat: { current: null } };
   const conf = { ...cfg, liveAssistant: true };
@@ -44,7 +47,7 @@ function Live({ access = systemAdmin(), live = [] as string[] }) {
 const click = async (name: string | RegExp) => { await act(async () => { fireEvent.click(screen.getAllByRole('button', { name })[0]); }); };
 const row = (key: string) => document.querySelector('[data-use="' + key + '"]') as HTMLElement;
 
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(store.loadAiAdmin).mockResolvedValue(data()); vi.mocked(store.loadStockVoices).mockResolvedValue(VOICES); });
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(store.loadAiAdmin).mockResolvedValue(data()); vi.mocked(store.loadStockVoices).mockResolvedValue(VOICES); vi.mocked(store.loadStockLooks).mockResolvedValue(LOOKS); });
 afterEach(cleanup);
 
 describe('the AI connections screen', () => {
@@ -110,6 +113,28 @@ describe('the AI connections screen', () => {
     expect(screen.getByText('Remove it and its key?')).toBeTruthy();
     await click('Remove');
     expect(store.deleteConnection).toHaveBeenCalledWith('c1');
+  });
+});
+
+describe('the stock looks', () => {
+  it('shows each look with its drawn portrait and licence, and no upload control', () => {
+    render(<Live />);
+    const section = screen.getByRole('region', { name: 'Stock looks' });
+    expect(within(section).getByText('CFO · 40s')).toBeTruthy();
+    expect(within(section).getByAltText('Portrait of CFO · 40s')).toBeTruthy();
+    expect(within(section).getByText(/Drawn in code for MyProfessionalMe/)).toBeTruthy();
+    expect(document.querySelector('input[type=file]')).toBeNull();
+  });
+  it('lets a General Admin add a look and switch one off', async () => {
+    render(<Live access={generalAdmin()} />);
+    const section = screen.getByRole('region', { name: 'Stock looks' });
+    await act(async () => { fireEvent.click(within(section).getByRole('button', { name: 'Deactivate' })); });
+    expect(store.setStockLookActive).toHaveBeenCalledWith('l1', false);
+    await click('+ Add look');
+    fireEvent.change(screen.getByLabelText('Name, as a role and an age'), { target: { value: 'Auditor · 40s' } });
+    fireEvent.change(screen.getByLabelText('Portrait'), { target: { value: 'p3' } });
+    await click('Add look');
+    expect(store.addStockLook).toHaveBeenCalledWith(expect.objectContaining({ name: 'Auditor · 40s', portrait: 'p3', color: '#2f7fc1' }));
   });
 });
 

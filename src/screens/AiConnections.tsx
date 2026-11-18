@@ -1,6 +1,6 @@
 // Administration · AI connections (System Admins): the providers' connections with their keys (shown as a hint only),
-// every place the app uses AI with the connection and model that serve it, and the stock voices (also General Admins,
-// who see that section only). Reads only from the view-model (aiVals, voiceVals).
+// every place the app uses AI with the connection and model that serve it, and the stock voices and looks (also General Admins,
+// who see those sections only). Reads only from the view-model (aiVals, voiceVals).
 import { Banner, Button, Drawer, Field, Hover, Input, LinkButton, PageTitle, PillToggle, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
 
@@ -91,7 +91,8 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
         </section>
       ))}
 
-      <StockVoices v={ai.voices} />
+      <StockList title="Stock voices" addLabel="+ Add voice" emptyText="No stock voices yet. Add the ElevenLabs voices creators may choose." v={ai.voices} />
+      <StockList title="Stock looks" addLabel="+ Add look" emptyText="No stock looks yet. Add the drawn portraits creators may choose." v={ai.looks} />
 
       {ai.system && ai.usageTop.length > 0 && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -104,7 +105,8 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
       )}
 
       {ai.form && <ConnectionDrawer f={ai.form} />}
-      {ai.voices.form && <VoiceDrawer f={ai.voices.form} />}
+      {ai.voices.form && <StockDrawer f={ai.voices.form} />}
+      {ai.looks.form && <StockDrawer f={ai.looks.form} />}
       {ai.useEdit && (
         <Drawer title={ai.useEdit.title} subtitle={ai.useEdit.subtitle} onClose={ai.useEdit.cancel} width={480}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -141,19 +143,21 @@ function ConnectionDrawer({ f }: { f: NonNullable<AiVM['form']> }) {
   );
 }
 
-// The voices creators may choose for narration: a role as the name, never a person; deactivated, never deleted.
-function StockVoices({ v }: { v: AiVM['voices'] }) {
+// The stock voices and the stock looks creators may choose: a role as the name, never a person; deactivated, never deleted.
+// One list and one drawer show both (voiceVals.ts gives them one shape). A look shows its drawn portrait; a voice its sample.
+function StockList({ title, addLabel, emptyText, v }: { title: string; addLabel: string; emptyText: string; v: AiVM['voices'] | AiVM['looks'] }) {
   return (
-    <section aria-label="Stock voices" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <section aria-label={title} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-        <div style={caps}>Stock voices</div>
-        <Button size="sm" variant="secondary" onClick={v.add}>+ Add voice</Button>
+        <div style={caps}>{title}</div>
+        <Button size="sm" variant="secondary" onClick={v.add}>{addLabel}</Button>
       </div>
-      {v.hearNote && <div style={{ fontSize: 12, color: '#8b918a' }}>{v.hearNote}</div>}
-      {v.loading && <div style={{ color: '#8b918a' }}>Loading the stock voices</div>}
-      {v.empty && <div style={{ ...card, padding: '14px 16px', color: '#5a6058' }}>No stock voices yet. Add the ElevenLabs voices creators may choose.</div>}
+      {v.note && <div style={{ fontSize: 12, color: '#8b918a' }}>{v.note}</div>}
+      {v.loading && <div style={{ color: '#8b918a' }}>Loading the {title.toLowerCase()}</div>}
+      {v.empty && <div style={{ ...card, padding: '14px 16px', color: '#5a6058' }}>{emptyText}</div>}
       {v.rows.map((r) => (
         <div key={r.id} style={{ ...card, padding: '10px 16px', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          {r.thumb && <img src={r.thumb.src} alt={'Portrait of ' + r.name} width={40} height={50} style={{ background: r.thumb.color, borderRadius: 6 }} />}
           <div style={{ flex: '1 1 260px', minWidth: 0 }}>
             <div style={{ fontWeight: 600 }}>{r.name}</div>
             <div style={{ fontSize: 12, color: '#5a6058', marginTop: 2 }}>{r.meta}</div>
@@ -167,16 +171,18 @@ function StockVoices({ v }: { v: AiVM['voices'] }) {
   );
 }
 
-function VoiceDrawer({ f }: { f: NonNullable<AiVM['voices']['form']> }) {
+function StockDrawer({ f }: { f: NonNullable<AiVM['voices']['form'] | AiVM['looks']['form']> }) {
   return (
-    <Drawer title="Add a stock voice" subtitle="Only stock voices from the ElevenLabs voice library: never a copy of a colleague's voice." onClose={f.cancel} width={480}>
+    <Drawer title={f.title} subtitle={f.subtitle} onClose={f.cancel} width={480}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Field label="Name, as a role" hint="A role and a description, never a person's name."><Input aria-label="Name, as a role" value={f.name} onChange={f.setName} placeholder="e.g. Narrator · warm, 40s" /></Field>
-        <Field label="ElevenLabs voice id"><Input aria-label="ElevenLabs voice id" value={f.voice_id} onChange={f.setVoiceId} placeholder="from the ElevenLabs voice library" /></Field>
-        <Field label="Language"><Input aria-label="Language" value={f.language} onChange={f.setLanguage} placeholder="e.g. en or nl-BE" /></Field>
-        <Field label="Accent (optional)"><Input aria-label="Accent" value={f.accent} onChange={f.setAccent} placeholder="e.g. British" /></Field>
+        {f.fields.map((x) => (
+          <Field key={x.label} label={x.label} hint={x.hint}>
+            {x.options ? <Select aria-label={x.label} value={x.value} onChange={x.set} options={x.options} />
+              : <Input aria-label={x.label} value={x.value} onChange={x.set} placeholder={x.placeholder} />}
+          </Field>
+        ))}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <Button onClick={f.save} disabled={f.busy}>Add voice</Button>
+          <Button onClick={f.save} disabled={f.busy}>{f.submit}</Button>
           <LinkButton tone="muted" onClick={f.cancel}>Cancel</LinkButton>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 // Every source file, as text. Guards against fictional people creeping back in: the seeded learner (Lena Mertens),
 // her counsellor, and the learner's-eye demo colleagues. The design's studio looks (Marleen, Yves, Sara) are roles now. Avatar-practice characters (AVATARS) are content, not people.
-const sources = import.meta.glob(['../**/*.ts', '../**/*.tsx', '!../**/*.test.ts'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const sources = import.meta.glob(['../**/*.ts', '../**/*.tsx', '!../**/*.test.ts', '../../supabase/migrations/20261118170000_stock_looks.sql'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
 describe('source code', () => {
   it('names no seeded learner, counsellor or colleague', () => {

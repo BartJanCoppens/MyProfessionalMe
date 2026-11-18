@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { STUDIOS, STUDIO_STEPS, STOCK_LOOKS } from '../studioData';
+import { STUDIOS, STUDIO_STEPS } from '../studioData';
+import { migrationText } from '../test/migrations';
 import { itemsValid, studioById, visibleSteps } from './studios';
 import type { StudioItem } from './studios';
 
@@ -18,10 +19,12 @@ describe('studio definitions', () => {
     expect(def('flash').alsoFormats).toEqual(['Practice exam']);
     expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
   });
-  it('names no person: examples and stock looks use roles', () => {
-    const text = JSON.stringify([STUDIOS, STOCK_LOOKS]);
-    expect(text).not.toMatch(/Marleen|Pieter|\bSara\b|Yves/);
-    expect(STOCK_LOOKS.map((l) => l.role)).toEqual(['HR director · 50s', 'CFO · 40s', 'Consultant · 30s', 'Engineer · 50s']);
+  it('names no person: the examples and the seeded stock looks use roles', () => {
+    expect(JSON.stringify(STUDIOS)).not.toMatch(/Marleen|Pieter|\bSara\b|Yves/);
+    const names = [...migrationText('20261118170000_stock_looks.sql').matchAll(/^\s+\('([^']+)', 'p\d'/gm)].map((m) => m[1]);
+    expect(names).toHaveLength(4);
+    names.forEach((n) => expect(n).toMatch(/^[A-Z][A-Za-z ]+ · \d0s$/));
+    names.forEach((n) => expect(n).not.toMatch(/Marleen|Pieter|\bSara\b|Yves/));
   });
   it('finds a studio by id', () => { expect(studioById('reel')?.name).toBe('Reel Studio'); expect(studioById('nope')).toBeUndefined(); });
 });

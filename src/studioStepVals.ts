@@ -19,7 +19,8 @@ import { isGameItem } from './logic/gameContent';
 import { voiceOn } from './lib/voice';
 import { STEERS, questionsOf, stepsOf } from './logic/studios';
 import type { Steers, StudioDef, StudioEntry, StudioItem } from './logic/studios';
-import { STOCK_LOOKS } from './studioData';
+import { lookOf } from './logic/stockLooks';
+import { portraitUrl } from './reel/portraits';
 import type { Chip } from './screens/ChipGroup';
 import { gameProduce } from './studioGame';
 import { motionProduce } from './studioMotion';
@@ -36,13 +37,20 @@ const choices = (nw: NewDraft, setNw: SetNw, field: Field, key: string, options:
   key, hint: steers ? STEERS[steers] : note, chips: options.map((o) => ({ key: o, label: o, on: nw[field]?.[key] === o, pick: () => setNw((cur) => ({ [field]: { ...cur[field], [key]: o } })) })),
 });
 
-// Which stock looks and voices a studio casts. A voice is one of the active stock voices, offered once the AI voice is live: for a deck
+const NO_STOCK_LOOKS = 'No stock looks are offered yet. A General Admin adds them on the AI connections page.';
+// Which stock looks and voices a studio casts. A look is one of the active stock looks. A voice is one of the active stock voices, offered once the AI voice is live: for a deck
 // once the AI voice is chosen, for an episode one for each speaker of its format.
 function castPickers(L: Logic, def: StudioDef, nw: NewDraft) {
-  const looks = STOCK_LOOKS.map((l) => l.role), voices = stockVoicesOf(L), names = (voices ?? []).map((v) => v.name), note = voices && !voices.length ? NO_STOCK_VOICES : '';
+  const looks = (L.state.stockLooks ?? []).filter((l) => l.active).map((l) => l.name), voices = stockVoicesOf(L), names = (voices ?? []).map((v) => v.name), note = voices && !voices.length ? NO_STOCK_VOICES : '';
   if (def.cast === 'voice') return wantsVoice(nw.shape ?? {}) && voiceOn(L.aiOpts()) ? [{ key: 'Voice', options: names, note }] : [];
   if (def.cast === 'voices') return voiceOn(L.aiOpts()) ? speakersOf(nw.shape ?? {}).map((speaker) => ({ key: castKey(speaker), options: names, note, speaker })) : [];
-  return def.cast === 'look' ? [{ key: 'Look', options: looks }] : [];
+  return def.cast === 'look' ? [{ key: 'Look', options: looks, note: L.state.stockLooks && !looks.length ? NO_STOCK_LOOKS : '' }] : [];
+}
+
+// A look choice: the active stock looks, each with its drawn portrait next to the role.
+function lookChoice(L: Logic, nw: NewDraft, setNw: SetNw, key: string, options: string[], note = '') {
+  const g = choices(nw, setNw, 'cast', key, options, undefined, note);
+  return { ...g, chips: g.chips.map((c) => ({ ...c, image: portraitUrl(lookOf(L.state.stockLooks, c.label)!.portrait) })) };
 }
 
 // A voice choice: the voice picked, or the one the stored clips were made in; picking another drops the clips of the old one.
@@ -73,7 +81,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     shape: def.qs.map(([q, options, steers]) => { const o = offered(on, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers)),
     cast: castPickers(L, def, nw).map((p) => ('speaker' in p ? voiceChoice(L, nw, setNw, p.key, p.options, p.note, speakerVoiceName(L, nw, p.speaker), (cur, id) => dropSpeakerVoice(cur, p.speaker, id))
-      : p.key === 'Voice' ? voiceChoice(L, nw, setNw, p.key, p.options, 'note' in p ? p.note : '', deckVoiceName(L, nw), dropOtherVoices) : choices(nw, setNw, 'cast', p.key, p.options))),
+      : p.key === 'Voice' ? voiceChoice(L, nw, setNw, p.key, p.options, 'note' in p ? p.note : '', deckVoiceName(L, nw), dropOtherVoices) : lookChoice(L, nw, setNw, p.key, p.options, p.note))),
     rows: stepsOf(list).map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
       edit: (f: 0 | 1 | 2, v: string) => change((rows, q) => [...rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x)), ...q]),
       remove: () => change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]) })),

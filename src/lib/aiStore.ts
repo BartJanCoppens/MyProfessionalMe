@@ -3,6 +3,7 @@
 // Stock voices: System and General Admins add and (de)activate them; nobody deletes one (RLS).
 import { supabase } from './supabase';
 import type { AiAdmin, AiConnection, AiForm, AiUsage, AiUse, StockVoice, StockVoiceForm } from '../logic/ai';
+import type { StockLook, StockLookForm } from '../logic/stockLooks';
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 // Calls an AI edge function (`ai`, `voice`). Throws the function's own error message (e.g. "This AI use is not live …")
@@ -82,6 +83,25 @@ export async function setStockVoiceActive(id: string, active: boolean) {
   const { data, error } = await supabase.from('stock_voices').update({ active }).eq('id', id).select('id');
   fail(error);
   if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can change stock voices');
+}
+
+// Admins read every look; anyone else only the active ones (RLS).
+export async function loadStockLooks(): Promise<StockLook[]> {
+  const { data, error } = await supabase.from('stock_looks').select('id, name, portrait, color, licence, active').order('created_at');
+  fail(error);
+  return (data || []) as StockLook[];
+}
+
+export async function addStockLook(f: StockLookForm) {
+  const { data, error } = await supabase.from('stock_looks').insert({ ...f, color: f.color.toLowerCase() }).select('id');
+  fail(error);
+  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can add stock looks');
+}
+
+export async function setStockLookActive(id: string, active: boolean) {
+  const { data, error } = await supabase.from('stock_looks').update({ active }).eq('id', id).select('id');
+  fail(error);
+  if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can change stock looks');
 }
 
 export const testConnection = (id: string) => invokeFunction<{ ok: boolean; model?: string; error?: string }>('ai', { action: 'test', connection_id: id });

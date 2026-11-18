@@ -8,7 +8,7 @@ import type { AiAdmin, AiConnection, AiUse } from './logic/ai';
 
 vi.mock('./lib/aiStore', () => ({
   loadAiAdmin: vi.fn(), loadLiveUses: vi.fn(async () => []), saveConnection: vi.fn(async () => 'c9'), setKey: vi.fn(async () => {}),
-  deleteConnection: vi.fn(async () => {}), updateUse: vi.fn(async () => {}), testConnection: vi.fn(), askAi: vi.fn(), loadStockVoices: vi.fn(async () => []),
+  deleteConnection: vi.fn(async () => {}), updateUse: vi.fn(async () => {}), testConnection: vi.fn(), askAi: vi.fn(), loadStockVoices: vi.fn(async () => []), loadStockLooks: vi.fn(async () => []),
 }));
 
 const conn = (over: Partial<AiConnection> = {}): AiConnection => ({ id: 'c1', name: 'Claude', provider: 'anthropic', base_url: null, default_model: 'claude-opus-5-5', region: 'global', key_hint: 'abcd', ...over });

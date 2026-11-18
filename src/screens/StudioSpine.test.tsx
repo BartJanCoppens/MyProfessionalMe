@@ -34,7 +34,8 @@ function Live({ state, readOnly = false }: { state: Partial<AppState>; readOnly?
 const rule = (formats: string[]) => ({ id: 1, user_id: 'u1', lines: ['Consulting'], formats, domains: [], audiences: [] });
 const data = (formats: string[] = []): CreateData => ({ contributions: [], reviews: [], rules: [rule(formats)], policies: [], peers: 3 });
 const nw = { line: 'Consulting', aud: '', type: 'Reel', title: 'Pillar Two', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One takeaway.', outline: [], sources: [], ai: false, aiNote: '' };
-const atStep = (step: number, readOnly = false) => <Live readOnly={readOnly} state={{ create: data(), createTab: 'new', nw, studio: { view: 'studio', step, id: 'reel' } }} />;
+const looks = [{ id: 'l1', name: 'HR director · 50s', portrait: 'p1' as const, color: '#8a5a8c', licence: 'Drawn in code', active: true }];
+const atStep = (step: number, readOnly = false) => <Live readOnly={readOnly} state={{ create: data(), createTab: 'new', nw, stockLooks: looks, studio: { view: 'studio', step, id: 'reel' } }} />;
 // StudioBuild is controlled (the steps live on the draft); this holds them the way the draft does.
 function Held({ initial, ...rest }: { initial: BuildStepState[]; runner: Parameters<typeof StudioBuild>[0]['runner']; readOnly?: boolean }) {
   const [steps, setSteps] = useState(initial);
