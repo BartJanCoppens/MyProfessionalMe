@@ -18,6 +18,7 @@ import {
   attrsOfDraft, blankDraft, checkKey, decide, deleteDraft, draftOf, effective, first, myLine, revKey, runCheck, saveForm, submitSaved, submittedEdit, writePolicy,
 } from './createSave';
 import { bundleFinder, draftAi, usableBundles } from './createGrounding';
+import { horizonCheck, horizonPanel } from './createHorizon';
 import { studioById } from './logic/studios';
 import { stillMotion } from './fmtMotion';
 import { changeFormat } from './studioRules';
@@ -75,7 +76,7 @@ function createScreen(L: Logic) {
   const nw = effective(s), attrs = attrsOfDraft(nw), policy = policyFor(d.policies, attrs), allowed = allowedValues(d.rules), ok = mayCreate(d.rules, attrs);
   const setNw: SetNw = (p) => L.setState((st) => { const cur = effective(st); return { nw: { ...cur, ...(typeof p === 'function' ? p(cur) : p) } }; });
   const checks = contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) })
-    .concat(hasItems(nw.type) ? [itemsCheck(nw.type, nw.items ?? noItems())] : []);
+    .concat(hasItems(nw.type) ? [itemsCheck(nw.type, nw.items ?? noItems())] : [], nw.type === 'Presentation' ? [horizonCheck(nw)] : []);
   const line = myLine(L);
   const picked = usableBundles(s.bundles, line).filter((b) => s.nwKb.includes(b.id));
   const editing = s.editing ? byId.get(s.editing) : null, locked = !!submittedEdit(s);
@@ -142,7 +143,7 @@ function createScreen(L: Logic) {
     ...bundleFinder(L, nw, line),
     nwDraftAi: () => draftAi(L), nwAiBusy: s.nwAiBusy, nwAiLabel: s.nwAiBusy ? 'Drafting' : 'Draft with AI', nwHasAi: nw.outline.length > 0 || nw.sources.length > 0, nwAiNote: nw.aiNote,
     nwAiOutline: nw.outline.map((o, k) => ({ n: (k + 1) + '.', text: o })), nwAiCites: nw.sources.map((c, k) => ({ n: String(k + 1), text: c })),
-    itemsPanel: itemsPanel(L, nw, picked, setNw),
+    itemsPanel: itemsPanel(L, nw, picked, setNw), horizonPanel: horizonPanel(L, nw),
     nwFileText: nw.type + ' · the file itself (video, audio or document) is attached later; this prototype stores the text only.',
     nwChecks: checks.map(dot), nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
@@ -215,7 +216,7 @@ function reviewDetail(L: Logic, c: Contribution, r: Review, d: CreateData, now: 
     meta: 'By ' + c.author_name + ' · for ' + c.audience_stage + ' · ' + (open ? daysWaiting(c.submitted_at, now) : 'submitted ' + fmtDate(c.submitted_at)),
     takeaway: c.takeaway, outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft · check the cited sources' : '',
     ...viewItems(c, ' to check', stillMotion(L)),
-    fileNote: carriesItems(c.type, c.studio) ? 'Check each ' + noun(c.type, 1) + ' against the takeaway.'
+    fileNote: c.type === 'Presentation' ? 'Play the presentation and check it against the takeaway.' : carriesItems(c.type, c.studio) ? 'Check each ' + noun(c.type, 1) + ' against the takeaway.'
       : 'The ' + (c.type === 'Podcast' ? 'audio' : c.type === 'Reel' ? 'video' : 'document') + ' is attached later; review the takeaway and outline for now.',
     checks: contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(itemsFromSaved(c.type, c.items)) }).map(dot),
     open, closed: !open, bannerTone: r.verdict === 'approved' || c.status === 'published' ? 'success' : 'warning', doneText,

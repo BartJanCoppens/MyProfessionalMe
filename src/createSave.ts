@@ -6,6 +6,7 @@ import type { Logic } from './model';
 import type { AppState, NewDraft } from './types';
 import { addFirst } from './createItems';
 import { aiAssisted, carriesItems, hasItems, itemsFromSaved, itemsText, noItems } from './logic/items';
+import type { DraftItems, Item } from './logic/items';
 import { attrsOf, checksPass, contentChecks, mayCreate, rubricComplete } from './logic/contribution';
 import type { Attrs, Contribution, CreateData, Review, RuleParts } from './logic/contribution';
 import { checkContribution, decideReview, loadCreate, removeDraft, saveDraft, submitContribution } from './lib/contributionStore';
@@ -86,11 +87,12 @@ async function submitChecked(id: string, studio: string | null | undefined) {
 
 // The one save step of the upload form and the studios: refused in View as, while busy or outside the creation rules;
 // otherwise the draft on screen is saved (an edited or already checked draft is the same row, a new studio draft says
-// its studio) and next runs on it. keep(id) is the state to keep when anything fails after the save started.
+// its studio) and next runs on it. keep(id) is the state to keep when anything fails after the save started; patch
+// changes the draft as it is saved.
 type Saved = { s: AppState; nw: NewDraft; studio: string | null; id: string };
-async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>) {
+async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>, patch: Partial<NewDraft> = {}) {
   if (busy(L)) return;
-  const s = L.state, nw = effective(s), rules = s.create?.rules || [], studio = draftStudio(s);
+  const s = L.state, nw = { ...effective(s), ...patch }, rules = s.create?.rules || [], studio = draftStudio(s);
   if (!rules.length) { L.say('Ask an admin for creation rights first'); return; }
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
   let id = s.editing ?? nw.savedId ?? null;
@@ -101,11 +103,24 @@ async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: 
   } catch (err) { failed(L, err, keep(id)); }
 }
 
+// A file the draft names (a Presentation's .horizon file): the draft is saved (the one save step, with `patch`), the file
+// stored in its folder through `attach` once it has an id, and the items `attach` returns saved with it.
+export async function saveWithFile(L: Logic, attach: (id: string) => Promise<Item[]>, patch: Partial<NewDraft>, done: string) {
+  await saveThen(L, async ({ s, nw, studio, id }) => {
+    const items: DraftItems = { ...noItems(), list: await attach(id), how: 'saved' };
+    await saveDraft(rowOf({ ...nw, items }, s.nwKb, studio, id), id);
+    const d = await reloaded(L);
+    L.setState((st) => ({ create: d, createError: null, createBusy: false, nw: { ...st.nw, ...patch, items, savedId: id } }));
+    L.say(done);
+  }, (id) => (st) => (id ? { nw: { ...st.nw, ...patch, savedId: id } } : {}), patch);
+}
+
 // Save the New form as a draft, or save and submit it. A draft that saved before a refused submit is edited next time, never duplicated.
 export async function saveForm(L: Logic, submit: boolean) {
   if (busy(L)) return;
   const nw = effective(L.state);
   if (submit && hasItems(nw.type) && !nw.items?.list.length) { L.say(addFirst(nw.type, 'generate them with AI or import a CSV')); return; }
+  if (submit && nw.type === 'Presentation' && !nw.items?.list.length) { L.say('Add the .horizon file first'); return; }
   if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) }))) { L.say('Clear the open checks first'); return; }
   await saveThen(L, async ({ s, studio, id }) => {
     const ed = s.editing ? s.create?.contributions.find((c) => c.id === s.editing) : null;
