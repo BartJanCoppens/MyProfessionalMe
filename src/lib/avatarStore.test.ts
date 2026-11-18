@@ -23,16 +23,31 @@ describe('avatar runs', () => {
     db.answer(() => ({ error: { message: 'new row violates row-level security policy' } }));
     await expect(startAvatarRun({ learningId: 'L38' })).rejects.toThrow('row-level security');
   });
-  it('says one line to the character through the ai function and sends nothing else: no system text, no conversation', async () => {
-    db.client.functions.invoke.mockImplementation(async () => ({ data: { say: 'Go on.', turn: 2, held: false }, error: null }));
-    expect(await sayToCharacter('run-1', 'Good morning')).toEqual({ say: 'Go on.', turn: 2, held: false });
-    expect(db.client.functions.invoke).toHaveBeenCalledWith('ai', { body: { use: 'avatar_conversation', run_id: 'run-1', say: 'Good morning' } });
+  const reply = { text: 'Go on.', meta: { turn: 2, held: false } };
+  const live = { enabled: true, live: ['avatar_conversation'] };
+  it('says one line to the character through the one AI path: the run and the line, no system text, no conversation', async () => {
+    const ask = vi.fn(async () => reply);
+    expect(await sayToCharacter('run-1', 'Good morning', { ...live, ask })).toEqual({ say: 'Go on.', turn: 2, held: false });
+    expect(ask).toHaveBeenCalledWith('avatar_conversation', { messages: [], run: { run_id: 'run-1', say: 'Good morning' } });
   });
-  it('refuses an answer that is not a reply, never a scripted line', async () => {
-    db.client.functions.invoke.mockImplementation(async () => ({ data: { ok: true }, error: null }));
-    await expect(sayToCharacter('run-1', 'Hi')).rejects.toThrow('The character did not answer · try again');
-    db.client.functions.invoke.mockImplementation(async () => ({ data: null, error: { message: 'The function said no' } }));
-    await expect(sayToCharacter('run-1', 'Hi')).rejects.toThrow('The function said no');
+  it('is not asked with ?live=off or while the use is not live, and says so', async () => {
+    const ask = vi.fn(async () => reply);
+    await expect(sayToCharacter('run-1', 'Hi', { enabled: false, live: ['avatar_conversation'], ask })).rejects.toThrow('The character is not available right now');
+    await expect(sayToCharacter('run-1', 'Hi', { enabled: true, live: [], ask })).rejects.toThrow('The character is not available right now');
+    expect(ask).not.toHaveBeenCalled();
+  });
+  it('throws the function\'s own words, and never a scripted line, when the call fails or does not answer', async () => {
+    await expect(sayToCharacter('run-1', 'Hi', { ...live, ask: async () => { throw new Error("This run's time is up · end it to see your score"); } })).rejects.toThrow('time is up');
+    await expect(sayToCharacter('run-1', 'Hi', { ...live, ask: async () => ({ text: 'x' }) })).rejects.toThrow('The character did not answer · try again');
+  });
+  it('sends one line at a time per run: a second line while the first is on its way is refused', async () => {
+    let release: (v: typeof reply) => void = () => {};
+    const ask = vi.fn(() => new Promise<typeof reply>((res) => { release = res; }));
+    const first = sayToCharacter('run-1', 'One', { ...live, ask });
+    await expect(sayToCharacter('run-1', 'Two', { ...live, ask })).rejects.toThrow('Wait for the character to answer');
+    release(reply);
+    await first;
+    expect(await sayToCharacter('run-1', 'Three', { ...live, ask: async () => reply })).toMatchObject({ turn: 2 });
   });
   it('ends a run through finish_avatar_run', async () => {
     await endAvatarRun('run-1');
@@ -40,11 +55,12 @@ describe('avatar runs', () => {
     db.answer(() => ({ error: { message: 'This run has ended' } }));
     await expect(endAvatarRun('run-1')).rejects.toThrow('This run has ended');
   });
-  it('reads my runs of a learning, newest first', async () => {
+  it('reads my runs of a learning, newest first, whoever else\'s shared runs I may see', async () => {
+    db.client.auth.getSession.mockImplementation(async () => ({ data: { session: { user: { id: 'me' } } } }));
     db.answer(() => ({ data: [{ id: 'r2', learning_id: 'L70', test: false, started_at: 'b', finished_at: null, turns: [] }] }));
     expect((await myAvatarRuns('L70')).map((r) => r.id)).toEqual(['r2']);
     const c = db.calls[0];
     expect(op(c)).toBe('select');
-    expect(has(c, 'eq', 'learning_id', 'L70') && has(c, 'order', 'started_at', { ascending: false })).toBe(true);
+    expect(has(c, 'eq', 'learning_id', 'L70') && has(c, 'eq', 'user_id', 'me') && has(c, 'order', 'started_at', { ascending: false })).toBe(true);
   });
 });

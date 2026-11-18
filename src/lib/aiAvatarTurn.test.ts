@@ -9,7 +9,7 @@ import { AVATAR_PROMPT_VERSION, avatarPromptHash } from '../../supabase/function
 const RUN = '3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b';
 const context: AvatarRunContext = {
   persona: 'An HR director, wary of consultants.', situation: 'A business case in ten minutes.', opening: 'Convince me.', reveals: 'The vendor contract ends in 14 months.',
-  hides: 'Two works-council members oppose the change', difficulty: 'Tough', language: 'English', counterpart: 'A colleague', hard: 'Short of time', points: [], minutes: 10, turns: [], learner_turns: 0,
+  hides: 'Two works-council members oppose the change', difficulty: 'Tough', language: 'English', counterpart: 'A colleague', hard: 'Short of time', points: [], minutes: 10, turns: [], learner_turns: 0, prompt_version: null, prompt_hash: null,
 };
 const deps = (o: Partial<AvatarDeps> = {}, ctx: Partial<AvatarRunContext> = {}): AvatarDeps => ({
   preamble: 'STAY IN CHARACTER', dailyLimit: 120, dailyChars: 1_000_000, context: vi.fn(async () => ({ ...context, ...ctx })), count: vi.fn(async () => 'ok' as const),
@@ -38,7 +38,7 @@ describe('playAvatarTurn', () => {
   it('refuses each way the database refuses, counting and calling nothing', async () => {
     const cases = [['not_yours', 403, 'That is not your run'], ['finished', 409, 'This run has ended'], ['not_allowed', 403, 'You can no longer practise with this draft'],
       ['no_scenario', 400, 'This learning has no practice scenario'], ['time_up', 409, 'This run\'s time is up · end it to see your score']] as const;
-    expect(Object.keys(REFUSED).sort()).toEqual([...cases.map((c) => c[0]), 'turns_used'].sort());
+    expect(Object.keys(REFUSED).sort()).toEqual([...cases.map((c) => c[0]), 'turns_used', 'prompt_changed'].sort());
     for (const [refusal, status, error] of cases) {
       const d = deps({ context: vi.fn(async () => ({ refusal })) });
       expect(await playAvatarTurn(d, ask())).toEqual({ status, error });
@@ -73,6 +73,7 @@ describe('playAvatarTurn', () => {
     expect(sent.system!.startsWith('STAY IN CHARACTER')).toBe(true);
     expect(sent.system).toContain('Two works-council members oppose the change');
     expect(JSON.stringify(sent.messages)).not.toContain('works-council');
+    expect(sent.system!.split('You opened with:')).toHaveLength(2);
     expect(sent.system).toContain('You opened with: <<<Convince me.>>>');
   });
   it('fails a cut answer and writes nothing', async () => {
@@ -91,9 +92,17 @@ describe('playAvatarTurn', () => {
     const d = deps();
     expect(await playAvatarTurn(d, ask())).toEqual({ status: 200, body: { say: 'Why now?', turn: 2, held: false } });
     expect(d.addTurns).toHaveBeenCalledTimes(1);
-    expect(d.addTurns).toHaveBeenCalledWith([{ who: 'learner', text: 'Good morning', guard: null }, { who: 'character', text: 'Why now?', guard: null }], AVATAR_PROMPT_VERSION, await avatarPromptHash());
+    expect(d.addTurns).toHaveBeenCalledWith([{ who: 'learner', text: 'Good morning', guard: null }, { who: 'character', text: 'Why now?', guard: null }], AVATAR_PROMPT_VERSION, await avatarPromptHash(), 0);
     const later = deps({}, { turns: [{ who: 'learner', text: 'a', guard: null }, { who: 'character', text: 'b', guard: null }], learner_turns: 1 });
     expect(await playAvatarTurn(later, ask())).toMatchObject({ body: { turn: 4 } });
+    expect(vi.mocked(later.addTurns).mock.calls[0][3]).toBe(2);
+  });
+  it('refuses a run that another prompt began before counting or calling, and accepts the same one', async () => {
+    const changed = deps({}, { prompt_version: '0.9.0', prompt_hash: 'old' });
+    expect(await playAvatarTurn(changed, ask())).toEqual({ status: 409, error: 'The prompt changed during the run' });
+    expect(changed.count).not.toHaveBeenCalled(); expect(changed.call).not.toHaveBeenCalled();
+    const same = deps({}, { prompt_version: AVATAR_PROMPT_VERSION, prompt_hash: await avatarPromptHash() });
+    expect(await playAvatarTurn(same, ask())).toMatchObject({ status: 200 });
   });
   it('does not answer when the turn could not be saved', async () => {
     const d = deps({ addTurns: vi.fn(async () => 'This run has ended') });

@@ -10,7 +10,7 @@ describe('roleAsker', () => {
   it('sends use game_role with the run, the conversation as user and assistant turns and the state as text; no system', async () => {
     const ask = vi.fn(async () => '{"say": "I signed nothing.", "action": null}');
     expect(await roleAsker('run-1', { ...live, ask })(req)).toEqual({ say: 'I signed nothing.', action: null });
-    expect(ask).toHaveBeenCalledWith('game_role', { messages: [{ role: 'user', content: 'Where were you?' }, { role: 'assistant', content: 'Out.' }, { role: 'user', content: 'Who with?' }], game: { run_id: 'run-1', state: '{"round":2}' } });
+    expect(ask).toHaveBeenCalledWith('game_role', { messages: [{ role: 'user', content: 'Where were you?' }, { role: 'assistant', content: 'Out.' }, { role: 'user', content: 'Who with?' }], run: { run_id: 'run-1', state: '{"round":2}' } });
     expect(Object.keys((ask.mock.calls[0] as unknown[])[1] as object)).not.toContain('system');
   });
   it('answers "not available right now" when the role is not live, without any call', async () => {

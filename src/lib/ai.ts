@@ -13,7 +13,7 @@ export type { AiRequest };
 export type AiSource = 'design' | 'connection';
 // onError hears why a source failed (e.g. "Daily AI limit reached …"); the caller still gets null.
 // cut: the answer stopped at its length limit (a file written in parts). An injected ask may answer with the text alone.
-export type CompleteOpts = { enabled: boolean; live: readonly string[]; timeoutMs?: number; ask?: (use: string, req: AiRequest) => Promise<string | { text: string; cut?: boolean }>; onError?: (err: Error) => void };
+export type CompleteOpts = { enabled: boolean; live: readonly string[]; timeoutMs?: number; ask?: (use: string, req: AiRequest) => Promise<string | { text: string; cut?: boolean; meta?: Record<string, unknown> }>; onError?: (err: Error) => void };
 
 declare global {
   interface Window { claude?: { complete?: (req: unknown) => Promise<string> } }
@@ -31,15 +31,23 @@ const within = <T>(p: Promise<T>, ms: number) => new Promise<T>((resolve, reject
 // A use that writes long answers waits for the time the function allows it, plus ten seconds for the round trip.
 const waitFor = (use: AiUseKey) => (USE_LIMITS[use] ? USE_LIMITS[use].timeoutMs + 10_000 : 45_000);
 
-export async function complete(use: AiUseKey, req: AiRequest, opts: CompleteOpts): Promise<{ text: string; via: AiSource; cut: boolean } | null> {
+export async function complete(use: AiUseKey, req: AiRequest, opts: CompleteOpts): Promise<{ text: string; via: AiSource; cut: boolean; meta?: Record<string, unknown> } | null> {
   if (!opts.enabled) return null;
   const ms = opts.timeoutMs ?? waitFor(use);
   try {
     if (designAi(use)) return { text: String(await within(window.claude!.complete!(req), ms)), via: 'design', cut: false };
     if (opts.live.includes(use)) {
       const got = await within((opts.ask || askAi)(use, req), ms);
-      return typeof got === 'string' ? { text: got, via: 'connection', cut: false } : { text: got.text, via: 'connection', cut: !!got.cut };
+      return typeof got === 'string' ? { text: got, via: 'connection', cut: false } : { text: got.text, via: 'connection', cut: !!got.cut, ...(got.meta ? { meta: got.meta } : {}) };
     }
   } catch (err) { opts.onError?.(err as Error); }
   return null;
+}
+
+/** complete() for a role the app must answer or say why not: the function's own words are thrown, never a scripted line (the game role and the avatar's character). */
+export async function completeOrThrow(use: AiUseKey, req: AiRequest, opts: CompleteOpts, unavailable: string) {
+  let failure: Error | null = null;
+  const out = await complete(use, req, { ...opts, onError: (e) => { failure = e; } });
+  if (!out) throw failure ?? new Error(unavailable);
+  return out;
 }

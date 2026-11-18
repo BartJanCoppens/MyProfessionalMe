@@ -14,10 +14,11 @@ import type { RoleDeps as RoleDepsOf, RoleRefusal } from './rolePlay.ts';
 
 export const AVATAR_USE = 'avatar_conversation';
 export type AvatarTurn = { who: 'learner' | 'character'; text: string; guard: string | null };
-export type AvatarRunContext = CharacterContext & { points: unknown[]; minutes: 5 | 10 | 15; turns: AvatarTurn[]; learner_turns: number };
+export type AvatarRunContext = CharacterContext & { points: unknown[]; minutes: 5 | 10 | 15; turns: AvatarTurn[]; learner_turns: number; prompt_version: string | null; prompt_hash: string | null };
 export type AvatarDeps = RoleDepsOf<AvatarRunContext> & {
   // public.avatar_add_turns: appends the learner's line and the character's, and records the prompt version and hash; the database's refusal, or null.
-  addTurns: (turns: AvatarTurn[], version: string, hash: string) => Promise<string | null>;
+  // `expected` is the number of turns the context saw: a stale append (another line was stored meanwhile) is refused.
+  addTurns: (turns: AvatarTurn[], version: string, hash: string, expected: number) => Promise<string | null>;
 };
 export type AvatarAsk = { ok: true; runId: string; say: string };
 export type AvatarResult = { status: 200; body: { say: string; turn: number; held: boolean } } | { status: number; error: string };
@@ -29,6 +30,7 @@ export const REFUSED = {
   not_allowed: { status: 403, error: 'You can no longer practise with this draft' },
   no_scenario: { status: 400, error: 'This learning has no practice scenario' },
   time_up: { status: 409, error: 'This run\'s time is up · end it to see your score' },
+  prompt_changed: { status: 409, error: 'The prompt changed during the run' }, // the edge's own, before counting (the database says it again at the write)
   turns_used: (r: RoleRefusal) => ({ status: 409, error: 'You used the ' + String(r.lines) + ' lines of this run · end it to see your score' }),
 };
 const UNUSABLE = { status: 502, error: 'AI did not return a usable reply · try again' };
@@ -50,15 +52,22 @@ const messagesOf = (turns: AvatarTurn[], say: string): Msg[] => [
 ];
 
 export async function playAvatarTurn(d: AvatarDeps, a: AvatarAsk): Promise<AvatarResult> {
-  const seen: { ctx?: AvatarRunContext } = {};
-  const out = await playRole(d, (ctx) => {
+  const seen: { ctx?: AvatarRunContext } = {}, hash = await avatarPromptHash();
+  // A run another prompt began is refused here, before the call is counted (the database refuses it again at the write).
+  const context = async () => {
+    const ctx = await d.context();
+    if (ctx && !('refusal' in ctx) && ctx.prompt_version && (ctx.prompt_version !== AVATAR_PROMPT_VERSION || ctx.prompt_hash !== hash)) return { refusal: 'prompt_changed' };
+    return ctx;
+  };
+  const out = await playRole({ ...d, context }, (ctx) => {
     seen.ctx = ctx;
-    return { system: buildPersonaPrompt(ctx) + '\n\nYou opened with: ' + marked(ctx.opening, 600), messages: messagesOf(ctx.turns, a.say), max_tokens: AVATAR_ASK.maxTokens };
+    return { system: buildPersonaPrompt(ctx), messages: messagesOf(ctx.turns, a.say), max_tokens: AVATAR_ASK.maxTokens };
   }, REFUSED, AVATAR_USE);
   if ('error' in out) return out;
   const reply = out.body.text.trim();
   if (!reply || reply.length > AVATAR_ASK.replyChars) return UNUSABLE;
-  const refused = await d.addTurns([{ who: 'learner', text: a.say, guard: null }, { who: 'character', text: reply, guard: null }], AVATAR_PROMPT_VERSION, await avatarPromptHash());
+  const stored = seen.ctx!.turns.length;
+  const refused = await d.addTurns([{ who: 'learner', text: a.say, guard: null }, { who: 'character', text: reply, guard: null }], AVATAR_PROMPT_VERSION, hash, stored);
   if (refused) return { status: 409, error: refused };
-  return { status: 200, body: { say: reply, turn: seen.ctx!.turns.length + 2, held: false } };
+  return { status: 200, body: { say: reply, turn: stored + 2, held: false } };
 }

@@ -12,17 +12,19 @@ const fn = (name: string) => sql.slice(sql.indexOf('create function public.' + n
 describe('avatar_run_context and the ai function', () => {
   it('give the same refusals, in the same words in avatar_add_turns', () => {
     const codes = [...fn('avatar_run_context').matchAll(/'refusal', '([a-z_]+)'/g)].map((m) => m[1]);
-    expect([...new Set(codes)].sort()).toEqual(Object.keys(REFUSED).sort());
+    // prompt_changed is the edge's own, before counting: the database says the same words at the write
+    expect([...new Set(codes)].sort()).toEqual(Object.keys(REFUSED).filter((c) => c !== 'prompt_changed').sort());
     const add = fn('avatar_add_turns');
     const sqlText = (error: string) => "'" + error.replace(/'/g, "''") + "'";
-    for (const [code, answer] of Object.entries(REFUSED)) {
+    expect(add).toContain(sqlText(REFUSED.prompt_changed.error));
+    for (const [code, answer] of Object.entries(REFUSED).filter(([c]) => c !== 'prompt_changed')) {
       // the one message with a number is built from the context's `lines`
       expect(add, code).toContain(typeof answer === 'function' ? "'You used the ' || (v_ctx ->> 'lines') || ' lines of this run · end it to see your score'" : sqlText(answer.error));
     }
   });
   it('are for the service role only', () => {
-    expect(sql).toContain('revoke execute on function public.avatar_run_context(uuid, uuid), public.avatar_add_turns(uuid, uuid, jsonb, text, text) from public, anon, authenticated;');
-    expect(sql).toContain('grant execute on function public.avatar_run_context(uuid, uuid), public.avatar_add_turns(uuid, uuid, jsonb, text, text) to service_role;');
+    expect(sql).toContain('revoke execute on function public.avatar_run_context(uuid, uuid), public.avatar_add_turns(uuid, uuid, jsonb, text, text, integer) from public, anon, authenticated;');
+    expect(sql).toContain('grant execute on function public.avatar_run_context(uuid, uuid), public.avatar_add_turns(uuid, uuid, jsonb, text, text, integer) to service_role;');
     for (const name of ['avatar_run_context', 'avatar_add_turns']) expect(fn(name)).toMatch(/security definer\s+set search_path = ''/);
   });
   it('count a run as the shared rules do: lines by minutes, and the minutes and five more', () => {

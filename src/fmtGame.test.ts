@@ -74,7 +74,7 @@ describe('the AI role in the game view', () => {
     const v = gameView(withRole, { ...o, ai: { enabled: true, live: ['game_role'], ask } });
     expect(v.roleNote).toBe('The AI role is played by AI · Made with AI');
     expect(await v.ask('run-7')!(req)).toEqual({ say: 'I signed nothing.', action: null });
-    expect(ask).toHaveBeenCalledWith('game_role', { messages: [{ role: 'user', content: 'Who signed?' }], game: { run_id: 'run-7', state: '' } });
+    expect(ask).toHaveBeenCalledWith('game_role', { messages: [{ role: 'user', content: 'Who signed?' }], run: { run_id: 'run-7', state: '' } });
   });
   it('a play-test says the role counts toward the creator\'s daily AI limit', () => {
     const v = gameView(withRole, { ...o, learningId: null, contributionId: 'c-1', ai: { enabled: true, live: ['game_role'], ask } });

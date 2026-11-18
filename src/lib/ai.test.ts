@@ -72,12 +72,14 @@ describe('complete: the fallback order', () => {
     expect(canComplete('game_role', { enabled: true, live: [] })).toBe(false);
     expect(canComplete('game_role', role)).toBe(true);
   });
-  it('never gives the avatar character to Claude Design either', async () => {
+  it('never gives the avatar character to Claude Design either, and sends its run and line as run_id and say', async () => {
     const design = vi.fn(async () => 'from design');
     vi.stubGlobal('window', { claude: { complete: design } });
-    const ask = vi.fn(async () => 'from connection');
-    expect(await complete('avatar_conversation', req, { enabled: true, live: ['avatar_conversation'], ask })).toEqual({ text: 'from connection', via: 'connection', cut: false });
+    db.client.functions.invoke.mockImplementation(async () => ({ data: { say: 'Go on.', turn: 2, held: false }, error: null }));
+    const out = await complete('avatar_conversation', { messages: [], run: { run_id: 'r1', say: 'Hi' } }, { enabled: true, live: ['avatar_conversation'] });
+    expect(out).toEqual({ text: 'Go on.', via: 'connection', cut: false, meta: { turn: 2, held: false } });
     expect(design).not.toHaveBeenCalled();
+    expect(db.client.functions.invoke).toHaveBeenCalledWith('ai', { body: { use: 'avatar_conversation', run_id: 'r1', say: 'Hi' } });
     expect(canComplete('avatar_conversation', { enabled: true, live: [] })).toBe(false);
   });
   it('says beforehand whether AI would answer', () => {
@@ -89,7 +91,7 @@ describe('complete: the fallback order', () => {
   });
   it('sends a game role ask as run_id and state, and no system text', async () => {
     db.client.functions.invoke.mockImplementation(async () => ({ data: { text: '{"say":"No."}' }, error: null }));
-    await complete('game_role', { messages: [{ role: 'user', content: 'Q' }], game: { run_id: 'r1', state: '{"round":1}' } }, { enabled: true, live: ['game_role'] });
+    await complete('game_role', { messages: [{ role: 'user', content: 'Q' }], run: { run_id: 'r1', state: '{"round":1}' } }, { enabled: true, live: ['game_role'] });
     expect(db.client.functions.invoke).toHaveBeenCalledWith('ai', { body: { use: 'game_role', messages: [{ role: 'user', content: 'Q' }], run_id: 'r1', state: '{"round":1}' } });
   });
   it('reaches the ai edge function through the store by default', async () => {

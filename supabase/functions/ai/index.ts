@@ -115,7 +115,7 @@ async function avatarTurn(call: Call): Promise<Response> {
   if (opened instanceof Response) return opened;
   const out = await playAvatarTurn({
     ...roleDeps<AvatarRunContext>(call, opened, AVATAR_USE, 'avatar_run_context', a.runId),
-    addTurns: async (turns: AvatarTurn[], version, hash) => (await call.admin.rpc('avatar_add_turns', { p_user: call.callerId, p_run: a.runId, p_turns: turns, p_version: version, p_hash: hash })).error?.message ?? null,
+    addTurns: async (turns: AvatarTurn[], version, hash, expected) => (await call.admin.rpc('avatar_add_turns', { p_user: call.callerId, p_run: a.runId, p_turns: turns, p_version: version, p_hash: hash, p_expected: expected })).error?.message ?? null,
   }, a);
   console.log(JSON.stringify({ use: AVATAR_USE, status: out.status, ms: Date.now() - call.started }));
   return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);

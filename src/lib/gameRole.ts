@@ -5,7 +5,7 @@
 import type { AskRole, RoleReply } from '../game/protocol';
 import { GAME_ASK } from '../../supabase/functions/_shared/gameRules.ts';
 import { jsonObject } from '../../supabase/functions/_shared/promptData.ts';
-import { complete } from './ai';
+import { completeOrThrow } from './ai';
 import type { CompleteOpts } from './ai';
 
 export const ROLE_UNAVAILABLE = 'The AI role is not available right now';
@@ -24,12 +24,10 @@ export function roleAsker(runId: string | null, opts: Pick<CompleteOpts, 'enable
   return async (req: AskRole): Promise<RoleReply> => {
     if (!opts.enabled || !opts.live.includes('game_role')) throw new Error(ROLE_UNAVAILABLE);
     if (!runId) throw new Error(ROLE_NEEDS_RUN);
-    let failure: Error | null = null;
-    const out = await complete('game_role', {
+    const out = await completeOrThrow('game_role', {
       messages: req.messages.map((m) => ({ role: m.role === 'player' ? 'user' as const : 'assistant' as const, content: m.text })),
-      game: { run_id: runId, state: req.state == null ? '' : JSON.stringify(req.state) },
-    }, { ...opts, onError: (e) => { failure = e; } });
-    if (!out) throw failure ?? new Error(ROLE_UNAVAILABLE);
+      run: { run_id: runId, state: req.state == null ? '' : JSON.stringify(req.state) },
+    }, opts, ROLE_UNAVAILABLE);
     return readRoleReply(out.text);
   };
 }

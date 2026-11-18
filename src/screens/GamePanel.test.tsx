@@ -48,7 +48,7 @@ describe('Game panel: the AI role', () => {
     expect(screen.getByText('The AI role is played by AI · Made with AI')).toBeTruthy();
     await play();
     expect(await frame.props!.askAI({ messages: [{ role: 'player', text: 'Who signed?' }], state: null })).toEqual({ say: 'I signed nothing.', action: null });
-    expect(ask).toHaveBeenCalledWith('game_role', expect.objectContaining({ game: { run_id: 'run-1', state: '' } }));
+    expect(ask).toHaveBeenCalledWith('game_role', expect.objectContaining({ run: { run_id: 'run-1', state: '' } }));
   });
   it('says while the role is not live that it is not available, and the ask is refused', async () => {
     render(<GamePanel gm={view({ ai: { enabled: true, live: [], ask } }, { role })} />);
