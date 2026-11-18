@@ -389,3 +389,15 @@ Plan: `docs/superpowers/plans/2026-11-17-studios.md`. The owner reversed D1 ("pa
 - **Cost.** `trajectory_ai` is off until a System Admin gives it a connection, admins only, 40 calls and 1,500,000 characters a person a day (every turn re-sends the brief, the plan and the sources), 4,000 tokens and 90 s an answer; a reached limit says so and offers no script.
 - **Not decided here (owner questions open):** who may create the learnings "Draft with AI" proposes, and whether a required placeholder step binds everyone enrolled. Nothing in 7.1 presumes either.
 - **Shortcut (PoC):** `AppState.trjPlans` and `trjAi` are minimal placeholders; 7.3 shapes them with the conversation.
+
+## Source documents and the pool (Studios Phase 7, Task 7.2)
+- **pdfjs-dist, pinned `6.5.438`** (latest at 18 Nov 2026, past the CVE fix of 4.2.67), loaded on first use with its worker as a separate asset; eval and font loading off. Alternatives: a server-side parser (a new service and the file leaving the browser), a hand-written parser (no). Reading happens only for an editor's own upload.
+- **Text only, no OCR.** A PDF with no text (a scan) is refused with the reason (owner, Phase 7 ruling 4).
+- **A cut is a flag.** `trajectory_plan_sources` has no column for "read only the first N", and a migration for one flag is not worth it: the source's `flags` hold `cut_pages` or `cut_text` beside the injection flags. A production version would add a `cut` column.
+- **Client names refuse; injection phrasing flags.** `blockedTerm` (the contribution rule) refuses the whole document, since the firm may not use client documents for training; `injectionFlags` (the avatar guard's) only flags, because a syllabus may quote such a phrase, and the text is data in every request anyway (`marked()`, 7.3).
+- **Checks before reading, backstop after.** The size, type and 10-source limit are checked before the PDF is read (so no time is spent), and the database trigger still refuses an 11th (its message is shown the same way).
+- **A cited passage from a now-unusable source is dropped, not quoted.** If a Knowledge source became client-confidential or licensed since the plan cited it, its stored quote is not sent either. A cited passage that is merely gone is sent from its quote, labelled "(source changed)". A `learning:` citation has no passage text, so its quote stands.
+- **`file:` references are pages.** A file citation resolves to all the passages of that page, read together (cut to 700 characters).
+- **"Who added it" is "you" or "another editor".** The page has no list of people to resolve an id to a name; a production version would join `profiles`.
+- **Bundle picker UI is 7.3's.** `pickBundle` and the state are here; the picker reuses `BundlePicker` (`CreateParts.tsx`) when the Build with AI panel exists, which needs its props narrowed from the whole create view-model.
+- **Shortcut (PoC):** `trjPlans[id]` may be missing when a source is added before the plan is loaded; the first add then makes it (7.3 loads it on opening).
