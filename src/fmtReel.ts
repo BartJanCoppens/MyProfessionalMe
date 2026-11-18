@@ -6,6 +6,7 @@
 import { playedGuard } from './fmtShared';
 import type { PlayedOpts } from './fmtShared';
 import { saveProgress } from './lib/learnerStore';
+import { shiftOf } from './logic/checkRow';
 import { fmtTime } from './logic/media';
 import { cutPlanOf, reelCues } from './logic/reelFrame';
 import type { Item, Logic } from './model';
@@ -23,7 +24,7 @@ export const seededReel = (M: ReelMedia): ReelContent => {
 export type ReelOpts = PlayedOpts & { answer: number | undefined; pick: (written: number) => void; takeaway: string | null; ai?: boolean }; // ai: the panel carries the AiMadeTag (not on the learner's page, whose header has it)
 
 export function reelView(c: ReelContent, o: ReelOpts) {
-  const { q, opts, a } = c.check, shift = q.length % opts.length, right = o.answer === a;
+  const { q, opts, a } = c.check, shift = shiftOf(q, opts.length), right = o.answer === a;
   return {
     rc: c, plan: cutPlanOf(c), cues: reelCues(c), paths: c.video ? [c.video.path] : [], takeaway: o.takeaway, q,
     sub: (c.video ? (c.size === '720x1280' ? 'Vertical' : 'Square') + ' video · ' + fmtTime(c.seconds) : 'Captions only · no video'),

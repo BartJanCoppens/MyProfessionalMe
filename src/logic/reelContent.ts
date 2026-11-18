@@ -8,6 +8,7 @@
 import type { ReelContent } from '../types';
 import { ownSeconds } from './narration';
 import { PRESENTER } from './slidesContent';
+import { CHECK_OPTIONS, checkOk, optionsOf } from './checkRow';
 import { stepsOf } from './studioRows';
 import type { StudioItem } from './studioRows';
 import { lookOf } from './stockLooks';
@@ -18,10 +19,9 @@ import { boundClips } from './voiceItem';
 import type { Clip, Part } from './voiceItem';
 
 export { isVideoItem, videoOf } from './videoItem';
-export { PRESENTER };
+export { PRESENTER, CHECK_OPTIONS, checkOk, optionsOf };
 export const REEL_SECONDS_MAX = 90;
 export const SCENE_GAP = 0.3;
-export const CHECK_OPTIONS = { min: 2, max: 4 };
 export const HOOK = 'Hook', CLOSE = 'Close', CHECK = 'Check';
 export const PORTRAIT_VOICE = 'Stock presenter and AI voice', CARDS_VOICE = 'AI voice over text cards', TEXT_ONLY = 'Text and music only';
 // The two ways the AI voice tells a reel.
@@ -37,14 +37,12 @@ export const BAD_LOOK = 'That look is not on the stock list';
 
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
 const blank = (v: string | undefined) => !v || !v.trim();
-const optionsOf = (text2: string | undefined) => (text2 ?? '').split(/\s*·\s*/).map((o) => o.trim());
 export const wantsVoice = (shape: Record<string, string>) => VOICE_PRESENTERS.includes(shape[PRESENTER]);
 const portrait = (shape: Record<string, string>) => shape[PRESENTER] === PORTRAIT_VOICE;
 
 // The scenes (every row but the Check) and the check, as the rows hold them.
 export const sceneRows = (items: readonly unknown[]): StudioItem[] => stepsOf(items).filter((r) => r[0] !== CHECK);
 export const checkRow = (items: readonly unknown[]): StudioItem | undefined => stepsOf(items).find((r) => r[0] === CHECK);
-const checkOk = (r: StudioItem) => { const o = optionsOf(r[2]); return o.length >= CHECK_OPTIONS.min && o.length <= CHECK_OPTIONS.max && o.every(Boolean); };
 // A scene's words, said by no one in particular (so the one voice rule is the reel's voice).
 const parts = (items: readonly unknown[]): Part[] => sceneRows(items).map((r) => ({ speaker: '', text: r[1] }));
 const clipsOf = (items: readonly unknown[], shape: Record<string, string>): Clip[] | null => (wantsVoice(shape) ? boundClips(items, parts(items)) : null);
