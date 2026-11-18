@@ -31,6 +31,10 @@ describe('PlanSources', () => {
     expect(screen.getByText('Contains text that reads like instructions to an AI · treated as data only')).toBeTruthy();
     expect(screen.getByText('Original file not stored')).toBeTruthy();
   });
+  it('warns only for known injection flags, never for another flag', () => {
+    render(<PlanSources p={panelOf([src({ flags: ['something_new'] })])} />);
+    expect(screen.queryByText(/reads like instructions/)).toBeNull();
+  });
   it('shows why a file was refused', () => {
     render(<PlanSources p={panelOf([], 'At most 10 sources per trajectory')} />);
     expect(screen.getByRole('alert').textContent).toBe('At most 10 sources per trajectory');

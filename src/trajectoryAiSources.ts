@@ -6,7 +6,7 @@ import type { ChangeEvent } from 'react';
 import type { Logic } from './model';
 import { emptyPlan, PLAN_CAPS } from './logic/trajectoryPlan';
 import type { PlanRecord, PlanSource, TrjPlanState } from './logic/trajectoryPlan';
-import { CUT_PAGES, CUT_TEXT, scanSource, SOURCE_CAPS, toPassages } from './logic/planSources';
+import { CUT_PAGES, CUT_TEXT, isInjectionFlag, looksScanned, scanSource, SOURCE_CAPS, toPassages } from './logic/planSources';
 import { sourceProblem } from './logic/mediaFiles';
 import { readPdfText } from './lib/pdfText';
 import { addPlanSourceRow, removePlanSource as removeStoredSource, savePlanSoon, setPlanSourcePath } from './lib/planStore';
@@ -32,7 +32,7 @@ export async function addPlanSource(L: Logic, trajectoryId: string, file: File):
   try {
     const { pages, totalPages } = await readPdfText(file, { maxPages: SOURCE_CAPS.pages });
     const text = toPassages(pages);
-    if (!text.passages.length) throw new Error(NO_TEXT);
+    if (!text.passages.length || looksScanned(text.chars, pages.length)) throw new Error(NO_TEXT);
     const scan = scanSource(text.passages);
     if (scan.refusal) throw new Error(scan.refusal);
     const cut = totalPages > SOURCE_CAPS.pages ? [CUT_PAGES] : text.cut ? [CUT_TEXT] : [];
@@ -89,7 +89,7 @@ export function sourcesPanel(L: Logic, trajectoryId: string): SourcesPanel {
   const s = L.state, canEdit = !L.subject.readOnly;
   const note = (x: PlanSource) => [
     x.flags.includes(CUT_PAGES) ? `Read the first ${SOURCE_CAPS.pages} pages only` : x.flags.includes(CUT_TEXT) ? `Read the first ${SOURCE_CAPS.chars.toLocaleString('en-US')} characters only` : '',
-    x.flags.some((f) => f !== CUT_PAGES && f !== CUT_TEXT) ? INJECTION : '',
+    x.flags.some(isInjectionFlag) ? INJECTION : '',
     x.path ? '' : 'Original file not stored',
   ].filter(Boolean);
   return {

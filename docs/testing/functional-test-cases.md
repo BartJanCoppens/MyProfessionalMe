@@ -584,6 +584,8 @@ Phase 1 of the studios (v0.10.0): the generic studio spine with one available st
 | TPL-23 | Admin | The sources block | Look at the notes | "PDF only, up to 20 MB and 400 pages ... no client documents." and "Each message sends the plan, the last messages and at most 24 matching or cited passages, never a whole document." | `PlanSources.test.tsx` |
 | TPL-24 | Admin | Knowledge bundles | Pick 13 bundles for a plan | At most 12: "At most 12 knowledge bundles per trajectory"; the pick is saved after 600 ms; the plan record is created on the first pick | `trajectoryAiSources.test.ts` |
 | TPL-25 | Admin | Real browser, a real text PDF, a real scan (LIVE CHECK, not run in CI) | Add both | The text PDF is read by pdf.js in its worker (network tab shows the worker asset loaded only now); the scan is refused | manual |
+| TPL-26 | Admin | A PDF whose only text is page numbers and footers | Add it | Refused as a scan (fewer than 50 characters a page) | `trajectoryAiSources.test.ts`, `planSources.test.ts` |
+| TPL-27 | Admin | The PDF reader fails to load (offline, blocked worker) | Add a PDF | "The PDF reader could not load · reload the page", not "could not be read" | `pdfText.test.ts` |
 
 ## Bugs found and fixed
 

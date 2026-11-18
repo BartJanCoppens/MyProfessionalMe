@@ -1,7 +1,7 @@
 // An uploaded document into citable passages, and what the scan refuses or flags. SOURCE_CAPS is pinned against the migration.
 import { describe, expect, it } from 'vitest';
 import { migrationText } from '../test/migrations';
-import { SOURCE_CAPS, scanSource, toPassages } from './planSources';
+import { isInjectionFlag, looksScanned, SOURCE_CAPS, scanSource, toPassages } from './planSources';
 
 const words = (n: number, w = 'alpha') => Array.from({ length: n }, (_, i) => w + i).join(' ');
 const sql = migrationText('_trajectory_plans.sql').replace(/\s+/g, ' ');
@@ -70,5 +70,24 @@ describe('SOURCE_CAPS', () => {
     expect(sql).toContain(`char_length(v ->> 1) between 1 and ${SOURCE_CAPS.passageChars}`);
     expect(sql).toContain(`chars between 1 and ${SOURCE_CAPS.chars}`);
     expect(sql).toContain(`pages between 1 and ${SOURCE_CAPS.pages}`);
+  });
+});
+
+describe('looksScanned', () => {
+  it('takes a text layer of page numbers and footers for a scan', () => {
+    const t = toPassages(Array.from({ length: 20 }, (_, i) => `Page ${i + 1} of 20`));
+    expect(t.passages.length).toBeGreaterThan(0);
+    expect(looksScanned(t.chars, 20)).toBe(true);
+  });
+  it('accepts a document with real text, and no pages as a scan', () => {
+    expect(looksScanned(toPassages(['The corporate income tax rate is 25 percent for the first year of the assessment period.']).chars, 1)).toBe(false);
+    expect(looksScanned(0, 0)).toBe(true);
+  });
+});
+
+describe('isInjectionFlag', () => {
+  it('knows the injection flags and not the cut markers', () => {
+    expect(['meta_or_injection', 'offensive', 'marker_forgery'].every(isInjectionFlag)).toBe(true);
+    expect(['cut_pages', 'cut_text', 'something_new'].some(isInjectionFlag)).toBe(false);
   });
 });

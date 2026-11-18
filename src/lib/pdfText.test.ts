@@ -35,4 +35,7 @@ describe('readPdfText', () => {
   it('says any other failure in one sentence', async () => {
     await expect(readPdfText(blob, { lib: fakeLib(1, new Error('Invalid PDF structure')).lib })).rejects.toThrow('This PDF could not be read');
   });
+  it('says when the reader itself could not load, apart from a bad file', async () => {
+    await expect(readPdfText(blob, { load: async () => { throw new Error('Failed to fetch dynamically imported module'); } })).rejects.toThrow('The PDF reader could not load · reload the page');
+  });
 });

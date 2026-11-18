@@ -8,6 +8,7 @@ export type PdfLib = { getDocument(src: { data: Uint8Array; isEvalSupported: boo
 
 const PASSWORD = 'This PDF is password-protected · remove the password and upload it again';
 const UNREADABLE = 'This PDF could not be read';
+const NO_READER = 'The PDF reader could not load · reload the page';
 
 async function loadLib(): Promise<PdfLib> {
   const [lib, worker] = await Promise.all([import('pdfjs-dist'), import('pdfjs-dist/build/pdf.worker.min.mjs?url')]);
@@ -16,10 +17,11 @@ async function loadLib(): Promise<PdfLib> {
 }
 
 // The text of the first `maxPages` pages (one string per page, items joined with spaces) and the page count of the whole file.
-export async function readPdfText(file: Blob, opts: { maxPages?: number; lib?: PdfLib } = {}): Promise<{ pages: string[]; totalPages: number }> {
+export async function readPdfText(file: Blob, opts: { maxPages?: number; lib?: PdfLib; load?: () => Promise<PdfLib> } = {}): Promise<{ pages: string[]; totalPages: number }> {
+  let lib = opts.lib;
+  try { lib ??= await (opts.load ?? loadLib)(); } catch (err) { console.error('pdf.js failed to load', err); throw new Error(NO_READER); }
   let doc: PdfDocument | null = null;
   try {
-    const lib = opts.lib ?? await loadLib();
     doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false, disableFontFace: true }).promise;
     const pages: string[] = [];
     for (let n = 1; n <= Math.min(doc.numPages, opts.maxPages ?? doc.numPages); n++) {

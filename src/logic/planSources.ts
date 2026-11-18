@@ -1,6 +1,6 @@
 // An uploaded document into the passages the Trajectory AI may cite (Phase 7): pure. The caps are the ones of
 // trajectory_plan_sources in 20261118230000_trajectory_plans.sql (planSources.test.ts pins them) and of the media rules.
-import { injectionFlags } from '../../supabase/functions/_shared/avatarGuard.ts';
+import { INJECTION_FLAGS, injectionFlags } from '../../supabase/functions/_shared/avatarGuard.ts';
 import type { InjectionFlag } from '../../supabase/functions/_shared/avatarGuard.ts';
 import { blockedTerm } from './contribution';
 import { SOURCE_KINDS } from './mediaFiles';
@@ -61,3 +61,10 @@ export function scanSource(passages: [number, string][]): { refusal: string | nu
     flags: injectionFlags(text),
   };
 }
+
+// The flags that read as instructions to an AI (the others in `flags` are the cut markers).
+export const isInjectionFlag = (flag: string): boolean => (INJECTION_FLAGS as readonly string[]).includes(flag);
+
+// A text layer of page numbers and footers is a scan: fewer than 50 characters a page on average.
+export const SCAN_MIN_CHARS_PER_PAGE = 50;
+export const looksScanned = (chars: number, pages: number): boolean => pages === 0 || chars / pages < SCAN_MIN_CHARS_PER_PAGE;
