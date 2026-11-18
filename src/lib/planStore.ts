@@ -3,7 +3,7 @@
 // messages as none and a malformed source is dropped, each with a console warning, never thrown.
 import { emptyPlan } from '../logic/trajectoryPlan';
 import type { PlanMessage, PlanRecord, PlanSource, TrajectoryPlan } from '../logic/trajectoryPlan';
-import { isObject } from '../logic/values';
+import { isObject, isTexts } from '../logic/values';
 import { inOrder } from './contentStore';
 import { removePaths } from './mediaStore';
 import { cancelSoon, saveSoon } from './saveSoon';
@@ -17,10 +17,9 @@ const PLAN_COLUMNS = 'trajectory_id, plan, messages, bundle_ids, updated_at';
 const SOURCE_COLUMNS = 'id, trajectory_id, name, path, pages, passages, chars, flags, added_by, added_at';
 const key = (trajectoryId: string) => 'plan:' + trajectoryId;
 
-const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
 const moduleOk = (m: unknown) => isObject(m) && typeof m.id === 'string' && typeof m.title === 'string' && typeof m.depth === 'string' && typeof m.hours === 'number'
-  && typeof m.accepted === 'boolean' && isStrings(m.goals) && Array.isArray(m.material) && Array.isArray(m.sources) && Array.isArray(m.checks);
-const planOk = (p: unknown): p is TrajectoryPlan => isObject(p) && p.version === 1 && Array.isArray(p.modules) && p.modules.every(moduleOk) && isStrings(p.removed);
+  && typeof m.accepted === 'boolean' && isTexts(m.goals) && Array.isArray(m.material) && Array.isArray(m.sources) && Array.isArray(m.checks);
+const planOk = (p: unknown): p is TrajectoryPlan => isObject(p) && p.version === 1 && Array.isArray(p.modules) && p.modules.every(moduleOk) && isTexts(p.removed);
 const messageOk = (m: unknown) => isObject(m) && (m.role === 'admin' || m.role === 'ai') && typeof m.text === 'string' && typeof m.at === 'string';
 const passageOk = (p: unknown) => Array.isArray(p) && p.length === 2 && typeof p[0] === 'number' && typeof p[1] === 'string';
 
@@ -31,7 +30,7 @@ function parsePlan(r: PlanRow): PlanRecord {
   if (!messagesOk) console.warn(`Messages of the plan of ${r.trajectory_id} are malformed; shown with none`);
   return {
     trajectoryId: r.trajectory_id, plan: plan ?? emptyPlan(), messages: messagesOk ? r.messages as PlanMessage[] : [],
-    bundleIds: isStrings(r.bundle_ids) ? r.bundle_ids : [], updatedAt: r.updated_at ?? null,
+    bundleIds: isTexts(r.bundle_ids) ? r.bundle_ids : [], updatedAt: r.updated_at ?? null,
   };
 }
 
