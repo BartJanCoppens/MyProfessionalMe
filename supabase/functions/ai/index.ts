@@ -17,10 +17,8 @@ import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '..
 import type { Conn, UseRow } from '../_shared/aiUse.ts';
 import { NO_SCRIPT, USE_LIMITS } from '../_shared/aiGuard.ts';
 import { callProvider, inputChars, limitMessage, LIMITS, readAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
-import { reviewGame } from './review.ts';
+import { GAME_USE, reviewGame } from './review.ts';
 import type { ReviewLoad } from './review.ts';
-
-const GAME_USE = 'studio_game';
 
 type Admin = Parameters<typeof isLive>[0];
 // The use as the caller may use it now (live, a text use, theirs to use), or the answer that says why not.

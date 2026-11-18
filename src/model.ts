@@ -108,6 +108,10 @@ export class Logic {
     this.levels = levelsByDomain(subject.data.progress, LEARN);
   }
 
+  // The newest Logic (App keeps it in a ref): a long job started on this one (a studio build) reads the draft as it is when it saves,
+  // so edits made meanwhile are not overwritten. Without App (tests, previews) it is this one.
+  latest: () => Logic = () => this;
+
   // Viewing someone else is read-only; returns true (and says so) when a write must not happen.
   readOnly() {
     if (!this.subject.readOnly) return false;

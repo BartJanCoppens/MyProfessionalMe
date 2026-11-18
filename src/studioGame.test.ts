@@ -183,16 +183,27 @@ describe('what the draft shows after the server passed the review', () => {
   });
 });
 
-describe('the game is saved without overwriting rows edited during the build', () => {
-  it('saves the rows as they are when the review step runs, with the built game after them', async () => {
+describe('the game is saved without overwriting what was edited during the build', () => {
+  it('keeps a row, the title and a Shape answer changed while the AI was writing, in the saved draft and on screen', async () => {
     const h = open();
     let first = true;
-    vi.mocked(aiStore.askAi).mockImplementation(async () => { if (!first) h.st().rows[1].edit(1, 'Edited during the build'); const out = first ? HTML : JS; first = false; return { text: out, cut: false }; });
+    vi.mocked(aiStore.askAi).mockImplementation(async () => {
+      if (!first) { // the creator edits while the logic is being written
+        h.st().rows[1].edit(1, 'Edited during the build');
+        h.L().setState({ nw: { ...h.state.nw, title: 'A better title', shape: { ...h.state.nw.shape, 'Leaderboard?': 'None' } } });
+      }
+      const out = first ? HTML : JS; first = false; return { text: out, cut: false };
+    });
     await h.build(); await flush();
-    const saved = vi.mocked(store.saveDraft).mock.calls.at(-1)![0] as { items: StudioEntry[] };
+    const saved = vi.mocked(store.saveDraft).mock.calls.at(-1)![0] as { items: StudioEntry[]; title: string; shape: Record<string, string> };
     expect(saved.items[1]).toEqual(['Round 1', 'Edited during the build', ROWS[1][2]]);
+    expect(saved.title).toBe('A better title');
+    expect(saved.shape['Leaderboard?']).toBe('None');
     expect(gameOf(saved.items)).not.toBeNull();
-    expect((h.state.nw.items!.list as StudioEntry[])[1]).toEqual(['Round 1', 'Edited during the build', ROWS[1][2]]);
+    expect(h.state.nw.title).toBe('A better title');
+    expect((h.state.nw.items!.list as StudioItem[])[1][1]).toBe('Edited during the build');
+    // and the verdict is for what was saved: nothing changed since, so it still passes
+    expect(h.st().game!.review).toBe('The house-rules check passed on this version');
   });
 });
 

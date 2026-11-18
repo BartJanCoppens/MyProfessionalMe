@@ -113,6 +113,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   }, [me]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
   // One clock while a podcast or reel plays. Each tick reads the latest Logic, which saves progress and stops at the end.
+  logic.latest = () => logicRef.current;
   const logicRef = useRef(logic);
   useEffect(() => { logicRef.current = logic; });
   // AI: which uses answer through a connection (everyone); the AI connections page loads its data when it opens.

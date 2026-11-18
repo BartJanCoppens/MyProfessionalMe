@@ -3,9 +3,11 @@
 // database and the provider are handed in, so Vitest tests the flow (src/lib/aiReview.test.ts).
 import { readVerdict, reviewRequest } from '../_shared/gameReview.ts';
 import type { ReviewInput } from '../_shared/gameReview.ts';
-import { inputChars, limitMessage, withPreamble } from './core.ts';
+import { inputChars, limitMessage, NO_SCRIPT, withPreamble } from './core.ts';
 import type { Ask, Outcome } from './core.ts';
 
+// The use the review is counted under and answered by (the build's).
+export const GAME_USE = 'studio_game';
 export type ReviewLoad = ReviewInput & { review_hash: string };
 export type Verdict = { passed: boolean; reasons: string[] };
 export type ReviewDeps = {
@@ -23,7 +25,7 @@ export async function reviewGame(d: ReviewDeps): Promise<ReviewResult> {
   if (!game) return { status: 404, error: 'That game is not yours to review, or it is not built yet' };
   const ask = withPreamble(reviewRequest(game), d.preamble);
   const counted = await d.count(inputChars(ask));
-  if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, false) } : { status: 500, error: 'Could not count the call' };
+  if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, !NO_SCRIPT.includes(GAME_USE)) } : { status: 500, error: 'Could not count the call' };
   const out = await d.call(ask);
   if (!out.ok) return { status: 502, error: out.error };
   const verdict = out.cut ? null : readVerdict(out.text);

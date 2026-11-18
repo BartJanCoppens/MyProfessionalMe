@@ -53,7 +53,8 @@ export function harness(opts: Opts = {}) {
   const refs = { toastTimer: { current: undefined as number | undefined }, drag: { current: null as string | null }, file: { current: null as HTMLInputElement | null }, chat: { current: null as HTMLDivElement | null } };
   const reloadSubject = opts.reloadSubject || vi.fn(async () => {});
   const reloadContent = opts.reloadContent || vi.fn(async () => {});
-  const L = () => new Logic(st, set, config, refs, access, subject, reloadSubject, reloadContent);
+  // latest() answers the newest Logic, as App's logicRef does: a long job (a build) reads the draft as it is when it saves.
+  const L = (): Logic => { const l = new Logic(st, set, config, refs, access, subject, reloadSubject, reloadContent); l.latest = () => L(); return l; };
   return {
     L, vm: () => L().renderVals(), patches, refs, subject, access, reloadSubject, reloadContent,
     get state() { return st; },

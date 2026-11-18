@@ -71,22 +71,21 @@ export function gameBuilt(list: StudioEntry[], shape: Record<string, string>, nw
 }
 
 // Saves the game with the draft, then has the server review it: a passed verdict it already holds for these files is reused.
-// The rows as they are now (edited during a long build), else the ones the build started with: the save must not overwrite them.
-async function currentRows(setNw: SetNw, fallback: StudioEntry[]): Promise<StudioEntry[]> {
-  let rows: StudioEntry[] | null = null;
-  setNw((cur) => { rows = stepsOf(listOf(cur)); return {}; });
-  for (let i = 0; i < 5 && !rows; i++) await new Promise((r) => setTimeout(r, 0));
-  return rows ?? fallback;
-}
-
+// Saves the game with the draft, then has the server review it: a passed verdict it already holds for these files is reused. The rows,
+// title and answers are read from the newest state when the save runs (L.latest), so what the creator edited during the build is kept.
 async function reviewed(ctx: BuildCtx, game: GameItem) {
-  const list = [...await currentRows(ctx.setNw, stepsOf(listOf(ctx.nw))), game];
-  let id = '';
-  const saved = await ctx.withFile(async (i) => { id = i; return list as Item[]; }, 'Saved as draft · the game is stored with it', ctx.nw.items?.how ?? '');
-  if (!saved) throw new Error('The game could not be saved · try again');
+  let id = '', saved: { list: StudioEntry[]; nw: NewDraft } | null = null;
+  const stored = await ctx.withFile(async (i) => {
+    id = i;
+    const now = ctx.L.latest().state.nw, list = [...stepsOf(listOf(now)), game] as StudioEntry[];
+    saved = { list, nw: now };
+    return list as Item[];
+  }, 'Saved as draft · the game is stored with it', ctx.nw.items?.how ?? '');
+  if (!stored || !saved) throw new Error('The game could not be saved · try again');
+  const { list, nw } = saved as { list: StudioEntry[]; nw: NewDraft };
   const held = await loadGameReview(id);
   const status = held?.current && held.passed ? held : { ...(await reviewGame(id)), current: true };
-  ctx.setNw({ gameReview: status, gameReviewFor: reviewBasis(ctx.nw.title, list, ctx.nw.shape ?? {}) });
+  ctx.setNw({ gameReview: status, gameReviewFor: reviewBasis(nw.title, list, nw.shape ?? {}) });
   if (!status.passed) throw new Error(status.reasons[0] ?? 'The house-rules check did not pass');
 }
 

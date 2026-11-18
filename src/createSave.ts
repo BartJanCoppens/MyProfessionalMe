@@ -92,7 +92,7 @@ async function submitChecked(id: string, studio: string | null | undefined) {
 type Saved = { s: AppState; nw: NewDraft; studio: string | null; id: string };
 async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>, patch: Partial<NewDraft> = {}): Promise<boolean> {
   if (busy(L)) return false;
-  const s = L.state, nw = { ...effective(s), ...patch }, rules = s.create?.rules || [], studio = draftStudio(s);
+  const s = L.latest().state, nw = { ...effective(s), ...patch }, rules = s.create?.rules || [], studio = draftStudio(s);
   if (!rules.length) { L.say('Ask an admin for creation rights first'); return false; }
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return false; }
   let id = s.editing ?? nw.savedId ?? null;
