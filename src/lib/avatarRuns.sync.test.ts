@@ -11,7 +11,7 @@ const fn = (name: string) => sql.slice(sql.indexOf('create function public.' + n
 
 describe('avatar_run_context and the ai function', () => {
   it('give the same refusals, in the same words in avatar_add_turns', () => {
-    const codes = [...fn('avatar_run_context').matchAll(/'refusal', '([a-z_]+)'/g)].map((m) => m[1]);
+    const codes = [...fn('avatar_run_context').matchAll(/'refusal', (?:case when r\.test then '([a-z_]+)' else )?'([a-z_]+)'/g)].flatMap((m) => [m[1], m[2]]).filter(Boolean);
     // prompt_changed is the edge's own, before counting: the database says the same words at the write
     expect([...new Set(codes)].sort()).toEqual(Object.keys(REFUSED).filter((c) => c !== 'prompt_changed').sort());
     const add = fn('avatar_add_turns');
@@ -43,9 +43,10 @@ describe('avatar_run_context and the ai function', () => {
     expect(sql).not.toMatch(/grant (update|delete)[^;]*avatar_runs/);
   });
   it('reads a real run from the published contribution and a practice run only while its author or reviewer', () => {
-    const context = fn('avatar_run_context');
-    expect(context).toContain("private.can_play_test_as(k.id, p_user, 'Avatar')");
-    expect(context).toContain("k.status = 'published'");
+    const context = fn('avatar_run_context'), lookup = sql.slice(sql.indexOf('create function private.avatar_run_contribution'), sql.indexOf('$$;', sql.indexOf('create function private.avatar_run_contribution')));
+    expect(context).toContain('private.avatar_run_contribution(p_run, p_user)');
+    expect(lookup).toContain("private.can_play_test_as(k.id, p_user, 'Avatar')");
+    expect(lookup).toContain("k.status = 'published'");
     expect(context).toContain('r.user_id is distinct from p_user');
   });
 });

@@ -113,6 +113,21 @@ create policy "avatar_runs: start" on public.avatar_runs for insert to authentic
     (not test and (select private.is_avatar_learning(learning_id)))
     or (test and (select private.can_play_test(contribution_id, 'Avatar')))));
 
+-- The contribution a run plays: a real run reads the published contribution of its learning, a practice run its own contribution while the person is still
+-- its author or an assigned reviewer; no row (id null) when there is none. The one lookup: the character's context and the score (Task 6.4) both use it.
+create function private.avatar_run_contribution(p_run uuid, p_user uuid)
+returns public.contributions
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select k.* from public.avatar_runs r join public.contributions k on k.type = 'Avatar'
+  where r.id = p_run and ((r.test and k.id = r.contribution_id and private.can_play_test_as(k.id, p_user, 'Avatar'))
+    or (not r.test and k.learning_id = r.learning_id and k.status = 'published'
+      and exists (select 1 from public.learnings l where l.id = r.learning_id and l.status = 'published' and l.format = 'Avatar' and l.content ->> 'kind' = 'avatar')));
+$$;
+
 -- 3. What the character's turn may use, read by the `ai` function with the service role: the caller's own, unfinished run that is in time and has
 -- lines left, or the reason it may not be played. A run lasts its minutes and five more; a run has 12, 24 or 36 learner lines (RUN_TURNS).
 create function public.avatar_run_context(p_user uuid, p_run uuid)
@@ -133,14 +148,8 @@ begin
   select * into r from public.avatar_runs where id = p_run;
   if not found or r.user_id is distinct from p_user then return jsonb_build_object('refusal', 'not_yours'); end if;
   if r.finished_at is not null then return jsonb_build_object('refusal', 'finished'); end if;
-  if r.test then
-    select k.* into c from public.contributions k where k.id = r.contribution_id and private.can_play_test_as(k.id, p_user, 'Avatar');
-    if not found then return jsonb_build_object('refusal', 'not_allowed'); end if;
-  else
-    select k.* into c from public.contributions k where k.learning_id = r.learning_id and k.type = 'Avatar' and k.status = 'published'
-      and exists (select 1 from public.learnings l where l.id = r.learning_id and l.status = 'published' and l.format = 'Avatar' and l.content ->> 'kind' = 'avatar');
-    if not found then return jsonb_build_object('refusal', 'no_scenario'); end if;
-  end if;
+  c := private.avatar_run_contribution(p_run, p_user);
+  if c.id is null then return jsonb_build_object('refusal', case when r.test then 'not_allowed' else 'no_scenario' end); end if;
   if not private.avatar_ok(c.items) then return jsonb_build_object('refusal', 'no_scenario'); end if;
   v_content := private.avatar_content(c.items, c.shape);
   v_minutes := (v_content ->> 'minutes')::integer;
@@ -222,7 +231,7 @@ update public.ai_uses set waiting_for = null, enabled = false, label = 'Avatar p
   where key = 'avatar_conversation';
 
 -- 7. Who may execute what.
-revoke execute on function private.can_play_test_as(uuid, uuid, text), private.can_play_test(uuid, text), private.is_avatar_learning(text), private.avatar_row_text(jsonb, text) from public, anon, authenticated;
+revoke execute on function private.can_play_test_as(uuid, uuid, text), private.can_play_test(uuid, text), private.is_avatar_learning(text), private.avatar_row_text(jsonb, text), private.avatar_run_contribution(uuid, uuid) from public, anon, authenticated;
 grant execute on function private.can_play_test(uuid, text), private.is_avatar_learning(text) to authenticated;
 revoke execute on function public.avatar_run_context(uuid, uuid), public.avatar_add_turns(uuid, uuid, jsonb, text, text, integer) from public, anon, authenticated;
 grant execute on function public.avatar_run_context(uuid, uuid), public.avatar_add_turns(uuid, uuid, jsonb, text, text, integer) to service_role;

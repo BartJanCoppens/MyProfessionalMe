@@ -8,6 +8,10 @@
 //   { use: 'avatar_conversation', run_id, say } the learner on a practice run (their own, unfinished, in time): the character's reply -> { say, turn, held };
 //                                            the character, what it reveals or hides and the earlier lines are read by the database (public.avatar_run_context)
 //                                            and the new lines written by it (public.avatar_add_turns); both roles are played by rolePlay.ts
+//   { action: 'score_avatar', run_id }       the learner whose practice run (their own, unfinished, with a line of theirs) is over: the AI's reading of what they
+//                                            said against the learning points -> { overall, band, points, ... }, from the conversation the database holds
+//                                            (public.avatar_score_input) and recorded by it (public.record_avatar_score), which also ends the run; counted under
+//                                            avatar_conversation
 //   { action: 'review_game', contribution_id } the author of a built Game: the house-rules review (use studio_game) of the files the
 //                                            database holds for that contribution -> { passed, reasons }, recorded by the database
 //                                            for those files (public.record_game_review); the verdict is never the client's
@@ -21,7 +25,9 @@ import { withSupabase } from '@supabase/server';
 import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
 import type { Conn, UseRow } from '../_shared/aiUse.ts';
 import { NO_SCRIPT, USE_LIMITS } from '../_shared/aiGuard.ts';
-import { callProvider, inputChars, limitMessage, LIMITS, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
+import { callProvider, inputChars, limitMessage, LIMITS, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, UUID, withPreamble } from './core.ts';
+import { scoreAvatarRun } from './avatarScore.ts';
+import type { ScoreLoad } from './avatarScore.ts';
 import { AVATAR_USE, playAvatarTurn, readAvatarAsk } from './avatarTurn.ts';
 import type { AvatarRunContext, AvatarTurn } from './avatarTurn.ts';
 import { GAME_ROLE_USE, playGameRole } from './gameRole.ts';
@@ -121,6 +127,25 @@ async function avatarTurn(call: Call): Promise<Response> {
   return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
 }
 
+// action 'score_avatar': the AI's reading of the caller's own practice run. Counted under avatar_conversation (no new use), and without that use's
+// "stay in character" preamble: the scoring text carries its own rules.
+async function scoreAvatar(call: Call): Promise<Response> {
+  const runId = String(call.body.run_id || '');
+  if (!UUID.test(runId)) return fail(400, 'Name the run (run_id)');
+  const opened = await openTarget(call.admin, AVATAR_USE, call.roles);
+  if (opened instanceof Response) return opened;
+  const { use, target } = opened;
+  const out = await scoreAvatarRun({
+    preamble: '', dailyLimit: use.daily_limit, dailyChars: use.daily_chars,
+    load: async () => ((await call.admin.rpc('avatar_score_input', { p_user: call.callerId, p_run: runId })).data as ScoreLoad | RoleRefusal | null) ?? null,
+    count: (chars) => countCall(call.admin, call.callerId, AVATAR_USE, chars),
+    call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[AVATAR_USE]?.timeoutMs),
+    record: async (hash, score) => (await call.admin.rpc('record_avatar_score', { p_run: runId, p_hash: hash, p_score: score })).error?.message ?? null,
+  });
+  console.log(JSON.stringify({ action: 'score_avatar', status: out.status, ms: Date.now() - call.started }));
+  return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
+}
+
 // Any other live text use: { use, system?, messages, max_tokens? }.
 async function answer({ admin, body, callerId, roles, started }: Call): Promise<Response> {
   const r = readAsk(body);
@@ -153,6 +178,7 @@ export default {
     const call: Call = { admin, body, callerId, roles, started: Date.now() };
     if (body.action === 'test') return testConnection(call);
     if (body.action === 'review_game') return review(call);
+    if (body.action === 'score_avatar') return scoreAvatar(call);
     if (body.use === GAME_ROLE_USE) return gameRole(call);
     return body.use === AVATAR_USE ? avatarTurn(call) : answer(call);
   }),
