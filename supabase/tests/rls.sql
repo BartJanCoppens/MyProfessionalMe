@@ -3092,5 +3092,42 @@ insert into results (check_name, expected, actual) select 'RS voice_ok accepts 3
 insert into results (check_name, expected, actual) select 'RS voice_ok refuses 301 words', 'false', private.voice_ok(pg_temp.rs_voice(jsonb_build_object('words', (select jsonb_agg(1) from generate_series(1, 301)))))::text;
 insert into results (check_name, expected, actual) select 'RS voice_ok refuses a 7th key that is not words', 'false', private.voice_ok(pg_temp.rs_voice('{"made":"x"}'))::text;
 insert into results (check_name, expected, actual) select 'RS voice_ok refuses an 8th key next to words', 'false', private.voice_ok(pg_temp.rs_voice('{"words":[0],"made":"x"}'))::text;
+-- ---------- Stock looks (LK) ----------
+-- stock_looks: System and General Admins add and edit (switching a look off is an edit); every signed-in person reads the
+-- active looks; nobody deletes one; the portrait is one of the four drawn in code and the colour six hex digits.
+reset role;
+insert into results (check_name, expected, actual) select 'LK the four built-in looks are seeded as roles, all active', 'CFO · 40s,Consultant · 30s,Engineer · 50s,HR director · 50s/4',
+  string_agg(name, ',' order by name)||'/'||count(*) from public.stock_looks where active;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e8","role":"authenticated"}';
+with i as (insert into public.stock_looks (name, portrait, color, licence) values ('T look · intern, 20s', 'p3', '#aa5500', 'Drawn in code') returning 1)
+  insert into results (check_name, expected, actual) select 'LK a General Admin adds a look', '1 rows', count(*)||' rows' from i;
+with u as (update public.stock_looks set active = false, name = 'T look · intern' where name = 'T look · intern, 20s' returning 1)
+  insert into results (check_name, expected, actual) select 'LK a General Admin edits and switches a look off', '1 rows', count(*)||' rows' from u;
+insert into results (check_name, expected, actual) select 'LK a General Admin reads the inactive look too', '5', count(*)::text from public.stock_looks;
+select pg_temp.gr_blocked('LK a portrait outside the drawn four is refused', $q$insert into public.stock_looks (name, portrait, color, licence) values ('T look bad portrait', 'p9', '#aa5500', 'x')$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('LK a colour that is not six lower-case hex digits is refused', $q$insert into public.stock_looks (name, portrait, color, licence) values ('T look bad colour', 'p1', 'red', 'x')$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('LK a look has a licence', $q$insert into public.stock_looks (name, portrait, color, licence) values ('T look no licence', 'p1', '#aa5500', ' ')$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('LK nobody deletes a look (switch it off instead)', $q$delete from public.stock_looks where name = 'T look · intern'$q$, 'blocked: 42501');
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+with i as (insert into public.stock_looks (name, portrait, color, licence) values ('T look · auditor, 40s', 'p2', '#112233', 'Drawn in code') returning 1)
+  insert into results (check_name, expected, actual) select 'LK a System Admin adds a look', '1 rows', count(*)||' rows' from i;
+insert into results (check_name, expected, actual) select 'LK a System Admin reads the inactive look too', '6', count(*)::text from public.stock_looks;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e9","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'LK a member reads the active looks only', '5', count(*)::text from public.stock_looks;
+select pg_temp.gr_blocked('LK a member adds no look', $q$insert into public.stock_looks (name, portrait, color, licence) values ('T look mine', 'p1', '#aa5500', 'x')$q$, 'blocked: 42501');
+with u as (update public.stock_looks set active = false where name = 'CFO · 40s' returning 1)
+  insert into results (check_name, expected, actual) select 'LK a member switches no look off', '0 rows', count(*)||' rows' from u;
+with u as (update public.stock_looks set name = 'Renamed' where name = 'CFO · 40s' returning 1)
+  insert into results (check_name, expected, actual) select 'LK a member edits no look', '0 rows', count(*)||' rows' from u;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select pg_temp.gr_blocked('LK a Domain Admin adds no look', $q$insert into public.stock_looks (name, portrait, color, licence) values ('T look line', 'p1', '#aa5500', 'x')$q$, 'blocked: 42501');
+with u as (update public.stock_looks set name = 'Renamed' where name = 'CFO · 40s' returning 1)
+  insert into results (check_name, expected, actual) select 'LK a Domain Admin edits no look', '0 rows', count(*)||' rows' from u;
+reset role;
+set local role anon;
+set local request.jwt.claims = '';
+select pg_temp.gr_blocked('LK anon reads no looks', $q$select count(*) from public.stock_looks$q$, 'blocked: 42501');
+reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
