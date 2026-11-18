@@ -3857,7 +3857,8 @@ set local request.jwt.claims = '';
 insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps) values
   ('TP1', 'T plan consulting draft', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]'),
   ('TP2', 'T plan firm-wide draft', 'T issuer', 'T credential', 'open', 6, 'draft', null, '[]', '[]'),
-  ('TP3', 'T plan live mandatory', 'T issuer', 'T credential', 'open', 6, 'live', 'Consulting', '[]', '[["Consulting","Consultant","mandatory"]]');
+  ('TP3', 'T plan live mandatory', 'T issuer', 'T credential', 'open', 6, 'live', 'Consulting', '[]', '[["Consulting","Consultant","mandatory"]]'),
+  ('TP4', 'T plan consulting draft without a plan', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]');
 insert into results (check_name, expected, actual) select 'TP the media bucket takes PDFs', 'true', (allowed_mime_types @> '{application/pdf,audio/mpeg}')::text from storage.buckets where id = 'media';
 insert into results (check_name, expected, actual) select 'TP trajectory_ai is seeded as a text use, off, for admins, 40 calls and 1,500,000 characters', 'text/false/true/40/1500000', kind||'/'||enabled||'/'||admins_only||'/'||daily_limit||'/'||daily_chars from public.ai_uses where key = 'trajectory_ai';
 insert into results (check_name, expected, actual) select 'TP trajectory_ai is not live without a connection', 'false', ('trajectory_ai' = any(public.ai_live_uses()))::text;
@@ -3879,6 +3880,7 @@ select pg_temp.gr_blocked('TP a Consulting Domain Admin is refused on a live Con
 select pg_temp.gr_blocked('TP the editor cannot delete a plan (no grant, no policy)', $q$delete from public.trajectory_plans where trajectory_id = 'TP1'$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('TP the editor cannot write updated_by', $q$update public.trajectory_plans set updated_by = null where trajectory_id = 'TP1'$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('TP the editor cannot insert updated_by', $q$insert into public.trajectory_plans (trajectory_id, updated_by) values ('TP1', null)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP a plan cannot be moved to another trajectory, even one the editor may plan', $q$update public.trajectory_plans set trajectory_id = 'TP4' where trajectory_id = 'TP1'$q$, 'blocked: 42501');
 select pg_temp.gr_blocked('TP 13 modules are refused by the check', $q$update public.trajectory_plans set plan = pg_temp.tp_plan(13) where trajectory_id = 'TP1'$q$, 'blocked: 23514');
 select pg_temp.gr_blocked('TP a plan of another version is refused', $q$update public.trajectory_plans set plan = '{"version":2,"modules":[],"removed":[]}' where trajectory_id = 'TP1'$q$, 'blocked: 23514');
 select pg_temp.gr_blocked('TP a plan that is not an object is refused', $q$update public.trajectory_plans set plan = '[]' where trajectory_id = 'TP1'$q$, 'blocked: 23514');
@@ -3923,7 +3925,7 @@ do $$ begin
   end loop;
 end $$;
 insert into results (check_name, expected, actual) select 'TP a trajectory holds 10 sources', '10', count(*)::text from public.trajectory_plan_sources where trajectory_id = 'TP1';
-select pg_temp.gr_blocked('TP the 11th source is refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'eleven.pdf', 1, '[[1,"x"]]', 1)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP the 11th source is refused (a trigger under a lock per trajectory)', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'eleven.pdf', 1, '[[1,"x"]]', 1)$q$, 'blocked: 23514');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'TP another editor (a General Admin) reads the sources of the trajectory', '10', count(*)::text from public.trajectory_plan_sources where trajectory_id = 'TP1';
 with u as (update public.trajectory_plan_sources set path = null where id = current_setting('test.tp_s1')::uuid returning 1) insert into results (check_name, expected, actual) select 'TP only the uploader sets the file: another editor updates 0 rows', '0 rows', count(*)||' rows' from u;
@@ -3948,6 +3950,16 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","r
 insert into results (check_name, expected, actual) select 'TP a learner cannot read the file', '0', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'TP a creator (with their own files) cannot read the file', '0', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
+-- a file whose source row is gone is garbage: any admin may remove it, nobody else; an insert under an unknown id stays refused
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP while its source row exists an Audit Domain Admin removes 0 files of it', '0 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with d as (delete from public.trajectory_plan_sources where id = current_setting('test.tp_s1')::uuid returning 1) insert into results (check_name, expected, actual) select 'TP an editor removes a source row', '1 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP a learner cannot remove the orphaned file', '0 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP an admin removes the file whose source row is gone', '1 rows', count(*)||' rows' from d;
+select pg_temp.gr_blocked('TP an orphan PDF still cannot be uploaded (the remove rule is not the write rule)', $q$insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000a7/00000000-0000-4000-8000-000000000003/x.pdf')$q$, 'blocked: 42501');
 -- the trajectory goes: plan and sources go with it
 reset role;
 set local request.jwt.claims = '';

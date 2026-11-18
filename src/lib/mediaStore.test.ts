@@ -1,7 +1,7 @@
 // What the media adapter sends to Supabase Storage, and the sentences it turns refusals into. The client is a fake.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, op } from '../test/fakeSupabase';
-import { mediaText, mediaUrl, removeContributionMedia, removeFiles, removeMedia, uploadMedia, uploadSourceFile } from './mediaStore';
+import { mediaText, mediaUrl, removeContributionMedia, removeMedia, removePaths, uploadMedia, uploadSourceFile } from './mediaStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 const USER = '0f8fad5b-d9cb-469f-a165-70867728950e', CONTRIBUTION = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -126,11 +126,12 @@ describe('a trajectory plan\'s source file', () => {
     db.answer(() => ({ error: { message: 'new row violates row-level security policy' } }));
     await expect(uploadSourceFile(SOURCE, blob(10), 'a.pdf')).rejects.toThrow('Not allowed · only an editor of this trajectory can add source files');
   });
-  it('is removed with the files that are there, and a refusal is worded', async () => {
-    db.answer(() => ({ data: [] }));
-    await removeFiles(['a', 'b']);
+  it('is removed by the one remove helper: a shortfall is an error unless a missing file is allowed', async () => {
+    db.answer(() => ({ data: [{ name: 'a' }] }));
+    await expect(removePaths(['a', 'b'])).rejects.toThrow('Not removed');
+    await expect(removePaths(['a', 'b'], true)).resolves.toBeUndefined();
     expect(db.calls[0].steps).toEqual([['remove', [['a', 'b']]]]);
     db.answer(() => ({ error: { message: 'new row violates row-level security policy' } }));
-    await expect(removeFiles(['a'])).rejects.toThrow('Not removed');
+    await expect(removePaths(['a'], true)).rejects.toThrow('Not removed');
   });
 });

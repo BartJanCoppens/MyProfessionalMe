@@ -12,7 +12,7 @@ describe('plan caps: TypeScript and the database agree', () => {
     expect(sql).toContain(`jsonb_array_length(p -> 'removed') <= ${PLAN_CAPS.removed}`);
     expect(sql).toContain(`jsonb_array_length(messages) <= ${PLAN_CAPS.messages}`);
     expect(sql).toContain(`cardinality(bundle_ids) <= ${PLAN_CAPS.bundles}`);
-    expect(sql).toContain(`< ${PLAN_CAPS.sourcesPerTrajectory}`);
+    expect(sql).toContain(`>= ${PLAN_CAPS.sourcesPerTrajectory} then raise exception`);
   });
   it('limits the size of a plan, the messages, a source and its passages', () => {
     expect(sql).toContain('octet_length(p::text) <= 120000');

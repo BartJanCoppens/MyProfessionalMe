@@ -66,20 +66,15 @@ export async function mediaText(path: string): Promise<string> {
   return res.text();
 }
 
-// Removes every path or throws: Storage skips a file the caller may not remove instead of refusing.
-async function removePaths(paths: string[]) {
+// Removes every path or throws: Storage skips a file the caller may not remove instead of refusing. allowMissing: a file already
+// gone is not an error (a plan source whose earlier delete was refused), so only Storage's own error counts.
+export async function removePaths(paths: string[], allowMissing = false) {
   const { data, error } = await bucket().remove(paths);
   fail(error, REMOVE);
-  if ((data?.length ?? 0) < paths.length) throw new Error(NOT_REMOVED);
+  if (!allowMissing && (data?.length ?? 0) < paths.length) throw new Error(NOT_REMOVED);
 }
 
 export const removeMedia = (path: string) => removePaths([path]);
-
-// Removes the files that are there (a file already gone is not an error: a trajectory whose delete was refused earlier is deleted again).
-export async function removeFiles(paths: string[]): Promise<void> {
-  const { error } = await bucket().remove(paths);
-  fail(error, REMOVE);
-}
 
 // Removes all files of one of the signed-in author's contributions (before its draft is deleted).
 // A contribution holds a few files; 1000 is Storage's page size and far above any studio's count.

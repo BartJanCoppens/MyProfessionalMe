@@ -159,17 +159,22 @@ describe('deleting a trajectory', () => {
     expect(has(call, 'eq', 'id', 'T100')).toBe(true);
     expect(has(call, 'select', 'id')).toBe(true);
   });
-  it('removes the files of the plan\'s sources first, then the row', async () => {
+  it('lists the files, deletes the row, and only then removes the files', async () => {
     db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? [{ path: 'u/s1/a.pdf' }] : [{ id: 'T100' }] }));
     expect(await deleteTrajectory('T100')).toEqual({ error: null });
-    expect(db.calls.map((c) => c.table)).toEqual(['trajectory_plan_sources', 'storage:media', 'trajectories']);
-    expect(op(db.calls[1])).toBe('remove');
-    expect(op(db.calls[2])).toBe('delete');
+    expect(db.calls.map((c) => c.table)).toEqual(['trajectory_plan_sources', 'trajectories', 'storage:media']);
+    expect(op(db.calls[1])).toBe('delete');
+    expect(op(db.calls[2])).toBe('remove');
   });
-  it('keeps the trajectory when its files cannot be removed', async () => {
-    db.answer((c) => (c.table === 'storage:media' ? { error: { message: 'new row violates row-level security policy' } } : { data: [{ path: 'u/s1/a.pdf' }] }));
-    expect((await deleteTrajectory('T100')).error).toMatch(/^Not removed/);
-    expect(db.on('trajectories')).toHaveLength(0);
+  it('keeps the files when the delete is refused', async () => {
+    db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? [{ path: 'u/s1/a.pdf' }] : [] }));
+    expect((await deleteTrajectory('T100')).error).toMatch(/^Not deleted/);
+    expect(db.calls.map((c) => c.table)).toEqual(['trajectory_plan_sources', 'trajectories']);
+  });
+  it('is deleted even when a file cannot be removed afterwards (a leftover file, warned)', async () => {
+    db.answer((c) => (c.table === 'storage:media' ? { error: { message: 'boom' } } : { data: c.table === 'trajectory_plan_sources' ? [{ path: 'u/s1/a.pdf' }] : [{ id: 'T100' }] }));
+    expect(await deleteTrajectory('T100')).toEqual({ error: null });
+    expect(warn).toHaveBeenCalled();
   });
   it('says so when the database refused (used meanwhile, or not the admin\'s)', async () => {
     db.answer(() => ({ data: [] }));

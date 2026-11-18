@@ -5,7 +5,7 @@ import { emptyPlan } from '../logic/trajectoryPlan';
 import type { PlanMessage, PlanRecord, PlanSource, TrajectoryPlan } from '../logic/trajectoryPlan';
 import { isObject } from '../logic/values';
 import { inOrder } from './contentStore';
-import { removeFiles } from './mediaStore';
+import { removePaths } from './mediaStore';
 import { cancelSoon, saveSoon } from './saveSoon';
 import { supabase } from './supabase';
 
@@ -80,10 +80,29 @@ export async function startOver(trajectoryId: string): Promise<void> {
   });
 }
 
-// The uploaded files of the trajectory's sources, before the trajectory is deleted. Rows without a file are skipped.
-export async function removePlanFiles(trajectoryId: string): Promise<void> {
+// The uploaded files of the trajectory's sources (rows without a file are skipped), listed before the trajectory is deleted.
+export async function planFilePaths(trajectoryId: string): Promise<string[]> {
   const { data, error } = await supabase.from('trajectory_plan_sources').select('path').eq('trajectory_id', trajectoryId);
   fail(error);
-  const paths = ((data || []) as { path: string | null }[]).map((r) => r.path).filter((p): p is string => !!p);
-  if (paths.length) await removeFiles(paths);
+  return ((data || []) as { path: string | null }[]).map((r) => r.path).filter((p): p is string => !!p);
+}
+
+// After the trajectory's row is gone: the files are cleaned up, and a failure is only warned about (a leftover file is acceptable,
+// a lost one is not, so this never runs before the delete).
+export async function removePlanFiles(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  try { await removePaths(paths, true); } catch (err) { console.warn('Plan source files left in storage: ' + (err as Error).message); }
+}
+
+// One source: its file first, then its row. When the file cannot be removed the row stays, so the file is never orphaned.
+export async function removePlanSource(sourceId: string): Promise<void> {
+  const { data, error } = await supabase.from('trajectory_plan_sources').select('path').eq('id', sourceId).maybeSingle();
+  fail(error);
+  const path = (data as { path: string | null } | null)?.path;
+  if (path) {
+    try { await removePaths([path], true); } catch { throw new Error('Not removed · the original file could not be removed, so the source stays'); }
+  }
+  const gone = await supabase.from('trajectory_plan_sources').delete().eq('id', sourceId).select('id');
+  fail(gone.error);
+  if (!(gone.data as unknown[] | null)?.length) throw new Error('Not removed · only an editor of this trajectory can remove a source');
 }

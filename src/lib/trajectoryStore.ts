@@ -5,7 +5,7 @@
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjDecision, TrjMap, TrjStep } from '../logic/trajectory';
 import { isObject } from '../logic/values';
 import { inOrder } from './contentStore';
-import { removePlanFiles } from './planStore';
+import { planFilePaths, removePlanFiles } from './planStore';
 import { saveSoon, whileDeleting } from './saveSoon';
 import { supabase } from './supabase';
 
@@ -122,15 +122,19 @@ export async function saveTrajectory(t: Trajectory) {
 export function saveTrajectorySoon(id: string, latest: () => Trajectory | undefined, onError: (message: string) => void, wait = 600) {
   saveSoon(id, latest, saveTrajectory, onError, wait);
 }
-// A trajectory nobody was ever enrolled on and no credential refers to (the database decides; see trajectory_in_use). Its plan's
-// source files go first (the rows go with the trajectory; a refused delete leaves them with their text, so citing still works).
+// A trajectory nobody was ever enrolled on and no credential refers to (the database decides; see trajectory_in_use). The source files
+// are listed first (their rows go with the trajectory) and removed only after the delete succeeded: a refused delete loses nothing.
 // A pending debounced save is held back first (whileDeleting), so it is never written back.
 const notDeleted = 'Not deleted · it is in use or you cannot delete it · retire it instead';
 export function deleteTrajectory(id: string): Promise<{ error: string | null }> {
   return whileDeleting(id, async () => {
-    try { await removePlanFiles(id); } catch (err) { return { error: (err as Error).message }; }
+    let paths: string[];
+    try { paths = await planFilePaths(id); } catch (err) { return { error: (err as Error).message }; }
     const { data, error } = await supabase.from('trajectories').delete().eq('id', id).select('id');
-    return { error: error ? failure(error) : (data as unknown[] | null)?.length ? null : notDeleted };
+    if (error) return { error: failure(error) };
+    if (!(data as unknown[] | null)?.length) return { error: notDeleted };
+    await removePlanFiles(paths);
+    return { error: null };
   });
 }
 // The ids (of those this admin may write) that are in use, so the editor offers Delete only on the others.
