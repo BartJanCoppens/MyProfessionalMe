@@ -2411,6 +2411,8 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","r
 insert into results (check_name, expected, actual) select 'VO not to their own contribution once published', 'false', public.can_write_media('00000000-0000-0000-0000-0000000000f1/'||current_setting('test.me_c')||'/voice-a.mp3')::text;
 reset role;
 -- ---------- Horizon presentations (HZ) ----------
+insert into results (check_name, expected, actual) select 'HZ a narrated Presentation counts its length rounded up to 0.05 h, at least 0.05 h', '0.25/0.05/0.05/0.10/0.15/10.00',
+  concat_ws('/', private.horizon_hours(0), private.horizon_hours(1), private.horizon_hours(180), private.horizon_hours(181.5), private.horizon_hours(361), private.horizon_hours(36000));
 -- 'Presentation' is an upload-form format: no studio, one item {kind, path, title, slides, seconds} (private.horizon_ok)
 -- naming the .horizon file in the contribution's own folder, which must be in Storage before the check and submit pass.
 reset role;
@@ -2460,6 +2462,8 @@ insert into results (check_name, expected, actual) select 'HZ a Presentation wit
 insert into results (check_name, expected, actual) select 'HZ it becomes horizon content: path, title, slides, seconds', 'true',
   (l.content = jsonb_build_object('kind', 'horizon', 'path', current_setting('test.hz_p'), 'title', 'Garden tour', 'slides', 3, 'seconds', 0))::text
   from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T hz deck';
+insert into results (check_name, expected, actual) select 'HZ a Presentation without a narration counts 0.25 h', '0.25',
+  l.hours::text from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T hz deck';
 select set_config('test.hz_l', (select learning_id from public.contributions where id = current_setting('test.hz_c')::uuid), true);
 -- a learner reads the published file (its path is in the content) and completes it themselves ('media')
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b8","role":"authenticated"}';

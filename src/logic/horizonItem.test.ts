@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseFormatContent } from '../lib/contentStore';
 import { latestMatch } from '../test/migrations';
-import { HORIZON_SECONDS_MAX, HORIZON_SLIDES_MAX, HORIZON_TITLE_MAX, isHorizonItem } from './horizonItem';
+import { HORIZON_SECONDS_MAX, HORIZON_SLIDES_MAX, HORIZON_TITLE_MAX, horizonHours, isHorizonItem } from './horizonItem';
 import type { HorizonItem } from './horizonItem';
 import { carriesItems, itemRows, itemsFromSaved, itemsText, ITEM_MAX } from './items';
 import { COMPLETION, completionText, completionTodo, selfCompletes } from './record';
@@ -56,4 +56,21 @@ describe('the Presentation format', () => {
     expect(completionTodo('Presentation')).toBe('play it to the last slide');
   });
   it('has its own library cover', () => { expect(COVER_KIND.Presentation).toBe('deck'); });
+});
+
+describe('the hours a published Presentation counts (a default awaiting the owner)', () => {
+  it('is its narration length rounded up to 0.05 h (at least 0.05 h), or 0.25 h without a narration', () => {
+    expect(horizonHours(0)).toBe(0.25);
+    expect([1, 180].map(horizonHours)).toEqual([0.05, 0.05]);
+    expect([181, 360, 361].map(horizonHours)).toEqual([0.1, 0.1, 0.15]);
+    expect(horizonHours(3600)).toBe(1);
+    expect(horizonHours(HORIZON_SECONDS_MAX)).toBe(10);
+  });
+  it('is the same arithmetic in private.horizon_hours, which publishing uses', () => {
+    const body = latestMatch(/create (?:or replace )?function private\.horizon_hours\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
+    expect(body).toContain('0.25');
+    expect(body).toContain('greatest(1, ceil(p_seconds / 180))');
+    expect(body).toContain('* 0.05');
+    expect(latestMatch(/create (?:or replace )?function private\.publish_contribution\([\s\S]*?\n\$\$;/)[0]).toContain("when 'Presentation' then private.horizon_hours((v_content ->> 'seconds')::numeric)");
+  });
 });

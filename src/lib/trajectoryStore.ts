@@ -3,6 +3,7 @@
 // the RPCs below (request, withdraw, submit, submit_renewal); the counsellor decides through decide_trajectory and
 // confirm_credential.
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjDecision, TrjMap, TrjStep } from '../logic/trajectory';
+import { isObject } from '../logic/values';
 import { inOrder } from './contentStore';
 import { supabase } from './supabase';
 
@@ -16,7 +17,6 @@ type Failure = { message: string; code?: string };
 
 const TRAJECTORY_COLUMNS = 'id, name, issuer, credential, enrol, months, valid_months, renewal, cost, status, business_line, steps, maps, published_at';
 const KINDS = ['learn', 'elect', 'evidence', 'check', 'exam'];
-const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const stepOk = (s: unknown) => isObject(s) && typeof s.id === 'string' && s.id.trim() !== '' && typeof s.k === 'string' && KINDS.includes(s.k);
 const mapOk = (m: unknown) => Array.isArray(m) && m.length === 3 && typeof m[0] === 'string' && typeof m[1] === 'string' && (m[2] === 'mandatory' || m[2] === 'advised');
 const entryOk = (e: unknown) => isObject(e) && ['submitted', 'booked', 'done'].includes(e.state as string);

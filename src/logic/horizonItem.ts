@@ -22,6 +22,10 @@ export function isHorizonItem(v: unknown): v is HorizonItem {
     && typeof x.seconds === 'number' && Number.isFinite(x.seconds) && x.seconds >= 0 && x.seconds <= HORIZON_SECONDS_MAX;
 }
 
+// The hours a published Presentation counts: its narration length rounded up to 0.05 h (at least 0.05 h), 0.25 h when it
+// has no narration. A default awaiting the owner (docs/decisions.md). Mirrored by private.horizon_hours.
+export const horizonHours = (seconds: number) => (seconds > 0 ? Math.round(Math.max(1, Math.ceil(seconds / 180)) * 5) / 100 : 0.25);
+
 // "2 min 5 s", "40 s": a narration's length in words.
 export const lengthWords = (seconds: number) => {
   const s = Math.round(seconds), m = Math.floor(s / 60);

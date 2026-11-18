@@ -15,6 +15,8 @@
 --          a referenced file must exist before it is sent).
 -- content  private.contribution_content publishes the summary, rebuilt from its known keys. Its "path" member opens the
 --          file to every signed-in person once published (private.can_read_media, 20261117270000).
+-- hours    A published Presentation counts its narration length rounded up to 0.05 h (at least 0.05 h), or 0.25 h when it
+--          has no narration (private.horizon_hours; horizonHours in src/logic/horizonItem.ts). A default awaiting the owner.
 -- completion 'media' (COMPLETION in src/logic/record.ts): the learner completes it themselves by reaching the last
 --          slide of the route; private.is_self_complete lists it.
 
@@ -201,4 +203,49 @@ as $$
                  and format in ('Podcast', 'Reel', 'E-learning', 'Avatar', 'Classroom', 'Flash cards', 'Job aid', 'Practice exam', 'Teach-back', 'Webinar', 'Interactive explainer', 'Animated flow', 'Presentation'));
 $$;
 
-revoke execute on function private.horizon_ok(jsonb), private.horizon_content(jsonb) from public, anon, authenticated;
+-- The hours a Presentation counts (mirrored by horizonHours in src/logic/horizonItem.ts).
+create function private.horizon_hours(p_seconds numeric)
+returns numeric
+language sql
+immutable
+set search_path = ''
+as $$
+  select case when p_seconds > 0 then greatest(1, ceil(p_seconds / 180)) * 0.05 else 0.25 end;
+$$;
+
+-- As before (20261117260000), with a Presentation's hours from its narration.
+create or replace function private.publish_contribution(p_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c public.contributions%rowtype;
+  v_id text;
+  v_content jsonb;
+begin
+  select * into c from public.contributions where id = p_id;
+  if not private.rules_allow(c.author_id, c.business_line, c.type, c.domain, c.audience) then
+    raise exception 'The author''s creation rules no longer allow this contribution, so it cannot be published' using errcode = '42501';
+  end if;
+  if private.carries_items(c.type, c.studio) then
+    if not private.items_ok(c.type, c.items) then
+      raise exception 'This contribution has no usable items, so it cannot be published' using errcode = 'P0001';
+    end if;
+    v_content := private.contribution_content(c.type, c.items, c.shape);
+  end if;
+  insert into public.learnings (title, domain, level, format, source, hours, cpd, due, why, business_line, status, created_by, content, ai_made)
+  values (btrim(c.title), c.domain, c.level, c.type, 'Peer contribution',
+          case c.type when 'Reel' then 0.025 when 'Podcast' then 0.5 when 'Micro-guide' then 0.1 when 'Practice exam' then 0.5
+                      when 'Case exercise' then private.case_hours(c.shape) when 'Animated flow' then 0.025
+                      when 'Presentation' then private.horizon_hours((v_content ->> 'seconds')::numeric) else 0.25 end,
+          0, '', btrim(c.takeaway), c.business_line, 'published', c.author_id, v_content,
+          c.ai_assisted or coalesce(v_content ->> 'made', '') = 'ai')
+  returning id into v_id;
+  update public.contributions set status = 'published', step = 4, learning_id = v_id, published_at = now() where id = p_id;
+  return v_id;
+end;
+$$;
+
+revoke execute on function private.horizon_ok(jsonb), private.horizon_content(jsonb), private.horizon_hours(numeric) from public, anon, authenticated;

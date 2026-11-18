@@ -1,6 +1,7 @@
 import { AUDS, BLS } from '../data';
 import { isHorizonItem } from '../logic/horizonItem';
 import { isQuestion } from '../logic/items';
+import { isCount, isText, isTexts } from '../logic/values';
 import type { Bundle, FormatContent, Learn, LearnMeta, Mapping } from '../types';
 import { supabase } from './supabase';
 
@@ -16,9 +17,6 @@ export type LearningFields = Omit<LearningRow, 'id' | 'content' | 'ai_made'>;
 
 const fail = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 
-const isText = (v: unknown): v is string => typeof v === 'string';
-const isTexts = (v: unknown): v is string[] => Array.isArray(v) && v.every(isText);
-const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isPair = (v: unknown): v is [string, string] => Array.isArray(v) && v.length === 2 && v.every(isText);
 
 // Stored content (jsonb) to a typed value; anything malformed is null so a screen can fall back to the plain page.
