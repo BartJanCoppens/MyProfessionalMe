@@ -3,11 +3,13 @@
 // only by the `ai` function (the character's turn); no learner receives them (private.avatar_content never copies them).
 // Learning-point weights and their equalising are ported from Taxatar's parseLearningPoints (supabase/functions/practice-chat/scoringPrompt.ts).
 export const CHARACTER_LABELS = ['Persona', 'Situation', 'Opening line', 'Reveals if asked', 'Hides unless probed'] as const;
+/** What the scripted draft puts in the two hidden rows when no passage is left for them; the check refuses it unedited (private.avatar_row_problems says the same). */
+export const TO_WRITE = { 'Reveals if asked': 'To write: what the character gives away if asked', 'Hides unless probed': 'To write: what the character keeps back unless probed' } as const;
 export const POINT_LABEL = /^Learning point · (\d+) %$/;
 export const RUN_MINUTES = [5, 10, 15] as const;
 /** The learner's lines in one run, by its minutes. */
 export const RUN_TURNS: Record<5 | 10 | 15, number> = { 5: 12, 10: 24, 15: 36 };
-/** The codes a guard writes on a turn it held (public.avatar_add_turns takes exactly these; the guards themselves are Task 6.3). */
+/** The codes a guard writes on a turn it held (public.avatar_add_turns takes exactly these; the guards are _shared/avatarGuard.ts). */
 export const GUARD_CODES = ['empty', 'too_long', 'meta_or_injection', 'offensive', 'classifier_meta', 'classifier_injection', 'classifier_offensive',
   'out_ai_admission', 'out_meta', 'out_joke', 'out_refusal', 'out_format', 'out_classifier'] as const;
 /** The minutes a run lasts are its length and this many more (public.avatar_run_context: time_up). */

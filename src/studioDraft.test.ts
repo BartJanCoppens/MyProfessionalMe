@@ -121,7 +121,9 @@ describe('scripted fallback per studio', () => {
   it('game has no sensible scripted draft', () => expect(scriptedItems(def('game'), nw('Game'), PASSAGES)).toBeNull());
   it('avatar: learning points add up to 100, and no quiz question is invented: the creator writes the three', () => {
     const rows = scriptedItems(def('avatar'), nw('Avatar'), PASSAGES.slice(0, 1))!;
-    expect(itemsValid(def('avatar'), rows)).toEqual(['Add the three quiz questions: each with 2 to 4 options, the right one first']);
+    // with one passage the hidden rows are still the "To write:" placeholders, which the check refuses unedited
+    expect(itemsValid(def('avatar'), rows)).toEqual(['Reveals if asked: write it, this is still the placeholder', 'Hides unless probed: write it, this is still the placeholder',
+      'Add the three quiz questions: each with 2 to 4 options, the right one first']);
     expect(rows.some((r) => r[0].startsWith('Quiz'))).toBe(false);
   });
   it('avatar: the hidden rows come from other passages, so a scripted draft with the quiz added passes the check', () => {

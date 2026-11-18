@@ -8,6 +8,7 @@ import { migrationText } from '../test/migrations';
 import { studioById, itemsValid } from './studios';
 import type { StudioItem } from './studios';
 import { ECHO_MIN, ECHO_WINDOW } from './textEcho';
+import { TO_WRITE } from '../../supabase/functions/_shared/avatarRules.ts';
 import { BAD_LOOK, avatarChecks, avatarContent, avatarProblems, avatarRows, quizOf } from './avatarContent';
 import type { StockLook } from './stockLooks';
 import type { StockVoice } from './ai';
@@ -68,6 +69,12 @@ describe('the problems with an avatar', () => {
     expect(avatarRows([...ROWS, ['Note', 'x']])).toEqual(['Note: use a character row, “Learning point · N %” or Quiz 1 to 3 as the label']);
     expect(avatarRows([...ROWS, ['Persona', 'again']])).toEqual(['Persona: use each character row once']);
   });
+  it('refuses an unedited "To write:" placeholder in Reveals or Hides, by its label', () => {
+    const swapRow = (label: string, text: string) => ROWS.map((r): StudioItem => (r[0] === label ? [label, text] : r));
+    expect(avatarRows(swapRow('Reveals if asked', TO_WRITE['Reveals if asked']))).toEqual(['Reveals if asked: write it, this is still the placeholder']);
+    expect(avatarRows(swapRow('Hides unless probed', '  ' + TO_WRITE['Hides unless probed'] + ' '))).toEqual(['Hides unless probed: write it, this is still the placeholder']);
+    expect(avatarRows(swapRow('Hides unless probed', TO_WRITE['Hides unless probed'] + ', and the budget is frozen'))).toEqual([]);
+  });
   it('asks to choose the run, the language, the difficulty, how it is scored and a look', () => {
     expect(problems(ROWS, {})).toEqual(['Choose how long a run is', 'Choose the language', 'Choose the difficulty', 'Choose how it is scored', 'Choose a look in Produce']);
     expect(problems(ROWS, { ...SHAPE, 'How is it scored?': 'Self-assessment' })).toEqual(['Choose how it is scored']);
@@ -122,6 +129,10 @@ describe('the SQL that repeats these rules (20261118190000_avatar_format.sql)', 
       'Add the three quiz questions: each with 2 to 4 options, the right one first', 'Choose how long a run is', 'Choose the language', 'Choose the difficulty', 'Choose how it is scored',
       'Choose a look in Produce', BAD_LOOK, 'That voice is not on the stock list', "The scenario''s public text repeats what the character keeps back",
       'Add 1 to 4 learning points, each as “Learning point · N %”', ': use each character row once', 'use a character row, “Learning point · N %” or Quiz 1 to 3 as the label']) expect(sql).toContain(t);
+  });
+  it('has the two placeholder texts and the placeholder problem', () => {
+    for (const t of Object.values(TO_WRITE)) expect(sql).toContain("'" + t + "'");
+    expect(sql).toContain(': write it, this is still the placeholder');
   });
   it('has the one echo helper with the same constants as textEcho.ts, and avatar_echo calls it', () => {
     const fn = /create function private\.text_echoes\([\s\S]*?\n\$\$;/.exec(sql)![0];

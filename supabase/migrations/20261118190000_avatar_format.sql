@@ -45,6 +45,8 @@ as $$
     and (select count(distinct label) from r where label in ('Persona', 'Situation', 'Opening line', 'Reveals if asked', 'Hides unless probed')) = 5
     and (select count(*) from r where label ~ '^Learning point · [0-9]+ %$') between 1 and 4
     and (select sum(substring(label from '[0-9]+')::numeric) from r where label ~ '^Learning point · [0-9]+ %$') = 100
+    and not exists (select 1 from r where (label = 'Reveals if asked' and private.trimmed(body) = 'To write: what the character gives away if asked')
+                                       or (label = 'Hides unless probed' and private.trimmed(body) = 'To write: what the character keeps back unless probed'))
     and (select count(*) from r where label in ('Quiz 1', 'Quiz 2', 'Quiz 3')) = 3
     and (select count(distinct label) from r where label in ('Quiz 1', 'Quiz 2', 'Quiz 3')) = 3
     and not exists (select 1 from r where label in ('Quiz 1', 'Quiz 2', 'Quiz 3') and not private.check_row_ok(e))
@@ -79,6 +81,11 @@ begin
                  where private.trimmed(e ->> 0) <> '' and e ->> 0 not in ('Persona', 'Situation', 'Opening line', 'Reveals if asked', 'Hides unless probed', 'Quiz 1', 'Quiz 2', 'Quiz 3')
                    and e ->> 0 !~ '^Learning point · [0-9]+ %$' order by n loop
     p := array_append(p, v_label || ': use a character row, “Learning point · N %” or Quiz 1 to 3 as the label');
+  end loop;
+  for v_label in select e ->> 0 from jsonb_array_elements(v_rows) e
+                 where (e ->> 0 = 'Reveals if asked' and private.trimmed(e ->> 1) = 'To write: what the character gives away if asked')
+                    or (e ->> 0 = 'Hides unless probed' and private.trimmed(e ->> 1) = 'To write: what the character keeps back unless probed') loop
+    p := array_append(p, v_label || ': write it, this is still the placeholder');
   end loop;
   select count(*), coalesce(sum(substring(e ->> 0 from '[0-9]+')::numeric), 0) into v_n, v_total from jsonb_array_elements(v_rows) e where e ->> 0 ~ '^Learning point · [0-9]+ %$';
   if v_n not between 1 and 4 then

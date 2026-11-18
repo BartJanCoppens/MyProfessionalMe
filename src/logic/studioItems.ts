@@ -5,6 +5,7 @@ import type { AiRequest } from '../lib/ai';
 import type { NewDraft } from '../types';
 import { jsonObject } from './json';
 import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, firstSentence, leadWords, marked, readQuestions, rowFieldMax } from './items';
+import { TO_WRITE } from '../../supabase/functions/_shared/avatarRules.ts';
 import { wrongSpeaker } from './podcastContent';
 import { END_CHECK, explainerEnd } from './studioContent';
 import { CHECK_SIZE, itemsValid, rowsMax } from './studios';
@@ -69,12 +70,11 @@ const stamp = (k: number) => 'Chapter ' + (k + 1) + ' · ' + k * 4 + ':00';
 const numbered = (label: string, sentences: string[]): StudioItem[] => sentences.map((s, k) => [label + ' ' + (k + 1), s]);
 const WEIGHTS = [30, 40, 30];
 // What the character gives away or keeps back is the creator's to write: it comes from passages not used in a public row, else a marked placeholder (never a copy of a public text).
-const TO_WRITE_REVEALS = 'To write: what the character gives away if asked', TO_WRITE_HIDES = 'To write: what the character keeps back unless probed';
 
 // Rows per studio from the top passages; null when no scripted draft makes sense (Game: its rounds need an invented flaw each).
 const SCRIPTS: Record<string, (s: string[], nw: NewDraft) => StudioItem[]> = {
   avatar: (s, nw) => [['Persona', 'Someone the learner must convince about “' + nw.title + '”.'], ['Situation', s[0]], ['Opening line', 'Walk me through “' + nw.title + '”. What should I know?'],
-    ['Reveals if asked', s[3] ?? TO_WRITE_REVEALS], ['Hides unless probed', s[4] ?? TO_WRITE_HIDES], ...WEIGHTS.map((w, k): StudioItem => ['Learning point · ' + w + ' %', s[k] ?? s[0]])],
+    ['Reveals if asked', s[3] ?? TO_WRITE['Reveals if asked']], ['Hides unless probed', s[4] ?? TO_WRITE['Hides unless probed']], ...WEIGHTS.map((w, k): StudioItem => ['Learning point · ' + w + ' %', s[k] ?? s[0]])],
   // No quiz question is invented: the creator writes the three (the check says so).
   // No check question is invented: the creator writes it (the Draft step says so).
   reel: (s, nw) => [['Hook', nw.title, leadWords(nw.title, 6)], ...s.slice(0, 3).map((x, k): StudioItem => ['Scene ' + (k + 1), x, leadWords(x, 6)]),

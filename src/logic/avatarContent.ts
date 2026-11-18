@@ -4,7 +4,7 @@
 // What the rows publish as is private.avatar_content, which avatarContent repeats for the preview; the checks are private.avatar_row_problems'
 // and the Avatar part of private.contribution_problems', the texts the same. What the character reveals or hides never leaves the rows: it is
 // not in the content, and no public text may repeat it (textEchoes: a window of ECHO_WINDOW characters of it, where the Game's check takes the whole text).
-import { CHARACTER_LABELS, DIFFICULTIES, LANGUAGES, POINT_LABEL, RUN_MINUTES, SCORINGS, characterOf, parseLearningPoints } from '../../supabase/functions/_shared/avatarRules.ts';
+import { CHARACTER_LABELS, DIFFICULTIES, LANGUAGES, POINT_LABEL, RUN_MINUTES, SCORINGS, TO_WRITE, characterOf, parseLearningPoints } from '../../supabase/functions/_shared/avatarRules.ts';
 import type { StockVoice } from './ai';
 import { optionsOf, checkOk } from './checkRow';
 import type { Check } from './contribution';
@@ -53,6 +53,7 @@ export function avatarRows(rows: StudioItem[]): string[] {
   out.push(...[...new Set(labels)].filter((l) => (CHARACTER_LABELS as readonly string[]).includes(l) && count(l) > 1).map((l) => l + ': use each character row once'));
   out.push(...rows.filter((r) => !blank(r[0]) && !(CHARACTER_LABELS as readonly string[]).includes(r[0]) && !isPointOrQuiz(r[0]))
     .map((r) => r[0] + ': use a character row, “Learning point · N %” or Quiz 1 to 3 as the label'));
+  out.push(...rows.filter((r) => r[0] in TO_WRITE && r[1].trim() === TO_WRITE[r[0] as keyof typeof TO_WRITE]).map((r) => r[0] + ': write it, this is still the placeholder'));
   const points = pointRows(rows), total = points.reduce((n, r) => n + parseInt(POINT_LABEL.exec(r[0])![1], 10), 0);
   if (points.length < POINTS.min || points.length > POINTS.max) out.push(NO_POINTS);
   else if (total !== 100) out.push(weightsText(total));
