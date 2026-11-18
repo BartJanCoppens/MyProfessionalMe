@@ -3849,6 +3849,111 @@ insert into results (check_name, expected, actual) select 'AL a finished run giv
 insert into results (check_name, expected, actual) select 'AL avatar_say_input gives the last character line, the scenario''s stock voice and the language', 'The cost, mostly./tAvVoice01/nl', (j ->> 'text')||'/'||(j ->> 'voice_id')||'/'||(j ->> 'language') from (select public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_said')::uuid) as j) x;
 insert into results (check_name, expected, actual) select 'AL avatar_say_input for another person''s run is refused', 'not_yours', public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_other')::uuid) ->> 'refusal';
 insert into results (check_name, expected, actual) select 'AL avatar_say_input on a run with no character line gives the scenario''s opening line', 'I have read your deck. Convince me this is not another IT project that HR ends up paying for.', public.avatar_say_input('00000000-0000-0000-0000-0000000000ad', current_setting('test.al_other')::uuid) ->> 'text';
+-- ---------- Trajectory AI: plans, sources and their files (TP) ----------
+-- can_plan_trajectory = can_write_trajectory: General Admins, the line's Domain Admin (a live trajectory with a mandatory map: General Admins only).
+-- Learners never read a plan or a source; no policy deletes a plan (it goes with its trajectory); a source's PDF is a storage object at <uploader>/<source id>/<file>.pdf.
+reset role;
+set local request.jwt.claims = '';
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps) values
+  ('TP1', 'T plan consulting draft', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]'),
+  ('TP2', 'T plan firm-wide draft', 'T issuer', 'T credential', 'open', 6, 'draft', null, '[]', '[]'),
+  ('TP3', 'T plan live mandatory', 'T issuer', 'T credential', 'open', 6, 'live', 'Consulting', '[]', '[["Consulting","Consultant","mandatory"]]');
+insert into results (check_name, expected, actual) select 'TP the media bucket takes PDFs', 'true', (allowed_mime_types @> '{application/pdf,audio/mpeg}')::text from storage.buckets where id = 'media';
+insert into results (check_name, expected, actual) select 'TP trajectory_ai is seeded as a text use, off, for admins, 40 calls and 1,500,000 characters', 'text/false/true/40/1500000', kind||'/'||enabled||'/'||admins_only||'/'||daily_limit||'/'||daily_chars from public.ai_uses where key = 'trajectory_ai';
+insert into results (check_name, expected, actual) select 'TP trajectory_ai is not live without a connection', 'false', ('trajectory_ai' = any(public.ai_live_uses()))::text;
+create function pg_temp.tp_plan(p_modules int) returns jsonb language sql as $f$
+  select jsonb_build_object('version', 1, 'brief', null, 'modules', coalesce((select jsonb_agg(jsonb_build_object('id', 'm'||g, 'title', 'T')) from generate_series(1, p_modules) g), '[]'::jsonb), 'finalExam', null, 'removed', '[]'::jsonb) $f$;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+with i as (insert into public.trajectory_plans (trajectory_id) values ('TP2') returning plan, bundle_ids, updated_by) insert into results (check_name, expected, actual) select 'TP a General Admin starts the plan of a firm-wide draft (empty plan, stamped)', 'empty/0/true', (case when plan = '{"version":1,"brief":null,"modules":[],"finalExam":null,"removed":[]}'::jsonb then 'empty' else 'other' end)||'/'||cardinality(bundle_ids)||'/'||(updated_by = '00000000-0000-0000-0000-0000000000a7')::text from i;
+with u as (update public.trajectory_plans set plan = pg_temp.tp_plan(2), bundle_ids = '{b1}' where trajectory_id = 'TP2' returning 1) insert into results (check_name, expected, actual) select 'TP a General Admin changes the plan of a firm-wide draft', '1 rows', count(*)||' rows' from u;
+with up as (insert into public.trajectory_plans (trajectory_id, plan, messages, bundle_ids) values ('TP2', pg_temp.tp_plan(3), '[]', '{}') on conflict (trajectory_id) do update set trajectory_id = excluded.trajectory_id, plan = excluded.plan, messages = excluded.messages, bundle_ids = excluded.bundle_ids returning 1) insert into results (check_name, expected, actual) select 'TP the same admin may upsert the plan, as the store does', '1 rows', count(*)||' rows' from up;
+with i as (insert into public.trajectory_plans (trajectory_id) values ('TP3') returning 1) insert into results (check_name, expected, actual) select 'TP a General Admin starts the plan of a live trajectory with a mandatory map', '1 rows', count(*)||' rows' from i;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into public.trajectory_plans (trajectory_id) values ('TP1') returning 1) insert into results (check_name, expected, actual) select 'TP a Consulting Domain Admin starts the plan of a Consulting draft', '1 rows', count(*)||' rows' from i;
+with u as (update public.trajectory_plans set plan = pg_temp.tp_plan(12), messages = '[{"role":"admin","text":"x","at":"t"}]' where trajectory_id = 'TP1' returning 1) insert into results (check_name, expected, actual) select 'TP ... changes it (12 modules)', '1 rows', count(*)||' rows' from u;
+insert into results (check_name, expected, actual) select 'TP ... and reads it', '1', count(*)::text from public.trajectory_plans where trajectory_id = 'TP1';
+insert into results (check_name, expected, actual) select 'TP a Consulting Domain Admin reads no plan of a firm-wide draft', '0', count(*)::text from public.trajectory_plans where trajectory_id = 'TP2';
+select pg_temp.gr_blocked('TP a Consulting Domain Admin starts a plan on a firm-wide draft: refused', $q$insert into public.trajectory_plans (trajectory_id) values ('TP2')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP a Consulting Domain Admin is refused on a live Consulting trajectory with a mandatory map', $q$insert into public.trajectory_plans (trajectory_id) values ('TP3')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP the editor cannot delete a plan (no grant, no policy)', $q$delete from public.trajectory_plans where trajectory_id = 'TP1'$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP the editor cannot write updated_by', $q$update public.trajectory_plans set updated_by = null where trajectory_id = 'TP1'$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP the editor cannot insert updated_by', $q$insert into public.trajectory_plans (trajectory_id, updated_by) values ('TP1', null)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP 13 modules are refused by the check', $q$update public.trajectory_plans set plan = pg_temp.tp_plan(13) where trajectory_id = 'TP1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP a plan of another version is refused', $q$update public.trajectory_plans set plan = '{"version":2,"modules":[],"removed":[]}' where trajectory_id = 'TP1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP a plan that is not an object is refused', $q$update public.trajectory_plans set plan = '[]' where trajectory_id = 'TP1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP 31 removed titles are refused', $q$update public.trajectory_plans set plan = jsonb_set(pg_temp.tp_plan(1), '{removed}', (select jsonb_agg('t'||g) from generate_series(1, 31) g)) where trajectory_id = 'TP1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP a plan over 120,000 bytes is refused', $q$update public.trajectory_plans set plan = jsonb_set(pg_temp.tp_plan(1), '{brief}', to_jsonb(repeat('x', 120001))) where trajectory_id = 'TP1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP 61 messages are refused by the check', $q$update public.trajectory_plans set messages = (select jsonb_agg(jsonb_build_object('role', 'ai', 'text', 'x', 'at', 't')) from generate_series(1, 61)) where trajectory_id = 'TP1'$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP 13 bundles are refused by the check', $q$update public.trajectory_plans set bundle_ids = (select array_agg('b'||g) from generate_series(1, 13) g) where trajectory_id = 'TP1'$q$, 'blocked: 23514');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP an Audit Domain Admin selects 0 rows of a Consulting plan', '0', count(*)::text from public.trajectory_plans where trajectory_id = 'TP1';
+select pg_temp.gr_blocked('TP an Audit Domain Admin cannot start a plan on a Consulting draft', $q$insert into public.trajectory_plans (trajectory_id) values ('TP1')$q$, 'blocked: 42501');
+with u as (update public.trajectory_plans set plan = pg_temp.tp_plan(1) where trajectory_id = 'TP1' returning 1) insert into results (check_name, expected, actual) select 'TP an Audit Domain Admin updates 0 rows of a Consulting plan', '0 rows', count(*)||' rows' from u;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP a learner selects 0 plans', '0', count(*)::text from public.trajectory_plans;
+select pg_temp.gr_blocked('TP a learner cannot start a plan', $q$insert into public.trajectory_plans (trajectory_id) values ('TP1')$q$, 'blocked: 42501');
+set local role anon;
+select pg_temp.gr_blocked('TP anon cannot read plans', $q$select * from public.trajectory_plans$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP anon cannot read sources', $q$select * from public.trajectory_plan_sources$q$, 'blocked: 42501');
+-- sources
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'syllabus.pdf', 2, '[[1,"Exam 1"],[2,"Exam 2"]]', 14) returning added_by) insert into results (check_name, expected, actual) select 'TP an editor adds a source (added_by is themselves)', 'true', (added_by = '00000000-0000-0000-0000-0000000000a1')::text from i;
+select pg_temp.gr_blocked('TP a source with added_by of another person is refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars, added_by) values ('TP1', 'x.pdf', 1, '[[1,"x"]]', 1, '00000000-0000-0000-0000-0000000000a7')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP passages with an empty text are refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'x.pdf', 1, '[[1, ""]]', 1)$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP passages of a page 0 are refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'x.pdf', 1, '[[0, "x"]]', 1)$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP passages that are not pairs are refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'x.pdf', 1, '["x"]', 1)$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP no passages are refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'x.pdf', 1, '[]', 1)$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP a passage over 1,200 characters is refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'x.pdf', 1, jsonb_build_array(jsonb_build_array(1, repeat('x', 1201))), 1)$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP 401 pages are refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'x.pdf', 401, '[[1,"x"]]', 1)$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP 400,001 characters are refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'x.pdf', 1, '[[1,"x"]]', 400001)$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('TP a source cannot be added by someone who cannot plan', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP2', 'x.pdf', 1, '[[1,"x"]]', 1)$q$, 'blocked: 42501');
+reset role;
+select set_config('test.tp_s1', (select id::text from public.trajectory_plan_sources where trajectory_id = 'TP1' and name = 'syllabus.pdf'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select pg_temp.gr_blocked('TP a path under another id is refused', format($q$update public.trajectory_plan_sources set path = '00000000-0000-0000-0000-0000000000a1/00000000-0000-4000-8000-000000000001/syllabus.pdf' where id = %L$q$, current_setting('test.tp_s1')), 'blocked: 23514');
+select pg_temp.gr_blocked('TP a path that is not a pdf is refused', format($q$update public.trajectory_plan_sources set path = '00000000-0000-0000-0000-0000000000a1/%s/a.mp3' where id = %L$q$, current_setting('test.tp_s1'), current_setting('test.tp_s1')), 'blocked: 23514');
+with u as (update public.trajectory_plan_sources set path = '00000000-0000-0000-0000-0000000000a1/'||id||'/syllabus.pdf' where id = current_setting('test.tp_s1')::uuid returning 1) insert into results (check_name, expected, actual) select 'TP the uploader sets the path of their file', '1 rows', count(*)||' rows' from u;
+select pg_temp.gr_blocked('TP nobody can rename a source (only path is granted)', format($q$update public.trajectory_plan_sources set name = 'x.pdf' where id = %L$q$, current_setting('test.tp_s1')), 'blocked: 42501');
+do $$ begin
+  for i in 1..9 loop
+    insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'more '||i||'.pdf', 1, '[[1,"x"]]', 1);
+  end loop;
+end $$;
+insert into results (check_name, expected, actual) select 'TP a trajectory holds 10 sources', '10', count(*)::text from public.trajectory_plan_sources where trajectory_id = 'TP1';
+select pg_temp.gr_blocked('TP the 11th source is refused', $q$insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP1', 'eleven.pdf', 1, '[[1,"x"]]', 1)$q$, 'blocked: 42501');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP another editor (a General Admin) reads the sources of the trajectory', '10', count(*)::text from public.trajectory_plan_sources where trajectory_id = 'TP1';
+with u as (update public.trajectory_plan_sources set path = null where id = current_setting('test.tp_s1')::uuid returning 1) insert into results (check_name, expected, actual) select 'TP only the uploader sets the file: another editor updates 0 rows', '0 rows', count(*)||' rows' from u;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP an Audit Domain Admin reads no source of a Consulting trajectory', '0', count(*)::text from public.trajectory_plan_sources where trajectory_id = 'TP1';
+with d as (delete from public.trajectory_plan_sources where trajectory_id = 'TP1' returning 1) insert into results (check_name, expected, actual) select 'TP ... and removes none', '0 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP a learner reads no source', '0', count(*)::text from public.trajectory_plan_sources;
+-- storage: the PDF of source 1
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+with i as (insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000a1/'||current_setting('test.tp_s1')||'/syllabus.pdf') returning 1) insert into results (check_name, expected, actual) select 'TP the uploader inserts <uid>/<source id>/syllabus.pdf', '1 rows', count(*)||' rows' from i;
+select pg_temp.gr_blocked('TP a file that is not a PDF under the source is refused', format($q$insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000a1/%s/a.mp3')$q$, current_setting('test.tp_s1')), 'blocked: 42501');
+select pg_temp.gr_blocked('TP a PDF under an id that is no source is refused', $q$insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000a1/00000000-0000-4000-8000-000000000002/x.pdf')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('TP a PDF under another uploader''s folder with this source id is refused', format($q$insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000a7/%s/x.pdf')$q$, current_setting('test.tp_s1')), 'blocked: 42501');
+insert into results (check_name, expected, actual) select 'TP the uploader reads the file', '1', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP another editor (General Admin) reads the file', '1', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP an Audit Domain Admin cannot read the file', '0', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
+select pg_temp.gr_blocked('TP an Audit Domain Admin cannot upload a PDF for it', format($q$insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000a4/%s/x.pdf')$q$, current_setting('test.tp_s1')), 'blocked: 42501');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP a learner cannot read the file', '0', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP a creator (with their own files) cannot read the file', '0', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
+-- the trajectory goes: plan and sources go with it
+reset role;
+set local request.jwt.claims = '';
+insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars, added_by) values ('TP2', 'gone.pdf', 1, '[[1,"x"]]', 1, '00000000-0000-0000-0000-0000000000a7');
+delete from public.trajectories where id in ('TP1', 'TP2');
+insert into results (check_name, expected, actual) select 'TP deleting the trajectories removes their plan and source rows', '0/0', (select count(*) from public.trajectory_plans where trajectory_id in ('TP1', 'TP2'))||'/'||(select count(*) from public.trajectory_plan_sources where trajectory_id in ('TP1', 'TP2'));
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
