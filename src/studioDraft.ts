@@ -47,16 +47,24 @@ export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setN
   // A placeholder's draft starts from the passages its module cites, then the picked bundles' best matches.
   const passages = [...cited, ...passagesOf(bundles, query)].slice(0, 8);
   if (!passages.length) { L.say('These bundles have no passages a creator may use'); return; }
-  const s = spec(passages), live = canComplete(s.use, L.aiOpts());
-  if (!live && !s.scripted) { L.say(s.noScript); return; }
+  const s = spec(passages);
   L.setState({ nwAiBusy: true });
-  const ai = live ? await L.viaAi(s.use, s.request, s.parse) : null;
+  const out = await runDraft(L, s);
   L.setState({ nwAiBusy: false });
   // The creator cannot change the format meanwhile; if it changed anyway, the answer is dropped.
-  const land = (items: DraftItems) => setNw((cur) => (cur.type === nw.type ? { items } : {}));
-  if (ai) { land({ list: ai, how: 'ai', problems: [], note: s.aiNote }); return; }
-  if (!s.scripted) { L.say(s.failed); return; }
-  land({ list: s.scripted, how: 'scripted', problems: [], note: live ? 'AI draft unavailable · scripted from the bundle' : 'Scripted from the bundle · no AI connection for this use' });
+  if (typeof out === 'string') { L.say(out); return; }
+  setNw((cur) => (cur.type === nw.type ? { items: out } : {}));
+}
+
+// One draft run on a spec: the AI's items, else the scripted rows when there are any (labelled as scripted, never AI), else the sentence that says why
+// there is nothing. `onLimit` hears a reached daily limit (a loop of drafts stops there). The one run behind a studio's button and "Draft with AI" on a placeholder.
+export async function runDraft(L: Logic, s: DraftSpec, onLimit?: (message: string) => void): Promise<DraftItems | string> {
+  const live = canComplete(s.use, L.aiOpts());
+  if (!live && !s.scripted) return s.noScript;
+  const ai = live ? await L.viaAi(s.use, s.request, s.parse, onLimit) : null;
+  if (ai) return { list: ai, how: 'ai', problems: [], note: s.aiNote };
+  if (!s.scripted) return s.failed;
+  return { list: s.scripted, how: 'scripted', problems: [], note: live ? 'AI draft unavailable · scripted from the bundle' : 'Scripted from the bundle · no AI connection for this use' };
 }
 
 // The spec of a generic studio (use studio_draft); Game has no scripted rows.

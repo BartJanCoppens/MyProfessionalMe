@@ -5,6 +5,7 @@ import { RUBRIC } from './data';
 import type { Logic } from './model';
 import type { AppState, NewDraft } from './types';
 import { addFirst } from './createItems';
+import type { SetNw } from './createItems';
 import { aiAssisted, carriesItems, hasItems, itemsFromSaved, itemsText, noItems } from './logic/items';
 import type { DraftItems, Item } from './logic/items';
 import { attrsOf, checksPass, contentChecks, mayCreate, rubricComplete } from './logic/contribution';
@@ -59,7 +60,7 @@ export const fieldsOf = (nw: NewDraft, bundles: string[], studio: string | null)
 };
 // The row to save: a new draft made in a studio says which (only on insert; the database keeps it).
 // A draft made from a placeholder step also names it (for_trajectory, for_step), once, as it is created.
-const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles, studio)
+export const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles, studio)
   : { ...fieldsOf(nw, bundles, studio), studio, ...(nw.brief && { for_trajectory: nw.brief.trajectoryId, for_step: nw.brief.stepId }) });
 // What a studio's automatic check was run on: the saved fields of the draft; a result counts while they are unchanged.
 export const checkKey = (nw: NewDraft, bundles: string[], studio: string | null) => JSON.stringify(fieldsOf(nw, bundles, studio));
@@ -80,6 +81,14 @@ export function draftOf(c: Contribution): NewDraft {
     outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !withItems, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
     items: withItems ? { ...noItems(), list, how: c.ai_assisted ? 'ai' : 'saved' } : noItems(), ...answersOf(c),
     ...(c.for_trajectory && c.for_step && { brief: { trajectoryId: c.for_trajectory, stepId: c.for_step, goals: [], depth: 'applied' as const, passages: [], sources: [] } }) };
+}
+
+// How a screen changes the draft on screen: a patch (or a function of the draft as it is now) merged into it.
+export const setNwOf = (L: Logic): SetNw => (p) => L.setState((st) => { const cur = effective(st); return { nw: { ...cur, ...(typeof p === 'function' ? p(cur) : p) } }; });
+// A saved contribution opened for editing: in its studio when it has steps of its own (its rows need the row editor), else in the form.
+export function editDraft(L: Logic, c: Contribution) {
+  const inStudio = !!c.studio && studioById(c.studio)?.compact === false;
+  L.setState({ screen: 'create', createTab: 'new', editing: c.id, nw: draftOf(c), nwKb: c.bundle_ids || [], nwKbQ: '', studio: inStudio ? { view: 'studio', step: 0, id: c.studio ?? undefined } : { view: 'form', step: 0 } });
 }
 
 // ---------- writes ----------

@@ -676,10 +676,10 @@ export class Logic {
   // Asks AI for one use and parses the text; null (scripted reply) when the use is not live, the call fails or the
   // reply does not parse. Records which it was, for the labels.
   // parse also hears whether the answer was cut at its length limit (a file written in parts).
-  async viaAi<T>(use: AiUseKey, req: AiRequest, parse: (text: string, cut: boolean) => T | null): Promise<T | null> {
+  async viaAi<T>(use: AiUseKey, req: AiRequest, parse: (text: string, cut: boolean) => T | null, onLimit?: (message: string) => void): Promise<T | null> {
     if (!this.aiCan(use)) return null;
     // A reached daily limit is said once per reply; other failures only show in the label.
-    const out = await complete(use, req, { ...this.aiOpts(), onError: (err) => { if (/daily ai limit/i.test(err.message)) this.say(err.message); } });
+    const out = await complete(use, req, { ...this.aiOpts(), onError: (err) => { if (/daily ai limit/i.test(err.message)) { this.say(err.message); onLimit?.(err.message); } } });
     let res: T | null = null;
     try { res = out ? parse(out.text, out.cut) : null; } catch { res = null; }
     this.setState((s) => ({ aiOut: { ...s.aiOut, [use]: res ? 'ai' : 'scripted' } }));

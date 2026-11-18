@@ -6,7 +6,6 @@ import { LEARN_BY, LEVELS, REVIEW_STAGES, REVIEW_WHO, RUBRIC, STAGES } from './d
 import type { Logic } from './model';
 import type { AppState } from './types';
 import { itemsPanel, viewItems } from './createItems';
-import type { SetNw } from './createItems';
 import { carriesItems, hasItems, itemsCheck, itemsFromSaved, itemsText, noItems, noun } from './logic/items';
 import {
   CREATE_TYPES, DEFAULT_POLICY, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
@@ -15,12 +14,11 @@ import {
 import type { Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
 import { removePolicy, savePolicy } from './lib/contributionStore';
 import {
-  attrsOfDraft, blankDraft, checkKey, decide, deleteDraft, draftOf, effective, first, myLine, revKey, runCheck, saveForm, saveWithFile, submitSaved, submittedEdit, writePolicy,
+  attrsOfDraft, blankDraft, checkKey, decide, deleteDraft, editDraft, effective, first, myLine, revKey, runCheck, saveForm, setNwOf, saveWithFile, submitSaved, submittedEdit, writePolicy,
 } from './createSave';
 import { bundleFinder, draftAi, usableBundles } from './createGrounding';
 import { horizonCheck, horizonPanel } from './createHorizon';
 import { avatarChecks } from './logic/avatarContent';
-import { studioById } from './logic/studios';
 import { stillMotion } from './fmtMotion';
 import { changeFormat } from './studioRules';
 import { HUB, studioOf, studioVals } from './studioVals';
@@ -82,7 +80,7 @@ function createScreen(L: Logic) {
   const attrs = attrsOfDraft(nw), allowed = allowedValues(rules), ok = mayCreate(rules, attrs);
   // A draft made under a placeholder (no creation rule of the person's own) always gets the full default review, as the database routes it.
   const policy = mayCreate(d.rules, attrs) ? policyFor(d.policies, attrs) : DEFAULT_POLICY;
-  const setNw: SetNw = (p) => L.setState((st) => { const cur = effective(st); return { nw: { ...cur, ...(typeof p === 'function' ? p(cur) : p) } }; });
+  const setNw = setNwOf(L);
   const checks = contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) })
     .concat(hasItems(nw.type) ? [itemsCheck(nw.type, nw.items ?? noItems())] : [], nw.type === 'Presentation' ? [horizonCheck(nw)] : []);
   const line = myLine(L);
@@ -199,10 +197,7 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
     isPub: c.status === 'published', pubNote: c.learning_id ? 'In the library as ' + c.learning_id + ' · admins can map it to paths like any learning.' : 'Published.',
     mainLabel: '', mainVariant: 'primary', main: () => {}, secondLabel: '', second: () => {}, thirdLabel: '', third: () => {},
   };
-  // A contribution made in a studio with its own steps is edited there (its rows need the row editor); the rest in the form.
-  const inStudio = !!c.studio && studioById(c.studio)?.compact === false;
-  const edit = () => L.setState({ createTab: 'new', editing: c.id, nw: draftOf(c), nwKb: c.bundle_ids || [], nwKbQ: '',
-    studio: inStudio ? { view: 'studio', step: 0, id: c.studio ?? undefined } : { view: 'form', step: 0 } });
+  const edit = () => editDraft(L, c);
   if (c.status === 'published') return { ...base, mainLabel: learning ? 'Open in library' : '', mainVariant: 'secondary', main: () => L.openDetail(c.learning_id!, 'create') };
   if (c.status === 'changes') return { ...base, mainLabel: 'Edit and resubmit', main: edit, secondLabel: 'Resubmit as it is', second: () => submitSaved(L, c) };
   if (c.status === 'review') return { ...base, secondLabel: '', mainLabel: '' };
