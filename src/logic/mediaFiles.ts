@@ -7,11 +7,13 @@ const MB = 1024 * 1024;
 export const MEDIA_MAX_BYTES = 50 * MB; // the bucket's file size limit
 
 export type MediaKind = { label: string; mime: string; maxBytes: number };
-// By file extension. A .horizon presentation is JSON; narration and podcasts are audio.
+// By file extension. A .horizon presentation is JSON; narration and podcasts are audio, a rendered reel is video (the Reel Studio's cut).
 export const MEDIA_KINDS: Record<string, MediaKind> = {
   horizon: { label: 'A Horizon presentation', mime: 'application/json', maxBytes: 50 * MB },
   mp3: { label: 'An audio file', mime: 'audio/mpeg', maxBytes: 25 * MB },
   m4a: { label: 'An audio file', mime: 'audio/mp4', maxBytes: 25 * MB },
+  mp4: { label: 'A video', mime: 'video/mp4', maxBytes: 50 * MB },
+  webm: { label: 'A video', mime: 'video/webm', maxBytes: 50 * MB },
 };
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';

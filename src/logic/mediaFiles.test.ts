@@ -35,8 +35,15 @@ describe('what may be uploaded', () => {
     expect(mediaProblem('part.mp3', 25 * MB)).toBeNull();
     expect(mediaProblem('part.mp3', 26 * MB)).toBe('An audio file is at most 25 MB · this one is 26.0 MB');
   });
+  it('allows a video (a studio reel) up to 50 MB, as mp4 or webm, and refuses a .mov', () => {
+    expect(mediaKind('reel.mp4')?.mime).toBe('video/mp4');
+    expect(mediaKind('reel.webm')?.mime).toBe('video/webm');
+    expect(mediaProblem('reel.mp4', 50 * MB)).toBeNull();
+    expect(mediaProblem('reel.mp4', 51 * MB)).toBe('A video is at most 50 MB · this one is 51.0 MB');
+    expect(mediaProblem('reel.mov', 10)).toMatch(/^Only /);
+  });
   it('names the accepted kinds for any other file, and refuses an empty one', () => {
-    expect(mediaProblem('photo.gif', 10)).toBe('Only .horizon, .mp3 and .m4a files can be added');
+    expect(mediaProblem('photo.gif', 10)).toBe('Only .horizon, .mp3, .m4a, .mp4 and .webm files can be added');
     expect(mediaProblem('part.mp3', 0)).toBe('The file is empty');
   });
 });
