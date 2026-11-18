@@ -1,4 +1,6 @@
 import { AUDS, BLS } from '../data';
+import { LEADERBOARDS } from '../logic/gameContent';
+import { GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
 import { isHorizonItem } from '../logic/horizonItem';
 import { isQuestion } from '../logic/items';
 import { PODCAST_MAX_SECONDS } from '../logic/podcastContent';
@@ -41,6 +43,8 @@ export function parseFormatContent(raw: unknown): FormatContent | null {
     case 'slides': return listOf(c.slides, slideOk) && isCount(c.seconds) && c.seconds > 0 && c.seconds <= SLIDES_MAX_SECONDS && isText(c.template) && isText(c.transitions) && (c.made === 'ai' || c.made === 'scripted') ? c as FormatContent : null;
     case 'podcast': return listOf(c.chapters, (x) => filled(x.title) && isCount(x.start) && isCount(x.turn)) && listOf(c.turns, turnOk) && isCount(c.seconds) && c.seconds > 0 && c.seconds <= PODCAST_MAX_SECONDS
       && c.made === 'ai' ? c as FormatContent : null;
+    case 'game': return filled(c.concept) && isText(c.win) && listOf(c.rounds, (x) => isText(x.text) && isText(x.answer)) && LEADERBOARDS.includes(c.leaderboard) && c.made === 'ai'
+      && (c.role === null || (!!c.role && (GAME_ROLES as readonly string[]).includes(c.role.kind) && isText(c.role.about))) && !!c.files && isText(c.files['index.html']) && isText(c.files['game.js']) ? c as FormatContent : null;
     default: return null;
   }
 }

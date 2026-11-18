@@ -11,16 +11,17 @@ export const FILE_NAMES = ['index.html', 'game.js'];
 /** Characters per file. */
 export const GAME_FILE_MAX: Record<string, number> = { 'index.html': 16000, 'game.js': 32000 };
 
-const RULES: { what: string; pattern: RegExp }[] = [
+// The one rule list: private.game_scan in the database repeats it (gameScan.sync.test.ts compares them).
+export const RULES: { what: string; pattern: RegExp }[] = [
   { what: 'contacts another website', pattern: /\bfetch\s*\(|XMLHttpRequest|\bWebSocket\b|\bEventSource\b|sendBeacon|RTCPeerConnection/ },
   { what: 'loads code from elsewhere', pattern: /\bimport\s*\(|importScripts|<script\b[^>]*\bsrc\s*=|<link\b|@import|<i?frame\b|<object\b|<embed\b|createElement\s*\(\s*['"`](i?frame|object|embed)['"`]/i },
   { what: 'leaves the page', pattern: /\b(window|self|globalThis|frames|top|parent|opener)\s*\.\s*open\s*\(|\[\s*['"`](location|open)['"`]\s*\]|\b(self|globalThis|frames|opener)\s*\.\s*location\b|\blocation\s*\.\s*(href\s*=(?!=)|assign\s*\(|replace\s*\()|\b(top|parent|document|window)\s*\.\s*location\s*=(?!=)|(^|[^.\w])location\s*=(?!=)|<meta\b[^>]*http-equiv|<a\b[^>]*\btarget\s*=/i },
   { what: 'submits a form', pattern: /<form\b|\.submit\s*\(|requestSubmit/i },
   { what: 'uses browser storage', pattern: /document\s*\.\s*cookie|\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b|\bcaches\s*\./ },
   { what: 'runs code from text', pattern: /\beval\s*\(|\bnew\s+Function\s*\(|\bset(Timeout|Interval)\s*\(\s*['"`]/ },
+  // Matched in the raw text, comments included: no comment parser for a game to trick.
+  { what: 'contains a web address', pattern: /\b(https?|wss?|ftp):\/\/|(^|[\s"'(=,`])\/\/[a-z0-9-]+\.[a-z]{2,}/i },
 ];
-
-const URL_PATTERN = /\b(https?|wss?|ftp):\/\/|(^|[\s"'(=,`])\/\/[a-z0-9-]+\.[a-z]{2,}/i;
 
 /** The files value must be an object of text under the known names: anything else could slip past the scan. */
 export function filesProblems(files: unknown): string[] {
@@ -45,9 +46,6 @@ export function scanGameFiles(files: Record<string, string | undefined>): string
       const found = text.match(rule.pattern);
       if (found) problems.push(`${name} ${rule.what} (${found[0].trim().slice(0, 40)})`);
     }
-    // Matched in the raw text, comments included: no comment parser for a game to trick.
-    const url = text.match(URL_PATTERN);
-    if (url) problems.push(`${name} contains a web address (${url[0].trim().slice(0, 40)})`);
   }
   return problems;
 }

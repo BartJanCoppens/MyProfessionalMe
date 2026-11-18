@@ -15,7 +15,7 @@ const LAYOUT: Record<string, string> = {
   avatar: 'one row each labelled Persona, Situation, Opening line, Reveals if asked and Hides unless probed, then rows labelled "Learning point · N %" (N a whole number) whose N add up to exactly 100',
   reel: 'a Hook row, rows labelled "Scene 1", "Scene 2" and so on, and a Close row; text is the voice-over, text2 the on-screen text',
   podcast: 'chapter rows labelled "Chapter N · m:ss" (N from 1, strictly rising times starting at 0:00, text the chapter title), each followed by one to four turn rows labelled with the speaker (Host and Guest for an interview, Host and Co-host for two hosts, Host alone for a solo talk, as the Format choice says; text what is said, one or two sentences)',
-  game: 'one Concept row first (text: the setup, text2: the win condition), then rows labelled "Round 1", "Round 2" and so on (text: what the player sees, text2: the flaw or the answer)',
+  game: 'one Concept row first (text: the setup, text2: the win condition), then rows labelled "Round 1", "Round 2" and so on (text: what the player sees, text2: the flaw or the answer), and, only when the Does the AI play a role? choice names a role, one row labelled AI role (text: who the AI plays, text2: what it knows and the player must not be told)',
   slides: 'one row per slide: label is the slide title, text its bullets separated by " · " (two to four short bullets), text2 the talk-over the slide is spoken with (a few sentences)',
   motion: 'one row per stage, in order: label is the stage name, text is what happens',
   explainer: 'one row per step: label is who or what acts, text is what happens',

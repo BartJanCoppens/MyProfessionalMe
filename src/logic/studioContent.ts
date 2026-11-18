@@ -3,6 +3,7 @@
 // private.explainer_content, private.motion_content); the studio's preview uses this so the creator tries exactly what
 // learners will get. Pure.
 import type { FormatContent } from '../types';
+import { gameContent, gameProblems } from './gameContent';
 import { ALT_MAX, drawingOf } from './motionSvg';
 import { podcastContent, podcastProblems } from './podcastContent';
 import { AI_VOICE, PRESENTER, slidesContent, slidesProblems } from './slidesContent';
@@ -61,10 +62,10 @@ export function motionProblems(items: StudioEntry[], shape: Record<string, strin
   return !d.alt.trim() ? [ALT_NEEDED] : d.alt.length > ALT_MAX ? ['Keep the text alternative to at most ' + ALT_MAX + ' characters'] : [];
 }
 // What the Produce step still has to make before a studio piece can be sent: the Motion Studio's animation, the voice-over of the
-// Slides Studio and the Podcast Studio (voiceOn: the AI voice can be used now, which words the reason) and a length within the limit.
+// Slides Studio and the Podcast Studio, the Game Studio's built game and its review (voiceOn: the AI voice can be used now, which words the reason) and a length within the limit.
 export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>, voiceOn = true) =>
   (def.format === 'Animated flow' ? motionProblems(items, shape) : def.format === 'Slides' ? slidesProblems(items, shape, voiceOn)
-    : def.format === 'Podcast' ? podcastProblems(items, shape, voiceOn) : []);
+    : def.format === 'Podcast' ? podcastProblems(items, shape, voiceOn) : def.format === 'Game' ? gameProblems(items, shape) : []);
 
 // Answers only Draft with AI (or, for the voice, the live AI voice) can deliver (question to answers): offered only while it can run, with the reason otherwise;
 // an answer already chosen stays on screen, with the reason.
@@ -77,6 +78,7 @@ const texts = (items: StudioItem[], label: string) => items.filter((i) => i[0] =
 const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, string>) => FormatContent | null> = {
   Slides: slidesContent,
   Podcast: (items) => podcastContent(items),
+  Game: gameContent,
   'Job aid': (items) => ({ kind: 'aid', items: stepsOf(items).map((i) => i[0].trim() + ' · ' + i[1].trim()) }),
   'Case exercise': (entries, shape) => { const items = stepsOf(entries);
     return { kind: 'case', brief: texts(items, 'Brief').join(' '), deliv: texts(items, 'Deliverable'), rubric: texts(items, 'Criterion'), reviewer: CASE_REVIEWER, evidence: shape[EVIDENCE_QUESTION] === 'Yes' }; },

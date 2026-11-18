@@ -4,6 +4,8 @@
 import type { ExamQuestion } from '../types';
 import type { Check } from './contribution';
 import { jsonObject } from './json';
+import { isGameItem } from './gameContent';
+import type { GameItem } from './gameContent';
 import { deckLine, isHorizonItem, slideCount } from './horizonItem';
 import type { HorizonItem } from './horizonItem';
 import { isDrawing } from './motionSvg';
@@ -16,7 +18,7 @@ export type Card = [string, string];
 // A generic studio's row is [label, text] (a Card has that shape) or [label, text, text2].
 export type StudioRow = [string, string, string];
 // An Animated flow's items end with its drawing (motionSvg.ts); a Presentation's one item is its file's summary (horizonItem.ts).
-export type Item = Card | StudioRow | ExamQuestion | MotionDrawing | HorizonItem | VoiceItem;
+export type Item = Card | StudioRow | ExamQuestion | MotionDrawing | HorizonItem | VoiceItem | GameItem;
 export type ItemSource = 'ai' | 'scripted' | 'csv' | 'manual' | 'saved' | '';
 // list: the items; how: where they came from ('ai' makes the contribution AI-assisted, see aiAssisted); note: the label shown with them;
 // problems: bad CSV lines to show.
@@ -58,10 +60,12 @@ const isRow = (v: unknown): v is StudioRow => Array.isArray(v) && (v.length === 
 const isStepOrQuestion = (v: unknown): v is StudioRow | ExamQuestion => isRow(v) || isQuestion(v);
 // A Slides or Podcast piece's items are its rows and, after them, its voice-over (voiceItem.ts).
 const isRowOrVoice = (v: unknown): v is StudioRow | VoiceItem => isRow(v) || isVoiceItem(v);
+// A Game's items are its rows and, after them, its built game (gameContent.ts).
+const isRowOrGame = (v: unknown): v is StudioRow | GameItem => isRow(v) || isGameItem(v);
 // An Animated flow's items are its stage rows and, after them, its drawing.
 const isStageOrDrawing = (v: unknown): v is StudioRow | MotionDrawing => isRow(v) || isDrawing(v);
 const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice exam' ? isQuestion : type === 'Interactive explainer' ? isStepOrQuestion
-  : type === 'Animated flow' ? isStageOrDrawing : type === 'Presentation' ? isHorizonItem : type === 'Slides' || type === 'Podcast' ? isRowOrVoice : isRow);
+  : type === 'Animated flow' ? isStageOrDrawing : type === 'Presentation' ? isHorizonItem : type === 'Slides' || type === 'Podcast' ? isRowOrVoice : type === 'Game' ? isRowOrGame : isRow);
 
 // The first sentence of a passage, and its first n words without a trailing punctuation mark; shared by the scripted drafts.
 export const firstSentence = (p: string) => p.trim().split(/(?<=[.!?])\s+/)[0];
@@ -153,6 +157,7 @@ export const validItems = (type: string, list: Item[]): Item[] => list.filter(is
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
   return validItems(type, list).map((x) => (Array.isArray(x) ? { front: x[0], back: x.slice(1).filter(Boolean).join(' · ') }
     : isDrawing(x) ? { front: 'Animation · ' + madeLabel(x.made), back: x.alt } : isHorizonItem(x) ? { front: 'Horizon presentation · ' + deckLine(x), back: x.title }
+      : isGameItem(x) ? { front: 'Game · built by AI', back: x.review?.passed ? 'House rules check passed' : 'House rules check not run yet' }
       : isVoiceItem(x) ? { front: 'Voice-over · AI voice', back: (type === 'Podcast' ? x.clips.length + (x.clips.length === 1 ? ' line' : ' lines') : slideCount(x.clips.length)) + ' voiced · ' + Math.round(x.clips.reduce((t, c) => t + c.seconds, 0)) + ' s' }
       : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
 }
@@ -162,7 +167,7 @@ export const aiAssisted = (nw: { ai: boolean; items?: DraftItems }) => nw.ai || 
 // Every text of the items, for the client-name check.
 // A drawing's text alternative and markup are scanned too, as the database scans the items.
 // A Presentation's file is not in the items: its title is scanned here, its slides when it is read (src/horizon/readDeck.ts).
-export const itemsText = (list: Item[]): string[] => list.flatMap((x) => (Array.isArray(x) ? x : isDrawing(x) ? [x.alt, x.svg] : isHorizonItem(x) ? [x.title] : isVoiceItem(x) ? x.clips.map((c) => c.text) : [x.t, x.q, ...(x.o || []), x.why]));
+export const itemsText = (list: Item[]): string[] => list.flatMap((x) => (Array.isArray(x) ? x : isDrawing(x) ? [x.alt, x.svg] : isHorizonItem(x) ? [x.title] : isGameItem(x) ? [x.files['index.html'], x.files['game.js']] : isVoiceItem(x) ? x.clips.map((c) => c.text) : [x.t, x.q, ...(x.o || []), x.why]));
 
 export function itemsCheck(type: string, d: DraftItems): Check {
   const n = d.list.length, what = countText(type, n);

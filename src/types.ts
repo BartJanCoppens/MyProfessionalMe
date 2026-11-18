@@ -93,7 +93,12 @@ export type SlidesContent = { kind: 'slides'; slides: { title: string; bullets: 
 // (each turn with its stored audio when the AI voice told it) and who told it. A v3 episode has chapters only (no recording).
 export type PodcastContent = { kind: 'podcast'; seconds: number; made: 'ai' | 'scripted'; chapters: { title: string; start: number; turn: number }[];
   turns: { speaker: string; text: string; audio?: { path: string; seconds: number; marks: RunMark[] } }[] };
-export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent;
+// A game (studios plan, Task 4.2): what getData() gives the game (GameData), who the AI plays (never what it knows), the leaderboard
+// chosen, the game's two files (run only in the sealed frame, src/game) and who made it ('ai': a game is always built by the AI).
+export type GameData = { concept: string; win: string; rounds: { text: string; answer: string }[] };
+export type GameContent = GameData & { kind: 'game'; role: { kind: 'Game master' | 'Opponent' | 'Suspect to question'; about: string } | null;
+  leaderboard: 'Firm-wide' | 'My team only' | 'None'; files: { 'index.html': string; 'game.js': string }; made: 'ai' };
+export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
 export type View = 'constellation' | 'radar' | 'road';

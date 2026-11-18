@@ -2,7 +2,10 @@
 // A studio's items are [label, text] or [label, text, text2] rows; what each row means depends on the studio (itemsValid).
 import { STUDIOS, STUDIO_STEPS } from '../studioData';
 import type { ExamQuestion } from '../types';
+import { ROLE_LABEL } from '../../supabase/functions/_shared/gameRules.ts';
 import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, isQuestion, rowFieldMax } from './items';
+import { isGameItem } from './gameContent';
+import type { GameItem } from './gameContent';
 import { isDrawing } from './motionSvg';
 import type { MotionDrawing } from './motionSvg';
 import { ALL_SPEAKERS, CHAPTER, isChapter } from './podcastContent';
@@ -21,12 +24,12 @@ export type BuildStep = string;
 export type StudioItem = [label: string, text: string] | [label: string, text: string, text2: string];
 // What a studio's items hold: its rows and, after them, the Explainer's three exam questions of its check or the
 // Animated flow's one drawing.
-export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing | VoiceItem;
+export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing | VoiceItem | GameItem;
 export const CHECK_SIZE = 3;
 export const stepsOf = (items: readonly StudioEntry[]) => items.filter((i): i is StudioItem => Array.isArray(i));
 // The rows as {label, text}, trimmed: an explainer's steps and an Animated flow's stages.
 export const labelledRows = (items: StudioEntry[]) => stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() }));
-export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i) && !isVoiceItem(i));
+export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i) && !isVoiceItem(i) && !isGameItem(i));
 // What a studio's cast is: one stock look, two voices, one voice, or nothing to cast.
 export type StudioCast = 'look' | 'voices' | 'voice' | null;
 export type ItemSchema = (items: StudioItem[]) => string[];
@@ -93,8 +96,15 @@ function podcast(items: StudioItem[]): string[] {
   const speakers = new Set(items.filter((i) => !isChapter(i[0]) && ALL_SPEAKERS.includes(i[0])).map((i) => i[0]));
   return [...out, ...(speakers.size > 2 ? ['Use at most two speakers in a script'] : []), ...(items.length > PODCAST_MAX ? ['Keep at most ' + PODCAST_MAX + ' rows: the voice-over takes the last place'] : [])];
 }
+// A game: one Concept first, at least 2 Rounds, at most one AI role and nothing else; its built game takes the last place of the
+// items, so the rows leave one free (private.game_ok repeats these rules).
+const GAME_MAX = ITEM_MAX.Game - 1;
+const GAME_LABEL = /^Round \d+$/;
 const game = (items: StudioItem[]) => [...(items[0]?.[0] === 'Concept' && labelled(items, 'Concept').length === 1 ? [] : ['Start with exactly one Concept']),
-  ...(items.filter((i) => /^Round \d+$/.test(i[0])).length >= 2 ? [] : ['Add at least 2 Round items'])];
+  ...(items.filter((i) => GAME_LABEL.test(i[0])).length >= 2 ? [] : ['Add at least 2 Round items']),
+  ...(labelled(items, ROLE_LABEL).length > 1 ? ['Use at most one AI role row'] : []),
+  ...items.filter((i) => !blank(i[0]) && i[0] !== 'Concept' && i[0] !== ROLE_LABEL && !GAME_LABEL.test(i[0])).map((i) => i[0] + ': use Concept, Round 1, Round 2 or AI role as the label'),
+  ...(items.length > GAME_MAX ? ['Keep at most ' + GAME_MAX + ' rows: the built game takes the last place'] : [])];
 // A case's rows, each at least once and nothing else (private.items_ok repeats them).
 export const CASE_LABELS = ['Brief', 'Deliverable', 'Criterion'];
 const caseExercise = (items: StudioItem[]) => [...CASE_LABELS.flatMap((l) => need(items, l)),
