@@ -2,6 +2,10 @@
 // _shared/codeScan.ts). A second line of defence: the frame's sandbox and content security policy already block
 // network access, so the scan gives readable reasons ("contacts another website") and catches attempts to leave
 // the page, which no browser policy can block.
+//
+// ADVISORY, NOT THE BOUNDARY: this is a regex denylist and can be bypassed (string building, aliases, other
+// spellings). The boundary is the frame's sandbox (no allow-same-origin), the CSP, and the host closing the frame
+// on a second load. The scan only gives creators and the AI readable reasons.
 
 export const FILE_NAMES = ['index.html', 'game.js'];
 /** Characters per file. */
@@ -10,7 +14,7 @@ export const GAME_FILE_MAX: Record<string, number> = { 'index.html': 16000, 'gam
 const RULES: { what: string; pattern: RegExp }[] = [
   { what: 'contacts another website', pattern: /\bfetch\s*\(|XMLHttpRequest|\bWebSocket\b|\bEventSource\b|sendBeacon|RTCPeerConnection/ },
   { what: 'loads code from elsewhere', pattern: /\bimport\s*\(|importScripts|<script\b[^>]*\bsrc\s*=|<link\b|@import|<i?frame\b|<object\b|<embed\b|createElement\s*\(\s*['"`](i?frame|object|embed)['"`]/i },
-  { what: 'leaves the page', pattern: /window\.open\s*\(|\blocation\s*\.\s*(href\s*=(?!=)|assign\s*\(|replace\s*\()|\b(top|parent|document|window)\s*\.\s*location\s*=(?!=)|(^|[^.\w])location\s*=(?!=)|<meta\b[^>]*http-equiv|<a\b[^>]*\btarget\s*=/i },
+  { what: 'leaves the page', pattern: /\b(window|self|globalThis|frames|top|parent|opener)\s*\.\s*open\s*\(|\[\s*['"`](location|open)['"`]\s*\]|\b(self|globalThis|frames|opener)\s*\.\s*location\b|\blocation\s*\.\s*(href\s*=(?!=)|assign\s*\(|replace\s*\()|\b(top|parent|document|window)\s*\.\s*location\s*=(?!=)|(^|[^.\w])location\s*=(?!=)|<meta\b[^>]*http-equiv|<a\b[^>]*\btarget\s*=/i },
   { what: 'submits a form', pattern: /<form\b|\.submit\s*\(|requestSubmit/i },
   { what: 'uses browser storage', pattern: /document\s*\.\s*cookie|\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b|\bcaches\s*\./ },
   { what: 'runs code from text', pattern: /\beval\s*\(|\bnew\s+Function\s*\(|\bset(Timeout|Interval)\s*\(\s*['"`]/ },

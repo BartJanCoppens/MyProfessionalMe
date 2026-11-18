@@ -13,39 +13,34 @@ type Props = Omit<BridgeContext, 'onLeft' | 'onFinished'> & {
   height?: number | string;
 };
 
+type RunProps = Omit<Props, 'files' | 'test'> & { srcDoc: string };
+
+/** One page in one run: its own host state, so a new page or run starts clean. */
+function FrameRun({ srcDoc, height, onFinished, ...ctx }: RunProps) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [left, setLeft] = useState(false);
+  useBridgeHost(frame, { ...ctx, onFinished: (score) => onFinished?.(score), onLeft: () => setLeft(true) });
+  if (left) return <div role="alert"><Banner tone="warning">{LEFT_MESSAGE}</Banner></div>;
+  return (
+    <iframe
+      ref={frame}
+      title="Game"
+      sandbox="allow-scripts"
+      referrerPolicy="no-referrer"
+      srcDoc={srcDoc}
+      style={{ width: '100%', height, border: '1px solid var(--tc-line-soft)', borderRadius: 8, background: 'var(--tc-surface)', display: 'block' }}
+    />
+  );
+}
+
 /**
  * A game in the sealed-off frame (ported from GameStudio's GameFrame.tsx): sandbox without same-origin (no
  * storage, no Supabase session), a strict content security policy inside, and the bridge as its only way out.
  * If the frame navigates away from the page it was given, it is replaced by a message.
  */
-export function GameFrame({ files, test, onFinished, height = 'calc(100dvh - 190px)', ...ctx }: Props) {
-  const frame = useRef<HTMLIFrameElement>(null);
-  const runId = test ? null : ctx.runId;
+export function GameFrame({ files, test, height = 'calc(100dvh - 190px)', ...ctx }: Props) {
   const srcDoc = useMemo(() => (files ? buildSrcdoc(files) : null), [files]);
-  // Which page (and run) was stopped for leaving; a new page or run starts clean.
-  const frameKey = `${runId ?? 'preview'}:${srcDoc}`;
-  const [leftKey, setLeftKey] = useState<string | null>(null);
-  const loads = useRef({ key: '', count: 0 });
-
-  useBridgeHost(frame, { ...ctx, runId, onFinished: (score) => onFinished?.(score), onLeft: () => setLeftKey(frameKey) });
-
-  if (leftKey === frameKey) return <div role="alert"><Banner tone="warning">{LEFT_MESSAGE}</Banner></div>;
   if (srcDoc === null) return <div style={{ padding: 24, color: 'var(--tc-ink-5)' }}>This game has no code yet.</div>;
-  return (
-    <iframe
-      ref={frame}
-      key={frameKey}
-      title="Game"
-      sandbox="allow-scripts"
-      referrerPolicy="no-referrer"
-      srcDoc={srcDoc}
-      // The first load is the game's own page; any further load means it navigated away.
-      onLoad={() => {
-        if (loads.current.key !== frameKey) loads.current = { key: frameKey, count: 0 };
-        loads.current.count += 1;
-        if (loads.current.count > 1) setLeftKey(frameKey);
-      }}
-      style={{ width: '100%', height, border: '1px solid var(--tc-line-soft)', borderRadius: 8, background: '#fff', display: 'block' }}
-    />
-  );
+  // The key follows the real run id and the page; a test play only stops the score from being saved.
+  return <FrameRun key={`${ctx.runId ?? 'preview'}:${srcDoc}`} srcDoc={srcDoc} height={height} {...ctx} runId={test ? null : ctx.runId} />;
 }

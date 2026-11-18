@@ -21,12 +21,12 @@ function setup(props: Partial<React.ComponentProps<typeof GameFrame>> = {}) {
   };
   const iframe = frame();
   /** The game's window sends `data`; resolves to what the platform answered (undefined: nothing). */
-  const send = async (data: unknown, source?: unknown) => {
+  const send = async (data: unknown, source?: unknown, origin = 'null') => {
     const el = view.container.querySelector('iframe') as HTMLIFrameElement;
     if (!vi.isMockFunction(el.contentWindow!.postMessage)) frame();
     const spy = el.contentWindow!.postMessage as unknown as ReturnType<typeof vi.fn>;
     const before = spy.mock.calls.length;
-    await act(async () => { window.dispatchEvent(new MessageEvent('message', { data, source: (source ?? el.contentWindow) as Window })); await new Promise((r) => setTimeout(r, 5)); });
+    await act(async () => { window.dispatchEvent(new MessageEvent('message', { data, origin, source: (source ?? el.contentWindow) as Window })); await new Promise((r) => setTimeout(r, 5)); });
     return spy.mock.calls.length > before ? spy.mock.calls[spy.mock.calls.length - 1][0] : undefined;
   };
   const rerender = (next: Partial<typeof current>) => { current = { ...current, ...next }; view.rerender(<GameFrame {...current} />); };
@@ -53,6 +53,11 @@ describe('GameFrame', () => {
     expect(await send(ask('getData'), window)).toBeUndefined();
   });
 
+  it('gives no answer to a message from the right window with the wrong origin', async () => {
+    const { send } = setup();
+    expect(await send(ask('getData'), undefined, 'https://evil.example')).toBeUndefined();
+  });
+
   it('gives no answer to a message that does not parse', async () => {
     const { send } = setup();
     expect(await send({ source: 'mpme-game', id: 1, type: 'navigate' })).toBeUndefined();
@@ -65,7 +70,7 @@ describe('GameFrame', () => {
     expect(screen.queryByText(LEFT_MESSAGE)).toBeNull();
     fireEvent.load(iframe);
     expect(screen.getByText(LEFT_MESSAGE)).toBeTruthy();
-    await act(async () => { window.dispatchEvent(new MessageEvent('message', { data: ask('getData'), source: gameWindow })); await new Promise((r) => setTimeout(r, 5)); });
+    await act(async () => { window.dispatchEvent(new MessageEvent('message', { data: ask('getData'), origin: 'null', source: gameWindow })); await new Promise((r) => setTimeout(r, 5)); });
     expect(posted).not.toHaveBeenCalled();
   });
 
@@ -116,6 +121,19 @@ describe('GameFrame', () => {
     expect(askAI).toHaveBeenCalledWith({ messages: [{ role: 'player', text: 'hi' }], state: { s: 1 } });
   });
 
+  it('shows a game only first names and initials, never an email', async () => {
+    expect(await setup({ player: 'jan.peeters@firm.example' }).send(ask('getPlayer'))).toMatchObject({ value: { name: 'Player' } });
+    cleanup();
+    const rows = [{ rank: 1, name: 'Jan Smith', score: 9, seconds: 30 }];
+    expect(await setup({ leaderboard: async () => rows }).send(ask('getLeaderboard'))).toMatchObject({ value: [{ rank: 1, name: 'Jan S.', score: 9, seconds: 30 }] });
+  });
+
+  it('limits getLeaderboard to 30 calls per run', async () => {
+    const { send } = setup({ leaderboard: async () => [] });
+    for (let i = 0; i < 30; i++) await send(ask('getLeaderboard'));
+    expect(await send(ask('getLeaderboard'))).toMatchObject({ ok: false, error: 'Limit reached' });
+  });
+
   it('refuses getLeaderboard without one, and answers the injected rows', async () => {
     expect(await setup().send(ask('getLeaderboard'))).toMatchObject({ ok: false, error: 'This game has no leaderboard' });
     cleanup();
@@ -130,6 +148,19 @@ describe('GameFrame', () => {
 });
 
 describe('a new run', () => {
+  it('accepts a score in a new test run, which saves nothing', async () => {
+    const { send, rerender, onScore } = setup({ test: true, runId: 't1' });
+    expect(await send(ask('submitScore', { score: 1 }))).toMatchObject({ ok: true, value: { saved: false } });
+    rerender({ runId: 't2' });
+    expect(await send(ask('submitScore', { score: 2 }))).toMatchObject({ ok: true, value: { saved: false } });
+    expect(onScore).not.toHaveBeenCalled();
+  });
+  it('accepts a score in a preview again after the files change', async () => {
+    const { send, rerender } = setup({ runId: null });
+    await send(ask('submitScore', { score: 1 }));
+    rerender({ files: { ...FILES, 'game.js': 'GameStudio.ready(); // edited' } });
+    expect(await send(ask('submitScore', { score: 2 }))).toMatchObject({ ok: true });
+  });
   it('accepts a score again', async () => {
     const { send, rerender } = setup();
     await send(ask('submitScore', { score: 1 }));
