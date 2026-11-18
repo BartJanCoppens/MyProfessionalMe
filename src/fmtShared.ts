@@ -45,9 +45,10 @@ export function playedOpts<K extends keyof DetailOf>(L: Logic, it: Item, what: s
 export const handedIn = (it: Item) => it.state === 'submitted' || it.state === 'accepted';
 export const completedToast = (it: Item, what: string) => what + ' · “' + it.title + '” counts toward your hours and levels';
 
-export function downloadText(name: string, text: string, type: string) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement('a');
-  a.href = url; a.download = name; a.click();
-  URL.revokeObjectURL(url);
+// Hands a file to the browser's download; the link is released once the browser has taken it.
+export function downloadBlob(name: string, blob: Blob) {
+  const url = URL.createObjectURL(blob), a = Object.assign(document.createElement('a'), { href: url, download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+export const downloadText = (name: string, text: string, type: string) => downloadBlob(name, new Blob([text], { type }));

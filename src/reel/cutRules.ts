@@ -3,10 +3,11 @@
 // refusals in words, what each frame tick does (keep going, finish, a hidden tab, a cancel), the 50 MB cap (for a cut that is
 // stored, checked before rendering from the bitrates and again on the finished file), the one audio clock the clips and the
 // music are scheduled on, and the time left shown while it renders.
+import { fmtTime } from '../logic/media';
 import { musicNotes } from './music';
 import type { MusicKind, Note } from './music';
 
-export const CUT_SIZES = { '9:16 vertical': { w: 720, h: 1280 }, '1:1 square': { w: 1080, h: 1080 }, slides: { w: 1280, h: 720 } };
+export const SLIDES_SIZE = { w: 1280, h: 720 }; // the reel sizes are in logic/videoItem.ts (SIZE_OF, dimensions)
 export const CUT_BITRATE: Record<string, number> = { '720x1280': 2_500_000, '1080x1080': 3_000_000, '1280x720': 1_000_000 };
 export const AUDIO_BITRATE = 128_000;
 export const CUT_FPS = 30;
@@ -62,7 +63,4 @@ export function cutStep(s: { t: number; seconds: number; hidden: boolean; aborte
 }
 
 // The length still to run at `pct` percent, as m:ss (it renders at about real time).
-export function timeLeft(seconds: number, pct: number): string {
-  const left = Math.max(0, Math.round(seconds * (1 - pct / 100)));
-  return Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
-}
+export const timeLeft = (seconds: number, pct: number): string => fmtTime(Math.max(0, Math.round(seconds * (1 - pct / 100))));

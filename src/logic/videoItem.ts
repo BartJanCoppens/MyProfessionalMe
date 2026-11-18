@@ -2,13 +2,14 @@
 // voice-over. `made` says what the cut was made from, so a later edit shows up as a stale cut (videoCurrent in reelContent.ts):
 // the rows, the paths of the voice clips, the stock look, the format, the captions and the music. Mirrored by private.video_ok and
 // private.reel_made_ok in supabase/migrations/20261118180000_reel_studio.sql (reelContent.test.ts compares the lists and limits).
-import { MEDIA_PATH } from './mediaFiles';
+import { MEDIA_PATH, UUID } from './mediaFiles';
 
 export const FORMATS = ['9:16 vertical', '1:1 square'] as const;
 export const CAPTION_MODES = ['Burned in', 'Separate file'] as const;
 export const MUSICS = ['None', 'Calm', 'Upbeat'] as const;
-// The size of each format, as stored (the compositor's own sizes are src/reel/cutRules.ts CUT_SIZES).
+// The size of each format, as stored: the one place the reel sizes are written (the compositor and the frames read `dimensions`).
 export const SIZE_OF = { '9:16 vertical': '720x1280', '1:1 square': '1080x1080' } as const;
+export const dimensions = (size: string): { w: number; h: number } => { const [w, h] = size.split('x').map(Number); return { w, h }; };
 export const MIME_OF_EXT = { mp4: 'video/mp4', webm: 'video/webm' } as const;
 export const VIDEO_SECONDS_MAX = 90;
 export const VIDEO_ROWS_MAX = 8;
@@ -17,7 +18,6 @@ export const VIDEO_CLIPS_MAX = 7;
 export type CutMade = { rows: string[][]; clips: string[]; look: string | null; format: (typeof FORMATS)[number]; captions: (typeof CAPTION_MODES)[number]; music: (typeof MUSICS)[number] };
 export type VideoItem = { kind: 'video'; path: string; seconds: number; size: '720x1280' | '1080x1080'; mime: 'video/mp4' | 'video/webm'; made: CutMade };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const exactly = (x: Record<string, unknown>, keys: string[]) => Object.keys(x).length === keys.length && keys.every((k) => k in x);
 const isStrings = (v: unknown, min: number, max: number) => Array.isArray(v) && v.length >= min && v.length <= max && v.every((s) => typeof s === 'string');
 

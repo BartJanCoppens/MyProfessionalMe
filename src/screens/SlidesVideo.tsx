@@ -3,6 +3,7 @@
 // stored or shown to learners, so nothing here uploads. A deck over the 15 minute cap is refused in words.
 import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
+import { downloadBlob } from '../fmtShared';
 import { Button } from '../ds';
 import { mediaUrl } from '../lib/mediaStore';
 import { mediaFileName } from '../logic/mediaFiles';
@@ -17,13 +18,6 @@ import { useCutRun } from './useCutRun';
 
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 
-// Hands the file to the browser's download; the link is released once the browser has taken it.
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob), a = Object.assign(document.createElement('a'), { href: url, download: name });
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
-
 export default function SlidesVideo({ content, title }: { content: SlidesContent; title: string }) {
   const voiced = content.slides.every((s) => s.audio), some = content.slides.some((s) => s.audio);
   const paths = useMemo(() => (voiced ? content.slides.map((s) => s.audio!.path) : []), [content, voiced]);
@@ -37,7 +31,7 @@ export default function SlidesVideo({ content, title }: { content: SlidesContent
       const fresh = await Promise.all(paths.map((p) => mediaUrl(p)));
       return slidesCut(content, fresh, await loadSlideImages(content.slides.map((s) => s.svg))).cut;
     }, context);
-    if (made) download(made.blob, mediaFileName(title || 'slides').replace(/\.+$/, '') + '.' + made.ext);
+    if (made) downloadBlob(mediaFileName(title || 'slides').replace(/\.+$/, '') + '.' + made.ext, made.blob);
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

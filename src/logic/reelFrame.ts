@@ -4,6 +4,7 @@
 import type { ReelContent } from '../types';
 import { captionCues, cueAt } from './captions';
 import type { Cue } from './captions';
+import { dimensions } from './videoItem';
 
 export type CutScene = { start: number; seconds: number; onScreen: string };
 export type CutPlan = { size: { w: number; h: number }; scenes: CutScene[]; captions: Cue[] | null; burned: boolean; look: ReelContent['look']; aiTag: boolean };
@@ -20,7 +21,7 @@ export function reelCues(c: ReelContent): Cue[] | null {
 }
 
 export const cutPlanOf = (c: ReelContent): CutPlan => ({
-  size: c.size === '720x1280' ? { w: 720, h: 1280 } : { w: 1080, h: 1080 },
+  size: dimensions(c.size),
   scenes: c.scenes.map((s) => ({ start: s.start, seconds: s.seconds, onScreen: s.onScreen })),
   captions: reelCues(c), burned: c.burned, look: c.look, aiTag: c.made === 'ai',
 });

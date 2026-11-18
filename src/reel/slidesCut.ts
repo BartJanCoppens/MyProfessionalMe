@@ -2,7 +2,7 @@
 // stored voice clip started where its slide starts, and `drawSlideFrame` for the picture. Nothing is uploaded: the author downloads it.
 import { deckSteps } from '../logic/slidesContent';
 import type { SlidesContent } from '../types';
-import { CUT_SIZES } from './cutRules';
+import { SLIDES_SIZE } from './cutRules';
 import type { Cut } from './cutRules';
 import { drawSlideFrame } from './drawSlide';
 import type { SlidePlan } from './drawSlide';
@@ -17,6 +17,6 @@ export function slidesCut(c: SlidesContent, urls: string[], images: (HTMLImageEl
     start += st.seconds;
     return { index, title: s.title, bullets: s.bullets, start: at, seconds: st.seconds, cues: st.marks.filter((m) => m.kind === 'cue').map((m) => m.at), drawing: !!s.svg };
   });
-  const plan: SlidePlan = { size: CUT_SIZES.slides, firm: c.template === 'Firm template', voiced: audio.length > 0, slides };
+  const plan: SlidePlan = { size: SLIDES_SIZE, firm: c.template === 'Firm template', voiced: audio.length > 0, slides };
   return { plan, cut: { size: plan.size, seconds: start, audio, music: 'None', draw: (ctx, t) => drawSlideFrame(ctx, plan, t, images) } };
 }

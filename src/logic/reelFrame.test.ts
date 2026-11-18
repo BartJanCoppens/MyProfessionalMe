@@ -53,3 +53,11 @@ describe('cutPlanOf', () => {
     expect(p.captions).toHaveLength(1);
   });
 });
+
+describe('the reel sizes are written once', () => {
+  it('reads the cut size from the stored size', async () => {
+    const { dimensions, SIZE_OF } = await import('./videoItem');
+    expect(dimensions(SIZE_OF['9:16 vertical'])).toEqual({ w: 720, h: 1280 });
+    expect(dimensions(SIZE_OF['1:1 square'])).toEqual({ w: 1080, h: 1080 });
+  });
+});

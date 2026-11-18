@@ -16,10 +16,10 @@ export const MEDIA_KINDS: Record<string, MediaKind> = {
   webm: { label: 'A video', mime: 'video/webm', maxBytes: 50 * MB },
 };
 
-const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const UUID_PART = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const FILE = '[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}';
-export const MEDIA_PATH = new RegExp('^' + UUID + '/' + UUID + '/' + FILE + '$');
-const ID = new RegExp('^' + UUID + '$');
+export const MEDIA_PATH = new RegExp('^' + UUID_PART + '/' + UUID_PART + '/' + FILE + '$');
+export const UUID = new RegExp('^' + UUID_PART + '$');
 const NAME_MAX = 100;
 
 // A file name the path accepts: other characters become '-', no leading dot, at most 100 characters with the extension kept.
@@ -49,8 +49,8 @@ export function mediaProblem(name: string, bytes: number): string | null {
 
 // The one place a contribution's folder and a media path are built.
 export function mediaFolder(userId: string, contributionId: string): string {
-  if (!ID.test(userId)) throw new Error('Sign in again to add files');
-  if (!ID.test(contributionId)) throw new Error('Save the contribution before adding files');
+  if (!UUID.test(userId)) throw new Error('Sign in again to add files');
+  if (!UUID.test(contributionId)) throw new Error('Save the contribution before adding files');
   return userId + '/' + contributionId;
 }
 export function mediaPath(userId: string, contributionId: string, name: string): string {

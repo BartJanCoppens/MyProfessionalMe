@@ -1,19 +1,20 @@
 // The cut's pure decisions: sizes and bitrates, what a tick does, the size cap and the time left shown to the author.
 import { describe, expect, it } from 'vitest';
-import { CUT_BITRATE, CUT_SIZES, VIDEO_MAX_BYTES, audioSchedule, bitrateOf, cutStep, estimateBytes, estimateProblem, sizeProblem, timeLeft } from './cutRules';
+import { CUT_BITRATE, SLIDES_SIZE, VIDEO_MAX_BYTES, audioSchedule, bitrateOf, cutStep, estimateBytes, estimateProblem, sizeProblem, timeLeft } from './cutRules';
 import type { Cut } from './cutRules';
+import { SIZE_OF, dimensions } from '../logic/videoItem';
 
 describe('cut sizes', () => {
   it('has the three sizes with a bitrate each', () => {
-    expect(CUT_SIZES['9:16 vertical']).toEqual({ w: 720, h: 1280 });
-    expect(CUT_SIZES.slides).toEqual({ w: 1280, h: 720 });
+    expect(dimensions(SIZE_OF['9:16 vertical'])).toEqual({ w: 720, h: 1280 });
+    expect(SLIDES_SIZE).toEqual({ w: 1280, h: 720 });
     expect(bitrateOf({ w: 1080, h: 1080 })).toBe(CUT_BITRATE['1080x1080']);
   });
   it('keeps 90 seconds of a reel size at about 28 MB (720x1280) and 34 MB (1080x1080), a third or more under the 50 MB cap', () => {
     const mb = (s: { w: number; h: number }) => estimateBytes(s, 90) / 1024 / 1024;
-    expect(mb(CUT_SIZES['9:16 vertical'])).toBeCloseTo(28.2, 0);
-    expect(mb(CUT_SIZES['1:1 square'])).toBeCloseTo(33.6, 0);
-    for (const s of [CUT_SIZES['9:16 vertical'], CUT_SIZES['1:1 square']]) expect(estimateBytes(s, 90)).toBeLessThan(VIDEO_MAX_BYTES * 0.7);
+    expect(mb(dimensions(SIZE_OF['9:16 vertical']))).toBeCloseTo(28.2, 0);
+    expect(mb(dimensions(SIZE_OF['1:1 square']))).toBeCloseTo(33.6, 0);
+    for (const s of [dimensions(SIZE_OF['9:16 vertical']), dimensions(SIZE_OF['1:1 square'])]) expect(estimateBytes(s, 90)).toBeLessThan(VIDEO_MAX_BYTES * 0.7);
   });
 });
 
