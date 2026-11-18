@@ -24,9 +24,9 @@ export type DraftItems = { list: Item[]; how: ItemSource; note: string; problems
 
 export const noItems = (): DraftItems => ({ list: [], how: '', note: '', problems: [] });
 // The most items of each format: cards, exam questions and every studio's rows (the design's example counts with room to
-// grow; reel and motion stay inside 90 s, podcast inside 30 min at four minutes a chapter, slides inside 15 min).
+// grow; reel and motion stay inside 90 s, podcast inside 30 min as chapters and turns (the most a script of 600-character turns can run), slides inside 15 min).
 // Mirrored in private.item_max.
-export const ITEM_MAX: Record<string, number> = { 'Flash cards': 40, 'Practice exam': 30, Presentation: 1, Avatar: 12, Reel: 8, Podcast: 8, Game: 10, Slides: 15, 'Animated flow': 8,
+export const ITEM_MAX: Record<string, number> = { 'Flash cards': 40, 'Practice exam': 30, Presentation: 1, Avatar: 12, Reel: 8, Podcast: 50, Game: 10, Slides: 15, 'Animated flow': 8,
   'Interactive explainer': 10, 'Job aid': 20, 'Case exercise': 12 };
 // The formats whose items are cards or exam questions, always there (the upload form's item panel); any other format's
 // items are a studio's rows.
@@ -56,12 +56,12 @@ export const isQuestion = (v: unknown): v is ExamQuestion => {
 const isRow = (v: unknown): v is StudioRow => Array.isArray(v) && (v.length === 2 || v.length === 3) && v.every((x) => typeof x === 'string');
 // The Interactive explainer's items are its step rows and, after them, its check's exam questions (studios.ts).
 const isStepOrQuestion = (v: unknown): v is StudioRow | ExamQuestion => isRow(v) || isQuestion(v);
-// A Slides piece's items are its slide rows and, after them, its voice-over (voiceItem.ts).
-const isSlideOrVoice = (v: unknown): v is StudioRow | VoiceItem => isRow(v) || isVoiceItem(v);
+// A Slides or Podcast piece's items are its rows and, after them, its voice-over (voiceItem.ts).
+const isRowOrVoice = (v: unknown): v is StudioRow | VoiceItem => isRow(v) || isVoiceItem(v);
 // An Animated flow's items are its stage rows and, after them, its drawing.
 const isStageOrDrawing = (v: unknown): v is StudioRow | MotionDrawing => isRow(v) || isDrawing(v);
 const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice exam' ? isQuestion : type === 'Interactive explainer' ? isStepOrQuestion
-  : type === 'Animated flow' ? isStageOrDrawing : type === 'Presentation' ? isHorizonItem : type === 'Slides' ? isSlideOrVoice : isRow);
+  : type === 'Animated flow' ? isStageOrDrawing : type === 'Presentation' ? isHorizonItem : type === 'Slides' || type === 'Podcast' ? isRowOrVoice : isRow);
 
 // The first sentence of a passage, and its first n words without a trailing punctuation mark; shared by the scripted drafts.
 export const firstSentence = (p: string) => p.trim().split(/(?<=[.!?])\s+/)[0];
@@ -153,7 +153,7 @@ export const validItems = (type: string, list: Item[]): Item[] => list.filter(is
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
   return validItems(type, list).map((x) => (Array.isArray(x) ? { front: x[0], back: x.slice(1).filter(Boolean).join(' · ') }
     : isDrawing(x) ? { front: 'Animation · ' + madeLabel(x.made), back: x.alt } : isHorizonItem(x) ? { front: 'Horizon presentation · ' + deckLine(x), back: x.title }
-      : isVoiceItem(x) ? { front: 'Voice-over · AI voice', back: slideCount(x.clips.length) + ' voiced · ' + Math.round(x.clips.reduce((t, c) => t + c.seconds, 0)) + ' s' }
+      : isVoiceItem(x) ? { front: 'Voice-over · AI voice', back: (type === 'Podcast' ? x.clips.length + (x.clips.length === 1 ? ' line' : ' lines') : slideCount(x.clips.length)) + ' voiced · ' + Math.round(x.clips.reduce((t, c) => t + c.seconds, 0)) + ' s' }
       : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
 }
 // Saved as AI-assisted when the outline was drafted by AI or the items were, in any studio; scripted and manual items never are.

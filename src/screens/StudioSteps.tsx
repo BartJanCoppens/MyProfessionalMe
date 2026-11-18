@@ -1,5 +1,5 @@
 // The step bodies a generic studio adds to the spine: Shape it (questions), Draft (item rows) and Produce (choices,
-// stock look and voice, build, the Motion Studio's drawing and the Slides Studio's deck). They only read from the view-model (studioVals.ts,
+// stock look and voice, build, the Motion Studio's drawing, the Slides Studio's deck and the Podcast Studio's episode). They only read from the view-model (studioVals.ts,
 // studioStepVals.ts) and use the shared ChipGroup and ItemRows. In View as the choices show as plain text and every
 // action is gone.
 import { Button, Input, LinkButton, Textarea } from '../ds';
@@ -58,9 +58,9 @@ function MotionOutput({ m, readOnly }: { m: NonNullable<ST['motion']>; readOnly:
   );
 }
 
-// The Slides Studio's deck: how it is told and how long it runs, and the browser voice to hear a talk-over when the AI voice cannot be
-// used (a preview, never stored). In View as there is only the line.
-function SlidesOutput({ s, readOnly }: { s: NonNullable<ST['slides']>; readOnly: boolean }) {
+// The Slides Studio's deck and the Podcast Studio's episode: how it is told and how long it runs, and the browser voice to hear the
+// talk-over or the script when the AI voice cannot be used (a preview, never stored). In View as there is only the line.
+function VoiceOutput({ s, readOnly }: { s: NonNullable<ST['slides'] | ST['podcast']>; readOnly: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ fontSize: 12.5, color: '#5a6058' }}>{s.line}</div>
@@ -76,7 +76,8 @@ export function Produce({ st }: { st: ST }) {
       {st.produce.map((g) => <Group key={g.key} g={g} st={st} />)}
       {st.build && <StudioBuild steps={st.build.steps} onChange={st.build.set} runner={st.buildRunner} readOnly={st.readOnly} />}
       {st.motion && <MotionOutput m={st.motion} readOnly={st.readOnly} />}
-      {st.slides && <SlidesOutput s={st.slides} readOnly={st.readOnly} />}
+      {st.slides && <VoiceOutput s={st.slides} readOnly={st.readOnly} />}
+      {st.podcast && <VoiceOutput s={st.podcast} readOnly={st.readOnly} />}
     </>
   );
 }

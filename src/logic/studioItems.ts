@@ -5,6 +5,7 @@ import type { AiRequest } from '../lib/ai';
 import type { NewDraft } from '../types';
 import { jsonObject } from './json';
 import { LONG_MAX, SHORT_MAX, fieldOk, firstSentence, leadWords, marked, readQuestions, rowFieldMax } from './items';
+import { wrongSpeaker } from './podcastContent';
 import { END_CHECK, explainerEnd } from './studioContent';
 import { CHECK_SIZE, itemsValid, rowsMax } from './studios';
 import type { StudioDef, StudioEntry, StudioItem } from './studios';
@@ -13,7 +14,7 @@ import type { StudioDef, StudioEntry, StudioItem } from './studios';
 const LAYOUT: Record<string, string> = {
   avatar: 'one row each labelled Persona, Situation, Opening line, Reveals if asked and Hides unless probed, then rows labelled "Learning point · N %" (N a whole number) whose N add up to exactly 100',
   reel: 'a Hook row, rows labelled "Scene 1", "Scene 2" and so on, and a Close row; text is the voice-over, text2 the on-screen text',
-  podcast: 'rows labelled "Chapter N · m:ss" with strictly rising times starting at 0:00; text is the chapter title, text2 what is said',
+  podcast: 'chapter rows labelled "Chapter N · m:ss" (N from 1, strictly rising times starting at 0:00, text the chapter title), each followed by one to four turn rows labelled with the speaker (Host and Guest for an interview, Host and Co-host for two hosts, Host alone for a solo talk, as the Format choice says; text what is said, one or two sentences)',
   game: 'one Concept row first (text: the setup, text2: the win condition), then rows labelled "Round 1", "Round 2" and so on (text: what the player sees, text2: the flaw or the answer)',
   slides: 'one row per slide: label is the slide title, text its bullets separated by " · " (two to four short bullets), text2 the talk-over the slide is spoken with (a few sentences)',
   motion: 'one row per stage, in order: label is the stage name, text is what happens',
@@ -22,12 +23,12 @@ const LAYOUT: Record<string, string> = {
   case: 'a Brief row, then Deliverable rows, then Criterion rows; text is one line each',
 };
 // The most tokens a studio's answer may need; the ai function clamps a request at LIMITS.maxTokens (2048).
-export const TOKENS: Record<string, number> = { avatar: 2000, slides: 2000, aid: 2000, case: 1500, game: 1500, explainer: 1500 };
+export const TOKENS: Record<string, number> = { avatar: 2000, slides: 2000, podcast: 2000, aid: 2000, case: 1500, game: 1500, explainer: 1500 };
 const arity = (def: StudioDef) => (def.items.some((i) => i.length === 3) ? 3 : 2);
 // The Explainer's three-question check is drafted with its steps when it ends with the check; the check shares the cap.
 const wantsCheck = (def: StudioDef, shape: Record<string, string> | undefined) => def.format === 'Interactive explainer' && explainerEnd(shape ?? {}) === END_CHECK;
-// How many rows the AI may write: the cap, less the Explainer's check or the place an Animated flow's drawing or a deck's voice-over takes.
-const room = (def: StudioDef, shape: Record<string, string> | undefined) => rowsMax(def) - (wantsCheck(def, shape) ? CHECK_SIZE : 0) - (def.format === 'Animated flow' || def.format === 'Slides' ? 1 : 0);
+// How many rows the AI may write: the cap, less the Explainer's check or the place an Animated flow's drawing or a deck's or episode's voice-over takes.
+const room = (def: StudioDef, shape: Record<string, string> | undefined) => rowsMax(def) - (wantsCheck(def, shape) ? CHECK_SIZE : 0) - (['Animated flow', 'Slides', 'Podcast'].includes(def.format) ? 1 : 0);
 const CHECK_ASK = ' Also write exactly ' + CHECK_SIZE + ' multiple-choice questions that check the steps, as "check":[{"t":short topic,"q":question,"o":[four options],"a":0-based index of the right option,"why":one sentence on why}].';
 
 export function studioRequest(def: StudioDef, nw: NewDraft, passages: string[]): AiRequest {
@@ -53,7 +54,7 @@ export function parseStudioItems(def: StudioDef, raw: string, shape?: Record<str
   if (!Array.isArray(rows) || !rows.length || !check || (check.length && check.length !== CHECK_SIZE)) return null;
   if (!rows.every((x) => Array.isArray(x) && x.length === width && x.every((v: unknown, k: number) => fieldOk(rowFieldMax(k))(v)))) return null;
   const list = [...(rows as string[][]).slice(0, room(def, shape)).map((x) => x.map((v) => v.trim()) as StudioItem), ...check];
-  return itemsValid(def, list).length ? null : list;
+  return itemsValid(def, list).length || (def.id === 'podcast' && wrongSpeaker(list, shape ?? {})) ? null : list;
 }
 
 // ---------- scripted rows ----------
@@ -68,7 +69,7 @@ const SCRIPTS: Record<string, (s: string[], nw: NewDraft) => StudioItem[]> = {
     ['Reveals if asked', s[1] ?? s[0]], ['Hides unless probed', s[2] ?? s[0]], ...WEIGHTS.map((w, k): StudioItem => ['Learning point · ' + w + ' %', s[k] ?? s[0]])],
   reel: (s, nw) => [['Hook', nw.title, 'On screen: ' + leadWords(nw.title, 6)], ...s.slice(0, 6).map((x, k): StudioItem => ['Scene ' + (k + 1), x, 'On screen: ' + leadWords(x, 6)]),
     ['Close', nw.take || nw.title, 'On screen: ' + leadWords(nw.take || nw.title, 6)]],
-  podcast: (s) => s.map((x, k): StudioItem => [stamp(k), leadWords(x, 10), 'Host: ' + x]),
+  podcast: (s) => s.flatMap((x, k): StudioItem[] => [[stamp(k), leadWords(x, 10)], ['Host', x]]),
   slides: (s) => s.map((x, k): StudioItem => [leadWords(x, 5) || 'Slide ' + (k + 1), x, x]),
   motion: (s) => numbered('Stage', s),
   explainer: (s) => numbered('Step', s),

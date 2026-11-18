@@ -215,7 +215,7 @@ describe('the browser voice', () => {
     expect(hear.label).toBe(BROWSER_VOICE);
     expect(open().st().slides!.hear).toBeNull();
     vi.mocked(voice.speakInBrowser).mockReturnValue({ label: BROWSER_VOICE, done: Promise.resolve('ended'), stop: () => {} });
-    await hear.slides[0].run();
+    await hear.parts[0].run();
     await flush();
     expect(voice.speakInBrowser).toHaveBeenCalledWith(ROWS[0][2]);
     expect(voice.speak).not.toHaveBeenCalled();

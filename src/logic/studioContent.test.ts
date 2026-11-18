@@ -6,6 +6,7 @@ import { STUDIOS } from '../studioData';
 import { ITEM_FORMATS, ITEM_MAX, LONG_MAX, SHORT_MAX } from './items';
 import { CASE_HOURS, CASE_REVIEWER, DEPTH_QUESTION, END_CHECK, END_NONE, END_QUESTION, END_SUMMARY, EVIDENCE_QUESTION, LENGTH_QUESTION, MOTION_LENGTH, NEEDS_CHECK, NEEDS_CHECK_AI, NEEDS_CHECK_NO_AI, UNUSED_CHECK,
   caseHours, countsAsEvidence, explainerProblems, studioContent } from './studioContent';
+import { FORMAT_QUESTION } from './podcastContent';
 import { PRESENTER, TEMPLATE, TRANSITIONS } from './slidesContent';
 import { CASE_LABELS, CHECK_SIZE, itemsValid, rowsMax, studioById } from './studios';
 import type { StudioEntry, StudioItem } from './studios';
@@ -76,7 +77,7 @@ describe('studioContent', () => {
     expect([caseHours({ [LENGTH_QUESTION]: '2 hours' }), caseHours({ [LENGTH_QUESTION]: 'Half a day' }), caseHours({ [LENGTH_QUESTION]: 'A full day' }), caseHours({})]).toEqual([2, 4, 8, 4]);
   });
   it('offers only answers the product delivers: every other question or row says it steers the AI draft', () => {
-    const published = [LENGTH_QUESTION, EVIDENCE_QUESTION, END_QUESTION, MOTION_LENGTH, PRESENTER, TEMPLATE, TRANSITIONS];
+    const published = [LENGTH_QUESTION, EVIDENCE_QUESTION, END_QUESTION, MOTION_LENGTH, PRESENTER, TEMPLATE, TRANSITIONS, FORMAT_QUESTION];
     STUDIOS.filter((d) => d.available && !d.compact).forEach((d) => [...d.qs, ...d.rows].forEach(([q, , steers]) => expect(!!steers || published.includes(q), d.id + ' · ' + q).toBe(true)));
     expect(studioById('case')!.rows.map((r) => r[0])).toEqual(['Names']);
     expect(studioById('aid')!.qs.map((q) => q[0])).toEqual(['Template?', 'When is it used?']);
@@ -140,7 +141,7 @@ describe('the database repeats these rules', () => {
     const b = body('private.items_ok');
     expect(b).toContain("when p_type = 'Flash cards' then private.rows_ok(p_items, private.item_max(p_type), 2)");
     const rows = /when p_type in \(([^)]*)\) then private\.rows_ok\(p_items, private\.item_max\(p_type\), 3\)/.exec(b);
-    expect(quoted(rows![1])).toEqual(STUDIOS.filter((d) => d.available && !d.compact && !['explainer', 'motion', 'slides'].includes(d.id)).map((d) => d.format));
+    expect(quoted(rows![1])).toEqual(STUDIOS.filter((d) => d.available && !d.compact && !['explainer', 'motion', 'slides', 'podcast'].includes(d.id)).map((d) => d.format));
     expect(b).toContain("when p_type = 'Practice exam' then jsonb_array_length(p_items) between 1 and private.item_max(p_type) and not exists (select 1 from jsonb_array_elements(p_items) e where not private.question_ok(e))");
     expect(b).toContain("when p_type = 'Interactive explainer' then private.explainer_ok(p_items)");
     expect(quoted(/\(e ->> 0\) not in \(([^)]*)\)/.exec(b)![1])).toEqual(CASE_LABELS);
@@ -183,7 +184,7 @@ describe('the database repeats these rules', () => {
     [END_CHECK, END_SUMMARY, END_NONE, 'Overview', 'With technical detail'].forEach((w) => expect(c).toContain("'" + w + "'"));
     const p = body('private.contribution_problems');
     [NEEDS_CHECK, UNUSED_CHECK].forEach((m) => expect(p).toContain("'" + m.replace(/'/g, "''") + "'"));
-    expect(p).toContain("c.type not in ('Interactive explainer', 'Animated flow', 'Slides') or jsonb_typeof(e) = 'array'");
+    expect(p).toContain("c.type not in ('Interactive explainer', 'Animated flow', 'Slides', 'Podcast') or jsonb_typeof(e) = 'array'");
   });
   it('private.contribution_content publishes every format whose studio is available', () => {
     const b = body('private.contribution_content');

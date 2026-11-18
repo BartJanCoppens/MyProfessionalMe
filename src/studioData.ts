@@ -3,7 +3,6 @@ import type { StudioDef } from './logic/studios';
 
 export const STUDIO_STEPS = ['Idea & sources', 'Shape it', 'Draft', 'Produce', 'Preview & test', 'Check & send'];
 export const STOCK_LOOKS: { role: string; color: string }[] = [{ role: 'HR director · 50s', color: '#8a5a8c' }, { role: 'CFO · 40s', color: '#2f7fc1' }, { role: 'Consultant · 30s', color: '#4c7a10' }, { role: 'Engineer · 50s', color: '#b5762a' }];
-export const STOCK_VOICES = ['Warm · Flemish English', 'Neutral · British English', 'Brisk · Belgian French', 'Calm · Dutch'];
 export const STUDIOS: StudioDef[] = [
  { id: 'avatar', name: 'Avatar Studio', out: 'Avatar', format: 'Avatar', available: false, compact: false, glyph: 'AV', time: 'about 20 min', dom: 'prof', lvl: 3, min: 6, cast: 'look', pv: 'avatar',
    tag: 'A talking AI character people practise a hard conversation with',
@@ -17,12 +16,13 @@ export const STUDIOS: StudioDef[] = [
    qs: [['Who is it for?', ['Analysts and consultants', 'Seniors and managers', 'Everyone']], ['Who presents?', ['An AI avatar', 'My own voice-over', 'Text and music only']], ['Tone?', ['Calm and clear', 'Energetic', 'Story-led']], ['Length?', ['30 s', '60 s', '90 s']]],
    items: [['Hook', 'Your project is drifting. Here are three signs, in under a minute.', 'On screen: three signs'], ['Scene 1', '“Can you just also…” turns up in every steering committee.', 'On screen: “Just also…” ×3'], ['Scene 2', 'Hours are booked on tasks that are not in the statement of work.', 'On screen: a timesheet, one line in red'], ['Scene 3', 'Deliverables keep getting “one more round”.', 'On screen: v7_final_FINAL.pptx'], ['Close', 'Spot one? Raise it with your engagement manager this week.', 'On screen: Talk to your EM']],
    rows: [['Format', ['9:16 vertical', '1:1 square']], ['Captions', ['Burned in', 'Separate file']], ['Music', ['None', 'Calm', 'Upbeat']]], build: ['Writing the voice-over', 'Recording the avatar take', 'Adding visuals and captions', 'Final cut'] },
- { id: 'podcast', name: 'Podcast Studio', out: 'Podcast', format: 'Podcast', available: false, compact: false, glyph: '◉', time: 'about 25 min', dom: 'reg', lvl: 3, min: 3, cast: 'voices', pv: 'podcast',
+ { id: 'podcast', name: 'Podcast Studio', out: 'Podcast', format: 'Podcast', available: true, compact: false, glyph: '◉', time: 'about 25 min', dom: 'reg', lvl: 3, min: 3, cast: 'voices', pv: 'podcast',
    tag: 'An episode with chapters and a transcript: interview, two hosts or solo',
    idea: 'How Pillar Two changes the year-end close', title: 'Pillar Two lands in the close',
-   qs: [['Format?', ['Interview with an expert', 'Two AI hosts', 'Solo talk']], ['Length?', ['10 min', '20 min', '30 min']], ['Who listens?', ['Tax specialists', 'Finance-facing consultants', 'Everyone']]],
-   items: [['Chapter 1 · 0:00', 'Why Pillar Two lands in the close, not only in tax', 'Host: Most finance teams think this is a tax problem. Why is it a close problem?'], ['Chapter 2 · 4:30', 'The data the GloBE information return needs, and where it hides', 'Guest: Half of it sits in consolidation, the other half in local ledgers nobody maps.'], ['Chapter 3 · 11:00', 'Three things to fix before the first filing', 'Guest: Entity data, deferred taxes and a sign-off owner. In that order.'], ['Chapter 4 · 17:30', 'What to ask a client CFO next week', 'Host: Give me the one question.']],
-   rows: [['Intro music', ['None', 'Short jingle']], ['Transcript', ['Generated and checked', 'None']]], build: ['Writing the script', 'Voicing host and guest', 'Mixing and chapter marks'] },
+   qs: [['Format?', ['Interview with an expert', 'Two AI hosts', 'Solo talk']], ['Length?', ['10 min', '20 min', '30 min'], 'draft'], ['Who listens?', ['Tax specialists', 'Finance-facing consultants', 'Everyone'], 'draft']],
+   items: [['Chapter 1 · 0:00', 'Why Pillar Two lands in the close, not only in tax'], ['Host', 'Most finance teams think this is a tax problem. Why is it a close problem?'], ['Guest', 'Half of the data sits in consolidation, the other half in local ledgers nobody maps.'],
+     ['Chapter 2 · 0:30', 'Three things to fix before the first filing'], ['Host', 'What should a team fix first?'], ['Guest', 'Entity data, deferred taxes and a sign-off owner. In that order.']],
+   rows: [], build: ['Writing the script', 'Voicing each speaker', 'Timing the chapters'], columns: ['Chapter or speaker', 'Chapter title or words'] },
  { id: 'game', name: 'Game Studio', out: 'Game', format: 'Game', available: false, compact: false, glyph: '◆◆', time: 'about 30 min', dom: 'reg', lvl: 2, min: 3, cast: null, pv: 'game',
    tag: 'Describe a game; the AI asks, designs and builds it in a sealed frame',
    idea: 'A detective game: spot what is wrong on suspicious invoices, based on the Belgian VAT invoice rules', title: 'Invoice detective',

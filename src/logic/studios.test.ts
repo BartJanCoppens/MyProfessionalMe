@@ -9,14 +9,14 @@ const ITEMS = (id: string) => def(id).items as StudioItem[];
 describe('studio definitions', () => {
   it('has the ten design studios, each with questions and, but for the Explainer (its options were not deliverable), produce rows', () => {
     expect(STUDIOS.map((s) => s.id)).toEqual(['avatar', 'reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
-    for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length > 0, s.id).toBe(!['explainer', 'slides'].includes(s.id)); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
+    for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length > 0, s.id).toBe(!['explainer', 'slides', 'podcast'].includes(s.id)); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
     expect(def('avatar').qs).toHaveLength(4);
     expect(def('reel').build).toEqual(['Writing the voice-over', 'Recording the avatar take', 'Adding visuals and captions', 'Final cut']);
   });
-  it('names a learning format per studio; Slides, Motion, Explainer, Job aid, Flash and Case are available', () => {
+  it('names a learning format per studio; Podcast, Slides, Motion, Explainer, Job aid, Flash and Case are available', () => {
     expect(STUDIOS.map((s) => s.format)).toEqual(['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Flash cards', 'Case exercise']);
     expect(def('flash').alsoFormats).toEqual(['Practice exam']);
-    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
+    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['podcast', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
   });
   it('names no person: examples and stock looks use roles', () => {
     const text = JSON.stringify([STUDIOS, STOCK_LOOKS]);
@@ -52,9 +52,9 @@ describe('itemsValid', () => {
     expect(itemsValid(def('reel'), reel).join(' ')).toMatch(/on-screen/i);
   });
   it('refuses podcast chapters without rising timestamps', () => {
-    const items = ITEMS('podcast').map((i, k): StudioItem => (k === 2 ? ['Chapter 3 · 2:00', i[1], i[2] ?? ''] : i));
+    const items = ITEMS('podcast').map((i, k): StudioItem => (k === 3 ? ['Chapter 2 · 0:00', i[1]] : i));
     expect(itemsValid(def('podcast'), items).join(' ')).toMatch(/timestamp/i);
-    expect(itemsValid(def('podcast'), ITEMS('podcast').map((i, k): StudioItem => (k === 0 ? ['Chapter 1', i[1], i[2] ?? ''] : i))).join(' ')).toMatch(/timestamp/i);
+    expect(itemsValid(def('podcast'), ITEMS('podcast').map((i, k): StudioItem => (k === 0 ? ['Chapter 1', i[1]] : i))).join(' ')).toMatch(/timestamp/i);
   });
   it('refuses a game without concept or rounds, a case without criteria, too few items', () => {
     expect(itemsValid(def('game'), ITEMS('game').filter((i) => i[0] !== 'Concept')).join(' ')).toMatch(/Concept/);

@@ -41,5 +41,21 @@ export function narrationSteps(parts: NarrationPart[], way: 'voice' | 'own', wpm
   return { steps, skipped };
 }
 
+// The most characters one call of the voice takes (VOICE_LIMITS.chars in supabase/functions/voice/core.ts); longer text goes in pieces.
+export const CHUNK_CHARS = 5000;
+// A text in pieces of at most `max` characters, each cut after a sentence end or else at a space (a word longer than the
+// limit is cut at it); the pieces put back together with a space are the text.
+export function chunkText(text: string, max = CHUNK_CHARS): string[] {
+  const out: string[] = [];
+  let rest = text.trim();
+  while (rest.length > max) {
+    const head = rest.slice(0, max + 1), sentence = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? ')), space = head.lastIndexOf(' ');
+    const cut = sentence > 0 ? sentence + 1 : space > 0 ? space : max;
+    out.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  return rest ? [...out, rest] : out;
+}
+
 // How long a run takes.
 export const runLength = (steps: RunStep[]): number => steps.reduce((t, s) => t + s.seconds, 0);

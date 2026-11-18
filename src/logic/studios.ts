@@ -5,6 +5,7 @@ import type { ExamQuestion } from '../types';
 import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, isQuestion, rowFieldMax } from './items';
 import { isDrawing } from './motionSvg';
 import type { MotionDrawing } from './motionSvg';
+import { ALL_SPEAKERS, CHAPTER, isChapter } from './podcastContent';
 import { bulletsOf, hasWords } from './slidesContent';
 import { isVoiceItem } from './voiceItem';
 import type { VoiceItem } from './voiceItem';
@@ -50,8 +51,6 @@ export function visibleSteps(def: StudioDef): string[] {
 }
 
 const blank = (v: string | undefined) => !v || !v.trim();
-const MINUTES = /^Chapter \d+ · (\d+):([0-5]\d)$/;
-const seconds = (label: string) => { const m = MINUTES.exec(label); return m ? +m[1] * 60 + +m[2] : -1; };
 const labelled = (items: StudioItem[], label: string) => items.filter((i) => i[0] === label);
 const need = (items: StudioItem[], label: string, atLeast = 1) => (labelled(items, label).length >= atLeast ? [] : ['Add ' + (atLeast > 1 ? 'at least ' + atLeast + ' ' : 'a ') + label]);
 
@@ -66,10 +65,33 @@ const onScreen = (items: StudioItem[]) => items.filter((i) => blank(i[2])).map((
 const SLIDES_MAX = ITEM_MAX.Slides - 1;
 const slides = (items: StudioItem[]) => [...items.filter((i) => !bulletsOf(i[1]).length).map((i) => i[0] + ': add at least one bullet'), ...items.filter((i) => !hasWords(i[2])).map((i) => i[0] + ': add the talk-over (marks are not spoken words)'),
   ...(items.length > SLIDES_MAX ? ['Keep at most ' + SLIDES_MAX + ' slides: the voice-over takes the last place'] : [])];
+// A script: chapter rows ("Chapter N · m:ss", numbered from 1, the times rising from 0:00) and turn rows (a speaker, then the
+// words), starting with a chapter that has at least one turn; its voice-over takes the last place of the items, so the rows leave
+// one free (private.script_ok and private.podcast_ok repeat these rules).
+const PODCAST_MAX = ITEM_MAX.Podcast - 1;
+const secondsOf = (label: string) => { const m = CHAPTER.exec(label); return m ? +m[2] * 60 + +m[3] : -1; };
 function podcast(items: StudioItem[]): string[] {
-  const secs = items.map((i) => seconds(i[0]));
-  const bad = items.filter((_, k) => secs[k] < 0 || (k > 0 && secs[k] <= secs[k - 1]));
-  return [...bad.map((i) => i[0] + ': needs a timestamp after the previous chapter, like “Chapter 2 · 4:30”'), ...items.filter((i) => blank(i[2])).map((i) => i[0] + ': add what is said')];
+  const out: string[] = [];
+  let chapters = 0, previous = -1, lines = 0;
+  const closed = (label: string) => { if (label && !lines) out.push(label + ': has no lines yet, add what is said'); };
+  let last = '';
+  items.forEach((i, k) => {
+    if (isChapter(i[0])) {
+      closed(last); last = i[0]; lines = 0; chapters++;
+      if (+CHAPTER.exec(i[0])![1] !== chapters) out.push(i[0] + ': Number the chapters 1, 2, 3 in order');
+      if (secondsOf(i[0]) <= previous || (chapters === 1 && secondsOf(i[0]) !== 0)) out.push(i[0] + ': needs a timestamp after the previous chapter, like “Chapter 2 · 4:30” (the first is 0:00)');
+      previous = secondsOf(i[0]);
+    } else if (i[0].startsWith('Chapter')) out.push(i[0] + ': needs a timestamp after the previous chapter, like “Chapter 2 · 4:30”');
+    else {
+      if (!k) out.push('Start with a chapter, like “Chapter 1 · 0:00”');
+      if (!ALL_SPEAKERS.includes(i[0].trim())) out.push(i[0] + ' is not a speaker: use Host, Guest or Co-host');
+      if (!hasWords(i[1])) out.push(i[0] + ': add what is said (marks are not spoken words)');
+      lines++;
+    }
+  });
+  closed(last);
+  const speakers = new Set(items.filter((i) => !isChapter(i[0]) && ALL_SPEAKERS.includes(i[0])).map((i) => i[0]));
+  return [...out, ...(speakers.size > 2 ? ['Use at most two speakers in a script'] : []), ...(items.length > PODCAST_MAX ? ['Keep at most ' + PODCAST_MAX + ' rows: the voice-over takes the last place'] : [])];
 }
 const game = (items: StudioItem[]) => [...(items[0]?.[0] === 'Concept' && labelled(items, 'Concept').length === 1 ? [] : ['Start with exactly one Concept']),
   ...(items.filter((i) => /^Round \d+$/.test(i[0])).length >= 2 ? [] : ['Add at least 2 Round items'])];

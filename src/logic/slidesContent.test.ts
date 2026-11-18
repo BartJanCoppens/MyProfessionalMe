@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parseFormatContent } from '../lib/contentStore';
 import { latestMatch } from '../test/migrations';
 import { STUDIOS } from '../studioData';
-import { horizonHours } from './horizonItem';
+import { mediaHours } from './horizonItem';
 import { aiAssisted, itemRows, itemsFromSaved, itemsText, ITEM_MAX } from './items';
 import { COMPLETION, completionTodo } from './record';
 import { AI_VOICE, CAPTIONS, PRESENTER, SLIDES_MAX_SECONDS, bulletsOf, hasWords, slidesLine, slidesProblems, slidesSeconds, wantsVoice } from './slidesContent';
@@ -31,7 +31,7 @@ describe('a voice-over item', () => {
   });
   it.each([
     ['another kind', { kind: 'motion' }], ['no clips', { clips: [] }], ['an extra key', { made: 'voice' }],
-    ['a slide twice', { clips: [clip(0, 'a'), clip(0, 'b')] }], ['a negative slide', { clips: [clip(-1, 'a')] }], ['a slide past the last place', { clips: [clip(14, 'a')] }],
+    ['a slide twice', { clips: [clip(0, 'a'), clip(0, 'b')] }], ['a negative slide', { clips: [clip(-1, 'a')] }], ['a slide past the last place', { clips: [clip(CLIPS_MAX, 'a')] }],
     ['a blank text', { clips: [clip(0, '  ')] }], ['a path that is not an mp3', { clips: [{ ...clip(0, 'a'), path: FOLDER + 'a.m4a' }] }], ['a path outside the folder shape', { clips: [{ ...clip(0, 'a'), path: '../a.mp3' }] }],
     ['no seconds', { clips: [clip(0, 'a', 0)] }], ['too many seconds', { clips: [clip(0, 'a', CLIP_SECONDS_MAX + 1)] }],
     ['a mark of another kind', { clips: [{ ...clip(0, 'a'), marks: [{ kind: 'x', at: 1 }] }] }], ['a mark past the longest clip', { clips: [{ ...clip(0, 'a'), marks: [{ kind: 'cue', at: CLIP_SECONDS_MAX + 1 }] }] }],
@@ -39,13 +39,13 @@ describe('a voice-over item', () => {
     ['an extra key on a clip', { clips: [{ ...clip(0, 'a'), made: 'x' }] }], ['no voice on a clip', { clips: [{ ...clip(0, 'a'), voice: undefined }] }], ['a voice id with a space', { clips: [{ ...clip(0, 'a'), voice: 'a b' }] }],
   ])('refuses %s', (_, patch) => { expect(isVoiceItem({ ...VOICE(), ...patch })).toBe(false); });
   it('repeats private.voice_ok\'s limits', () => {
-    expect(CLIPS_MAX).toBe(ITEM_MAX.Slides - 1);
+    expect(CLIPS_MAX).toBe(ITEM_MAX.Podcast - 1); // the most parts of any piece: a script's turns
     const body = latestMatch(/create (?:or replace )?function private\.voice_ok\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
     expect(body).toContain('<= ' + CLIP_SECONDS_MAX);
     expect(body).toContain('<= ' + CLIP_MARKS_MAX);
     expect(body).toContain("right(c ->> 'path', 4) = '.mp3'");
     expect(body).toContain('{1,64}$'); // VOICE_ID in supabase/functions/_shared/voiceRules.ts
-    expect(body).toContain('between 0 and ' + (ITEM_MAX.Slides - 2));
+    expect(body).toContain('between 0 and ' + (CLIPS_MAX - 1));
   });
 });
 
@@ -137,7 +137,7 @@ describe('what blocks sending Slides', () => {
 
 describe('hours and completion', () => {
   it('the hours come from the total seconds through the one hours helper (0.05 h steps, at least 0.05, at most 1)', () => {
-    expect([horizonHours(14), horizonHours(181), horizonHours(900)]).toEqual([0.05, 0.1, 0.25]);
+    expect([mediaHours(14), mediaHours(181), mediaHours(900)]).toEqual([0.05, 0.1, 0.25]);
     expect(slidesLine({ slides: [{}, {}, {}], seconds: 14 })).toBe('3 slides · 14 s · counts 0.05 h');
   });
   it('completes itself when the last slide has finished (media)', () => {
@@ -163,8 +163,8 @@ describe('the SQL repeats these rules', () => {
     expect(fn('slides_content')).toContain("'Slide in'");
     expect(latestMatch(/slides_seconds\([^)]*\) > (\d+)/)[1]).toBe(String(SLIDES_MAX_SECONDS));
   });
-  it('Slides complete themselves and count their hours from the content\'s seconds through horizon_hours', () => {
+  it('Slides complete themselves and count their hours from the content\'s seconds through media_hours', () => {
     expect(latestMatch(/format in \(([^)]*'Slides'[^)]*)\)/)[1]).toContain("'Slides'");
-    expect(latestMatch(/when 'Slides' then private\.horizon_hours\(\(v_content ->> 'seconds'\)::numeric\)/)[0]).toBeTruthy();
+    expect(latestMatch(/when 'Slides' then private\.media_hours\(\(v_content ->> 'seconds'\)::numeric\)/)[0]).toBeTruthy();
   });
 });

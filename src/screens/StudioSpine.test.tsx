@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The generic studio spine: the hub over all ten studios, the step bodies, build retry and View as (Task 1.2).
-// Podcast is marked available here (by overriding the data in this file only) to reach the generic path.
+// Reel is marked available here (by overriding the data in this file only) to reach the generic path: a studio with three-text rows,
+// produce rows, a stock look and no build runner yet.
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as store from '../lib/contributionStore';
 import { studioById } from '../logic/studios';
@@ -21,7 +22,7 @@ vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.
   checkContribution: vi.fn() }));
 vi.mock('../studioData', async (orig) => {
   const real = await orig<typeof import('../studioData')>();
-  return { ...real, STUDIOS: real.STUDIOS.map((s) => (s.id === 'podcast' ? { ...s, available: true } : s)) };
+  return { ...real, STUDIOS: real.STUDIOS.map((s) => (s.id === 'reel' ? { ...s, available: true } : s)) };
 });
 
 function Live({ state, readOnly = false }: { state: Partial<AppState>; readOnly?: boolean }) {
@@ -32,8 +33,8 @@ function Live({ state, readOnly = false }: { state: Partial<AppState>; readOnly?
 }
 const rule = (formats: string[]) => ({ id: 1, user_id: 'u1', lines: ['Consulting'], formats, domains: [], audiences: [] });
 const data = (formats: string[] = []): CreateData => ({ contributions: [], reviews: [], rules: [rule(formats)], policies: [], peers: 3 });
-const nw = { line: 'Consulting', aud: '', type: 'Podcast', title: 'Pillar Two', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One takeaway.', outline: [], sources: [], ai: false, aiNote: '' };
-const atStep = (step: number, readOnly = false) => <Live readOnly={readOnly} state={{ create: data(), createTab: 'new', nw, studio: { view: 'studio', step, id: 'podcast' } }} />;
+const nw = { line: 'Consulting', aud: '', type: 'Reel', title: 'Pillar Two', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One takeaway.', outline: [], sources: [], ai: false, aiNote: '' };
+const atStep = (step: number, readOnly = false) => <Live readOnly={readOnly} state={{ create: data(), createTab: 'new', nw, studio: { view: 'studio', step, id: 'reel' } }} />;
 // StudioBuild is controlled (the steps live on the draft); this holds them the way the draft does.
 function Held({ initial, ...rest }: { initial: BuildStepState[]; runner: Parameters<typeof StudioBuild>[0]['runner']; readOnly?: boolean }) {
   const [steps, setSteps] = useState(initial);
@@ -49,10 +50,10 @@ describe('the hub', () => {
     render(<Live state={{ create: data(), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
     ['Avatar Studio', 'Reel Studio', 'Podcast Studio', 'Game Studio', 'Slides Studio', 'Motion Studio', 'Explainer Studio', 'Job Aid Studio', 'Flash card & Exam Studio', 'Case Studio']
       .forEach((n) => expect(screen.getByRole('button', { name: new RegExp(n) })).toBeTruthy());
-    expect(card(/Reel Studio/).disabled).toBe(true);
-    expect(card(/Reel Studio/).textContent).toContain('Coming in a later release');
+    expect(card(/Avatar Studio/).disabled).toBe(true);
+    expect(card(/Avatar Studio/).textContent).toContain('Coming in a later release');
     expect(card(/Flash card & Exam Studio/).disabled).toBe(false);
-    expect(screen.getAllByText('Coming in a later release')).toHaveLength(3);
+    expect(screen.getAllByText('Coming in a later release')).toHaveLength(2);
   });
   it('greys an available studio the creation rules do not allow, with the reason', () => {
     render(<Live state={{ create: data(['Flash cards']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
@@ -61,9 +62,9 @@ describe('the hub', () => {
     expect(card(/Flash card & Exam Studio/).disabled).toBe(false);
   });
   it('opens an available studio the rules allow', () => {
-    render(<Live state={{ create: data(['Podcast']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
+    render(<Live state={{ create: data(['Reel']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
     expect(card(/Flash card & Exam Studio/).textContent).toContain('Not in your creation rules');
-    fireEvent.click(card(/Podcast Studio/));
+    fireEvent.click(card(/Reel Studio/));
     ['Idea & sources', 'Shape it', 'Draft', 'Produce', 'Preview & test', 'Check & send'].forEach((x) => expect(screen.getAllByText(x).length).toBeGreaterThan(0));
   });
 });
@@ -71,12 +72,12 @@ describe('the hub', () => {
 describe('the steps', () => {
   it('stores the shape answers on the draft as chips', () => {
     render(atStep(1));
-    const chip = () => screen.getByRole('button', { name: 'Two AI hosts' });
+    const chip = () => screen.getByRole('button', { name: 'Energetic' });
     expect(chip().getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(chip());
     expect(chip().getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: '20 min' }));
-    expect(screen.getByRole('button', { name: '20 min' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: '60 s' }));
+    expect(screen.getByRole('button', { name: '60 s' }).getAttribute('aria-pressed')).toBe('true');
   });
   it('offers Draft with AI on the Draft step', () => {
     render(atStep(2));
@@ -86,19 +87,19 @@ describe('the steps', () => {
     render(atStep(2));
     fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
     expect(screen.getAllByRole('alert').map((a) => a.textContent).join(' ')).toMatch(/Add at least 3 items/);
-    fireEvent.change(screen.getByLabelText('Label of item 1'), { target: { value: 'Chapter 1 · 0:00' } });
-    fireEvent.change(screen.getByLabelText('Text of item 1'), { target: { value: 'Why it lands in the close' } });
-    fireEvent.change(screen.getByLabelText('Text 2 of item 1'), { target: { value: 'Host: why is it a close problem?' } });
-    expect((screen.getByLabelText('Label of item 1') as HTMLInputElement).value).toBe('Chapter 1 · 0:00');
+    fireEvent.change(screen.getByLabelText('Label of item 1'), { target: { value: 'Hook' } });
+    fireEvent.change(screen.getByLabelText('Text of item 1'), { target: { value: 'Your project is drifting.' } });
+    fireEvent.change(screen.getByLabelText('Text 2 of item 1'), { target: { value: 'On screen: three signs' } });
+    expect((screen.getByLabelText('Label of item 1') as HTMLInputElement).value).toBe('Hook');
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(screen.queryByLabelText('Label of item 1')).toBeNull();
   });
   it('offers produce rows and stock looks and voices as chips, with nothing to play yet', () => {
     render(atStep(3));
-    fireEvent.click(screen.getByRole('button', { name: 'Short jingle' }));
-    expect(screen.getByRole('button', { name: 'Short jingle' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getAllByRole('button', { name: 'Warm · Flemish English' })).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: /HR director/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Upbeat' }));
+    expect(screen.getByRole('button', { name: 'Upbeat' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: /HR director/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Warm · Flemish English' })).toBeNull();
   });
   it('says a preview comes with the studio when its kind is not registered', () => {
     render(atStep(4));
@@ -115,8 +116,8 @@ describe('Check & send', () => {
     vi.mocked(store.loadCreate).mockResolvedValue(data());
     vi.mocked(store.saveDraft).mockResolvedValue('p1');
     vi.mocked(store.checkContribution).mockResolvedValue({ passed: false, reasons: ['Add the items first'] });
-    const rows = studioById('podcast')!.items.map((r) => [...r]) as StudioRow[];
-    render(<Live state={{ create: data(), createTab: 'new', nw: { ...nw, items: { list: rows, how: 'manual', problems: [], note: '' } }, studio: { view: 'studio', step: 5, id: 'podcast' } }} />);
+    const rows = studioById('reel')!.items.map((r) => [...r]) as StudioRow[];
+    render(<Live state={{ create: data(), createTab: 'new', nw: { ...nw, items: { list: rows, how: 'manual', problems: [], note: '' } }, studio: { view: 'studio', step: 5, id: 'reel' } }} />);
     const send = screen.getByRole('button', { name: 'Send for review' }) as HTMLButtonElement;
     expect(send.disabled).toBe(true);
     expect(screen.getByText('Saves your draft and checks it on the server. Send for review opens when it passes.')).toBeTruthy();
@@ -129,7 +130,7 @@ describe('Check & send', () => {
 
 describe('View as', () => {
   it('hides every action in each step', () => {
-    for (const [step, gone] of [[1, 'Two AI hosts'], [2, 'Add item'], [2, 'Draft with AI'], [3, 'Short jingle'], [5, 'Send for review']] as const) {
+    for (const [step, gone] of [[1, 'Energetic'], [2, 'Add item'], [2, 'Draft with AI'], [3, 'Upbeat'], [5, 'Send for review']] as const) {
       render(atStep(step, true));
       expect(screen.queryByRole('button', { name: gone }), 'step ' + step).toBeNull();
       cleanup();
@@ -184,24 +185,24 @@ describe('build steps', () => {
 
 describe('one draft', () => {
   const open = () => {
-    const h = harness({ access: member('u1'), state: { screen: 'create', create: data(), createTab: 'new', nw, nwKb: [], studio: { view: 'studio', step: 2, id: 'podcast' } } });
+    const h = harness({ access: member('u1'), state: { screen: 'create', create: data(), createTab: 'new', nw, nwKb: [], studio: { view: 'studio', step: 2, id: 'reel' } } });
     return Object.assign(h, { st: () => h.vm().create!.studio });
   };
   it('keeps a studio\'s rows in nw.items with their provenance, and marks AI items as AI-assisted', () => {
     const h = open();
     h.st().add();
-    h.st().rows[0].edit(0, 'Chapter 1 · 0:00');
-    expect(h.state.nw.items).toMatchObject({ how: 'manual', list: [['Chapter 1 · 0:00', '', '']] });
+    h.st().rows[0].edit(0, 'Hook');
+    expect(h.state.nw.items).toMatchObject({ how: 'manual', list: [['Hook', '', '']] });
     expect(h.st().itemsLabel).toBe('');
     h.L().setState({ nw: { ...h.state.nw, items: { ...h.state.nw.items!, how: 'ai' } } });
     expect(h.st().itemsLabel).toBe('Made with AI');
   });
   it('keeps the build state on the draft so it survives Back and Next', () => {
     const h = open();
-    const steps: BuildStepState[] = [{ name: 'Writing the script', status: 'done' }, { name: 'Voicing host and guest', status: 'failed', error: 'x' }, { name: 'Mixing and chapter marks', status: 'todo' }];
+    const steps: BuildStepState[] = [{ name: 'Writing the voice-over', status: 'done' }, { name: 'Recording the avatar take', status: 'failed', error: 'x' }, { name: 'Adding visuals and captions', status: 'todo' }];
     h.st().build!.set(steps);
-    h.L().setState({ studio: { view: 'studio', step: 1, id: 'podcast' } });
-    h.L().setState({ studio: { view: 'studio', step: 3, id: 'podcast' } });
+    h.L().setState({ studio: { view: 'studio', step: 1, id: 'reel' } });
+    h.L().setState({ studio: { view: 'studio', step: 3, id: 'reel' } });
     expect(h.st().build!.steps).toEqual(steps);
   });
 });

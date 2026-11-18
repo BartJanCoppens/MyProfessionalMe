@@ -2412,7 +2412,7 @@ insert into results (check_name, expected, actual) select 'VO not to their own c
 reset role;
 -- ---------- Horizon presentations (HZ) ----------
 insert into results (check_name, expected, actual) select 'HZ a narrated Presentation counts its length rounded up to 0.05 h, at least 0.05 h', '0.25/0.05/0.05/0.10/0.15/1',
-  concat_ws('/', private.horizon_hours(0), private.horizon_hours(1), private.horizon_hours(180), private.horizon_hours(181.5), private.horizon_hours(361), private.horizon_hours(36000));
+  concat_ws('/', private.media_hours(0), private.media_hours(1), private.media_hours(180), private.media_hours(181.5), private.media_hours(361), private.media_hours(36000));
 -- 'Presentation' is an upload-form format: no studio, one item {kind, path, title, slides, seconds} (private.horizon_ok)
 -- naming the .horizon file in the contribution's own folder, which must be in Storage before the check and submit pass.
 reset role;
@@ -2531,7 +2531,7 @@ exception when others then insert into results (check_name, expected, actual) va
 -- malformed items: a voice-over of the wrong shape, a slide without a bullet or a talk-over, more slides than the cap
 do $$ declare r record; begin
   for r in select * from (values ('an extra key', '{"made":"x"}'::jsonb, 'top'), ('another kind', '{"kind":"motion"}', 'top'), ('no clips', '{"clips":[]}', 'top'),
-    ('slide 14', '{"slide":14}', 'clip'), ('a path that is not an mp3', '{"path":"00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/a.m4a"}', 'clip'),
+    ('slide 49', '{"slide":49}', 'clip'), ('a path that is not an mp3', '{"path":"00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/a.m4a"}', 'clip'),
     ('181 seconds', '{"seconds":181}', 'clip'), ('no seconds', '{"seconds":0}', 'clip'), ('an extra key on a clip', '{"made":"x"}', 'clip'), ('a voice id with a space', '{"voice":"a b"}', 'clip'), ('no voice id', '{"voice":null}', 'clip'), ('a blank text', '{"text":"  "}', 'clip'),
     ('a mark of another kind', '{"marks":[{"kind":"x","at":1}]}', 'clip'), ('a mark past 180 s', '{"marks":[{"kind":"cue","at":181}]}', 'clip')) as t(k, v, w) loop
     update public.contributions c set items = current_setting('test.sl_rows')::jsonb || jsonb_build_array(case when r.w = 'top' then pg_temp.sl_voice(c.id::text, current_setting('test.sl_rows')::jsonb) || r.v
@@ -2583,6 +2583,90 @@ do $$ begin
   begin perform private.slides_ok('[]'::jsonb);
     insert into results (check_name, expected, actual) values ('SL a signed-in user cannot call slides_ok', 'blocked: 42501', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('SL a signed-in user cannot call slides_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+-- ---------- Podcast Studio (PD) ----------
+-- A script is [label, text] rows (private.podcast_ok): "Chapter N · m:ss" rows and speaker rows (Host, Guest, Co-host), then at most one
+-- voice-over item of clips (one per turn, `slide` the turn's index). "Format?" says which speakers there are; an episode is always
+-- voiced by the AI voice, one voice per speaker and different voices for two speakers, at most 30 minutes, every file in the
+-- contribution's own folder and in Storage; it publishes as podcast content with chapters from the voiced lengths.
+reset role;
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000aa','{Consulting}','{Podcast}');
+insert into public.review_policies (formats, peers, expert, quality) values ('{Podcast}', 0, false, false);
+create function pg_temp.pd_voice(p_id text, p_rows jsonb, p_skip integer default -1, p_secs numeric default 5, p_host text default 'EL1', p_guest text default 'EL2') returns jsonb language sql as $f$
+  select jsonb_build_object('kind', 'voice', 'clips', jsonb_agg(jsonb_build_object('slide', t.k - 1, 'text', t.body, 'path', '00000000-0000-0000-0000-0000000000aa/'||p_id||'/voice-'||t.k||'.mp3',
+    'voice', case when t.label = 'Host' then p_host else p_guest end, 'seconds', p_secs + t.k - 1, 'marks', '[]'::jsonb) order by t.k))
+  from (select x.e ->> 0 as label, x.e ->> 1 as body, row_number() over (order by x.n) as k
+        from jsonb_array_elements(p_rows) with ordinality as x(e, n) where (x.e ->> 0) !~ '^Chapter') t where t.k - 1 <> p_skip $f$;
+select set_config('test.pd_rows', '[["Chapter 1 · 0:00","Why it lands in the close"],["Host","Most teams think this is a tax problem. Why is it a close problem?"],["Guest","Half of the data sits in consolidation."],["Chapter 2 · 0:30","What to fix first"],["Host","Give me the one thing to fix first."],["Guest","Entity data, then deferred taxes."]]', true);
+select set_config('test.pd_long', (select jsonb_agg(jsonb_build_array(case when g = 0 then 'Chapter 1 · 0:00' else 'Host' end, case when g = 0 then 'Everything' else 'Say it ' || g end)) from generate_series(0, 11) g)::text, true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, shape) values
+ ('Consulting','Podcast','T pd voiced','reg','Fix the data first.','podcast','{"Format?":"Interview with an expert"}'),
+ ('Consulting','Podcast','T pd same voice','reg','x','podcast','{"Format?":"Interview with an expert"}'), ('Consulting','Podcast','T pd mixed','reg','x','podcast','{"Format?":"Interview with an expert"}'),
+ ('Consulting','Podcast','T pd unvoiced','reg','x','podcast','{"Format?":"Interview with an expert"}'), ('Consulting','Podcast','T pd stale','reg','x','podcast','{"Format?":"Interview with an expert"}'),
+ ('Consulting','Podcast','T pd missing','reg','x','podcast','{"Format?":"Interview with an expert"}'), ('Consulting','Podcast','T pd elsewhere','reg','x','podcast','{"Format?":"Interview with an expert"}'),
+ ('Consulting','Podcast','T pd long','reg','x','podcast','{"Format?":"Solo talk"}'), ('Consulting','Podcast','T pd solo guest','reg','x','podcast','{"Format?":"Solo talk"}'),
+ ('Consulting','Podcast','T pd hosts','reg','x','podcast','{"Format?":"Two AI hosts"}'), ('Consulting','Podcast','T pd bad','reg','x','podcast',null) returning 1)
+  insert into results (check_name, expected, actual) select 'PD a Podcast is made in its studio', '11 rows', count(*)||' rows' from i;
+update public.contributions c set items = current_setting('test.pd_rows')::jsonb || jsonb_build_array(pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb)) where title in ('T pd voiced', 'T pd solo guest');
+update public.contributions c set items = current_setting('test.pd_rows')::jsonb || jsonb_build_array(pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb, -1, 5, 'EL1', 'EL1')) where title = 'T pd same voice';
+update public.contributions c set items = current_setting('test.pd_rows')::jsonb || jsonb_build_array(jsonb_set(pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb), '{clips,2,voice}', '"EL3"')) where title = 'T pd mixed';
+update public.contributions c set items = current_setting('test.pd_rows')::jsonb || jsonb_build_array(pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb, 1)) where title = 'T pd unvoiced';
+update public.contributions c set items = current_setting('test.pd_rows')::jsonb || jsonb_build_array(jsonb_set(pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb), '{clips,1,text}', '"Words that were changed since."')) where title = 'T pd stale';
+update public.contributions c set items = current_setting('test.pd_rows')::jsonb || jsonb_build_array(pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb)) where title in ('T pd missing', 'T pd hosts');
+update public.contributions c set items = current_setting('test.pd_rows')::jsonb || jsonb_build_array(pg_temp.pd_voice((select id::text from public.contributions where title = 'T pd missing'), current_setting('test.pd_rows')::jsonb)) where title = 'T pd elsewhere';
+insert into storage.objects (bucket_id, name) select 'media', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-'||n||'.mp3' from public.contributions c, generate_series(1, 4) n where c.title in ('T pd voiced', 'T pd same voice', 'T pd mixed', 'T pd unvoiced', 'T pd stale', 'T pd solo guest', 'T pd hosts');
+insert into storage.objects (bucket_id, name) select 'media', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-'||n||'.mp3' from public.contributions c, generate_series(1, 3) n where c.title = 'T pd missing';
+update public.contributions c set items = current_setting('test.pd_long')::jsonb || jsonb_build_array(pg_temp.pd_voice(c.id::text, current_setting('test.pd_long')::jsonb, -1, 165)) where title = 'T pd long';
+insert into storage.objects (bucket_id, name) select 'media', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-'||n||'.mp3' from public.contributions c, generate_series(1, 11) n where c.title = 'T pd long';
+update public.contributions set items = current_setting('test.pd_rows')::jsonb where title = 'T pd bad';
+insert into results (check_name, expected, actual) select 'PD an interview with every line voiced, a voice for each speaker, passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T pd voiced'))::text;
+insert into results (check_name, expected, actual) select 'PD two speakers in one voice fails the check', 'Voice every line in Produce: an episode is always told by the AI voice, with a different voice for each speaker', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd same voice')), '|');
+insert into results (check_name, expected, actual) select 'PD one speaker in two voices fails the check', 'Voice every line in Produce: an episode is always told by the AI voice, with a different voice for each speaker', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd mixed')), '|');
+insert into results (check_name, expected, actual) select 'PD a line without a clip fails the check', 'Voice every line in Produce: an episode is always told by the AI voice, with a different voice for each speaker', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd unvoiced')), '|');
+insert into results (check_name, expected, actual) select 'PD a clip made from other words does not count', 'Voice every line in Produce: an episode is always told by the AI voice, with a different voice for each speaker', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd stale')), '|');
+insert into results (check_name, expected, actual) select 'PD the check refuses a voice-over file that is not in Storage', 'A voice-over file is not there · voice the episode again', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd missing')), '|');
+insert into results (check_name, expected, actual) select 'PD and a file in another contribution''s folder', 'A voice-over file is not there · voice the episode again', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd elsewhere')), '|');
+insert into results (check_name, expected, actual) select 'PD an episode over 30 minutes is refused', 'The episode runs longer than 30 minutes: shorten the script', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd long')), '|');
+insert into results (check_name, expected, actual) select 'PD a Guest line in a solo talk is refused', 'A line has a speaker this format does not have: Host only', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd solo guest')), '|');
+insert into results (check_name, expected, actual) select 'PD a Guest line with two AI hosts is refused', 'A line has a speaker this format does not have: Host and Co-host only', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd hosts')), '|');
+do $$ declare r record; begin
+  for r in select * from (values ('an extra key', '{"made":"x"}'::jsonb, 'top'), ('another kind', '{"kind":"motion"}', 'top'), ('no clips', '{"clips":[]}', 'top'),
+    ('slide 49', '{"slide":49}', 'clip'), ('a path that is not an mp3', '{"path":"00000000-0000-0000-0000-0000000000aa/00000000-0000-0000-0000-000000000001/a.m4a"}', 'clip'), ('181 seconds', '{"seconds":181}', 'clip')) as t(k, v, w) loop
+    update public.contributions c set items = current_setting('test.pd_rows')::jsonb || jsonb_build_array(case when r.w = 'top' then pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb) || r.v
+      else jsonb_set(pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb), '{clips,0}', (pg_temp.pd_voice(c.id::text, current_setting('test.pd_rows')::jsonb) -> 'clips' -> 0) || r.v) end) where title = 'T pd bad';
+    insert into results (check_name, expected, actual) select 'PD a voice-over with '||r.k||' fails the check', 'Add the script first: a chapter, then a line for each speaker', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd bad')), '|');
+  end loop;
+  for r in select * from (values ('no chapter first', '[["Host","a"],["Chapter 1 · 0:00","b"],["Guest","c"]]'::jsonb), ('a chapter not at 0:00', '[["Chapter 1 · 0:10","a"],["Host","b"],["Guest","c"]]'),
+    ('chapters not rising', '[["Chapter 1 · 0:00","a"],["Host","b"],["Chapter 2 · 0:00","c"],["Guest","d"]]'), ('chapters not numbered from 1', '[["Chapter 2 · 0:00","a"],["Host","b"],["Guest","c"]]'),
+    ('a chapter without a line', '[["Chapter 1 · 0:00","a"],["Host","b"],["Chapter 2 · 1:00","c"]]'), ('two chapters in a row', '[["Chapter 1 · 0:00","a"],["Chapter 2 · 1:00","b"],["Host","c"],["Guest","d"]]'),
+    ('a speaker that is not one', '[["Chapter 1 · 0:00","a"],["Host","b"],["Narrator","c"]]'), ('three speakers', '[["Chapter 1 · 0:00","a"],["Host","b"],["Guest","c"],["Co-host","d"]]'),
+    ('a line of marks only', '[["Chapter 1 · 0:00","a"],["Host","⟨next⟩"],["Guest","c"]]'), ('a text of 3 fields', '[["Chapter 1 · 0:00","a"],["Host","b","x"],["Guest","c"]]'),
+    ('50 rows', (select jsonb_agg(jsonb_build_array(case when g = 1 then 'Chapter 1 · 0:00' else 'Host' end, 'x')) from generate_series(1, 50) g))) as t(k, v) loop
+    update public.contributions set items = r.v where title = 'T pd bad';
+    insert into results (check_name, expected, actual) select 'PD a script with '||r.k||' fails the check', 'Add the script first: a chapter, then a line for each speaker', array_to_string(public.check_contribution((select id from public.contributions where title = 'T pd bad')), '|');
+  end loop;
+  begin update public.contributions set items = (select jsonb_agg(jsonb_build_array('Host', 'x')) from generate_series(1, 51) g) where title = 'T pd bad';
+    insert into results (check_name, expected, actual) values ('PD more than 50 items are refused', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('PD more than 50 items are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'PD an episode is published', 'published', public.submit_contribution((select id from public.contributions where title = 'T pd voiced'));
+insert into results (check_name, expected, actual) select 'PD the episode becomes podcast content: chapters from the voiced lengths, the script as transcript with each turn''s audio, 26 s, told by the AI voice', 'true',
+  (l.content = jsonb_build_object('kind', 'podcast', 'made', 'ai', 'seconds', 26,
+    'chapters', jsonb_build_array(jsonb_build_object('title', 'Why it lands in the close', 'start', 0, 'turn', 0), jsonb_build_object('title', 'What to fix first', 'start', 11, 'turn', 2)),
+    'turns', jsonb_build_array(
+      jsonb_build_object('speaker', 'Host', 'text', 'Most teams think this is a tax problem. Why is it a close problem?', 'audio', jsonb_build_object('path', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-1.mp3', 'seconds', 5, 'marks', '[]'::jsonb)),
+      jsonb_build_object('speaker', 'Guest', 'text', 'Half of the data sits in consolidation.', 'audio', jsonb_build_object('path', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-2.mp3', 'seconds', 6, 'marks', '[]'::jsonb)),
+      jsonb_build_object('speaker', 'Host', 'text', 'Give me the one thing to fix first.', 'audio', jsonb_build_object('path', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-3.mp3', 'seconds', 7, 'marks', '[]'::jsonb)),
+      jsonb_build_object('speaker', 'Guest', 'text', 'Entity data, then deferred taxes.', 'audio', jsonb_build_object('path', '00000000-0000-0000-0000-0000000000aa/'||c.id||'/voice-4.mp3', 'seconds', 8, 'marks', '[]'::jsonb)))))::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T pd voiced';
+insert into results (check_name, expected, actual) select 'PD the hours come from the seconds through media_hours; an AI-voiced episode is marked AI-made', 'Podcast/0.05/true', l.format||'/'||l.hours||'/'||l.ai_made
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T pd voiced';
+do $$ begin
+  begin perform private.podcast_ok('[]'::jsonb);
+    insert into results (check_name, expected, actual) values ('PD a signed-in user cannot call podcast_ok', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('PD a signed-in user cannot call podcast_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
 end $$;
 -- the pace repeats ownSeconds in src/logic/narration.ts (marks are not words; at least 2 s)
 reset role;

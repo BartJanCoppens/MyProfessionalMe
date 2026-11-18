@@ -4,12 +4,12 @@
 // slide needs a clip made from its present talk-over) or by captions at a reading pace. What the rows publish as is
 // private.slides_content, which this repeats for the preview and for the checks; the seconds are private.slides_seconds.
 import type { SlidesContent } from '../types';
-import { horizonHours, lengthWords, slideCount } from './horizonItem';
+import { mediaHours, lengthWords, slideCount } from './horizonItem';
 import { ownSeconds, spoken } from './narration';
 import { stepsOf } from './studios';
 import type { StudioEntry } from './studios';
-import { voiceOf } from './voiceItem';
-import type { Clip } from './voiceItem';
+import { boundClips as boundOf, clipsFor as clipsOf, withClips as withOf } from './voiceItem';
+import type { Clip, Part } from './voiceItem';
 
 export const PRESENTER = 'Who presents?', AI_VOICE = 'AI voice', CAPTIONS = 'Captions only';
 export const TEMPLATE = 'Template', TEMPLATES = ['Firm template', 'Minimal'];
@@ -26,19 +26,14 @@ export const hasWords = (talk: string | undefined) => !!spoken(talk ?? '');
 export const bulletsOf = (text: string) => text.split(/\s*·\s*/).map((b) => b.trim()).filter(Boolean);
 export const wantsVoice = (shape: Record<string, string>) => shape[PRESENTER] === AI_VOICE;
 
+// A deck's parts: each slide's talk-over, said by no one in particular (so the one voice rule is the deck's voice).
+export const slideParts = (items: readonly StudioEntry[]): Part[] => stepsOf(items).map((r) => ({ speaker: '', text: r[2] ?? '' }));
 // Each slide's clip, made from the words the slide has now; undefined where it has none.
-export function clipsFor(items: readonly StudioEntry[]): (Clip | undefined)[] {
-  const voice = voiceOf(items);
-  return stepsOf(items).map((r, k) => voice?.clips.find((c) => c.slide === k && c.text.trim() === (r[2] ?? '').trim()));
-}
+export const clipsFor = (items: readonly StudioEntry[]) => clipsOf(items, slideParts(items));
 // The clip of every slide, all in one voice; null when some slide has none or the voices are mixed.
-export function boundClips(items: readonly StudioEntry[]): Clip[] | null {
-  const clips = clipsFor(items);
-  return clips.length && clips.every(Boolean) && new Set(clips.map((c) => c!.voice)).size === 1 ? (clips as Clip[]) : null;
-}
+export const boundClips = (items: readonly StudioEntry[]) => boundOf(items, slideParts(items));
 // The slides with these clips as their one voice-over item after them.
-export const withClips = (items: readonly StudioEntry[], clips: Clip[]): StudioEntry[] =>
-  [...stepsOf(items), ...(clips.length ? [{ kind: 'voice' as const, clips: clips.slice().sort((a, b) => a.slide - b.slide) }] : [])];
+export const withClips = (items: readonly StudioEntry[], clips: Clip[]): StudioEntry[] => withOf(stepsOf(items), clips) as StudioEntry[];
 const clipsIn = (items: readonly StudioEntry[], shape: Record<string, string>) => (wantsVoice(shape) ? boundClips(items) : null);
 
 // How long the talk runs: each slide's stored seconds with the AI voice, else its words at the reading pace.
@@ -78,6 +73,6 @@ export function slidesBuilt(items: readonly StudioEntry[], shape: Record<string,
   return wantsVoice(shape) && !boundClips(items) ? 1 : overTime(items, shape) ? 2 : 3;
 }
 
-// "3 slides · 2 min 5 s · counts 0.05 h": what the deck holds and the hours it counts (the one hours helper, horizonHours).
+// "3 slides · 2 min 5 s · counts 0.05 h": what the deck holds and the hours it counts (the one hours helper, mediaHours).
 export const slidesLine = (c: { slides: unknown[]; seconds: number }) =>
-  slideCount(c.slides.length) + ' · ' + lengthWords(c.seconds) + ' · counts ' + horizonHours(c.seconds) + ' h';
+  slideCount(c.slides.length) + ' · ' + lengthWords(c.seconds) + ' · counts ' + mediaHours(c.seconds) + ' h';

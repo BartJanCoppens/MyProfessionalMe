@@ -89,7 +89,11 @@ export type HorizonContent = HorizonItem;
 // chosen, and who told it ('ai': the AI voice; 'scripted': captions at a reading pace). svg: a drawing for the slide, drawn only through SafeSvg.
 export type SlidesContent = { kind: 'slides'; slides: { title: string; bullets: string[]; svg?: string; narration: string; audio?: { path: string; seconds: number; marks: RunMark[] } }[];
   seconds: number; template: string; transitions: string; made: 'ai' | 'scripted' };
-export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent;
+// A podcast episode: its chapters (the start in seconds and the index of the chapter's first turn), the script as its transcript
+// (each turn with its stored audio when the AI voice told it) and who told it. A v3 episode has chapters only (no recording).
+export type PodcastContent = { kind: 'podcast'; seconds: number; made: 'ai' | 'scripted'; chapters: { title: string; start: number; turn: number }[];
+  turns: { speaker: string; text: string; audio?: { path: string; seconds: number; marks: RunMark[] } }[] };
+export type FormatContent = FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
 export type View = 'constellation' | 'radar' | 'road';
@@ -207,6 +211,7 @@ export type DetailOf = {
   motion: { played?: boolean; read?: boolean }; // played to the end; the text version read
   horizon: { last?: boolean };                 // the last slide of the route reached
   slides: { last?: boolean };                  // the last slide finished playing
+  podcast: { last?: boolean };                 // the last chapter or turn finished playing
 };
 export type LearningDetail = Partial<DetailOf[keyof DetailOf]>;
 
