@@ -25,6 +25,7 @@ const REFUSALS = {
   CUT_HIDDEN: 'The tab was hidden, so the cut stopped · keep this tab in front while it renders · nothing was saved',
   CUT_CANCELLED: 'Cancelled · nothing was saved',
   CUT_AUDIO: 'A voice clip could not be loaded · voice the scene again',
+  CUT_BLOCKED: 'The browser blocked audio · press the button again',
   CUT_RECORDER: 'The browser stopped recording · try again',
 };
 export type CutCode = keyof typeof REFUSALS | 'CUT_TOO_LARGE';

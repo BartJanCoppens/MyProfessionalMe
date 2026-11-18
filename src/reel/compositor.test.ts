@@ -7,7 +7,7 @@ import { CUT_BITRATE, CutError, VIDEO_MAX_BYTES } from './cutRules';
 import type { Cut } from './cutRules';
 
 const MB = 1024 * 1024;
-type Opts = { bytes?: number; supported?: string[]; noRecorder?: boolean; missing?: string[]; hiddenAt?: number; undecodable?: boolean; closeThrows?: boolean; recorderError?: boolean };
+type Opts = { bytes?: number; supported?: string[]; noRecorder?: boolean; missing?: string[]; hiddenAt?: number; undecodable?: boolean; closeThrows?: boolean; recorderError?: boolean; resumeHangs?: boolean; stuckClock?: boolean };
 
 function fake(o: Opts = {}) {
   const log = { recorders: [] as { opts: Record<string, unknown>; slice?: number; stopped: boolean }[], starts: [] as number[], gains: [] as number[], oscillators: 0, closed: false, fetched: [] as string[], unload: 0, unloadOff: 0, trackStops: 0, contexts: 0, order: [] as string[], lastRaf: null as null | (() => void) };
@@ -25,7 +25,8 @@ function fake(o: Opts = {}) {
   const node = () => ({ connect: vi.fn(), disconnect: vi.fn() });
   class Audio {
     constructor() { log.contexts++; }
-    get currentTime() { return time / 1000; }
+    get currentTime() { return o.stuckClock ? 0 : time / 1000; }
+    resume = () => (o.resumeHangs ? new Promise<void>(() => {}) : Promise.resolve());
     decodeAudioData = async () => { if (o.undecodable) throw new Error('bad'); return { duration: 2 }; };
     createMediaStreamDestination = () => ({ ...node(), stream: { getAudioTracks: () => [{ stop: vi.fn() }] } });
     createBufferSource = () => ({ ...node(), buffer: null as unknown, start: (at: number) => { log.starts.push(at); log.order.push('src.start'); }, stop: vi.fn() });
@@ -39,6 +40,7 @@ function fake(o: Opts = {}) {
     createCanvas: () => ({ getContext: () => ({}), captureStream: () => { const tracks = [{ stop: () => { log.trackStops++; } }]; return { getVideoTracks: () => tracks, getTracks: () => tracks, addTrack: (t: { stop: () => void }) => { tracks.push(t as never); } }; } }),
     fetch: async (url: string) => { log.fetched.push(url); return { ok: !(o.missing ?? []).includes(url), arrayBuffer: async () => new ArrayBuffer(8) }; },
     raf: (cb) => { log.lastRaf = cb; time += 100; if (o.hiddenAt !== undefined && time >= o.hiddenAt && !doc.hidden) { doc.hidden = true; (listeners.visibilitychange || []).forEach((f) => f()); } queueMicrotask(cb); return 0; },
+    sleep: async (ms: number) => { time += ms; },
     document: doc,
     window: { addEventListener: () => { log.unload++; }, removeEventListener: () => { log.unloadOff++; } },
   };
@@ -60,7 +62,8 @@ describe('renderCut', () => {
   });
   it('starts each voice clip at its time and returns the blob with the format it was recorded in', async () => {
     const a = fake(), r = await go(cut({ audio: [{ url: 'a', at: 0 }, { url: 'b', at: 4.3 }] }), a.env);
-    expect(a.log.starts).toEqual([0, 4.3]);
+    const [first, second] = a.log.starts; // on the audio clock, from the moment the clock was seen running
+    expect(first).toBeGreaterThanOrEqual(0); expect(second - first).toBeCloseTo(4.3);
     expect(r).toMatchObject({ mime: 'video/mp4;codecs=avc1,mp4a', ext: 'mp4', seconds: 10 });
     expect(r.blob.type).toBe('video/mp4');
   });
@@ -172,5 +175,19 @@ describe('clean-up on every way out', () => {
     expect(ok.log.trackStops).toBeGreaterThan(0); expect(ok.log.unloadOff).toBe(1); expect(ok.listeners.visibilitychange).toEqual([]);
     const hid = fake({ hiddenAt: 4000 }); await refusal(go(cut(), hid.env));
     expect(hid.log.trackStops).toBeGreaterThan(0); expect(hid.log.unloadOff).toBe(1); expect(hid.listeners.visibilitychange).toEqual([]);
+  });
+});
+
+describe('audio that never starts', () => {
+  it('can be cancelled while the audio context is still resuming', async () => {
+    const a = fake({ resumeHangs: true }), ctl = new AbortController(), p = refusal(go(cut(), a.env, ctl.signal));
+    await Promise.resolve(); await Promise.resolve();
+    ctl.abort();
+    expect((await p)?.code).toBe('CUT_CANCELLED'); expect(a.log.closed).toBe(true); expect(a.log.recorders).toEqual([]);
+  });
+  it('fails in words when the audio clock never advances, instead of freezing at 0 %', async () => {
+    const a = fake({ stuckClock: true }), onProgress = vi.fn(), e = await refusal(go(cut(), a.env, undefined, onProgress));
+    expect(e?.code).toBe('CUT_BLOCKED'); expect(e?.message).toBe('The browser blocked audio · press the button again');
+    expect(a.log.recorders).toEqual([]); expect(a.log.closed).toBe(true); expect(onProgress).not.toHaveBeenCalled();
   });
 });

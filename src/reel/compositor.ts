@@ -27,7 +27,7 @@ export type RecorderEnv = {
   AudioContext?: new () => AudioLike;
   createCanvas: (w: number, h: number) => { getContext: (k: '2d') => unknown; captureStream: (fps: number) => Stream };
   fetch: (url: string) => Promise<{ ok: boolean; arrayBuffer: () => Promise<ArrayBuffer> }>;
-  raf: (cb: () => void) => unknown;
+  raf: (cb: () => void) => unknown; sleep: (ms: number) => Promise<void>;
   document: Target & { hidden: boolean }; window: Target;
 };
 export type CutResult = { blob: Blob; mime: string; ext: 'mp4' | 'webm'; seconds: number };
@@ -39,7 +39,7 @@ const browserEnv = (): RecorderEnv => ({
   MediaRecorder: (globalThis as unknown as { MediaRecorder?: RecorderEnv['MediaRecorder'] }).MediaRecorder,
   AudioContext: (window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) as unknown as RecorderEnv['AudioContext'],
   createCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }) as never,
-  fetch: (url) => fetch(url), raf: (cb) => requestAnimationFrame(cb), document, window,
+  fetch: (url) => fetch(url), raf: (cb) => requestAnimationFrame(cb), sleep: (ms) => new Promise((r) => setTimeout(r, ms)), document, window,
 });
 
 async function loadClips(cut: Cut, ac: AudioLike, env: RecorderEnv): Promise<unknown[]> {
@@ -99,6 +99,14 @@ function playFrames(cut: Cut, ctx: unknown, env: RecorderEnv, ac: AudioLike, bas
   });
 }
 
+// A suspended audio context (started outside a gesture) never advances its clock, and the frames are timed on it: wait up to 2 s
+// for it to run, and fail in words if it does not, instead of freezing at 0 %.
+async function clockRuns(ac: AudioLike, env: RecorderEnv): Promise<void> {
+  const start = ac.currentTime;
+  for (let waited = 0; waited < 2000 && !(ac.currentTime > start); waited += 100) await env.sleep(100);
+  if (!(ac.currentTime > start)) throw new CutError('CUT_BLOCKED');
+}
+
 // A clean-up step that fails must not hide why the run ended.
 const quietly = async (f: () => unknown) => { try { await f(); } catch { /* ignored on purpose */ } };
 
@@ -120,7 +128,8 @@ async function record(cut: Cut, o: RenderOptions, env: RecorderEnv, ac: AudioLik
   let rec: Recorder | null = null, stream: Stream | null = null;
   try {
     const clips = await Promise.race([loadClips(cut, ac, env), g.stopped]);
-    await ac.resume?.();
+    await Promise.race([ac.resume?.(), g.stopped]);
+    await Promise.race([clockRuns(ac, env), g.stopped]);
     const canvas = env.createCanvas(cut.size.w, cut.size.h), ctx = canvas.getContext('2d'), dest = ac.createMediaStreamDestination();
     stream = canvas.captureStream(CUT_FPS);
     dest.stream.getAudioTracks().forEach((t) => stream!.addTrack(t));

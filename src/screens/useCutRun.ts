@@ -18,7 +18,8 @@ export function useCutRun() {
     abort.current = ctl;
     setState({ kind: 'running', pct: 0 });
     try {
-      const cut = await build();
+      let cut: Cut;
+      try { cut = await build(); } catch (e) { void context?.close().catch(() => {}); throw e; } // renderCut closes the context from here on
       const result = await renderCut(cut, { signal: ctl.signal, context, onProgress: (pct) => { if (live) setState({ kind: 'running', pct }); } });
       setState({ kind: 'done' });
       return result;

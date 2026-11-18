@@ -48,6 +48,16 @@ describe('SlidesVideo', () => {
     expect(cut.audio.map((a) => a.url)).toEqual(['url3:p/s0.mp3', 'url4:p/s1.mp3']);
     click.mockRestore();
   });
+  it('closes the audio context it opened when the cut cannot be built', async () => {
+    const close = vi.fn(async () => {});
+    vi.mocked(prepareAudio).mockReturnValue({ close } as never);
+    render(<SlidesVideo content={deck(true)} title="Steering" />);
+    await act(async () => {});
+    vi.mocked(media.mediaUrl).mockRejectedValue(new Error('gone'));
+    await press();
+    expect(renderCut).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
   it('says a part-voiced deck is cut without sound', async () => {
     render(<SlidesVideo content={deck(true, false)} title="Steering" />);
     await act(async () => {});
