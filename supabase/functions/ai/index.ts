@@ -5,6 +5,9 @@
 //   { action: 'test', connection_id }        System Admins: one tiny call with that connection -> { ok, model } or { ok: false, error }
 //   { use: 'game_role', run_id, messages, state } the player of a run (their own, unfinished) of a game with an AI role: the role's reply -> { text };
 //                                            the role and what it knows are read by the database for the run (public.game_role_context), never sent by the client
+//   { use: 'avatar_conversation', run_id, say } the learner on a practice run (their own, unfinished, in time): the character's reply -> { say, turn, held };
+//                                            the character, what it reveals or hides and the earlier lines are read by the database (public.avatar_run_context)
+//                                            and the new lines written by it (public.avatar_add_turns); both roles are played by rolePlay.ts
 //   { action: 'review_game', contribution_id } the author of a built Game: the house-rules review (use studio_game) of the files the
 //                                            database holds for that contribution -> { passed, reasons }, recorded by the database
 //                                            for those files (public.record_game_review); the verdict is never the client's
@@ -19,8 +22,11 @@ import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '..
 import type { Conn, UseRow } from '../_shared/aiUse.ts';
 import { NO_SCRIPT, USE_LIMITS } from '../_shared/aiGuard.ts';
 import { callProvider, inputChars, limitMessage, LIMITS, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
-import { GAME_ROLE_USE, playRole } from './gameRole.ts';
-import type { RoleContext } from './gameRole.ts';
+import { AVATAR_USE, playAvatarTurn, readAvatarAsk } from './avatarTurn.ts';
+import type { AvatarRunContext, AvatarTurn } from './avatarTurn.ts';
+import { GAME_ROLE_USE, playGameRole } from './gameRole.ts';
+import type { GameRoleContext } from './gameRole.ts';
+import type { RoleDeps, RoleRefusal } from './rolePlay.ts';
 import { GAME_USE, reviewGame } from './review.ts';
 import type { ReviewLoad } from './review.ts';
 
@@ -81,20 +87,37 @@ async function review({ admin, body, callerId, roles, started }: Call): Promise<
   return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
 }
 
+// What the role-play path (rolePlay.ts) needs of any role: the use's preamble and limits, the database's context for the caller's run, the count
+// before the call and the provider call.
+const roleDeps = <C extends object>({ admin, callerId }: Call, { use, target }: { use: UseRow; target: ReturnType<typeof targetOf> }, name: string, contextRpc: string, runId: string): RoleDeps<C> => ({
+  preamble: use.preamble, dailyLimit: use.daily_limit, dailyChars: use.daily_chars,
+  context: async () => ((await admin.rpc(contextRpc, { p_user: callerId, p_run: runId })).data as C | RoleRefusal | null) ?? null,
+  count: (chars) => countCall(admin, callerId, name, chars),
+  call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[name]?.timeoutMs),
+});
+
 // use 'game_role': a game's AI role for the caller's own run.
-async function gameRole({ admin, body, callerId, roles, started }: Call): Promise<Response> {
-  const g = readGameAsk(body);
+async function gameRole(call: Call): Promise<Response> {
+  const g = readGameAsk(call.body);
   if (!g.ok) return fail(400, g.error);
-  const opened = await openTarget(admin, GAME_ROLE_USE, roles);
+  const opened = await openTarget(call.admin, GAME_ROLE_USE, call.roles);
   if (opened instanceof Response) return opened;
-  const { use, target } = opened;
-  const out = await playRole({
-    preamble: use.preamble, dailyLimit: use.daily_limit, dailyChars: use.daily_chars,
-    context: async () => ((await admin.rpc('game_role_context', { p_user: callerId, p_run: g.runId })).data as RoleContext | null) ?? null,
-    count: (chars) => countCall(admin, callerId, GAME_ROLE_USE, chars),
-    call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_ROLE_USE]?.timeoutMs),
-  }, g);
-  console.log(JSON.stringify({ use: GAME_ROLE_USE, status: out.status, ms: Date.now() - started }));
+  const out = await playGameRole(roleDeps<GameRoleContext>(call, opened, GAME_ROLE_USE, 'game_role_context', g.runId), g);
+  console.log(JSON.stringify({ use: GAME_ROLE_USE, status: out.status, ms: Date.now() - call.started }));
+  return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
+}
+
+// use 'avatar_conversation': the Avatar's character, for the caller's own practice run; the turn is written by the database after the reply.
+async function avatarTurn(call: Call): Promise<Response> {
+  const a = readAvatarAsk(call.body);
+  if (!a.ok) return fail(400, a.error);
+  const opened = await openTarget(call.admin, AVATAR_USE, call.roles);
+  if (opened instanceof Response) return opened;
+  const out = await playAvatarTurn({
+    ...roleDeps<AvatarRunContext>(call, opened, AVATAR_USE, 'avatar_run_context', a.runId),
+    addTurns: async (turns: AvatarTurn[], version, hash) => (await call.admin.rpc('avatar_add_turns', { p_user: call.callerId, p_run: a.runId, p_turns: turns, p_version: version, p_hash: hash })).error?.message ?? null,
+  }, a);
+  console.log(JSON.stringify({ use: AVATAR_USE, status: out.status, ms: Date.now() - call.started }));
   return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
 }
 
@@ -130,6 +153,7 @@ export default {
     const call: Call = { admin, body, callerId, roles, started: Date.now() };
     if (body.action === 'test') return testConnection(call);
     if (body.action === 'review_game') return review(call);
-    return body.use === GAME_ROLE_USE ? gameRole(call) : answer(call);
+    if (body.use === GAME_ROLE_USE) return gameRole(call);
+    return body.use === AVATAR_USE ? avatarTurn(call) : answer(call);
   }),
 };

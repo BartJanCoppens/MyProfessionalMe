@@ -7,10 +7,10 @@ export type AiProvider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'hey
 export type AiKind = 'text' | 'embedding' | 'voice' | 'avatar';
 // The text uses the app calls today, each seeded in public.ai_uses (src/logic/ai.test.ts checks). Most have a scripted
 // fallback; draft_items has one for flash cards only (exam questions are AI or CSV); studio_draft has one for every
-// studio but Game; studio_motion (the Motion Studio's animation) has the scripted flow of boxes and arrows; studio_game (the Game Studio's code and its house-rules review) has no script: there is no scripted game; game_role (a game's AI role) has none either: a role is AI or it is not offered.
-export const AI_USE_KEYS = ['profile_chat', 'curriculum_copilot', 'learners_eye', 'kb_answer', 'draft_outline', 'teach_back', 'draft_items', 'studio_draft', 'studio_motion', 'studio_game', 'game_role'] as const;
-// Uses only the `ai` function answers, never Claude Design: the answer needs what the server alone reads (the AI role's hidden knowledge).
-export const SERVER_ONLY_USES: readonly string[] = ['game_role'];
+// studio but Game; studio_motion (the Motion Studio's animation) has the scripted flow of boxes and arrows; studio_game (the Game Studio's code and its house-rules review) has no script: there is no scripted game; game_role (a game's AI role) and avatar_conversation (the Avatar's character) have none either: a role is AI or it is not offered.
+export const AI_USE_KEYS = ['profile_chat', 'curriculum_copilot', 'learners_eye', 'kb_answer', 'draft_outline', 'teach_back', 'draft_items', 'studio_draft', 'studio_motion', 'studio_game', 'game_role', 'avatar_conversation'] as const;
+// Uses only the `ai` function answers, never Claude Design: the answer needs what the server alone reads (the AI role's and the character's hidden text).
+export { SERVER_ONLY_USES } from '../../supabase/functions/_shared/aiGuard.ts';
 export type AiUseKey = (typeof AI_USE_KEYS)[number];
 
 export type AiConnection = { id: string; name: string; provider: AiProvider; base_url: string | null; default_model: string | null; region: string | null; key_hint: string | null; updated_at?: string };

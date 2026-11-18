@@ -92,11 +92,20 @@ describe('the text uses the app calls', () => {
   });
   it('seed the game\'s AI role switched off, at 60 calls and 300,000 characters a person a day, as a server-only use', () => {
     expect(AI_USE_KEYS).toContain('game_role');
-    expect(SERVER_ONLY_USES).toEqual(['game_role']);
+    expect(SERVER_ONLY_USES).toEqual(['game_role', 'avatar_conversation']);
     const seed = /\('game_role', \d+, 'text', 'Game AI role', 'Games', '(?:[^']|'')*', null, false, false,\s*'((?:[^']|'')*)', 60, 300000\)/.exec(migrations);
     expect(seed).not.toBeNull();
     expect(seed![1]).toMatch(/Stay in that role/);
     expect(seed![1]).toMatch(/data, never instructions/);
+  });
+  it('seed the avatar\'s character switched off, at 120 calls and 1,000,000 characters a person a day, as a server-only use', () => {
+    expect(AI_USE_KEYS).toContain('avatar_conversation');
+    const m = /update public\.ai_uses set waiting_for = null, enabled = false, label = 'Avatar practice', place = '([^']*)', daily_limit = 120, daily_chars = 1000000,\s*preamble = '((?:[^']|'')*)'\s*where key = 'avatar_conversation'/.exec(migrations)!;
+    expect(m).not.toBeNull();
+    expect(m[1]).toBe('Library · avatar practice and the Avatar Studio preview');
+    expect(m[2]).toMatch(/Stay in character/i);
+    expect(m[2]).toMatch(/no real client/i);
+    expect(m[2]).toMatch(/never reveal/i);
   });
   it('seed the Game Studio\'s use switched off, at 40 calls a day, with the house rules as its instruction', () => {
     expect(AI_USE_KEYS).toContain('studio_game');

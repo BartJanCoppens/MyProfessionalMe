@@ -72,6 +72,14 @@ describe('complete: the fallback order', () => {
     expect(canComplete('game_role', { enabled: true, live: [] })).toBe(false);
     expect(canComplete('game_role', role)).toBe(true);
   });
+  it('never gives the avatar character to Claude Design either', async () => {
+    const design = vi.fn(async () => 'from design');
+    vi.stubGlobal('window', { claude: { complete: design } });
+    const ask = vi.fn(async () => 'from connection');
+    expect(await complete('avatar_conversation', req, { enabled: true, live: ['avatar_conversation'], ask })).toEqual({ text: 'from connection', via: 'connection', cut: false });
+    expect(design).not.toHaveBeenCalled();
+    expect(canComplete('avatar_conversation', { enabled: true, live: [] })).toBe(false);
+  });
   it('says beforehand whether AI would answer', () => {
     expect(canComplete('profile_chat', live)).toBe(true);
     expect(canComplete('kb_answer', live)).toBe(false);

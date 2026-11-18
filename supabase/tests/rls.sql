@@ -2327,7 +2327,7 @@ end $$;
 reset role;
 insert into results (check_name, expected, actual) select 'VO studio_voice is seeded: voice, off, 300 calls and 30000 characters a day', 'voice/false/300/30000',
   kind||'/'||enabled||'/'||daily_limit||'/'||daily_chars from public.ai_uses where key = 'studio_voice';
-insert into results (check_name, expected, actual) select 'VO text uses keep no character limit, but the game''s AI role (a budget per person)', 'game_role', string_agg(key, ',') from public.ai_uses where kind = 'text' and daily_chars is not null;
+insert into results (check_name, expected, actual) select 'VO text uses keep no character limit, but the game''s AI role and the avatar''s character (a budget per person)', 'avatar_conversation,game_role', string_agg(key, ',' order by key) from public.ai_uses where kind = 'text' and daily_chars is not null;
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e8','t.voicega@test.local'), ('00000000-0000-0000-0000-0000000000e9','t.voicemember@test.local');
 insert into public.user_roles (user_id, role) values ('00000000-0000-0000-0000-0000000000e8','general_admin');
 set local role authenticated;
@@ -3443,5 +3443,112 @@ reset role;
 insert into results (check_name, expected, actual) select 'AV the contribution exists (so the learner case above is not vacuous)', '1', count(*)::text from public.contributions where title = 'T av ok';
 insert into results (check_name, expected, actual) select 'AV a published Avatar is self-completed by its quiz and its evidence rule is unchanged', 'true/none', private.is_self_complete(c.learning_id)::text||'/'||private.evidence_rule('Avatar')
   from public.contributions c where c.title = 'T av ok';
+-- ---------- Avatar practice runs and the character's turn (AR) ----------
+-- avatar_runs: a learner's run on a published Avatar learning (test = false), or the author's / an assigned reviewer's practice on a contribution
+-- (test = true, never on a learning, never progress). Own rows only (a shared, non-test run is readable by whoever may see the track, for 6.4), no
+-- update or delete, finish through finish_avatar_run. avatar_run_context and avatar_add_turns are the service role's: the character with what it
+-- reveals and hides, and the one write of the turns. T av ok (AV above) is the published avatar; ...ac is its assigned reviewer, ...ad uninvolved.
+reset role;
+set local request.jwt.claims = '';
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000ac','t.avrev@test.local'), ('00000000-0000-0000-0000-0000000000ad','t.avother@test.local');
+insert into public.contribution_reviews (contribution_id, step, slot, reviewer_id, verdict) select id, 1, 1, '00000000-0000-0000-0000-0000000000ac', 'pending' from public.contributions where title = 'T av ok';
+select set_config('test.ar_learning', (select learning_id from public.contributions where title = 'T av ok'), true), set_config('test.ar_c', (select id::text from public.contributions where title = 'T av ok'), true);
+insert into results (check_name, expected, actual) select 'AR avatar_conversation is the character: text, off, no longer waiting, 120 calls and 1,000,000 characters a person a day', 'text/false/true/120/1000000',
+  kind||'/'||enabled||'/'||(waiting_for is null)||'/'||daily_limit||'/'||daily_chars from public.ai_uses where key = 'avatar_conversation';
+insert into results (check_name, expected, actual) select 'AR avatar_conversation is not live without a connection', 'false', ('avatar_conversation' = any(public.ai_live_uses()))::text;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+with i as (insert into public.avatar_runs (learning_id, test) values (current_setting('test.ar_learning'), false) returning id) select set_config('test.ar_run', (select id::text from i), true);
+insert into results (check_name, expected, actual) select 'AR a learner starts a run on a published studio Avatar, as themselves', '1/true', count(*)||'/'||bool_and(user_id = '00000000-0000-0000-0000-0000000000ab' and not test and finished_at is null and turns = '[]') from public.avatar_runs where id = current_setting('test.ar_run')::uuid;
+select pg_temp.gr_blocked('AR test = true on a learning is refused', format($q$insert into public.avatar_runs (learning_id, test) values (%L, true)$q$, current_setting('test.ar_learning')), 'blocked: 42501');
+select pg_temp.gr_blocked('AR a run on the seeded L38 (no avatar content) is refused', $q$insert into public.avatar_runs (learning_id, test) values ('L38', false)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AR a learner''s practice on a contribution that is not theirs is refused', format($q$insert into public.avatar_runs (contribution_id, test) values (%L, true)$q$, current_setting('test.ar_c')), 'blocked: 42501');
+select pg_temp.gr_blocked('AR a run for another person is refused', format($q$insert into public.avatar_runs (user_id, learning_id, test) values ('00000000-0000-0000-0000-0000000000ad', %L, false)$q$, current_setting('test.ar_learning')), 'blocked: 42501');
+select pg_temp.gr_blocked('AR a run on both a learning and a contribution is refused', format($q$insert into public.avatar_runs (learning_id, contribution_id, test) values (%L, %L, false)$q$, current_setting('test.ar_learning'), current_setting('test.ar_c')), 'blocked: 23514');
+select pg_temp.gr_blocked('AR a direct update of turns is denied', $q$update public.avatar_runs set turns = '[{"who":"character","text":"forged","guard":null}]'$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AR a direct update of score is denied', $q$update public.avatar_runs set score = '{"total":100}'$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AR a direct update of shared_at is denied', $q$update public.avatar_runs set shared_at = now()$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AR a direct delete is denied', $q$delete from public.avatar_runs$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('AR a learner cannot execute avatar_run_context', format($q$select public.avatar_run_context('00000000-0000-0000-0000-0000000000ab', %L)$q$, current_setting('test.ar_run')), 'blocked: 42501');
+select pg_temp.gr_blocked('AR a learner cannot execute avatar_add_turns', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, '[]', 'v', 'h')$q$, current_setting('test.ar_run')), 'blocked: 42501');
+insert into results (check_name, expected, actual) select 'AR a learner reads neither the contribution nor, in the learning, what the character reveals or hides', '0/0', (select count(*) from public.contributions where title = 'T av ok')||'/'||(select count(*) from public.learnings where id = current_setting('test.ar_learning') and (content::text like '%payroll vendor contract%' or content::text like '%works-council%'));
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+with i as (insert into public.avatar_runs (contribution_id, test) values (current_setting('test.ar_c')::uuid, true) returning id) select set_config('test.ar_test_run', (select id::text from i), true);
+insert into results (check_name, expected, actual) select 'AR the author may practise their own Avatar (test = true)', '1', count(*)::text from public.avatar_runs where id = current_setting('test.ar_test_run')::uuid and test;
+insert into results (check_name, expected, actual) select 'AR another learner''s run selects 0 rows (the author sees only their own)', '0', count(*)::text from public.avatar_runs where user_id <> '00000000-0000-0000-0000-0000000000aa';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ac","role":"authenticated"}';
+with i as (insert into public.avatar_runs (contribution_id, test) values (current_setting('test.ar_c')::uuid, true) returning id) select set_config('test.ar_rev_run', (select id::text from i), true);
+insert into results (check_name, expected, actual) select 'AR an assigned reviewer may practise it too', '1', count(*)::text from public.avatar_runs where id = current_setting('test.ar_rev_run')::uuid;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ad","role":"authenticated"}';
+select pg_temp.gr_blocked('AR another person''s practice on that contribution is refused', format($q$insert into public.avatar_runs (contribution_id, test) values (%L, true)$q$, current_setting('test.ar_c')), 'blocked: 42501');
+insert into results (check_name, expected, actual) select 'AR an uninvolved person selects 0 rows', '0', count(*)::text from public.avatar_runs;
+set local role anon;
+select pg_temp.gr_blocked('AR anon cannot execute avatar_run_context', format($q$select public.avatar_run_context('00000000-0000-0000-0000-0000000000ab', %L)$q$, current_setting('test.ar_run')), 'blocked: 42501');
+select pg_temp.gr_blocked('AR anon cannot execute avatar_add_turns', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, '[]', 'v', 'h')$q$, current_setting('test.ar_run')), 'blocked: 42501');
+reset role;
+-- a practice run never counts as progress: no run of any kind wrote a learning record
+insert into results (check_name, expected, actual) select 'AR no run, practice or real, wrote progress on the learning', '0', count(*)::text from public.learner_learnings where learning_id = current_setting('test.ar_learning');
+-- the context (service role): the character with what it reveals and hides, or why not
+set local role service_role;
+create function pg_temp.ar(p_user text, p_run text) returns text language sql as $f$
+  select coalesce(j ->> 'refusal' || coalesce('/' || (j ->> 'lines'), ''), (j ->> 'persona')||'|'||(j ->> 'opening')||'|'||(j ->> 'reveals')||'|'||(j ->> 'hides')||'|'||(j ->> 'difficulty')||'|'||(j ->> 'language')||'|'||(j ->> 'minutes')||'|'||(j ->> 'counterpart')||'|'||(j ->> 'learner_turns'))
+  from (select public.avatar_run_context(p_user::uuid, p_run::uuid) as j) x $f$;
+insert into results (check_name, expected, actual) select 'AR the context of an unfinished real run gives the character with what it reveals and hides', 'An HR director at a mid-sized manufacturer, 22 years in HR, wary of consultants.|I have read your deck. Convince me this is not another IT project that HR ends up paying for.|The current payroll vendor contract ends in 14 months.|Two works-council members already oppose the change.|Tough|Dutch|10|A colleague or junior|0',
+  pg_temp.ar('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_run'));
+insert into results (check_name, expected, actual) select 'AR the context of another person''s run is not_yours', 'not_yours', pg_temp.ar('00000000-0000-0000-0000-0000000000ad', current_setting('test.ar_run'));
+insert into results (check_name, expected, actual) select 'AR the context of no run is not_yours', 'not_yours', pg_temp.ar('00000000-0000-0000-0000-0000000000ab', gen_random_uuid()::text);
+insert into results (check_name, expected, actual) select 'AR the author''s practice reads the contribution', 'An HR director', left(pg_temp.ar('00000000-0000-0000-0000-0000000000aa', current_setting('test.ar_test_run')), 14);
+insert into results (check_name, expected, actual) select 'AR an assigned reviewer''s practice reads it too', 'An HR director', left(pg_temp.ar('00000000-0000-0000-0000-0000000000ac', current_setting('test.ar_rev_run')), 14);
+reset role;
+delete from public.contribution_reviews where reviewer_id = '00000000-0000-0000-0000-0000000000ac' and contribution_id = current_setting('test.ar_c')::uuid;
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AR a practice run of a reviewer who was removed is not_allowed', 'not_allowed', pg_temp.ar('00000000-0000-0000-0000-0000000000ac', current_setting('test.ar_rev_run'));
+reset role;
+-- time: a 10-minute run is in time for 15 minutes (the minutes and five more)
+with i as (insert into public.avatar_runs (user_id, learning_id, test, started_at) values ('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_learning'), false, now() - interval '16 minutes') returning id) select set_config('test.ar_late', (select id::text from i), true);
+with i as (insert into public.avatar_runs (user_id, learning_id, test, started_at) values ('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_learning'), false, now() - interval '14 minutes') returning id) select set_config('test.ar_inside', (select id::text from i), true);
+with i as (insert into public.avatar_runs (user_id, learning_id, test, turns) select '00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_learning'), false,
+  (select jsonb_agg(jsonb_build_object('who', w, 'text', 'line ' || n, 'guard', null) order by n, w desc) from generate_series(1, 24) n, unnest(array['learner', 'character']) w) returning id) select set_config('test.ar_full', (select id::text from i), true);
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AR a run started 16 minutes ago with 10 minutes is time_up', 'time_up', pg_temp.ar('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_late'));
+insert into results (check_name, expected, actual) select 'AR one started 14 minutes ago is still in time', 'An HR director', left(pg_temp.ar('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_inside')), 14);
+insert into results (check_name, expected, actual) select 'AR 24 learner lines on a 10-minute run give turns_used', 'turns_used/24', pg_temp.ar('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_full'));
+-- the one write of the turns
+create function pg_temp.ar_turns(p_text text default 'Why now?', p_guard text default null, p_who text default 'character') returns jsonb language sql as $f$
+  select jsonb_build_array(jsonb_build_object('who', 'learner', 'text', 'Good morning', 'guard', null), jsonb_build_object('who', p_who, 'text', p_text, 'guard', p_guard)) $f$;
+select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_run')::uuid, pg_temp.ar_turns(), '1.0.0', 'hash-a');
+reset role;
+insert into results (check_name, expected, actual) select 'AR add_turns appends both lines and records the prompt version and hash once', '2/1.0.0/hash-a/learner,character', jsonb_array_length(turns)||'/'||prompt_version||'/'||prompt_hash||'/'||(select string_agg(t ->> 'who', ',' order by n) from jsonb_array_elements(turns) with ordinality x(t, n)) from public.avatar_runs where id = current_setting('test.ar_run')::uuid;
+set local role service_role;
+select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_run')::uuid, pg_temp.ar_turns('Go on.', 'out_joke'), '1.0.0', 'hash-a');
+select pg_temp.gr_blocked('AR a second, different prompt version raises its text', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, pg_temp.ar_turns(), '1.1.0', 'hash-b')$q$, current_setting('test.ar_run')), 'blocked: The prompt changed during the run');
+select pg_temp.gr_blocked('AR a different hash under the same version raises it too', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, pg_temp.ar_turns(), '1.0.0', 'hash-b')$q$, current_setting('test.ar_run')), 'blocked: The prompt changed during the run');
+select pg_temp.gr_blocked('AR a guard that is no code is refused', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, pg_temp.ar_turns('x', 'because'), '1.0.0', 'hash-a')$q$, current_setting('test.ar_run')), 'blocked: That is not a guard code');
+select pg_temp.gr_blocked('AR one line only is refused', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, '[{"who":"learner","text":"x","guard":null}]', '1.0.0', 'hash-a')$q$, current_setting('test.ar_run')), 'blocked: Add one learner line and one character line');
+select pg_temp.gr_blocked('AR two learner lines are refused', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, pg_temp.ar_turns('x', null, 'learner'), '1.0.0', 'hash-a')$q$, current_setting('test.ar_run')), 'blocked: Add the learner line first, then the character line');
+select pg_temp.gr_blocked('AR a line over 1,200 characters is refused', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, pg_temp.ar_turns(repeat('x', 1201)), '1.0.0', 'hash-a')$q$, current_setting('test.ar_run')), 'blocked: A line is 1 to 1,200 characters');
+select pg_temp.gr_blocked('AR a missing text is refused', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, '[{"who":"learner","guard":null},{"who":"character","text":"x"}]', '1.0.0', 'hash-a')$q$, current_setting('test.ar_run')), 'blocked: A line is 1 to 1,200 characters');
+select pg_temp.gr_blocked('AR add_turns on another person''s run refuses with the context''s words', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ad', %L, pg_temp.ar_turns(), '1.0.0', 'hash-a')$q$, current_setting('test.ar_run')), 'blocked: That is not your run');
+select pg_temp.gr_blocked('AR add_turns on a run with no lines left refuses', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, pg_temp.ar_turns(), '1.0.0', 'hash-a')$q$, current_setting('test.ar_full')), 'blocked: You used the 24 lines of this run · end it to see your score');
+select pg_temp.gr_blocked('AR add_turns on a run out of time refuses', format($q$select public.avatar_add_turns('00000000-0000-0000-0000-0000000000ab', %L, pg_temp.ar_turns(), '1.0.0', 'hash-a')$q$, current_setting('test.ar_late')), 'blocked: This run''s time is up · end it to see your score');
+reset role;
+insert into results (check_name, expected, actual) select 'AR the refused writes left the run with its four lines, the guard kept on the one held', '4/out_joke', jsonb_array_length(turns)||'/'||(turns -> 3 ->> 'guard') from public.avatar_runs where id = current_setting('test.ar_run')::uuid;
+-- ending
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ad","role":"authenticated"}';
+select pg_temp.gr_blocked('AR finishing another person''s run raises', format($q$select public.finish_avatar_run(%L)$q$, current_setting('test.ar_run')), 'blocked: That run is not yours');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+select public.finish_avatar_run(current_setting('test.ar_run')::uuid);
+select pg_temp.gr_blocked('AR finishing twice raises "This run has ended"', format($q$select public.finish_avatar_run(%L)$q$, current_setting('test.ar_run')), 'blocked: This run has ended');
+insert into results (check_name, expected, actual) select 'AR the finished run is read back with its turns', '4/true', jsonb_array_length(turns)||'/'||(finished_at is not null) from public.avatar_runs where id = current_setting('test.ar_run')::uuid;
+reset role;
+set local role service_role;
+insert into results (check_name, expected, actual) select 'AR the context of a finished run is finished', 'finished', pg_temp.ar('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_run'));
+reset role;
+insert into results (check_name, expected, actual) select 'AR finishing wrote no progress either', '0', count(*)::text from public.learner_learnings where learning_id = current_setting('test.ar_learning');
+-- the one rule behind game and avatar practice
+insert into results (check_name, expected, actual) select 'AR can_test_game_as still allows a Game''s author and refuses an Avatar contribution', 'true/false',
+  private.can_test_game_as((select id from public.contributions where title = 'T gm ok'), '00000000-0000-0000-0000-0000000000aa')::text||'/'||private.can_test_game_as(current_setting('test.ar_c')::uuid, '00000000-0000-0000-0000-0000000000aa')::text;
+insert into results (check_name, expected, actual) select 'AR can_play_test_as keeps the types apart', 'true/false', private.can_play_test_as(current_setting('test.ar_c')::uuid, '00000000-0000-0000-0000-0000000000aa', 'Avatar')::text||'/'||private.can_play_test_as(current_setting('test.ar_c')::uuid, '00000000-0000-0000-0000-0000000000aa', 'Game')::text;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

@@ -7,6 +7,11 @@ export const POINT_LABEL = /^Learning point · (\d+) %$/;
 export const RUN_MINUTES = [5, 10, 15] as const;
 /** The learner's lines in one run, by its minutes. */
 export const RUN_TURNS: Record<5 | 10 | 15, number> = { 5: 12, 10: 24, 15: 36 };
+/** The codes a guard writes on a turn it held (public.avatar_add_turns takes exactly these; the guards themselves are Task 6.3). */
+export const GUARD_CODES = ['empty', 'too_long', 'meta_or_injection', 'offensive', 'classifier_meta', 'classifier_injection', 'classifier_offensive',
+  'out_ai_admission', 'out_meta', 'out_joke', 'out_refusal', 'out_format', 'out_classifier'] as const;
+/** The minutes a run lasts are its length and this many more (public.avatar_run_context: time_up). */
+export const RUN_GRACE_MINUTES = 5;
 /** What a learner may say and the character may reply (characters), and the most tokens of a reply. */
 export const AVATAR_ASK = { sayChars: 1000, replyChars: 1200, maxTokens: 400 };
 export const LANGUAGES = { English: { code: 'en', speech: 'en-GB' }, Dutch: { code: 'nl', speech: 'nl-BE' }, French: { code: 'fr', speech: 'fr-BE' } } as const;

@@ -8,8 +8,11 @@ export const fail = (status: number, error: string) => Response.json({ error }, 
 // default of 2048 tokens and 30 s. One call stays under the 150 s request limit of Supabase edge functions (confirm the plan's limit at deploy).
 export const USE_LIMITS: Record<string, { maxTokens: number; timeoutMs: number }> = { studio_game: { maxTokens: 5000, timeoutMs: 110_000 } };
 // A part that times out keeps no text, so the budget per part is what one call can surely write in the time: about 5000 tokens in 110 s (measure at deploy); MAX_PARTS (src/logic/continuation.ts) times this fits a full game.js.
-// Uses with no scripted answer: a reached daily limit does not fall back to a script for them.
-export const NO_SCRIPT = ['studio_game', 'game_role'];
+// Uses only the `ai` function answers, each with its own request shape (a run, not a system text): the AI role's and the character's hidden text is read
+// by the database for the run. Never Claude Design, never the generic answer path (readAsk refuses them).
+export const SERVER_ONLY_USES: readonly string[] = ['game_role', 'avatar_conversation'];
+// Uses with no scripted answer: a reached daily limit does not fall back to a script for them (a role is AI or it is not offered).
+export const NO_SCRIPT = ['studio_game', ...SERVER_ONLY_USES];
 
 export type Provider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'heygen' | 'other';
 

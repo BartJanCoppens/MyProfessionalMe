@@ -2,7 +2,7 @@
 // requests for Anthropic and OpenAI-compatible services, reply and error parsing, and that the key never leaks.
 import { describe, expect, it, vi } from 'vitest';
 import { ANTHROPIC_MIN_TOKENS, ANTHROPIC_VERSION, buildRequest, callProvider, gameRoleSystem, inputChars, isLimitError, limitMessage, LIMITS, parseReply, readAsk, readGameAsk, scrub, TEST_ASK, withPreamble } from '../../supabase/functions/ai/core.ts';
-import { NO_SCRIPT, USE_LIMITS } from '../../supabase/functions/_shared/aiGuard.ts';
+import { NO_SCRIPT, SERVER_ONLY_USES, USE_LIMITS } from '../../supabase/functions/_shared/aiGuard.ts';
 import type { Target } from '../../supabase/functions/ai/core.ts';
 
 const user = (content: string) => ({ role: 'user', content });
@@ -10,6 +10,10 @@ const claude: Target = { provider: 'anthropic', baseUrl: null, model: 'claude-te
 const mistral: Target = { provider: 'openai_compatible', baseUrl: 'https://api.mistral.ai/v1/', model: 'mistral-large-latest', key: 'mi-secret-5678' };
 
 describe('readAsk', () => {
+  it('refuses every server-only use: the generic path never answers the AI role or the character with a client-built request', () => {
+    for (const use of SERVER_ONLY_USES) expect(readAsk({ use, system: 'x', messages: [user('hi')] })).toEqual({ ok: false, error: 'This use is answered with its own request: a run, not a system text' });
+    expect(SERVER_ONLY_USES).toEqual(['game_role', 'avatar_conversation']);
+  });
   it('accepts a use, an optional system prompt and messages, and defaults max_tokens', () => {
     expect(readAsk({ use: 'profile_chat', system: 'Be brief', messages: [user('Hi')] })).toEqual({ ok: true, use: 'profile_chat', ask: { system: 'Be brief', messages: [{ role: 'user', content: 'Hi' }], max_tokens: LIMITS.defaultTokens } });
   });
@@ -28,7 +32,7 @@ describe('readAsk', () => {
   });
   it('says a reached daily limit truthfully: no scripted reply exists for a use without a script', () => {
     expect(limitMessage(40)).toContain('scripted reply');
-    expect(NO_SCRIPT).toEqual(['studio_game', 'game_role']);
+    expect(NO_SCRIPT).toEqual(['studio_game', 'game_role', 'avatar_conversation']);
     expect(limitMessage(40, false)).toBe('Daily AI limit reached (40 a day per person for this use); try again tomorrow (UTC)');
   });
   it('names calls and characters for a use that has both limits (it cannot tell which ran out)', () => {

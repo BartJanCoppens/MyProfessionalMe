@@ -1,7 +1,7 @@
 // The `ai` function's game role (supabase/functions/ai/gameRole.ts), with its database and provider stood in: the run is checked first (real,
 // the caller's, unfinished), the call is counted before it is made, the hidden knowledge goes only to the model, and the game's text is data.
 import { describe, expect, it, vi } from 'vitest';
-import { playRole } from '../../supabase/functions/ai/gameRole.ts';
+import { playGameRole as playRole } from '../../supabase/functions/ai/gameRole.ts';
 import type { RoleDeps } from '../../supabase/functions/ai/gameRole.ts';
 
 const context = { kind: 'Suspect to question', about: 'A manager.', knows: 'the supplier is the CFO’s brother', concept: 'You audit a supplier.' };
