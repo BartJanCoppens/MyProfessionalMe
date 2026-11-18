@@ -27,6 +27,25 @@ describe('captionCues', () => {
   });
 });
 
+describe('captionCues, awkward text', () => {
+  it('hard-breaks a word longer than a cue, so no cue is over 42 characters', () => {
+    const long = 'x'.repeat(100);
+    const cues = captionCues('See ' + long + ' now.', [0, 1, 4], 0, 5)!;
+    expect(cues.every((c) => c.text.length <= CAPTION_CHARS)).toBe(true);
+    expect(cues.map((c) => c.text).join('').replace(/ /g, '')).toBe('See' + long + 'now.');
+    expect(cues.every((c, i) => c.end > c.start && (i === 0 || c.start >= cues[i - 1].end))).toBe(true);
+  });
+  it('does not end a cue at an abbreviation', () => {
+    const cues = captionCues('Ask Dr. Smith about the U.S. rules. Then act.', [0, 0.2, 0.5, 0.8, 1, 1.2, 1.5, 1.8, 2.1], 0, 3)!;
+    expect(cues.map((c) => c.text)).toEqual(['Ask Dr. Smith about the U.S. rules.', 'Then act.']);
+  });
+  it('never gives a zero or negative cue when the end is before the last word starts', () => {
+    const cues = captionCues(TEXT, WORDS, 10, 11)!;
+    expect(cues.every((c) => c.end > c.start)).toBe(true);
+    expect(cues.at(-1)!.end).toBe(11);
+  });
+});
+
 describe('toVtt and cueAt', () => {
   it('writes WebVTT with the cue times', () => {
     const vtt = toVtt(CUES);

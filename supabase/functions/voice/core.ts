@@ -4,7 +4,7 @@
 // server/voice.ts (markTimes, the with-timestamps call and its reading).
 // The key is only ever put in a request header to ElevenLabs; errors are scrubbed of it before they leave.
 import { fail, scrub } from '../_shared/aiGuard.ts';
-import { CUE_MARK, NEXT_MARK, spoken } from '../_shared/narrationText.ts';
+import { CUE_MARK, NEXT_MARK, spoken, spokenWords } from '../_shared/narrationText.ts';
 import type { Mark } from '../_shared/narrationText.ts';
 import { CLIP_SECONDS_MAX, VOICE_ID, VOICE_USE } from '../_shared/voiceRules.ts';
 
@@ -55,13 +55,16 @@ export function markTimes(text: string, starts: number[], seconds: number): Mark
   return out;
 }
 
-// When each spoken word starts: its first character as ElevenLabs timed it; past the timings, at the end. Kept
-// non-decreasing within [0, seconds]. One per word of spoken(text), as private.spoken_words counts them.
+// When each spoken word starts: its first character as ElevenLabs timed it; past the timings (or where a timing is not a
+// number), the word before's time, or the end for a word past the timings. In milliseconds, non-decreasing within [0, seconds].
+// One per word of spoken(text), as private.spoken_words counts them. (Positions are UTF-16 units, as markTimes' are.)
 export function wordTimes(text: string, starts: number[], seconds: number): number[] {
-  let last = 0;
-  return [...spoken(text).matchAll(/\S+/g)].map((m) => {
-    const at = m.index! < starts.length ? starts[m.index!] : seconds;
-    last = Math.max(last, Math.min(seconds, Math.max(0, at)));
+  let last = 0, k = 0;
+  return spokenWords(text).map((w) => {
+    const s = starts[k];
+    const at = k >= starts.length ? seconds : Number.isFinite(s) ? s : last;
+    k += w.length + 1;
+    last = Math.max(last, Math.floor(Math.min(seconds, Math.max(0, at)) * 1000) / 1000);
     return last;
   });
 }

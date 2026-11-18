@@ -58,6 +58,16 @@ describe('wordTimes', () => {
   it('puts words past the timings at the end of the audio', () => {
     expect(wordTimes('Hello ⟨cue⟩ big world.', S16.slice(0, 7), 1.2)).toEqual([S16[0], S16[6], 1.2]);
   });
+  it('never lets a missing or non-numeric start poison the later words', () => {
+    const bad = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, NaN, 1.1, 1.2, 1.3, 1.4, 1.5] as unknown as number[];
+    const t = wordTimes('Hello big world.', bad, 1.6);
+    expect(t.every(Number.isFinite)).toBe(true);
+    expect(t).toEqual([0, 0.6, 0.6]); // a start that is not a number takes the word before's time
+  });
+  it('stores times to the millisecond, never past the audio, still non-decreasing', () => {
+    expect(wordTimes('Hello big world.', Array.from({ length: 16 }, (_, i) => i * 0.0743), 1.0005)).toEqual([0, 0.445, 0.743]);
+    expect(wordTimes('a b', [0, 0, 0.9999999], 0.9999999)).toEqual([0, 0.999]);
+  });
   it('lifts a start that goes back to the one before, and keeps every start within the audio', () => {
     expect(wordTimes('Hello big world.', [0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0.2, 0, 0, 0, 0, 0], 1.2)).toEqual([0, 0.9, 0.9]);
     expect(wordTimes('Hi there', [-1, 0, 0, 5, 0, 0, 0, 0], 1.2)).toEqual([0, 1.2]);

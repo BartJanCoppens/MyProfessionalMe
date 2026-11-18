@@ -6,3 +6,5 @@ export const NEXT_MARK = '⟨next⟩', CUE_MARK = '⟨cue⟩';
 export type Mark = { kind: 'next' | 'cue'; at: number };
 // The text without its marks, as a voice speaks it.
 export const spoken = (t: string): string => t.split(NEXT_MARK).join(' ').split(CUE_MARK).join(' ').replace(/\s+/g, ' ').replace(/\s+([.,!?;:])/g, '$1').trim();
+// The spoken words of a text, one entry per word (what private.spoken_words counts); wordTimes, captionCues and ownSeconds all use it.
+export const spokenWords = (t: string): string[] => spoken(t).split(' ').filter(Boolean);

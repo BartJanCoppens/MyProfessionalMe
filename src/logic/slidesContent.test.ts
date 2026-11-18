@@ -59,7 +59,12 @@ describe('a voice-over item', () => {
     expect(body).toContain("right(c ->> 'path', 4) = '.mp3'");
     expect(body).toContain('{1,64}$'); // VOICE_ID in supabase/functions/_shared/voiceRules.ts
     expect(body).toContain('between 0 and ' + (CLIPS_MAX - 1));
-    expect(latestMatch(/create (?:or replace )?function private\.words_ok\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1]).toContain('> ' + CLIP_WORDS_MAX); // at most CLIP_WORDS_MAX words
+    const words = latestMatch(/create (?:or replace )?function private\.words_ok\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1]; // isWords in voiceItem.ts
+    expect(words).toContain('> ' + CLIP_WORDS_MAX); // at most CLIP_WORDS_MAX words
+    expect(words).toContain("is distinct from 'array'"); // a list
+    expect(words).toContain("is distinct from 'number'"); // of numbers
+    expect(words).toContain('not between 0 and p_seconds'); // each within the clip
+    expect(words).toContain('> (t.x'); // never going back
   });
 });
 

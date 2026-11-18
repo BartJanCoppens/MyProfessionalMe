@@ -3,9 +3,9 @@
 // and the steps a narration runs in. A step lasts its voice's seconds, with the marks where the voice timed them; in
 // your own words (no stored voice), its words at a pace. The step player (src/screens/StepPlayer.tsx) plays them.
 // The marks and the spoken text are the ones the `voice` edge function uses, from one shared file.
-import { CUE_MARK, NEXT_MARK, spoken } from '../../supabase/functions/_shared/narrationText.ts';
+import { CUE_MARK, NEXT_MARK, spoken, spokenWords } from '../../supabase/functions/_shared/narrationText.ts';
 
-export { CUE_MARK, NEXT_MARK, spoken } from '../../supabase/functions/_shared/narrationText.ts';
+export { CUE_MARK, NEXT_MARK, spoken, spokenWords } from '../../supabase/functions/_shared/narrationText.ts';
 
 import type { Mark } from '../../supabase/functions/_shared/narrationText.ts';
 
@@ -17,7 +17,7 @@ export type NarrationPart = { part: string; text: string; audio?: { url: string;
 
 // Words a minute when nobody's voice sets the time.
 export const PACE = 140;
-const wordCount = (t: string) => spoken(t).split(' ').filter(Boolean).length;
+const wordCount = (t: string) => spokenWords(t).length;
 
 // A passage told at `wpm`: its words' time, at least 2 seconds.
 export const ownSeconds = (text: string, wpm = PACE): number => Math.max(2, (wordCount(text) / wpm) * 60);
