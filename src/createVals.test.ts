@@ -145,6 +145,16 @@ describe('the New tab', () => {
     expect(h.c().nwPolicyNote).toBe('Review for this combination: 1 peer, quality & risk.');
     expect(h.c().nwRouteWarn).toMatch(/^Only 0 colleagues can peer-review you; this combination needs 1\./);
   });
+  it('words the too-few-peers warning of a placeholder draft by who made it: the grant says to get a rule, a rule holder is told what the database tells them', () => {
+    const brief = { trajectoryId: 'T1', stepId: 'm1', goals: [], depth: 'applied' as const, passages: [], sources: [] };
+    const nobody = open(cs({ data: data({ rules: [], policies: [], peers: 0 }) }));
+    nobody.state.nw.brief = brief;
+    expect(nobody.c().nwRouteWarn).toMatch(/^Drafts made from a trajectory need 2 peer reviewers .*or get a creation rule$/);
+    const holder = open(cs({ data: data({ rules: [rule({ lines: ['Consulting'] })], policies: [pol({ formats: ['Micro-guide'] }, 1, false, false)], peers: 0 }) }));
+    holder.state.nw.type = 'Micro-guide';
+    holder.state.nw.brief = brief;
+    expect(holder.c().nwRouteWarn).toMatch(/^Only 0 colleagues can peer-review you; this combination needs 1\. Submitting is refused until an admin lowers the peer requirement\.$/);
+  });
   it('looks for peers in the author\'s line and the content\'s line', () => {
     const h = open(cs({ data: data({ rules: [rule({ lines: ['Tax & Legal'] })] }) }));
     expect(h.state.nw.line).toBe('Tax & Legal');

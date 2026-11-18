@@ -122,7 +122,9 @@ export const rubricComplete = (r: boolean[] | undefined) => !!r && r.length === 
 // The review requirements that route a contribution: all of them, except for one made under a placeholder (a draft for a trajectory's step) whose author's
 // own creation rules do not allow it, which the database always routes through the full default review (none match: DEFAULT_POLICY). `rules` null: not known
 // (a reviewer), taken as no rule. Mirrors submit_contribution (20261118250000).
-export const routePolicies = (rules: RuleParts[] | null, policies: PolicyRow[], a: Attrs, forPlan: boolean): PolicyRow[] => (forPlan && (!rules || !mayCreate(rules, a)) ? [] : policies);
+// Made under a placeholder's grant: for a placeholder and without a creation rule of the author's own (the database's v_grant); such a draft gets the full default review.
+export const underGrant = (rules: RuleParts[] | null, a: Attrs, forPlan: boolean) => forPlan && (!rules || !mayCreate(rules, a));
+export const routePolicies = (rules: RuleParts[] | null, policies: PolicyRow[], a: Attrs, forPlan: boolean): PolicyRow[] => (underGrant(rules, a, forPlan) ? [] : policies);
 export function policyFor(rows: (RuleParts & Policy)[], a: Attrs | null): Policy {
   const m = a ? rows.filter((r) => ruleMatches(a.audience ? r : { ...r, audiences: [] }, a)) : [];
   return m.length ? { peers: Math.max(...m.map((r) => r.peers)), expert: m.some((r) => r.expert), quality: m.some((r) => r.quality) } : DEFAULT_POLICY;

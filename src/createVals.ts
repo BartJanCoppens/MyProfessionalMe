@@ -9,7 +9,7 @@ import { itemsPanel, viewItems } from './createItems';
 import { carriesItems, hasItems, itemsCheck, itemsFromSaved, itemsText, noItems, noun } from './logic/items';
 import {
   CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
-  emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, routePolicies, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
+  emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, routePolicies, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, underGrant, valueName, withinLines,
 } from './logic/contribution';
 import type { Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
 import { removePolicy, savePolicy } from './lib/contributionStore';
@@ -154,7 +154,7 @@ function createScreen(L: Logic) {
     nwChecks: [...checks.map(dot), ...(studioOf(s) === 'reel' ? [REEL_CAPTIONS] : []), ...(studioOf(s) === 'avatar' ? [...avatarChecks(nw.items?.list ?? []).map(dot), AVATAR_STOCK] : [])], nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
     nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: fresh(), nwKb: [], nwKbQ: '', createTab: 'mine', studio: HUB }),
-    nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short && nw.brief ? 'Drafts made from a trajectory need ' + policy.peers + ' peer reviewers in ' + (nw.line || 'your business line') + ' and only ' + d.peers + (d.peers === 1 ? ' is' : ' are') + ' available · ask an admin to add reviewers, or get a creation rule' : short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this combination needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement.' : '',
+    nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short && underGrant(d.rules, attrs, !!nw.brief) ? 'Drafts made from a trajectory need ' + policy.peers + ' peer reviewers in ' + (nw.line || 'your business line') + ' and only ' + d.peers + (d.peers === 1 ? ' is' : ' are') + ' available · ask an admin to add reviewers, or get a creation rule' : short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this combination needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement.' : '',
     // Review requirements
     policyRows, defaultPolicy: 'When no requirement matches: ' + policyLabel(policyFor([], null)) + '. When several match, the strictest counts.',
     polGroups: PARTS.map((part) => ({ part, label: PART_LABEL[part], chips: (part === 'lines' ? pfLines : PART_VALUES[part]).map((v) => ({ value: v, label: valueName(part, v), on: pf[part].includes(v),
