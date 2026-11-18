@@ -13,7 +13,7 @@ import { AVATAR_ASK } from '../_shared/avatarRules.ts';
 import { marked } from '../_shared/promptData.ts';
 import { guardedCall, guardedCount } from './avatarGuarded.ts';
 import type { GuardState } from './avatarGuarded.ts';
-import { UUID } from './core.ts';
+import { record, UUID } from '../_shared/aiGuard.ts';
 import type { Msg } from './core.ts';
 import { playRole } from './rolePlay.ts';
 import type { RoleDeps as RoleDepsOf, RoleRefusal } from './rolePlay.ts';
@@ -30,11 +30,15 @@ export type AvatarAsk = { ok: true; runId: string; say: string };
 export type AvatarResult = { status: 200; body: { say: string; turn: number; held: boolean } } | { status: number; error: string };
 
 // avatar_run_context's refusals, one for one (src/lib/avatarRuns.sync.test.ts).
-export const REFUSED = {
+// RUN_REFUSED: the refusals the turn and the score share (avatarScore.ts adds its own).
+export const RUN_REFUSED = {
   not_yours: { status: 403, error: 'That is not your run' },
   finished: { status: 409, error: 'This run has ended' },
   not_allowed: { status: 403, error: 'You can no longer practise with this draft' },
   no_scenario: { status: 400, error: 'This learning has no practice scenario' },
+};
+export const REFUSED = {
+  ...RUN_REFUSED,
   time_up: { status: 409, error: 'This run\'s time is up · end it to see your score' },
   prompt_changed: { status: 409, error: 'The prompt changed during the run' }, // the edge's own, before counting (the database says it again at the write)
   turns_used: (r: RoleRefusal) => ({ status: 409, error: 'You used the ' + String(r.lines) + ' lines of this run · end it to see your score' }),
@@ -43,7 +47,7 @@ const UNUSABLE = { status: 502, error: 'AI did not return a usable reply · try 
 
 // { use, run_id, say }: one line of the learner's. No system text and no conversation: the scenario sets the character, the database holds the turns.
 export function readAvatarAsk(body: unknown): AvatarAsk | { ok: false; error: string } {
-  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const b = record(body);
   if (b.system !== undefined || b.messages !== undefined) return { ok: false, error: 'The scenario sets the character, not the request' };
   if (typeof b.run_id !== 'string' || !UUID.test(b.run_id)) return { ok: false, error: 'Name the run (run_id)' };
   if (typeof b.say !== 'string' || !b.say.trim()) return { ok: false, error: 'Say something to the character (say)' };

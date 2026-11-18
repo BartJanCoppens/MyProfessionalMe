@@ -3,7 +3,8 @@
 // read), then the use's preamble goes first, the call is counted before it is made (the per-person daily limits) and a cut answer is a failure,
 // never text. What differs per use is handed in: the context and how it becomes a request (`build`), and the refusals. The database and the
 // provider are handed in too, so Vitest tests the flow (src/lib/aiGameRole.test.ts, src/lib/aiAvatarTurn.test.ts).
-import { inputChars, limitMessage, NO_SCRIPT, withPreamble } from './core.ts';
+import { countFirst } from '../_shared/aiGuard.ts';
+import { inputChars, withPreamble } from './core.ts';
 import type { Ask, Outcome } from './core.ts';
 
 export type Refusal = { status: number; error: string };
@@ -27,8 +28,8 @@ export async function playRole<C extends object>(d: RoleDeps<C>, build: (ctx: C)
     return !answer ? { status: 500, error: 'Could not read the run' } : typeof answer === 'function' ? answer(r) : answer;
   }
   const ask = withPreamble(build(ctx as C), d.preamble);
-  const counted = await d.count(inputChars(ask));
-  if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, !NO_SCRIPT.includes(use), d.dailyChars ?? null) } : { status: 500, error: 'Could not count the call' };
+  const stopped = await countFirst(d.count, inputChars(ask), use, d.dailyLimit, d.dailyChars);
+  if (stopped) return stopped;
   const out = await d.call(ask);
   if (!out.ok) return { status: 502, error: out.error };
   // An answer cut at its limit is a fragment, never text for the run.

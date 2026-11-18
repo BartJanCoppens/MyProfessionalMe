@@ -1,7 +1,7 @@
 // The single AI path of the app (src/lib/ai.ts) and the AI store (src/lib/aiStore.ts): the fallback order
 // Claude Design → ai edge function (live uses only) → scripted, and what the store sends to Supabase. Supabase is a fake.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { canComplete, complete } from './ai';
+import { canComplete, complete, liveOn } from './ai';
 import { askAi, deleteConnection, loadAiAdmin, loadLiveUses, saveConnection, setKey, testConnection, updateUse } from './aiStore';
 import { db, has, op } from '../test/fakeSupabase';
 import { blankForm } from '../logic/ai';
@@ -153,5 +153,13 @@ describe('the AI store', () => {
     db.answer(() => ({ data: [{ key: 'kb_answer' }] }));
     await updateUse('kb_answer', { connection_id: 'c1', model: null });
     expect(db.on('ai_uses')[0].steps[0]).toEqual(['update', [{ connection_id: 'c1', model: null }]]);
+  });
+});
+
+describe('liveOn: enabled and the use is live', () => {
+  it('is true only when the session is enabled and the use is in the live list', () => {
+    expect(liveOn({ enabled: true, live: ['avatar_voice'] }, 'avatar_voice')).toBe(true);
+    expect(liveOn({ enabled: false, live: ['avatar_voice'] }, 'avatar_voice')).toBe(false);
+    expect(liveOn({ enabled: true, live: ['avatar_voice'] }, 'avatar_video')).toBe(false);
   });
 });

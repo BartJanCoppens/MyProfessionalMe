@@ -5,7 +5,7 @@
 // that never starts speaking.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../test/fakeSupabase';
-import { BROWSER_VOICE, hearStockVoice, sayRunLine, speak, speakInBrowser, voiceLive } from './voice';
+import { BROWSER_VOICE, hearStockVoice, sayRunLine, speak, speakInBrowser, voiceLive, browserVoiceAvailable } from './voice';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 const CID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -81,6 +81,11 @@ describe('speakInBrowser', () => {
     again.stop();
     expect(synth.cancel).toHaveBeenCalledTimes(1);
     expect(await again.done).toBe('stopped');
+  });
+  it('browserVoiceAvailable follows what the browser has', () => {
+    expect(browserVoiceAvailable()).toBe(true);
+    vi.stubGlobal('speechSynthesis', undefined);
+    expect(browserVoiceAvailable()).toBe(false);
   });
   it('says when the browser has no voice at all', async () => {
     vi.stubGlobal('speechSynthesis', undefined);

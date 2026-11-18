@@ -4,10 +4,11 @@
 // in, so Vitest tests the flow (src/lib/aiAvatarScore.test.ts). The call is counted under avatar_conversation, like the character's turns.
 import { readScore, scoreRequest } from '../_shared/avatarScore.ts';
 import type { AvatarScore, ScoreInput } from '../_shared/avatarScore.ts';
-import { inputChars, limitMessage, NO_SCRIPT, withPreamble } from './core.ts';
+import { countFirst } from '../_shared/aiGuard.ts';
+import { inputChars, withPreamble } from './core.ts';
 import type { Ask, Outcome } from './core.ts';
 import type { RoleRefusal } from './rolePlay.ts';
-import { AVATAR_USE } from './avatarTurn.ts';
+import { AVATAR_USE, RUN_REFUSED } from './avatarTurn.ts';
 
 export type ScoreLoad = ScoreInput & { score_hash: string };
 export type ScoreDeps = {
@@ -23,10 +24,7 @@ export type ScoreResult = { status: 200; body: AvatarScore } | { status: number;
 
 // avatar_score_input's refusals (src/lib/avatarScore.sync.test.ts reads the same words in the migration or the character's).
 export const SCORE_REFUSED: Record<string, { status: number; error: string }> = {
-  not_yours: { status: 403, error: 'That is not your run' },
-  finished: { status: 409, error: 'This run has ended' },
-  not_allowed: { status: 403, error: 'You can no longer practise with this draft' },
-  no_scenario: { status: 400, error: 'This learning has no practice scenario' },
+  ...RUN_REFUSED,
   no_lines: { status: 400, error: 'Say something before you end the run' },
   practice_only: { status: 400, error: 'This scenario is practice only: it has no score' },
 };
@@ -38,8 +36,8 @@ export async function scoreAvatarRun(d: ScoreDeps): Promise<ScoreResult> {
   if ('refusal' in loaded) return SCORE_REFUSED[(loaded as RoleRefusal).refusal] ?? { status: 500, error: 'Could not read the run' };
   const input = loaded as ScoreLoad;
   const ask = withPreamble(scoreRequest(input), d.preamble);
-  const counted = await d.count(inputChars(ask));
-  if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, !NO_SCRIPT.includes(AVATAR_USE), d.dailyChars ?? null) } : { status: 500, error: 'Could not count the call' };
+  const stopped = await countFirst(d.count, inputChars(ask), AVATAR_USE, d.dailyLimit, d.dailyChars);
+  if (stopped) return stopped;
   const out = await d.call(ask);
   if (!out.ok) return { status: 502, error: out.error };
   const score = out.cut ? null : readScore(out.text, input.points, input.turns);

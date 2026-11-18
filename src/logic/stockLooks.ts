@@ -3,12 +3,12 @@
 // The rules below repeat the table's checks (stockLooks.sync.test.ts).
 import { PORTRAIT_KEYS } from '../reel/portraits';
 import type { PortraitKey } from '../reel/portraits';
+import { UUID } from '../../supabase/functions/_shared/aiGuard.ts';
 
 // heygen_avatar_id / heygen_voice_id: a HeyGen stock avatar (and its HeyGen voice) for the live video; a look without an avatar id is "Portrait only".
 export type StockLook = { id: string; name: string; portrait: PortraitKey; color: string; licence: string; active: boolean; heygen_avatar_id?: string | null; heygen_voice_id?: string | null };
 // id: set when the form edits a look's HeyGen ids (the one drawer adds and edits).
 export type StockLookForm = { id?: string; name: string; portrait: PortraitKey; color: string; licence: string; heygen_avatar_id: string; heygen_voice_id: string };
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const HEYGEN_LICENCE = 'HeyGen stock avatar · no real colleague';
 export const liveVideoOf = (l: Pick<StockLook, 'heygen_avatar_id'>) => (l.heygen_avatar_id ? 'Live video' : 'Portrait only');
 

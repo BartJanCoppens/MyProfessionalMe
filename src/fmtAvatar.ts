@@ -2,6 +2,7 @@
 // for a studio scenario (live practice), on the learner's page and as the Avatar Studio's preview (a test run on a saved draft, none on an unsaved one). A run is
 // never a progress write: the learning completes by its quiz (completionVals.ts), the AI's score is advice and the counsellor's confirmation a note.
 import { AVATARS } from './data';
+import { liveOn } from './lib/ai';
 import type { CompleteOpts } from './lib/ai';
 import { endAvatarRun, sayToCharacter, scoreAvatarRun, shareAvatarRun, startAvatarRun, withdrawAvatarRun } from './lib/avatarStore';
 import type { RunTarget } from './lib/runTarget';
@@ -35,7 +36,7 @@ function skillsOf(a: AvatarSpec): Skill[] {
 }
 
 const base = (o: AvatarOpts) => ({ ro: o.ro, test: !o.learningId, counsellor: o.counsellor, learningId: o.learningId, contributionId: o.contributionId });
-const live = (o: AvatarOpts, id: string) => o.ai.enabled && o.ai.live.includes(id);
+const live = (o: AvatarOpts, id: string) => liveOn(o.ai, id);
 
 export function seededView(a: AvatarSpec, o: AvatarOpts) {
   return { ...base(o), key: o.learningId ?? '', seeded: true as const, persona: a.persona, role: a.role, initials: a.initials, brief: a.brief, sub: 'Practice scenario · the quiz completes this learning',

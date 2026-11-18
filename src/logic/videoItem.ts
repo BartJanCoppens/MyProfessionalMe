@@ -2,7 +2,8 @@
 // voice-over. `made` says what the cut was made from, so a later edit shows up as a stale cut (videoCurrent in reelContent.ts):
 // the rows, the paths of the voice clips, the stock look, the format, the captions and the music. Mirrored by private.video_ok and
 // private.reel_made_ok in supabase/migrations/20261118180000_reel_studio.sql (reelContent.test.ts compares the lists and limits).
-import { MEDIA_PATH, UUID } from './mediaFiles';
+import { MEDIA_PATH } from './mediaFiles';
+import { UUID } from '../../supabase/functions/_shared/aiGuard.ts';
 
 export const FORMATS = ['9:16 vertical', '1:1 square'] as const;
 export const CAPTION_MODES = ['Burned in', 'Separate file'] as const;

@@ -2,6 +2,8 @@
 // and the one path shape <author id>/<contribution id>/<file>. The bucket (size limit, types) and private.media_path_ok
 // in supabase/migrations/20261117270000_media_storage.sql repeat these rules; mediaFiles.test.ts keeps them in step.
 // A published learning names a file by a "path" member anywhere in its content, e.g. { audio: { path } }.
+import { UUID, UUID_PART } from '../../supabase/functions/_shared/aiGuard.ts';
+
 export const MEDIA_BUCKET = 'media';
 const MB = 1024 * 1024;
 export const MEDIA_MAX_BYTES = 50 * MB; // the bucket's file size limit
@@ -16,10 +18,8 @@ export const MEDIA_KINDS: Record<string, MediaKind> = {
   webm: { label: 'A video', mime: 'video/webm', maxBytes: 50 * MB },
 };
 
-const UUID_PART = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const FILE = '[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}';
 export const MEDIA_PATH = new RegExp('^' + UUID_PART + '/' + UUID_PART + '/' + FILE + '$');
-export const UUID = new RegExp('^' + UUID_PART + '$');
 const NAME_MAX = 100;
 
 // A file name the path accepts: other characters become '-', no leading dot, at most 100 characters with the extension kept.

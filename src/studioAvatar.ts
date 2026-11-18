@@ -4,6 +4,7 @@ import type { SetNw } from './createItems';
 import type { Logic } from './model';
 import { lookOf, liveVideoOf } from './logic/stockLooks';
 import type { Chip } from './screens/ChipGroup';
+import { liveOn } from './lib/ai';
 import { NO_STOCK_VOICES, stockVoicesOf } from './studioVoicing';
 import type { NewDraft } from './types';
 
@@ -12,7 +13,7 @@ export const NO_VOICE = 'No voice · the browser voice speaks';
 type Group = { key: string; hint: string; chips: Chip[] };
 
 /** The avatar voice (the portrait's) answers now. */
-export const avatarVoiceOn = (L: Logic) => { const o = L.aiOpts(); return o.enabled && o.live.includes('avatar_voice'); };
+export const avatarVoiceOn = (L: Logic) => liveOn(L.aiOpts(), 'avatar_voice');
 
 // The voice's choice: "No voice" or one of the active stock voices; the draft stores the voice's id ('' for none).
 function voiceGroup(L: Logic, nw: NewDraft, setNw: SetNw): Group {

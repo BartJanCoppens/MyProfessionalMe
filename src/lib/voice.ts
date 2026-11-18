@@ -3,6 +3,7 @@
 // author's own draft; a failure is thrown in words and nothing else is tried. speakInBrowser() is the browser's own
 // speechSynthesis, for a preview only, never stored and always labelled "Browser voice · not saved"; the caller chooses
 // it (the voice is not live, or the creator only wants to hear it), it is never substituted for a stored voice.
+import { liveOn } from './ai';
 import { invokeFunction } from './aiStore';
 import { spoken } from '../logic/narration';
 import type { RunMark } from '../logic/narration';
@@ -18,7 +19,9 @@ export type SpeakRequest = { contributionId: string; voiceId: string; text: stri
 // Whether the AI voice answers now (the use is in ai_live_uses()).
 export const voiceLive = (live: readonly string[]) => live.includes(VOICE_USE);
 // ... and not switched off for this session (?live=off): what every studio and the AI connections page ask (Logic.aiOpts).
-export const voiceOn = (o: { enabled: boolean; live: readonly string[] }) => o.enabled && voiceLive(o.live);
+export const voiceOn = (o: { enabled: boolean; live: readonly string[] }) => liveOn(o, VOICE_USE);
+// Whether this browser can speak at all (speechSynthesis): the one check.
+export const browserVoiceAvailable = () => typeof window !== 'undefined' && !!window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined';
 
 export async function speak(req: SpeakRequest): Promise<StoredVoice> {
   const data = await invokeFunction<Partial<StoredVoice>>('voice', { ...req });
@@ -47,8 +50,8 @@ export type BrowserSpeech = { label: typeof BROWSER_VOICE; done: Promise<Browser
 // Says the words with the browser's voice. A browser that never starts (no voices, autoplay rules) is given up after
 // startMs and reported as blocked, as Taxatar's watchdog does, instead of pretending it spoke.
 export function speakInBrowser(text: string, opts: { lang?: string; startMs?: number } = {}): BrowserSpeech {
-  const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
-  if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return { label: BROWSER_VOICE, done: Promise.resolve('unsupported'), stop: () => {} };
+  if (!browserVoiceAvailable()) return { label: BROWSER_VOICE, done: Promise.resolve('unsupported'), stop: () => {} };
+  const synth = window.speechSynthesis;
   let settle: (o: BrowserOutcome) => void = () => {};
   const done = new Promise<BrowserOutcome>((resolve) => { settle = resolve; });
   const u = new SpeechSynthesisUtterance(spoken(text));

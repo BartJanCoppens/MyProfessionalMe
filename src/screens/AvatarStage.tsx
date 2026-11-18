@@ -6,7 +6,7 @@ import { Button, LinkButton } from '../ds';
 import { useLiveAvatar } from '../avatar/useLiveAvatar';
 import type { Heard } from '../avatar/useAvatarRun';
 import type { AvatarVals } from '../fmtAvatar';
-import { BROWSER_VOICE, sayRunLine, speakInBrowser } from '../lib/voice';
+import { BROWSER_VOICE, browserVoiceAvailable, sayRunLine, speakInBrowser } from '../lib/voice';
 import { stageOf } from '../logic/avatarStage';
 import { portraitUrl } from '../reel/portraits';
 import { LANGUAGES } from '../../supabase/functions/_shared/avatarRules.ts';
@@ -14,14 +14,13 @@ import { LANGUAGES } from '../../supabase/functions/_shared/avatarRules.ts';
 export const VIDEO_UNAVAILABLE = 'Live video is unavailable · the portrait speaks instead';
 export const TEXT_ONLY = "Text only · the character's lines appear here";
 const small = { fontSize: 12, color: '#5a6058' } as const;
-const hasSynthesis = () => typeof window !== 'undefined' && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
 
 export default function AvatarStage({ av, runId, heard }: { av: AvatarVals; runId: string; heard: Heard | null }) {
   const [videoOff, setVideoOff] = useState(false), [videoFailed, setVideoFailed] = useState(false), [voiceFailed, setVoiceFailed] = useState(false), [note, setNote] = useState('');
   const { status, attach, speak, stop, resume } = useLiveAvatar({ runId, enabled: av.video && !videoOff, onFallback: (m) => { setVideoFailed(true); setNote(m); } });
   const heardN = heard?.n;
   const failed = videoFailed || status === 'failed' || status === 'ended';
-  const browser = hasSynthesis();
+  const browser = browserVoiceAvailable();
   const stage = stageOf({ videoLive: av.video, videoFailed: failed, videoOff, voiceLive: av.voice && !voiceFailed, browserVoice: browser });
   const latest = useRef({ av, stage, speak, browser, runId, heard });
   useEffect(() => { latest.current = { av, stage, speak, browser, runId, heard }; });

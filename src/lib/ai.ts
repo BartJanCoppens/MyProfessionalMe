@@ -20,6 +20,8 @@ declare global {
 }
 
 export const designAi = (use?: string) => typeof window !== 'undefined' && typeof window.claude?.complete === 'function' && !(use && SERVER_ONLY_USES.includes(use));
+// A use that is enabled for this session (not ?live=off) and live in ai_live_uses(): the one check every studio and panel asks.
+export const liveOn = (o: Pick<CompleteOpts, 'enabled' | 'live'>, use: string) => o.enabled && o.live.includes(use);
 // Whether a use would be answered by AI right now (before trying).
 export const canComplete = (use: AiUseKey, opts: Pick<CompleteOpts, 'enabled' | 'live'>) => opts.enabled && (designAi(use) || opts.live.includes(use));
 

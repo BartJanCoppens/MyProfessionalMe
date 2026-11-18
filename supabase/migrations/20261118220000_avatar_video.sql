@@ -39,6 +39,11 @@ create index avatar_sessions_run_id_idx on public.avatar_sessions (run_id);
 alter table public.avatar_sessions enable row level security;
 revoke all on public.avatar_sessions from anon, authenticated;
 
+-- The one language-name -> code mapping the video and the portrait's voice use (the scenario's language is English, Dutch or French).
+create or replace function private.language_code(p_language text) returns text language sql immutable set search_path = '' as $$
+  select case p_language when 'Dutch' then 'nl' when 'French' then 'fr' else 'en' end
+$$;
+
 -- 3. Opens a session for the caller's own unfinished run: a refusal, or { session_id, max_seconds, avatar_id, voice_id, language }.
 create function public.avatar_session_open(p_user uuid, p_run uuid)
 returns jsonb
@@ -83,7 +88,7 @@ begin
   update public.ai_usage set seconds = seconds + v_max where user_id = p_user and use_key = 'avatar_video' and day = today;
   insert into public.avatar_sessions (user_id, run_id, max_seconds) values (p_user, p_run, v_max) returning id into v_id;
   return jsonb_build_object('session_id', v_id, 'max_seconds', v_max, 'avatar_id', v_look.heygen_avatar_id, 'voice_id', v_look.heygen_voice_id,
-    'language', case v_content ->> 'language' when 'Dutch' then 'nl' when 'French' then 'fr' else 'en' end);
+    'language', private.language_code(v_content ->> 'language'));
 end;
 $$;
 
@@ -163,7 +168,7 @@ begin
   if v_text is null then v_text := v_content ->> 'opening'; end if;
   if v_text is null then return jsonb_build_object('refusal', 'no_line'); end if;
   return jsonb_build_object('text', v_text, 'voice_id', v_voice,
-    'language', case v_content ->> 'language' when 'Dutch' then 'nl' when 'French' then 'fr' else 'en' end);
+    'language', private.language_code(v_content ->> 'language'));
 end;
 $$;
 

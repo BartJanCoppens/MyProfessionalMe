@@ -8,7 +8,9 @@ export const AI_HEADER = { 'X-AI-Generated': 'true' } as const;
 // A request read: the value, or the error in words. record() reads a body that may be anything as an object.
 export type Read<T> = ({ ok: true } & T) | { ok: false; error: string };
 export const record = (b: unknown) => (b && typeof b === 'object' ? b : {}) as Record<string, unknown>;
-export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// The one uuid pattern (case-insensitive) of the functions and the client; UUID_PART builds longer patterns (src/logic/mediaFiles.ts).
+export const UUID_PART = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+export const UUID = new RegExp('^' + UUID_PART + '$', 'i');
 
 // Per-use ceilings on one answer, for the uses that write long text (the Game Studio's files, in parts). Every other use keeps the
 // default of 2048 tokens and 30 s. One call stays under the 150 s request limit of Supabase edge functions (confirm the plan's limit at deploy).
@@ -28,3 +30,14 @@ export function scrub(text: string, key: string) {
 }
 // The database (ai_count_call) refuses a call beyond the use's daily limits with this message.
 export const isLimitError = (message: string | undefined) => /daily ai limit reached/i.test(message || '');
+
+// scripted: the use has a scripted reply to fall back on (false for the Game Studio's build and review: there is none).
+// chars: the use's daily character budget, when it has one (calls or characters may have run out; the count cannot say which).
+export const limitMessage = (limit: number | null, scripted = true, chars: number | null = null) => 'Daily AI limit reached' + (limit != null ? (chars != null ? ' (' + limit + ' calls or ' + chars.toLocaleString('en-US') + ' characters a day per person for this use; one of them ran out)' : ' (' + limit + ' a day per person for this use)') : '') + (scripted ? '; the scripted reply is used until tomorrow (UTC)' : '; try again tomorrow (UTC)');
+
+// The one count-then-limit step every metered use takes before its provider call: null when the call was counted (go on), else the answer to send.
+export async function countFirst(count: (chars: number) => Promise<'ok' | 'limit' | 'error'>, chars: number, use: string, limit: number | null | undefined, dailyChars: number | null | undefined): Promise<{ status: number; error: string } | null> {
+  const counted = await count(chars);
+  if (counted === 'ok') return null;
+  return counted === 'limit' ? { status: 429, error: limitMessage(limit ?? null, !NO_SCRIPT.includes(use), dailyChars ?? null) } : { status: 500, error: 'Could not count the call' };
+}

@@ -24,8 +24,8 @@
 import { withSupabase } from '@supabase/server';
 import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
 import type { Conn, UseRow } from '../_shared/aiUse.ts';
-import { NO_SCRIPT, USE_LIMITS } from '../_shared/aiGuard.ts';
-import { callProvider, inputChars, limitMessage, LIMITS, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, UUID, withPreamble } from './core.ts';
+import { countFirst, USE_LIMITS, UUID } from '../_shared/aiGuard.ts';
+import { callProvider, inputChars, LIMITS, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
 import { SCORE_TIMEOUT_MS } from '../_shared/avatarScore.ts';
 import { scoreAvatarRun } from './avatarScore.ts';
 import type { ScoreLoad } from './avatarScore.ts';
@@ -156,8 +156,8 @@ async function answer({ admin, body, callerId, roles, started }: Call): Promise<
   const { use } = opened;
   const ask = withPreamble(r.ask, use.preamble);
   // Counted before the call, atomically; beyond the limit nothing is counted and nothing is sent.
-  const counted = await countCall(admin, callerId, r.use, inputChars(ask));
-  if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit, !NO_SCRIPT.includes(r.use), use.daily_chars)) : fail(500, 'Could not count the call');
+  const stopped = await countFirst((chars) => countCall(admin, callerId, r.use, chars), inputChars(ask), r.use, use.daily_limit, use.daily_chars);
+  if (stopped) return fail(stopped.status, stopped.error);
   const key = await connectionKey(admin, use.connection!.id);
   if (!key) return fail(409, 'The connection has no key');
   const out = await callProvider(targetOf(use, key), ask, fetch, USE_LIMITS[r.use]?.timeoutMs);
