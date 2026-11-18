@@ -17,7 +17,7 @@ export default function AvatarRun({ av, run }: { av: AvatarVals; run: Run }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {open && <AvatarStage av={av} runId={run.runId!} heard={run.heard} />}
-      <ol aria-label="The conversation" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13.5 }}>
+      <ol role="log" aria-live="polite" aria-label="The conversation" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13.5 }}>
         {run.lines.map((l, k) => (
           <li key={k} style={{ alignSelf: l.who === 'learner' ? 'flex-end' : 'flex-start', maxWidth: '85%', background: l.who === 'learner' ? '#eef0ec' : '#f6f9ef', borderRadius: 8, padding: '7px 11px' }}>
             {l.held ? <i style={small}>{HELD_MARKER}</i> : l.text}
@@ -29,7 +29,7 @@ export default function AvatarRun({ av, run }: { av: AvatarVals; run: Run }) {
       {open && (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Button variant="secondary" onClick={() => void run.end()} disabled={working}>{av.scored ? 'End and score' : 'End the run'}</Button>
-          {av.scored && run.error && <Button variant="secondary" onClick={() => void run.endWithoutScore()} disabled={working}>End without a score</Button>}
+          {av.scored && run.scoreFailed && <Button variant="secondary" onClick={() => void run.endWithoutScore()} disabled={working}>End without a score</Button>}
         </div>
       )}
       {run.phase === 'ended' && !run.score && <div style={small}>The run has ended{av.scored ? ' without a score' : ' · practice only, nothing is scored'}.</div>}

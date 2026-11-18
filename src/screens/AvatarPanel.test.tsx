@@ -112,12 +112,13 @@ describe('a studio scenario', () => {
     await begin();
     expect(screen.getByText("Text only · the character's lines appear here")).toBeTruthy();
   });
-  it('speaks the replies with the portrait voice (never the opening line, which has no stored turn) and falls back to the browser voice when it fails', async () => {
+  it('speaks the opening line and the replies with the portrait voice, and falls back to the browser voice when it fails', async () => {
     delete win.webkitSpeechRecognition;
     panel({ ai: { enabled: true, live: ['avatar_conversation', 'avatar_voice'] } });
     await begin();
-    expect(voice.sayRunLine).not.toHaveBeenCalled();
-    expect(voice.speakInBrowser).toHaveBeenCalledWith(CONTENT.opening, { lang: 'en-GB' });
+    expect(voice.sayRunLine).toHaveBeenCalledWith('run-1'); // the server reads the opening line from the scenario
+    expect(voice.speakInBrowser).not.toHaveBeenCalled();
+    vi.mocked(voice.sayRunLine).mockClear();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Send' })); });
     expect(voice.sayRunLine).toHaveBeenCalledWith('run-1');
@@ -127,6 +128,47 @@ describe('a studio scenario', () => {
     expect(await screen.findByText('The portrait voice could not speak · the browser voice is used instead')).toBeTruthy();
     expect(voice.speakInBrowser).toHaveBeenLastCalledWith('Go on, then.', { lang: 'en-GB' });
     expect(screen.getByText('Browser voice')).toBeTruthy();
+  });
+  it('plays no sound after the learner left or ended the run while the voice was still being fetched', async () => {
+    let arrive = (_u: string) => {};
+    vi.mocked(voice.sayRunLine).mockImplementation(() => new Promise((r) => { arrive = r; }));
+    const play = vi.fn(async () => {});
+    vi.stubGlobal('Audio', function () { return { play, pause: vi.fn() }; });
+    delete win.webkitSpeechRecognition;
+    const view = panel({ ai: { enabled: true, live: ['avatar_conversation', 'avatar_voice'] } });
+    await begin();
+    view.unmount();
+    await act(async () => { arrive('blob:late'); });
+    expect(play).not.toHaveBeenCalled();
+  });
+  it('announces the conversation to a screen reader as it grows', async () => {
+    panel();
+    await begin();
+    const log = screen.getByRole('log', { name: 'The conversation' });
+    expect(log.getAttribute('aria-live')).toBe('polite');
+  });
+  it('offers "End without a score" only after the score failed, not after another error', async () => {
+    vi.mocked(store.sayToCharacter).mockRejectedValue(new Error('The character is not available right now'));
+    delete win.webkitSpeechRecognition;
+    panel();
+    await begin();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Send' })); });
+    expect(await screen.findByText('The character is not available right now')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'End without a score' })).toBeNull();
+  });
+  it('keeps a spoken line in the box, with a notice, when it could not be sent', async () => {
+    let rec: { onresult?: (e: unknown) => void } = {};
+    win.webkitSpeechRecognition = function () { rec = { start: vi.fn(), abort: vi.fn() } as never; return rec; };
+    vi.mocked(store.sayToCharacter).mockRejectedValue(new Error('The character is not available right now'));
+    panel();
+    await begin();
+    const talk = screen.getByRole('button', { name: 'Hold to talk' });
+    fireEvent.pointerDown(talk);
+    act(() => rec.onresult?.({ resultIndex: 0, results: [{ 0: { transcript: 'my spoken line' }, isFinal: true }] }));
+    await act(async () => { fireEvent.pointerUp(talk); });
+    expect((await screen.findByRole('textbox') as HTMLTextAreaElement).value).toBe('my spoken line');
+    expect(screen.getByText('Your line was not sent · it is in the box, send it again')).toBeTruthy();
   });
   it('says practice needs AI when avatar_conversation is off', () => {
     panel({ ai: { enabled: true, live: [] } });

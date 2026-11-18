@@ -3848,7 +3848,7 @@ insert into results (check_name, expected, actual) select 'AL a finished run giv
 -- what the portrait says
 insert into results (check_name, expected, actual) select 'AL avatar_say_input gives the last character line, the scenario''s stock voice and the language', 'The cost, mostly./tAvVoice01/nl', (j ->> 'text')||'/'||(j ->> 'voice_id')||'/'||(j ->> 'language') from (select public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_said')::uuid) as j) x;
 insert into results (check_name, expected, actual) select 'AL avatar_say_input for another person''s run is refused', 'not_yours', public.avatar_say_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.al_other')::uuid) ->> 'refusal';
-insert into results (check_name, expected, actual) select 'AL avatar_say_input on a run with no character line gives no_line', 'no_line', public.avatar_say_input('00000000-0000-0000-0000-0000000000ad', current_setting('test.al_other')::uuid) ->> 'refusal';
+insert into results (check_name, expected, actual) select 'AL avatar_say_input on a run with no character line gives the scenario''s opening line', 'I have read your deck. Convince me this is not another IT project that HR ends up paying for.', public.avatar_say_input('00000000-0000-0000-0000-0000000000ad', current_setting('test.al_other')::uuid) ->> 'text';
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

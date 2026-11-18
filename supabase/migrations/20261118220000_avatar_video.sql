@@ -9,7 +9,7 @@
 -- avatar_session_open / avatar_session_report      reserve the seconds before a token is issued; the client's seconds never lower the charge: a final report that
 --                                                  stopped the upstream session charges the wall clock and returns the rest, one that did not stop it keeps the whole reservation. One open session per person; an unreported session keeps its
 --                                                  reservation until its maximum has passed.
--- avatar_say_input                                 what the portrait voice says: the run's last character line, with the scenario's stock voice (never a text from the client).
+-- avatar_say_input                                 what the portrait voice says: the run's last character line (the scenario's opening line before the character has answered), with the scenario's stock voice (never a text from the client).
 -- ai_live_uses()                                   as before (20261117280000), and an avatar use is live on a HeyGen connection with a key (no model needed).
 
 -- 1. Looks and uses.
@@ -158,8 +158,10 @@ begin
   select v.voice_id into v_voice from public.stock_voices v where v.active and v.id::text = c.shape ->> 'Voice';
   if v_voice is null then return jsonb_build_object('refusal', 'no_voice'); end if;
   select t ->> 'text' into v_text from jsonb_array_elements(r.turns) with ordinality x(t, n) where t ->> 'who' = 'character' order by n desc limit 1;
-  if v_text is null then return jsonb_build_object('refusal', 'no_line'); end if;
   v_content := private.avatar_content(c.items, c.shape);
+  -- Before the character has answered, the line to speak is the scenario's own opening line, read here from the published content (never from the client).
+  if v_text is null then v_text := v_content ->> 'opening'; end if;
+  if v_text is null then return jsonb_build_object('refusal', 'no_line'); end if;
   return jsonb_build_object('text', v_text, 'voice_id', v_voice,
     'language', case v_content ->> 'language' when 'Dutch' then 'nl' when 'French' then 'fr' else 'en' end);
 end;

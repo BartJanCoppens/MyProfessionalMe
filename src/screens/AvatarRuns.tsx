@@ -26,7 +26,7 @@ function PastRun({ run, counsellor, reload }: { run: AvatarRunRow; counsellor: s
   const act = (f: (id: string) => Promise<void>) => () => { setBusy(true); setProblem(''); f(run.id).then(reload, (e) => setProblem((e as Error).message)).finally(() => setBusy(false)); };
   return (
     <details style={{ borderTop: '1px solid #eef0ea', padding: '8px 0', fontSize: 12.5 }}>
-      <summary style={{ cursor: 'pointer' }}>{new Date(run.started_at).toLocaleDateString()} · {run.score ? run.score.overall + ' · ' + run.score.band : run.finished_at ? 'Ended without a score' : 'Not finished'}{run.test ? ' · practice in the studio' : ''}</summary>
+      <summary style={{ cursor: 'pointer' }}>{new Date(run.started_at).toLocaleDateString()} · {run.score ? run.score.overall + ' · ' + run.score.band : 'Ended without a score'}{run.test ? ' · practice in the studio' : ''}</summary>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
         {run.score && <ScoreView score={run.score} />}
         {run.score && !run.test && <ShareRow counsellor={counsellor} shared={!!run.shared_at} confirmed={!!run.confirmed_at} busy={busy} share={act(shareAvatarRun)} withdraw={act(withdrawAvatarRun)} />}
@@ -37,7 +37,8 @@ function PastRun({ run, counsellor, reload }: { run: AvatarRunRow; counsellor: s
   );
 }
 
-// My earlier runs on this learning, except the one on screen. Not in View as: the store reads the signed-in person's runs only.
+// My earlier runs on this learning, except the one on screen. Not in View as, by decision: a counsellor sees the formal track only, and a run reaches them only when the learner
+// shares it, so the subject's practice runs are never listed to whoever views as them (decisions.md, Task 6.6). A run left open is not listed until it is finished.
 export default function AvatarRuns({ learningId, skip, counsellor }: { learningId: string; skip: string | null; counsellor: string }) {
   const [runs, setRuns] = useState<AvatarRunRow[]>([]);
   const load = useCallback(() => { void myAvatarRuns(learningId).then(setRuns, () => {}); }, [learningId]);

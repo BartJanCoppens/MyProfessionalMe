@@ -116,7 +116,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
           <FormatPanels vm={vm} />
           {vm.rec.showEvidence && <EvidenceCard rec={vm.rec} />}
           {vm.rec.hasHistory && <RecordCard rec={vm.rec} />}
-          {det.av && <AvatarPanel av={det.av} />}
+          {det.av && <AvatarPanel key={det.av.key} av={det.av} />}
           {vm.done.quiz && <QuizCard quiz={vm.done.quiz} />}
           {vm.done.feedback && <FeedbackCard fb={vm.done.feedback} />}
           {vm.done.attendance && <AttendanceCard att={vm.done.attendance} />}

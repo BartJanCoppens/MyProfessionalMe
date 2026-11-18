@@ -11,10 +11,10 @@ export type RunDeps = {
   share(runId: string): Promise<void>; withdraw(runId: string): Promise<void>;
 };
 type Busy = 'starting' | 'sending' | 'ending' | 'sharing';
-/** The character's line the stage should speak: `opening` has no stored turn yet, so the portrait voice cannot read it (it reads the run's last stored character line). */
+/** The character's line the stage should speak (`opening`: the scenario's first line, read by the portrait voice from the scenario on the server). */
 export type Heard = { n: number; text: string; opening: boolean };
-type State = { phase: 'idle' | 'live' | 'ended'; runId: string | null; lines: RunLine[]; score: AvatarScore | null; shared: boolean; error: string; busy: Busy | null; heard: Heard | null };
-const IDLE: State = { phase: 'idle', runId: null, lines: [], score: null, shared: false, error: '', busy: null, heard: null };
+type State = { phase: 'idle' | 'live' | 'ended'; runId: string | null; lines: RunLine[]; score: AvatarScore | null; scoreFailed: boolean; shared: boolean; error: string; busy: Busy | null; heard: Heard | null };
+const IDLE: State = { phase: 'idle', runId: null, lines: [], score: null, scoreFailed: false, shared: false, error: '', busy: null, heard: null };
 
 export function useAvatarRun({ opening, scored, deps }: { opening: string; scored: boolean; deps: RunDeps }) {
   const [s, setS] = useState<State>(IDLE);
@@ -39,7 +39,11 @@ export function useAvatarRun({ opening, scored, deps }: { opening: string; score
     ...cur, lines: [...cur.lines, { who: 'learner', text, held: r.held }, { who: 'character', text: r.say, held: false }], heard: { n: ++heardN.current, text: r.say, opening: false },
   })), [guarded, deps]);
 
-  const end = useCallback(() => guarded('ending', () => (scored ? deps.score(runId.current!) : deps.end(runId.current!).then(() => null)), (score) => (cur) => ({ ...cur, phase: 'ended', score })), [guarded, deps, scored]);
+  const end = useCallback(async () => {
+    const ok = await guarded('ending', () => (scored ? deps.score(runId.current!) : deps.end(runId.current!).then(() => null)), (score) => (cur) => ({ ...cur, phase: 'ended', score, scoreFailed: false }));
+    if (!ok && scored) setS((cur) => ({ ...cur, scoreFailed: true })); // only a failed score offers "End without a score"
+    return ok;
+  }, [guarded, deps, scored]);
   const endWithoutScore = useCallback(() => guarded('ending', () => deps.end(runId.current!), () => (cur) => ({ ...cur, phase: 'ended', score: null })), [guarded, deps]);
   const share = useCallback(() => guarded('sharing', () => deps.share(runId.current!), () => (cur) => ({ ...cur, shared: true })), [guarded, deps]);
   const withdraw = useCallback(() => guarded('sharing', () => deps.withdraw(runId.current!), () => (cur) => ({ ...cur, shared: false })), [guarded, deps]);

@@ -9,13 +9,14 @@ import { AVATAR_ASK } from '../../supabase/functions/_shared/avatarRules.ts';
 
 export const SPEECH_NOTE = 'Your browser turns your speech into text. In Chrome and Edge the audio goes to Google or Microsoft to do that. Nothing is recorded here.';
 export const NO_SPEECH = 'This browser has no speech input · type your lines';
+export const NOT_SENT = 'Your line was not sent · it is in the box, send it again';
 const small = { fontSize: 12, color: '#5a6058' } as const;
 const isHoldKey = (e: KeyboardEvent) => e.key === ' ' || e.key === 'Enter';
 
 // onSend resolves true when the line went through (the typed text is then cleared).
 export default function AvatarInput({ lang, disabled, onSend }: { lang: string; disabled: boolean; onSend: (text: string) => Promise<boolean> }) {
   const [typing, setTyping] = useState(false), [text, setText] = useState(''), [blocked, setBlocked] = useState('');
-  const speech = useSpeechInput({ lang, onFinal: (said) => { void onSend(said); }, onError: () => { setBlocked('The microphone is blocked or missing · type your lines'); setTyping(true); } });
+  const speech = useSpeechInput({ lang, onFinal: (said) => { void onSend(said).then((sent) => { if (!sent) { setText(said); setTyping(true); setBlocked(NOT_SENT); } }); }, onError: () => { setBlocked('The microphone is blocked or missing · type your lines'); setTyping(true); } });
   const typed = !speech.supported || typing;
   const send = async () => { if (text.trim() && await onSend(text.trim())) setText(''); };
   return (

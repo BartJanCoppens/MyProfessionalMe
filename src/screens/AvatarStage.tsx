@@ -1,6 +1,6 @@
 // Where the character is seen and heard (studios plan, Task 6.6): the live video, else the stock portrait with a voice (the AI voice, or the browser's own, labelled),
 // else text only. Each rung drops to the next with a message when it fails, ends or is switched off; typing never depends on any of them (S4). The character's line
-// is spoken when it arrives (`heard`). The opening line has no stored turn, so the AI portrait voice cannot read it: it is spoken in the browser voice or shown as text.
+// is spoken when it arrives (`heard`). The AI portrait voice reads the opening line from the scenario on the server (`avatar_say_input`), like every later line.
 import { useEffect, useRef, useState } from 'react';
 import { Button, LinkButton } from '../ds';
 import { useLiveAvatar } from '../avatar/useLiveAvatar';
@@ -26,7 +26,8 @@ export default function AvatarStage({ av, runId, heard }: { av: AvatarVals; runI
   const latest = useRef({ av, stage, speak, browser, runId, heard });
   useEffect(() => { latest.current = { av, stage, speak, browser, runId, heard }; });
   const audio = useRef<HTMLAudioElement | null>(null), spoken = useRef<{ stop: () => void } | null>(null);
-  useEffect(() => () => { audio.current?.pause(); spoken.current?.stop(); }, []);
+  const generation = useRef(0); // a line fetched for the portrait voice plays only while it is still the latest line of a panel still on screen
+  useEffect(() => () => { generation.current += 1; audio.current?.pause(); spoken.current?.stop(); }, []);
 
   // The character's new line, on the rung the stage is on (the video's refusal of a line drops it to the portrait for that line).
   useEffect(() => {
@@ -34,11 +35,12 @@ export default function AvatarStage({ av, runId, heard }: { av: AvatarVals; runI
     if (!line) return;
     const lang = LANGUAGES[a.language].speech;
     audio.current?.pause(); spoken.current?.stop();
+    const mine = ++generation.current;
     const inBrowser = () => { if (b) spoken.current = speakInBrowser(line.text, { lang }); };
     if (s === 'video' && say(line.text)) return;
-    if (s === 'text' || !a.voice || line.opening) { inBrowser(); return; }
-    sayRunLine(id).then((url) => { const el = new Audio(url); audio.current = el; el.onended = () => URL.revokeObjectURL(url); return el.play(); })
-      .catch(() => { setVoiceFailed(true); setNote('The portrait voice could not speak · the browser voice is used instead'); inBrowser(); });
+    if (s === 'text' || !a.voice) { inBrowser(); return; }
+    sayRunLine(id).then((url) => { if (mine !== generation.current) { URL.revokeObjectURL(url); return; } const el = new Audio(url); audio.current = el; el.onended = () => URL.revokeObjectURL(url); return el.play(); })
+      .catch(() => { if (mine !== generation.current) return; setVoiceFailed(true); setNote('The portrait voice could not speak · the browser voice is used instead'); inBrowser(); });
   }, [heardN]);
 
   const look = av.look, label = stage === 'video' ? 'Live video · Made with AI' : stage === 'text' ? TEXT_ONLY : av.voice && !voiceFailed ? 'Portrait · AI voice' : BROWSER_VOICE.split(' · ')[0];

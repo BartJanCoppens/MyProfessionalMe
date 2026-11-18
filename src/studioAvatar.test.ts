@@ -2,6 +2,7 @@
 // live), the choices a reopened draft shows again, and the preview built from the draft's Produce answers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { draftOf } from './createSave';
+import { viewItems } from './createItems';
 import * as store from './lib/contributionStore';
 import { emptyParts } from './logic/contribution';
 import type { Contribution, CreateData, Rule } from './logic/contribution';
@@ -75,5 +76,14 @@ describe('the Avatar preview content', () => {
     const c = studioContent('Avatar', rows, { 'Who does the learner talk to?': 'A client executive', 'How is it scored?': 'Practice only', 'How long is a run?': '15 minutes' },
       { looks: LOOKS, voices: VOICES, draft: { produce: { Language: 'French', Difficulty: 'Gentle' }, cast: { Look: 'l1', Voice: 'v1' } } });
     expect(c).toMatchObject({ kind: 'avatar', language: 'French', difficulty: 'Gentle', minutes: 15, scoring: 'Practice only', look: { id: 'l1' }, voice: { id: 'v1', name: 'Warm · 40s' }, counterpart: 'A client executive' });
+  });
+});
+
+describe('a saved Avatar contribution shown to its author or reviewers', () => {
+  it('practises with the chosen stock voice: the saved view is given the stock voices', () => {
+    const rows = studioById('avatar')!.items.map((r) => [...r]);
+    const c = { id: 'c1', type: 'Avatar', studio: 'avatar', ai_assisted: false, items: rows, shape: { 'Who does the learner talk to?': 'A client executive', 'How is it scored?': 'Practice only', 'How long is a run?': '5 minutes', Language: 'English', Difficulty: 'Gentle', Look: 'l1', Voice: 'v1' } } as unknown as Contribution;
+    const t = viewItems(c, '', false, undefined, LOOKS, VOICES).asLearner;
+    expect(t?.content).toMatchObject({ kind: 'avatar', voice: { id: 'v1' } });
   });
 });
