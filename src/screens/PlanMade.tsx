@@ -7,7 +7,7 @@ import type { madeVals } from '../trajectoryMadeVals';
 type Made = ReturnType<typeof madeVals>;
 
 export function MadeActions({ made }: { made: Made }) {
-  if (!made.draft && !made.open) return null;
+  if (!made.draft && !made.open && !made.status) return null;
   return (
     <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       {made.draft && <Button size="sm" variant="secondary" onClick={made.draft}>{made.draftLabel}</Button>}

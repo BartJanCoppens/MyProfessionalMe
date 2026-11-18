@@ -57,6 +57,29 @@ describe('draftPlaceholders', () => {
     expect(h.state.trjAi.busy).toBeNull();
     expect(h.state.trjAi.drafting ?? null).toBeNull();
   });
+  it('skips a placeholder that holds another editor\'s draft without an AI call, and drafts the rest', async () => {
+    const t = { ...T, steps: [{ ...T.steps[0], cid: 'someone-elses' }, T.steps[1], T.steps[2]] };
+    const h = setup({}, t);
+    const r = await draftPlaceholders(h.L(), 'T1', ['m1', 'm2', 'm3']);
+    expect([r.drafted, ask.mock.calls.length]).toEqual([2, 2]);
+    expect(r.notes).toContain('Title m1: A draft is already linked to this placeholder');
+  });
+  it('one placeholder the database refuses does not stop the others', async () => {
+    save.mockImplementation(async (row) => { if (row.for_step === 'm1') throw new Error('Not allowed · ask an admin'); return 'c' + ++n; });
+    const h = setup();
+    const r = await draftPlaceholders(h.L(), 'T1', ['m1', 'm2', 'm3']);
+    expect(r.drafted).toBe(2);
+    expect(r.notes).toContain('Title m1: Not allowed · ask an admin');
+    expect(h.state.trjs[0].steps.map((x) => x.cid)).toEqual([undefined, 'c1', 'c2']);
+  });
+  it('drafts with the default domain and stage when the plan\'s brief and the step carry text that is no code (I1)', async () => {
+    const brief = { goal: '', credential: '', issuer: '', audience: '', stage: 'Senior Consultant', line: null, level: '', hoursBudget: null, deadline: null, bodyRules: '', constraints: '', domain: 'Indirect tax' };
+    const t = { ...T, steps: T.steps.map((x) => ({ ...x, dom: 'Indirect tax' })) };
+    const h = setup({ trjPlans: { T1: { record: { ...record, plan: { ...record.plan, brief } }, sources: [] } } }, t);
+    const r = await draftPlaceholders(h.L(), 'T1', ['m1', 'm2', 'm3']);
+    expect(r.drafted).toBe(3);
+    expect(save.mock.calls.map((c) => [c[0].domain, c[0].audience_stage])).toEqual([['prof', 'Consultant'], ['prof', 'Consultant'], ['prof', 'Consultant']]);
+  });
   it('shows its progress while it runs', async () => {
     const h = setup();
     await draftPlaceholders(h.L(), 'T1', ['m1', 'm2', 'm3']);

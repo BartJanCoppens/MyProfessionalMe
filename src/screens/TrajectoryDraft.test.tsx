@@ -67,6 +67,12 @@ describe('Draft with AI in the step drawer', () => {
     expect(screen.getByRole('button', { name: 'Open the draft · In review' })).toBeTruthy();
     expect(screen.getAllByText('Draft in review').length).toBeGreaterThan(0);
   });
+  it('a step whose cid is not one of the admin\'s own drafts is taken: no Draft with AI, and it says so', () => {
+    show({ trjStep: 's1' }, trajectory([make('s1', 'p:m1', { cid: 'someone-elses' })]));
+    expect(screen.queryByRole('button', { name: /Draft with AI/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Open the draft/ })).toBeNull();
+    expect(screen.getAllByText('A draft is already linked to this placeholder · not one of yours').length).toBeGreaterThan(0);
+  });
   it('opens the draft in Create & share', async () => {
     show({ trjStep: 's1', create: { contributions: [own('c1', 'draft', { type: 'Flash cards', title: 'T', domain: 'prof', level: 3, audience_stage: 'Consultant', takeaway: '', outline: '', sources: [], items: null, shape: null, studio: 'flash', for_trajectory: 'T1', for_step: 's1', bundle_ids: [] })], reviews: [], rules: [], policies: [], peers: 0 } }, trajectory([make('s1', 'p:m1', { cid: 'c1' })]));
     await act(async () => { click('Open the draft · Draft'); });
@@ -85,6 +91,10 @@ describe('Draft all with AI on the plan', () => {
     cleanup();
     show({ trjPanel: panel, trjAi: { busy: 'draft', error: null, drafting: { done: 1, total: 3 } } });
     expect(screen.getByText('Drafting 2 of 3')).toBeTruthy();
+  });
+  it('counts only the placeholders that are free: one that holds another editor\'s draft is not in "Draft all"', () => {
+    show({ trjPanel: panel }, trajectory([make('s1', 'p:m1', { cid: 'someone-elses' }), make('s2', 'p:m2'), make('s3', 'p:m3')]));
+    expect(screen.getByRole('button', { name: 'Draft all 2 with AI' })).toBeTruthy();
   });
   it('shows each module\'s placeholder with its own button', () => {
     show({ trjPanel: panel });

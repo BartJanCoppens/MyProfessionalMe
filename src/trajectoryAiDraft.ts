@@ -19,7 +19,7 @@ import { usableBundles } from './createGrounding';
 import { draftItems, passagesOf, runDraft, studioQuery, studioSpec } from './studioDraft';
 import type { DraftSpec } from './studioDraft';
 import { saveDraft } from './lib/contributionStore';
-import { linkMadeStep } from './trajectoryMade';
+import { isTaken, linkMadeStep } from './trajectoryMade';
 import { refusal } from './trajectoryAdminVals';
 
 // The cited knowledge bundles a creator of this line may use (the studio's picked bundles).
@@ -33,6 +33,7 @@ type Prepared = { t: Trajectory; step: TrjStep; def: StudioDef; nw: NewDraft; kb
 function prepare(L: Logic, trajectoryId: string, stepId: string): Prepared | string {
   const t = L.state.trjs.find((x) => x.id === trajectoryId), step = t?.steps.find((s) => s.id === stepId && s.k === 'make');
   if (!t || !step) return 'That placeholder is no longer in the trajectory';
+  if (isTaken(step)) return 'A draft is already linked to this placeholder';
   const def = studioById(studioFor(step.fmt ?? '') ?? '');
   if (!def) return 'No studio makes ' + (step.fmt ?? 'this format') + ' · add it as evidence instead';
   const why = refusal(L, t);
@@ -87,15 +88,17 @@ export async function draftPlaceholders(L: Logic, trajectoryId: string, stepIds:
   progress(0);
   try {
     for (const id of ids) {
-      const made = prepare(L.latest(), trajectoryId, id);
-      if (typeof made === 'string') { out.notes.push((t?.steps.find((s) => s.id === id)?.title ?? id) + ': ' + made); continue; }
-      const r = await draftOne(L.latest(), made, (m) => { limit = m; });
-      if (r.limit) break;
-      if (r.saved) out.drafted++;
-      if (r.note) out.notes.push(r.note);
+      const title = t?.steps.find((s) => s.id === id)?.title ?? id, made = prepare(L.latest(), trajectoryId, id);
+      if (typeof made === 'string') { out.notes.push(title + ': ' + made); continue; }
+      try {
+        const r = await draftOne(L.latest(), made, (m) => { limit = m; });
+        if (r.limit) break;
+        if (r.saved) out.drafted++;
+        if (r.note) out.notes.push(r.note);
+      } catch (err) { out.notes.push(title + ': ' + (err as Error).message); } // one refusal never stops the rest
       progress(++done);
     }
-  } catch (err) { out.notes.push((err as Error).message); } finally { progress(null); }
+  } finally { progress(null); }
   await L.latest().reloadCreate();
   const head = 'Drafted ' + out.drafted + ' of ' + total;
   if (limit) out.notes.push(head + ' · ' + limit);
