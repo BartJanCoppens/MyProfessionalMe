@@ -16,6 +16,7 @@ import { QUESTIONS } from './logic/avatarContent';
 import { studioById } from './logic/studios';
 import { changeFormat, uploadFormat } from './studioRules';
 import { HUB, studioOf } from './studioVals';
+import { grantRules, linkMadeStep } from './trajectoryMade';
 
 export const first = (name: string) => name.split(/\s+/)[0] || name;
 export const revKey = (r: Review) => r.contribution_id + '|' + r.step + '|' + r.slot;
@@ -57,7 +58,9 @@ export const fieldsOf = (nw: NewDraft, bundles: string[], studio: string | null)
     items: carriesItems(nw.type, studio) ? nw.items?.list ?? [] : null, shape };
 };
 // The row to save: a new draft made in a studio says which (only on insert; the database keeps it).
-const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles, studio) : { ...fieldsOf(nw, bundles, studio), studio });
+// A draft made from a placeholder step also names it (for_trajectory, for_step), once, as it is created.
+const rowOf = (nw: NewDraft, bundles: string[], studio: string | null, id: string | null): DraftFields => (id || !studio ? fieldsOf(nw, bundles, studio)
+  : { ...fieldsOf(nw, bundles, studio), studio, ...(nw.brief && { for_trajectory: nw.brief.trajectoryId, for_step: nw.brief.stepId }) });
 // What a studio's automatic check was run on: the saved fields of the draft; a result counts while they are unchanged.
 export const checkKey = (nw: NewDraft, bundles: string[], studio: string | null) => JSON.stringify(fieldsOf(nw, bundles, studio));
 // A saved draft's answers back on the step stores: a studio that keeps its Produce answers and cast inside the shape (savesProduce) has them read out of it again, so the Produce
@@ -75,7 +78,8 @@ export function draftOf(c: Contribution): NewDraft {
   const list = itemsFromSaved(c.type, c.items), withItems = carriesItems(c.type, c.studio);
   return { line: c.business_line || '', aud: c.audience || '', type: c.type, title: c.title, dom: c.domain, lvl: String(c.level), stage: c.audience_stage, take: c.takeaway,
     outline: c.outline ? c.outline.split('\n') : [], sources: c.sources || [], ai: c.ai_assisted && !withItems, aiNote: c.ai_assisted ? 'AI-assisted draft' : c.outline ? 'Scripted outline from the passages' : '',
-    items: withItems ? { ...noItems(), list, how: c.ai_assisted ? 'ai' : 'saved' } : noItems(), ...answersOf(c) };
+    items: withItems ? { ...noItems(), list, how: c.ai_assisted ? 'ai' : 'saved' } : noItems(), ...answersOf(c),
+    ...(c.for_trajectory && c.for_step && { brief: { trajectoryId: c.for_trajectory, stepId: c.for_step, goals: [], depth: 'applied' as const, passages: [], sources: [] } }) };
 }
 
 // ---------- writes ----------
@@ -107,14 +111,18 @@ async function submitChecked(id: string, studio: string | null | undefined) {
 type Saved = { s: AppState; nw: NewDraft; studio: string | null; id: string };
 async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>, patch: Partial<NewDraft> = {}): Promise<boolean> {
   if (busy(L)) return false;
-  const s = latestDraft(L), nw = { ...effective(s), ...patch }, rules = s.create?.rules || [], studio = draftStudio(s);
+  const s = latestDraft(L), nw = { ...effective(s), ...patch }, rules: RuleParts[] = [...(s.create?.rules || []), ...grantRules(L, nw.brief, nw.type)], studio = draftStudio(s);
   if (!rules.length) { L.say('Ask an admin for creation rights first'); return false; }
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return false; }
   let id = s.editing ?? nw.savedId ?? null;
   L.setState({ createBusy: true });
   try {
+    const first = !id;
     id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
+    // The first save of a draft made for a placeholder links the step to it; if that is refused the draft is still saved, and it says so.
+    const notLinked = first && nw.brief ? linkMadeStep(L, nw.brief.trajectoryId, nw.brief.stepId, id) : null;
     await next({ s, nw, studio, id });
+    if (notLinked) L.say('Saved · not linked to the trajectory step: ' + notLinked);
     return true;
   } catch (err) { failed(L, err, (st) => (sameDraft(s, st) ? keep(id)(st) : {})); return false; }
 }
@@ -156,7 +164,8 @@ export async function submitSaved(L: Logic, c: Contribution) {
   if (hasItems(c.type) && !items.length) { L.say(addFirst(c.type, 'edit it first')); return; }
   const bad = contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(items) }).find((x) => !x.ok);
   if (bad) { L.say(bad.text + ' · edit it first'); return; }
-  if (!mayCreate(L.state.create?.rules || [], attrsOf(c))) { L.say('Not allowed by your creation rules · ask an admin'); return; }
+  const ref = c.for_trajectory && c.for_step ? { trajectoryId: c.for_trajectory, stepId: c.for_step } : undefined;
+  if (!mayCreate([...(L.state.create?.rules || []), ...grantRules(L, ref, c.type)], attrsOf(c))) { L.say('Not allowed by your creation rules · ask an admin'); return; }
   L.setState({ createBusy: true });
   try {
     const status = await submitChecked(c.id, c.studio), d = await reloaded(L);

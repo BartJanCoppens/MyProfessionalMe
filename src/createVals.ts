@@ -9,7 +9,7 @@ import { itemsPanel, viewItems } from './createItems';
 import type { SetNw } from './createItems';
 import { carriesItems, hasItems, itemsCheck, itemsFromSaved, itemsText, noItems, noun } from './logic/items';
 import {
-  CREATE_TYPES, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
+  CREATE_TYPES, DEFAULT_POLICY, PARTS, PART_LABEL, PART_VALUES, MAKEABLE_FORMATS, ROLE_OF_STEP, TAKE_MAX, allowedValues, attrsLabel, attrsOf, audienceName, checksPass, contentChecks, daysWaiting, domainName,
   emptyParts, fmtDate, mayCreate, policyFor, policyLabel, reviewBadge, rubricComplete, ruleProblem, ruleSentence, stageAt, stagesOf, togglePart, valueName, withinLines,
 } from './logic/contribution';
 import type { Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
@@ -24,6 +24,7 @@ import { studioById } from './logic/studios';
 import { stillMotion } from './fmtMotion';
 import { changeFormat } from './studioRules';
 import { HUB, studioOf, studioVals } from './studioVals';
+import { grantRules } from './trajectoryMade';
 
 type Input = ChangeEvent<HTMLInputElement>; type Sel = ChangeEvent<HTMLSelectElement>; type Area = ChangeEvent<HTMLTextAreaElement>;
 const ST: Record<string, [string, string, string]> = { published: ['accepted', 'Published', 'check'], review: ['submitted', 'In review', 'dot'], changes: ['clarification', 'Changes requested', 'dot'], draft: ['not-started', 'Draft', 'dot'] };
@@ -50,7 +51,7 @@ function createScreen(L: Logic) {
   const s = L.state, me = L.access.userId, d = s.create || EMPTY, now = new Date();
   const byId = new Map(d.contributions.map((c) => [c.id, c]));
   const revsOf = (id: string) => d.reviews.filter((r) => r.contribution_id === id).sort((a, b) => a.step - b.step || a.slot - b.slot);
-  const canCreate = d.rules.length > 0, isAdmin = L.isAdmin();
+  const nw = effective(s), rules: RuleParts[] = [...d.rules, ...grantRules(L, nw.brief, nw.type)], canCreate = rules.length > 0, isAdmin = L.isAdmin();
   const setState = (p: Partial<AppState>) => L.setState(p);
 
   // Mine
@@ -78,7 +79,9 @@ function createScreen(L: Logic) {
   const rs = r0 ? reviewDetail(L, byId.get(r0.contribution_id)!, r0, d, now) : null;
 
   // New
-  const nw = effective(s), attrs = attrsOfDraft(nw), policy = policyFor(d.policies, attrs), allowed = allowedValues(d.rules), ok = mayCreate(d.rules, attrs);
+  const attrs = attrsOfDraft(nw), allowed = allowedValues(rules), ok = mayCreate(rules, attrs);
+  // A draft made under a placeholder (no creation rule of the person's own) always gets the full default review, as the database routes it.
+  const policy = mayCreate(d.rules, attrs) ? policyFor(d.policies, attrs) : DEFAULT_POLICY;
   const setNw: SetNw = (p) => L.setState((st) => { const cur = effective(st); return { nw: { ...cur, ...(typeof p === 'function' ? p(cur) : p) } }; });
   const checks = contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) })
     .concat(hasItems(nw.type) ? [itemsCheck(nw.type, nw.items ?? noItems())] : [], nw.type === 'Presentation' ? [horizonCheck(nw)] : []);
@@ -121,7 +124,7 @@ function createScreen(L: Logic) {
     lead: 'Make something for your colleagues: ' + MAKEABLE_FORMATS.slice(0, -1).join(', ') + ' or ' + MAKEABLE_FORMATS[MAKEABLE_FORMATS.length - 1] + '. Review requirements depend on the line, format, domain and audience: by default two peer reviews, an expert check and a quality and risk check before it reaches the library.',
     canCreate, noGrantText: 'You have no creation rights yet. Ask an admin for creation rights: a Domain Admin or General Admin gives you rules such as “Consulting or Tax & Legal · Podcast”.',
     myRules: d.rules.map((r) => ruleSentence(r)),
-    goNew: () => (canCreate ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [], nwKbQ: '', studio: HUB }) : L.say('Ask an admin for creation rights first')),
+    goNew: () => (d.rules.length ? setState({ createTab: 'new', editing: null, nw: fresh(), nwKb: [], nwKbQ: '', studio: HUB }) : L.say('Ask an admin for creation rights first')),
     // The full flow, as the design shows it. Peers come from the author's business line (the design said "same domain").
     reviewSteps: REVIEW_STAGES.map((n, k) => ({ n: String(k + 1), name: n, who: k === 1 ? 'Two colleagues in your line or the content\'s line · 5 working days' : REVIEW_WHO[k], bg: k === 4 ? '#86BC25' : '#1a1d18', fg: k === 4 ? '#10180a' : '#fff' })),
     tabs, tab, setTab: (v: string) => (v === 'new' && !canCreate ? L.say('Ask an admin for creation rights first') : v === 'rules' && !isAdmin ? undefined
@@ -170,7 +173,7 @@ function createScreen(L: Logic) {
   };
   // The Studios hub arranges what the form already computed (studioVals.ts); an edit shows the form unless it opened in its studio.
   const chk = s.studio.check, checkReasons = chk && chk.key === checkKey(nw, s.nwKb, studioOf(s)) ? chk.reasons : null;
-  const studio = studioVals(L, { nw, setNw, bundles: picked, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
+  const studio = studioVals(L, { nw, setNw, bundles: picked, rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
     routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, cancel: vm.nwCancel, checkReasons, runCheck: () => runCheck(L), withFile: (attach, done, how) => saveWithFile(L, attach, {}, done, how) });
   return { ...vm, studio, newView: s.editing && s.studio.view !== 'studio' ? 'form' as const : s.studio.view };
 }

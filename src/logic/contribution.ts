@@ -13,6 +13,7 @@ export type Contribution = {
   type: string; title: string; domain: string; level: number; audience_stage: string; takeaway: string; outline: string; sources: string[];
   ai_assisted: boolean; bundle_ids: string[]; items: unknown[] | null; status: ContributionStatus; step: number; learning_id: string | null;
   shape: Record<string, string> | null; // a studio's "Shape it" answers (question to answer); publishing reads what the content needs
+  for_trajectory?: string | null; for_step?: string | null; // the placeholder step it was drafted for (Studios Phase 7); never changes
   studio: string | null; // the studio it was made in (STUDIOS id), null from the upload form; a studio one is checked before it is submitted
   created_at: string; updated_at: string; submitted_at: string | null; published_at: string | null;
 };
