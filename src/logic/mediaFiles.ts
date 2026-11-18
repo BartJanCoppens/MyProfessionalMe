@@ -18,6 +18,9 @@ export const MEDIA_KINDS: Record<string, MediaKind> = {
   webm: { label: 'A video', mime: 'video/webm', maxBytes: 50 * MB },
 };
 
+// The documents an admin adds as sources of a trajectory plan (Phase 7). Not a contribution file: MEDIA_KINDS takes no PDF.
+export const SOURCE_KINDS: Record<string, MediaKind> = { pdf: { label: 'A PDF', mime: 'application/pdf', maxBytes: 20 * MB } };
+
 const FILE = '[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}';
 export const MEDIA_PATH = new RegExp('^' + UUID_PART + '/' + UUID_PART + '/' + FILE + '$');
 const NAME_MAX = 100;
@@ -42,6 +45,15 @@ export function mediaProblem(name: string, bytes: number): string | null {
     const exts = Object.keys(MEDIA_KINDS).map((k) => '.' + k);
     return 'Only ' + exts.slice(0, -1).join(', ') + ' and ' + exts[exts.length - 1] + ' files can be added';
   }
+  if (bytes <= 0) return 'The file is empty';
+  if (bytes > kind.maxBytes) return kind.label + ' is at most ' + kind.maxBytes / MB + ' MB · this one is ' + (bytes / MB).toFixed(1) + ' MB';
+  return null;
+}
+
+// Why a source document cannot be added, in words, or null.
+export function sourceProblem(name: string, bytes: number): string | null {
+  const kind = SOURCE_KINDS.pdf;
+  if (!/\.pdf$/i.test(name.trim())) return 'Only .pdf files can be added as sources';
   if (bytes <= 0) return 'The file is empty';
   if (bytes > kind.maxBytes) return kind.label + ' is at most ' + kind.maxBytes / MB + ' MB · this one is ' + (bytes / MB).toFixed(1) + ' MB';
   return null;

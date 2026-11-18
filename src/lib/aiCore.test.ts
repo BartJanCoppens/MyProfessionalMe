@@ -28,11 +28,17 @@ describe('readAsk', () => {
     expect(readAsk({ use: 'studio_game', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 5000 } });
     expect(readAsk({ use: 'studio_game', messages: [user('Q')], max_tokens: 4000 })).toMatchObject({ ok: true, ask: { max_tokens: 4000 } });
     expect(readAsk({ use: 'kb_answer', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 2048 } });
-    expect(Object.keys(USE_LIMITS)).toEqual(['studio_game']);
+    expect(Object.keys(USE_LIMITS)).toEqual(['studio_game', 'trajectory_ai']);
+  });
+  it('gives the Trajectory AI 4,000 tokens and 90 s an answer, and no scripted plan', () => {
+    expect(USE_LIMITS.trajectory_ai).toEqual({ maxTokens: 4000, timeoutMs: 90_000 });
+    expect(readAsk({ use: 'trajectory_ai', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 4000 } });
+    expect(NO_SCRIPT).toContain('trajectory_ai');
+    expect(limitMessage(40, !NO_SCRIPT.includes('trajectory_ai'), 1500000)).not.toContain('scripted');
   });
   it('says a reached daily limit truthfully: no scripted reply exists for a use without a script', () => {
     expect(limitMessage(40)).toContain('scripted reply');
-    expect(NO_SCRIPT).toEqual(['studio_game', 'game_role', 'avatar_conversation']);
+    expect(NO_SCRIPT).toEqual(['studio_game', 'trajectory_ai', 'game_role', 'avatar_conversation']);
     expect(limitMessage(40, false)).toBe('Daily AI limit reached (40 a day per person for this use); try again tomorrow (UTC)');
   });
   it('names calls and characters for a use that has both limits (it cannot tell which ran out)', () => {

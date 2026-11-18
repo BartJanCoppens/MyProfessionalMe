@@ -48,6 +48,9 @@ export type PlanRecord = { trajectoryId: string; plan: TrajectoryPlan; messages:
 // An admin's uploaded document, read into numbered passages [page, text] the AI may cite; the original file is path (null: removed).
 export type PlanSource = { id: string; trajectoryId: string; name: string; path: string | null; pages: number; passages: [number, string][]; chars: number; flags: string[]; addedBy: string; addedAt: string };
 
+// What the screen holds per trajectory once loaded: record null means the trajectory has no plan yet.
+export type TrjPlanState = { record: PlanRecord | null; sources: PlanSource[] };
+
 export const emptyPlan = (): TrajectoryPlan => ({ version: 1, brief: null, modules: [], finalExam: null, removed: [] });
 
 const hoursProblem = (h: number): string | null => {

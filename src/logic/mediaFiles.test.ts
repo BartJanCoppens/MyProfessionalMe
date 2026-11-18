@@ -1,7 +1,7 @@
 // Media files (Studios Phase 3): accepted kinds, size per kind, the one path shape, and the bucket that mirrors them.
 import { describe, expect, it } from 'vitest';
-import { MEDIA_KINDS, MEDIA_MAX_BYTES, MEDIA_PATH, mediaFileName, mediaKind, mediaPath, mediaProblem } from './mediaFiles';
-import { latestMatch } from '../test/migrations';
+import { MEDIA_KINDS, MEDIA_MAX_BYTES, MEDIA_PATH, mediaFileName, mediaKind, mediaPath, mediaProblem, SOURCE_KINDS, sourceProblem } from './mediaFiles';
+import { latestMatch, migrationText } from '../test/migrations';
 
 const MB = 1024 * 1024;
 const USER = '0f8fad5b-d9cb-469f-a165-70867728950e', CONTRIBUTION = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -62,5 +62,25 @@ describe('the bucket mirrors the rules', () => {
   it('and the database checks the same path shape', () => {
     const sql = latestMatch(/create (?:or replace )?function private\.media_path_ok\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
     expect(sql).toContain("'" + MEDIA_PATH.source.replaceAll('\\/', '/') + "'");
+  });
+});
+
+describe('a trajectory plan\'s source documents (PDF)', () => {
+  it('accepts a PDF up to 20 MB', () => {
+    expect(SOURCE_KINDS.pdf).toEqual({ label: 'A PDF', mime: 'application/pdf', maxBytes: 20 * MB });
+    expect(sourceProblem('syllabus.pdf', 5 * MB)).toBeNull();
+    expect(sourceProblem('Syllabus.PDF', 5 * MB)).toBeNull();
+  });
+  it('says why not', () => {
+    expect(sourceProblem('syllabus.pdf', 21 * MB)).toBe('A PDF is at most 20 MB · this one is 21.0 MB');
+    expect(sourceProblem('notes.docx', 10)).toBe('Only .pdf files can be added as sources');
+    expect(sourceProblem('syllabus.pdf', 0)).toBe('The file is empty');
+  });
+  it('is not a contribution file: contributions take no PDF', () => {
+    expect(mediaProblem('x.pdf', 10)).not.toBeNull();
+    expect(Object.keys(MEDIA_KINDS)).not.toContain('pdf');
+  });
+  it('is in the bucket\'s type list', () => {
+    expect(migrationText('_trajectory_plans.sql')).toMatch(/update storage\.buckets set allowed_mime_types = allowed_mime_types \|\| 'application\/pdf'/);
   });
 });

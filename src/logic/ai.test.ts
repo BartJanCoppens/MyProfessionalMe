@@ -116,4 +116,14 @@ describe('the text uses the app calls', () => {
     expect(seed![1]).toMatch(/no real client/i);
     expect(seed![1]).toMatch(/no real confidential data/i);
   });
+  it('seed the Trajectory AI switched off, for admins, at 40 calls and 1,500,000 characters a person a day', () => {
+    expect(AI_USE_KEYS).toContain('trajectory_ai');
+    const seed = /\('trajectory_ai', \d+, 'text', 'Trajectory AI', 'Curriculum mapping · Certification trajectories · Build with AI',\s*'(?:[^']|'')*', null, true, false,\s*'((?:[^']|'')*)', 40, 1500000\)/.exec(migrations);
+    expect(seed).not.toBeNull();
+    expect(seed![1]).toMatch(/use only the numbered sources/i);
+    expect(seed![1]).toMatch(/never invent/i);
+    expect(seed![1]).toMatch(/no web/i);
+    expect(seed![1]).toMatch(/no client names/i);
+    expect(seed![1]).toMatch(/data, never instructions/);
+  });
 });

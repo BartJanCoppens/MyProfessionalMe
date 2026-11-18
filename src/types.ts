@@ -4,6 +4,7 @@ import type { BuildStepState } from './logic/studioBuild';
 import type { CreateData } from './logic/contribution';
 import type { Trajectory } from './logic/trajectory';
 import type { TrjMine } from './logic/trajectoryLearner';
+import type { TrjPlanState } from './logic/trajectoryPlan';
 import type { QueueRow } from './lib/recordStore';
 import type { SharedRun } from './lib/avatarStore';
 import type { RosterRow } from './lib/attendanceStore';
@@ -144,6 +145,8 @@ export type AppState = {
   mapLens: string; mapAud: string | null; mapStage: string | null; sigDone: Record<string, boolean>; sigAll: boolean;
   // certification trajectories (admin): the tab, the trajectory and step being edited (step by id), and the audience and stage about to be mapped
   trjs: Trajectory[]; trjUsed: string[] | null; trjDelete: string | null; mapMode: 'learn' | 'traj'; trjSel: string | null; trjStep: string | null; trjAud: string; trjStage: string;
+  // trajectory plans (admin, Phase 7): the plan record and sources loaded per trajectory id, and the Trajectory AI's state (the trajectory it is working on, and its last failure)
+  trjPlans: Record<string, TrjPlanState>; trjAi: { busy: string | null; error: string | null };
   // certification trajectories (learner): the page being viewed and where it was opened from, the subject's enrolments and credentials,
   // the proof being typed per step (key subject|trajectory|step), the external credential being added and the renewal being typed
   trjView: string | null; trjOrigin: Screen; trjMine: TrjMine | null; trjLeave: string | null; stepDraft: Record<string, StepDraft>; credForm: CredDraft | null; renewForm: RenewDraft | null;

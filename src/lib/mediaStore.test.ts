@@ -1,7 +1,7 @@
 // What the media adapter sends to Supabase Storage, and the sentences it turns refusals into. The client is a fake.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, op } from '../test/fakeSupabase';
-import { mediaText, mediaUrl, removeContributionMedia, removeMedia, uploadMedia } from './mediaStore';
+import { mediaText, mediaUrl, removeContributionMedia, removeFiles, removeMedia, uploadMedia, uploadSourceFile } from './mediaStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 const USER = '0f8fad5b-d9cb-469f-a165-70867728950e', CONTRIBUTION = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -109,3 +109,28 @@ describe('removing all files of a contribution', () => {
   });
 });
 
+
+describe('a trajectory plan\'s source file', () => {
+  const SOURCE = '3b241101-e2bb-4255-8caf-4136c566a962';
+  it('is put at <uploader>/<source id>/<file>.pdf with the PDF type, and the path is returned', async () => {
+    db.answer(() => ({ data: {} }));
+    expect(await uploadSourceFile(SOURCE, blob(10), 'Syllabus.PDF')).toBe(USER + '/' + SOURCE + '/Syllabus.pdf');
+    expect(db.calls[0].steps).toEqual([['upload', [USER + '/' + SOURCE + '/Syllabus.pdf', expect.any(Blob), { contentType: 'application/pdf', upsert: true }]]]);
+  });
+  it('checks kind and size before sending anything', async () => {
+    await expect(uploadSourceFile(SOURCE, blob(10), 'notes.docx')).rejects.toThrow('Only .pdf files can be added as sources');
+    await expect(uploadSourceFile(SOURCE, blob(21 * 1024 * 1024), 'a.pdf')).rejects.toThrow('A PDF is at most 20 MB');
+    expect(db.calls).toHaveLength(0);
+  });
+  it('says who may add it when Storage refuses', async () => {
+    db.answer(() => ({ error: { message: 'new row violates row-level security policy' } }));
+    await expect(uploadSourceFile(SOURCE, blob(10), 'a.pdf')).rejects.toThrow('Not allowed · only an editor of this trajectory can add source files');
+  });
+  it('is removed with the files that are there, and a refusal is worded', async () => {
+    db.answer(() => ({ data: [] }));
+    await removeFiles(['a', 'b']);
+    expect(db.calls[0].steps).toEqual([['remove', [['a', 'b']]]]);
+    db.answer(() => ({ error: { message: 'new row violates row-level security policy' } }));
+    await expect(removeFiles(['a'])).rejects.toThrow('Not removed');
+  });
+});

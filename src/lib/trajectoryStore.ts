@@ -5,6 +5,8 @@
 import type { Credential, Enrolment, StepEntry, Trajectory, TrjDecision, TrjMap, TrjStep } from '../logic/trajectory';
 import { isObject } from '../logic/values';
 import { inOrder } from './contentStore';
+import { removePlanFiles } from './planStore';
+import { saveSoon, whileDeleting } from './saveSoon';
 import { supabase } from './supabase';
 
 export type TrajectoryDraft = Omit<Trajectory, 'id' | 'published_at'>;
@@ -116,31 +118,20 @@ export async function saveTrajectory(t: Trajectory) {
   if (!data?.length) throw new Error(refused);
 }
 
-// Edits come in bursts. Each trajectory saves one write at a time, in order; a scheduled save reads the trajectory as it
-// is when the timer fires, so the last edit wins. (Same scheme as saveBundleSoon; inOrder is shared, the timers are not.)
-const timers = new Map<string, { handle: number; run: () => void; wait: number }>();
-function schedule(id: string, run: () => void, wait: number) {
-  clearTimeout(timers.get(id)?.handle);
-  timers.set(id, { handle: window.setTimeout(() => { timers.delete(id); run(); }, wait), run, wait });
-}
+// Edits come in bursts: saveSoon (src/lib/saveSoon.ts) writes the trajectory as it is when the timer fires, one write at a time.
 export function saveTrajectorySoon(id: string, latest: () => Trajectory | undefined, onError: (message: string) => void, wait = 600) {
-  schedule(id, () => { const t = latest(); if (t) inOrder(id, () => saveTrajectory(t)).catch((err) => onError((err as Error).message)); }, wait);
+  saveSoon(id, latest, saveTrajectory, onError, wait);
 }
-// A trajectory nobody was ever enrolled on and no credential refers to (the database decides; see trajectory_in_use). A pending
-// debounced save of it is held back first, and a write already running finishes before the delete, so it is never written back.
-// When the delete is refused the trajectory stays, so the held-back save is scheduled again (an edit the screen shows is not lost).
+// A trajectory nobody was ever enrolled on and no credential refers to (the database decides; see trajectory_in_use). Its plan's
+// source files go first (the rows go with the trajectory; a refused delete leaves them with their text, so citing still works).
+// A pending debounced save is held back first (whileDeleting), so it is never written back.
 const notDeleted = 'Not deleted · it is in use or you cannot delete it · retire it instead';
-export async function deleteTrajectory(id: string): Promise<{ error: string | null }> {
-  const held = timers.get(id);
-  clearTimeout(held?.handle);
-  timers.delete(id);
-  let result: { error: string | null } = { error: null };
-  await inOrder(id, async () => {
+export function deleteTrajectory(id: string): Promise<{ error: string | null }> {
+  return whileDeleting(id, async () => {
+    try { await removePlanFiles(id); } catch (err) { return { error: (err as Error).message }; }
     const { data, error } = await supabase.from('trajectories').delete().eq('id', id).select('id');
-    result = { error: error ? failure(error) : (data as unknown[] | null)?.length ? null : notDeleted };
+    return { error: error ? failure(error) : (data as unknown[] | null)?.length ? null : notDeleted };
   });
-  if (result.error && held && !timers.has(id)) schedule(id, held.run, held.wait);
-  return result;
 }
 // The ids (of those this admin may write) that are in use, so the editor offers Delete only on the others.
 export async function loadTrajectoriesInUse(): Promise<string[]> {

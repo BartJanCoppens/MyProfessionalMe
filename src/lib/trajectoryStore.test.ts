@@ -154,9 +154,22 @@ describe('deleting a trajectory', () => {
   it('deletes by id and reads back what was removed', async () => {
     db.answer(() => ({ data: [{ id: 'T100' }] }));
     expect(await deleteTrajectory('T100')).toEqual({ error: null });
-    expect(op(db.calls[0])).toBe('delete');
-    expect(has(db.calls[0], 'eq', 'id', 'T100')).toBe(true);
-    expect(has(db.calls[0], 'select', 'id')).toBe(true);
+    const [call] = db.on('trajectories');
+    expect(op(call)).toBe('delete');
+    expect(has(call, 'eq', 'id', 'T100')).toBe(true);
+    expect(has(call, 'select', 'id')).toBe(true);
+  });
+  it('removes the files of the plan\'s sources first, then the row', async () => {
+    db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? [{ path: 'u/s1/a.pdf' }] : [{ id: 'T100' }] }));
+    expect(await deleteTrajectory('T100')).toEqual({ error: null });
+    expect(db.calls.map((c) => c.table)).toEqual(['trajectory_plan_sources', 'storage:media', 'trajectories']);
+    expect(op(db.calls[1])).toBe('remove');
+    expect(op(db.calls[2])).toBe('delete');
+  });
+  it('keeps the trajectory when its files cannot be removed', async () => {
+    db.answer((c) => (c.table === 'storage:media' ? { error: { message: 'new row violates row-level security policy' } } : { data: [{ path: 'u/s1/a.pdf' }] }));
+    expect((await deleteTrajectory('T100')).error).toMatch(/^Not removed/);
+    expect(db.on('trajectories')).toHaveLength(0);
   });
   it('says so when the database refused (used meanwhile, or not the admin\'s)', async () => {
     db.answer(() => ({ data: [] }));
@@ -172,7 +185,7 @@ describe('deleting a trajectory', () => {
     saveTrajectorySoon('T1', () => parsed(), vi.fn(), 600);
     await deleteTrajectory('T1');
     await vi.advanceTimersByTimeAsync(700);
-    expect(db.calls.map(op)).toEqual(['delete']);
+    expect(db.on('trajectories').map(op)).toEqual(['delete']);
   });
   it('schedules the held-back save again when the delete is refused, so the edit is not lost', async () => {
     vi.useFakeTimers();
@@ -182,8 +195,8 @@ describe('deleting a trajectory', () => {
     expect((await deleteTrajectory('T1')).error).toMatch(/^Not deleted/);
     db.answer(() => ({ data: [{ id: 'T1' }] }));
     await vi.advanceTimersByTimeAsync(700);
-    expect(db.calls.map(op)).toEqual(['delete', 'update']);
-    expect((db.calls[1].steps[0][1][0] as { name: string }).name).toBe('edited');
+    expect(db.on('trajectories').map(op)).toEqual(['delete', 'update']);
+    expect((db.on('trajectories')[1].steps[0][1][0] as { name: string }).name).toBe('edited');
   });
   it('lists the ids in use through the database function', async () => {
     db.answer(() => ({ data: ['T1', 'T3'] }));

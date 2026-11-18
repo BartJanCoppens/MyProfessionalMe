@@ -3,7 +3,7 @@
 // (the author while the contribution is a draft or has changes requested) and who reads (author, reviewers, and
 // everyone once the published learning names the path). Nothing is public: reading is always a signed URL.
 import { supabase } from './supabase';
-import { MEDIA_BUCKET, MEDIA_MAX_BYTES, mediaFolder, mediaKind, mediaPath, mediaProblem } from '../logic/mediaFiles';
+import { MEDIA_BUCKET, MEDIA_MAX_BYTES, mediaFolder, mediaKind, mediaPath, mediaProblem, SOURCE_KINDS, sourceProblem } from '../logic/mediaFiles';
 
 type StorageError = { message: string; statusCode?: string };
 type Refusals = [RegExp, string][];
@@ -17,6 +17,8 @@ const UPLOAD: Refusals = [
   [/maximum allowed size|payload too large/i, 'The file is too large · at most ' + MEDIA_MAX_BYTES / 1024 / 1024 + ' MB'],
   [/mime type \S+ is not supported/i, 'This kind of file is not accepted'],
 ];
+const NOT_ALLOWED_SOURCE = 'Not allowed · only an editor of this trajectory can add source files';
+const UPLOAD_SOURCE: Refusals = [[/row-level security|unauthorized/i, NOT_ALLOWED_SOURCE], ...UPLOAD.slice(1)];
 const READ: Refusals = [[/not found|row-level security|unauthorized/i, NOT_THERE]];
 const REMOVE: Refusals = [[/row-level security|unauthorized/i, NOT_REMOVED]];
 const fail = (error: StorageError | null, refusals: Refusals) => {
@@ -25,14 +27,26 @@ const fail = (error: StorageError | null, refusals: Refusals) => {
 const bucket = () => supabase.storage.from(MEDIA_BUCKET);
 const signedInId = async () => (await supabase.auth.getSession()).data.session?.user.id ?? '';
 
+// Uploads (or replaces) a file at the path; the one place a file is sent to the bucket. Returns the path.
+async function put(path: string, file: Blob, contentType: string, refusals: Refusals): Promise<string> {
+  const { error } = await bucket().upload(path, file, { contentType, upsert: true });
+  fail(error, refusals);
+  return path;
+}
+
 // Uploads (or replaces) a file of the signed-in author's contribution. Returns its path, for the contribution's items.
 export async function uploadMedia(contributionId: string, file: Blob, name: string): Promise<string> {
   const problem = mediaProblem(name, file.size);
   if (problem) throw new Error(problem);
-  const path = mediaPath(await signedInId(), contributionId, name);
-  const { error } = await bucket().upload(path, file, { contentType: mediaKind(name)!.mime, upsert: true });
-  fail(error, UPLOAD);
-  return path;
+  return put(mediaPath(await signedInId(), contributionId, name), file, mediaKind(name)!.mime, UPLOAD);
+}
+
+// Uploads the PDF of a trajectory plan's source (its row exists already: the row's id is the folder). Returns the path, for the row.
+export async function uploadSourceFile(sourceId: string, file: Blob, name: string): Promise<string> {
+  const problem = sourceProblem(name, file.size);
+  if (problem) throw new Error(problem);
+  const path = mediaPath(await signedInId(), sourceId, name.trim().replace(/\.pdf$/i, '.pdf'));
+  return put(path, file, SOURCE_KINDS.pdf.mime, UPLOAD_SOURCE);
 }
 
 // A signed URL to play or download the file, valid for `seconds` (an hour by default).
@@ -60,6 +74,12 @@ async function removePaths(paths: string[]) {
 }
 
 export const removeMedia = (path: string) => removePaths([path]);
+
+// Removes the files that are there (a file already gone is not an error: a trajectory whose delete was refused earlier is deleted again).
+export async function removeFiles(paths: string[]): Promise<void> {
+  const { error } = await bucket().remove(paths);
+  fail(error, REMOVE);
+}
 
 // Removes all files of one of the signed-in author's contributions (before its draft is deleted).
 // A contribution holds a few files; 1000 is Storage's page size and far above any studio's count.
