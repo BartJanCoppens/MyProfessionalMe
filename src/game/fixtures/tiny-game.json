@@ -1,0 +1,6 @@
+{
+ "files": {
+  "index.html": "<main id=\"app\">\n  <h1 id=\"title\">Tiny quiz</h1>\n  <p id=\"progress\"></p>\n  <h2 id=\"question\"></h2>\n  <div id=\"options\"></div>\n  <p id=\"feedback\"></p>\n</main>\n<style>body{font-family:'IBM Plex Sans',sans-serif;padding:24px} button{display:block;margin:6px 0;padding:8px 12px}</style>",
+  "game.js": "(async () => {\n  await GameStudio.ready();\n  const { questions } = await GameStudio.getData();\n  let i = 0, score = 0;\n  const $ = id => document.getElementById(id);\n  function show() {\n    if (i >= questions.length) return end();\n    const q = questions[i];\n    $('progress').textContent = 'Question ' + (i + 1) + ' of ' + questions.length;\n    $('question').textContent = q.q;\n    $('options').innerHTML = '';\n    q.options.forEach((text, k) => {\n      const b = document.createElement('button');\n      b.textContent = text;\n      b.onclick = () => { if (k === q.answer) score += 10; i++; show(); };\n      $('options').appendChild(b);\n    });\n  }\n  async function end() {\n    $('question').textContent = 'Done: ' + score + ' points';\n    $('options').innerHTML = '';\n    await GameStudio.submitScore(score, { answered: questions.length });\n    await GameStudio.finish();\n  }\n  show();\n})();"
+ }
+}
