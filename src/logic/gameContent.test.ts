@@ -119,6 +119,19 @@ describe('what the check gate reports for a Game (gameProblems)', () => {
     const short: StudioItem = ['AI role', 'A manager.', 'a short one'];
     expect(problems([...ROWS, short, item({ for: { role: 'Opponent' }, files: { ...files, 'game.js': 'a short one' } })], { ...SHAPE, [ROLE_QUESTION]: 'Opponent' })).toBe('');
   });
+  it('refuses text that repeats what the AI role hides in the rounds, the concept or the role itself', () => {
+    const leak = (rows: StudioItem[]) => problems([...rows, ROLE_ROW, item({ for: { role: 'Suspect to question' } })], WITH_ROLE);
+    const ECHO = 'The game\'s text repeats what the AI role hides';
+    expect(leak([ROWS[0], ['Round 1', 'Ask: ' + SECRET.toUpperCase(), 'x'], ROWS[2]])).toBe(ECHO);
+    expect(leak([ROWS[0], ROWS[1], ['Round 2', 'x', 'so ' + SECRET]])).toBe(ECHO);
+    expect(leak([['Concept', SECRET + '!', 'win'], ROWS[1], ROWS[2]])).toBe(ECHO);
+    expect(problems([...ROWS, ['AI role', 'Plays: ' + SECRET, SECRET], item({ for: { role: 'Suspect to question' } })], WITH_ROLE)).toBe(ECHO);
+    expect(leak(ROWS)).toBe('');
+  });
+  it('wants the built game after the rows', () => {
+    expect(problems([item(), ...ROWS])).toBe('The built game must come after the rows · build the game again');
+    expect(gameProblems([...ROWS, item()], SHAPE)).toEqual([]);
+  });
   it('is the Produce problem list of a Game studio piece', () => expect(outputProblems(def, ROWS, SHAPE)).toEqual(['Build the game in Produce first']));
 });
 

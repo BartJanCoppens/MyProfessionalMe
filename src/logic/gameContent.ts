@@ -2,10 +2,11 @@
 // one built game item {kind, files, for, review, made}: its two files, the AI role answer it was built for, the house-rules
 // review of this build (null until it ran) and who made it. The database repeats these rules (private.game_item_ok,
 // private.game_ok, private.game_content and the Game part of private.contribution_problems).
-import { roleOf, GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
+import { roleOf, GAME_ROLES, ROLE_LABEL } from '../../supabase/functions/_shared/gameRules.ts';
 import type { GameContent, GameData } from '../types';
 import { FILE_NAMES, GAME_FILE_MAX, scanGameFiles } from './gameScan';
-import type { StudioEntry, StudioItem } from './studios';
+import { stepsOf } from './studioRows';
+import type { StudioEntry } from './studios';
 
 export const ROLE_QUESTION = 'Does the AI play a role?';
 export const NO_ROLE = 'No AI role';
@@ -18,6 +19,8 @@ export const ROLE_MISSING = 'Add the AI role: who it plays and what it knows';
 export const ROLE_UNUSED = 'Remove the AI role row, or choose a role in Shape it';
 export const ROLE_CHANGED = 'You changed the AI role after the build · build the game again';
 export const ECHOED = "The game's code repeats what the AI role hides";
+export const ECHOED_TEXT = "The game's text repeats what the AI role hides";
+export const GAME_LAST = 'The built game must come after the rows · build the game again';
 export const NOT_PASSED = 'The house-rules check has not passed';
 // A hidden text shorter than this is too common to look for in the code.
 const ECHO_MIN = 12;
@@ -38,8 +41,7 @@ export function isGameItem(v: unknown): v is GameItem {
 }
 export const gameOf = (items: readonly unknown[]): GameItem | null => (items.find(isGameItem) as GameItem | undefined) ?? null;
 
-// The rows: stepsOf in studios.ts, which this file cannot import (studios.ts and items.ts import this file first, and studios.ts reads items.ts at load).
-const rowsOf = (items: StudioEntry[]) => items.filter((i): i is StudioItem => Array.isArray(i)).map((i) => ({ label: i[0], text: i[1].trim(), text2: (i[2] ?? '').trim() }));
+const rowsOf = (items: StudioEntry[]) => stepsOf(items).map((i) => ({ label: i[0], text: i[1].trim(), text2: (i[2] ?? '').trim() }));
 const ROUND = /^Round \d+$/;
 /** What getData() gives the game: the Concept's setup and win condition and each Round's text and answer. */
 export function gameData(items: StudioEntry[]): GameData {
@@ -59,13 +61,19 @@ export function gameContent(items: StudioEntry[], shape: Record<string, string>)
     leaderboard: LEADERBOARDS.includes(shape[LEADERBOARD_QUESTION] as GameContent['leaderboard']) ? shape[LEADERBOARD_QUESTION] as GameContent['leaderboard'] : LEADERBOARDS[0] };
 }
 
+// Case-insensitive containment. JavaScript's toLowerCase and Postgres' lower() can differ for a few Unicode letters (decisions.md).
+const hasIn = (text: string, part: string) => text.toLowerCase().includes(part.toLowerCase());
+
 /** What stops a game being sent (the Game part of private.contribution_problems, in the same order and words). */
 export function gameProblems(items: StudioEntry[], shape: Record<string, string>): string[] {
   const game = gameOf(items), answer = roleAnswer(shape), role = roleOf(items);
   const roleRow = answer !== NO_ROLE && !role ? [ROLE_MISSING] : answer === NO_ROLE && role ? [ROLE_UNUSED] : [];
   if (!game) return [...roleRow, BUILD_FIRST];
-  const echoed = !!role && role.knows.length >= ECHO_MIN && Object.values(game.files).some((text) => text.toLowerCase().includes(role.knows.toLowerCase()));
-  return [...roleRow, ...scanGameFiles(game.files),
+  const misplaced = items.indexOf(game) < items.findLastIndex((i) => Array.isArray(i));
+  const echoed = !!role && role.knows.length >= ECHO_MIN && Object.values(game.files).some((text) => hasIn(text, role.knows));
+  // The published texts (concept, win, rounds, who the AI plays) must not carry it either; the role's own text 2 is the one place it lives.
+  const leaked = !!role && role.knows.length >= ECHO_MIN && rowsOf(items).some((r) => hasIn(r.text, role.knows) || (r.label !== ROLE_LABEL && hasIn(r.text2, role.knows)));
+  return [...(misplaced ? [GAME_LAST] : []), ...roleRow, ...scanGameFiles(game.files),
     ...(game.review?.passed ? [] : [NOT_PASSED + (game.review?.reasons[0] ? ': ' + game.review.reasons[0] : '')]),
-    ...(game.for.role === answer ? [] : [ROLE_CHANGED]), ...(echoed ? [ECHOED] : [])];
+    ...(game.for.role === answer ? [] : [ROLE_CHANGED]), ...(echoed ? [ECHOED] : []), ...(leaked ? [ECHOED_TEXT] : [])];
 }

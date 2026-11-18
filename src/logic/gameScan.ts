@@ -38,7 +38,9 @@ export function filesProblems(files: unknown): string[] {
 export function scanGameFiles(files: Record<string, string | undefined>): string[] {
   const problems: string[] = [];
   if (!files['index.html']) problems.push('The game has no index.html');
-  for (const [name, text] of Object.entries(files)) {
+  // In FILE_NAMES order, as private.game_scan reads them; other names are filesProblems' business.
+  for (const name of FILE_NAMES) {
+    const text = files[name];
     if (typeof text !== 'string') continue;
     const max = GAME_FILE_MAX[name];
     if (max !== undefined && text.length > max) { problems.push(`${name} is too large (over ${max} characters)`); continue; }

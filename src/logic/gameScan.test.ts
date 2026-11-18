@@ -58,6 +58,13 @@ describe('scanGameFiles', () => {
   it('reports index.html over 16,000 characters', () => expect(scanGameFiles({ 'index.html': 'x'.repeat(16001) }).join(' ')).toContain('index.html is too large'));
 });
 
+describe('the order of the problems', () => {
+  it('follows FILE_NAMES whatever the order of the keys (as private.game_scan does)', () => {
+    const out = scanGameFiles({ 'game.js': 'fetch("x")', 'index.html': '<form>' });
+    expect(out).toEqual(['index.html submits a form (<form)', 'game.js contacts another website (fetch()']);
+  });
+});
+
 describe('filesProblems', () => {
   it('accepts the two files as text', () => expect(filesProblems({ 'index.html': '<p></p>', 'game.js': '' })).toEqual([]));
   it('refuses a style.css key as an unexpected file', () => expect(filesProblems({ 'index.html': '<p></p>', 'style.css': 'p{}' }).join(' ')).toContain('Unexpected file style.css'));

@@ -5,6 +5,8 @@ import type { ExamQuestion } from '../types';
 import { ROLE_LABEL } from '../../supabase/functions/_shared/gameRules.ts';
 import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, isQuestion, rowFieldMax } from './items';
 import { isGameItem } from './gameContent';
+import { stepsOf } from './studioRows';
+import type { StudioItem } from './studioRows';
 import type { GameItem } from './gameContent';
 import { isDrawing } from './motionSvg';
 import type { MotionDrawing } from './motionSvg';
@@ -21,12 +23,12 @@ export const STEERS: Record<Steers, string> = { draft: 'Steers the AI draft', re
 export type StudioQuestion = [question: string, options: string[], steers?: Steers];
 export type ProduceRow = [label: string, options: string[], steers?: Steers];
 export type BuildStep = string;
-export type StudioItem = [label: string, text: string] | [label: string, text: string, text2: string];
+export type { StudioItem };
 // What a studio's items hold: its rows and, after them, the Explainer's three exam questions of its check or the
 // Animated flow's one drawing.
 export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing | VoiceItem | GameItem;
 export const CHECK_SIZE = 3;
-export const stepsOf = (items: readonly StudioEntry[]) => items.filter((i): i is StudioItem => Array.isArray(i));
+export { stepsOf };
 // The rows as {label, text}, trimmed: an explainer's steps and an Animated flow's stages.
 export const labelledRows = (items: StudioEntry[]) => stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() }));
 export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i) && !isVoiceItem(i) && !isGameItem(i));
