@@ -90,4 +90,13 @@ describe('the text uses the app calls', () => {
     expect(seed![2]).toMatch(/SVG only/);
     expect(seed![2]).not.toMatch(/JSON/);
   });
+  it('seed the Game Studio\'s use switched off, at 40 calls a day, with the house rules as its instruction', () => {
+    expect(AI_USE_KEYS).toContain('studio_game');
+    const seed = /\('studio_game', \d+, 'text', 'Studio game build', 'Game Studio', '(?:[^']|'')*', null, false, false,\s*'((?:[^']|'')*)', 40\)/.exec(migrations);
+    expect(seed).not.toBeNull();
+    expect(seed![1]).toMatch(/professional and respectful/i);
+    expect(seed![1]).toMatch(/nothing violent/i);
+    expect(seed![1]).toMatch(/no real client/i);
+    expect(seed![1]).toMatch(/no real confidential data/i);
+  });
 });

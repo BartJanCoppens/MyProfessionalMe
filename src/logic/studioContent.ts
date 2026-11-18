@@ -4,6 +4,7 @@
 // learners will get. Pure.
 import type { FormatContent } from '../types';
 import { gameContent, gameProblems } from './gameContent';
+import type { GameReviewStatus } from './gameContent';
 import { ALT_MAX, drawingOf } from './motionSvg';
 import { podcastContent, podcastProblems } from './podcastContent';
 import { AI_VOICE, PRESENTER, slidesContent, slidesProblems } from './slidesContent';
@@ -63,9 +64,9 @@ export function motionProblems(items: StudioEntry[], shape: Record<string, strin
 }
 // What the Produce step still has to make before a studio piece can be sent: the Motion Studio's animation, the voice-over of the
 // Slides Studio and the Podcast Studio, the Game Studio's built game and its review (voiceOn: the AI voice can be used now, which words the reason) and a length within the limit.
-export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>, voiceOn = true) =>
+export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>, voiceOn = true, review?: GameReviewStatus | null) =>
   (def.format === 'Animated flow' ? motionProblems(items, shape) : def.format === 'Slides' ? slidesProblems(items, shape, voiceOn)
-    : def.format === 'Podcast' ? podcastProblems(items, shape, voiceOn) : def.format === 'Game' ? gameProblems(items, shape) : []);
+    : def.format === 'Podcast' ? podcastProblems(items, shape, voiceOn) : def.format === 'Game' ? gameProblems(items, shape, review) : []);
 
 // Answers only Draft with AI (or, for the voice, the live AI voice) can deliver (question to answers): offered only while it can run, with the reason otherwise;
 // an answer already chosen stays on screen, with the reason.

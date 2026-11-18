@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { roleOf, GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
 import { parseFormatContent } from '../lib/contentStore';
 import { STUDIOS } from '../studioData';
-import type { GameItem } from './gameContent';
+import type { GameItem, GameReviewStatus } from './gameContent';
 import { LEADERBOARD_QUESTION, NO_ROLE, ROLE_QUESTION, gameContent, gameData, gameOf, gameProblems, isGameItem } from './gameContent';
 import { itemRows, itemsFromSaved, itemsText } from './items';
 import { studioContent, outputProblems } from './studioContent';
@@ -18,7 +18,8 @@ const ROWS = def.items as StudioItem[];
 const SECRET = 'the supplier is the CFO’s brother';
 const ROLE_ROW: StudioItem = ['AI role', 'The supplier’s manager, defensive and in a hurry.', SECRET];
 const files = { 'index.html': '<main id="app"></main>', 'game.js': 'GameStudio.ready();' };
-const item = (over: Partial<GameItem> = {}): GameItem => ({ kind: 'game', files, for: { role: NO_ROLE }, review: { passed: true, reasons: [] }, made: 'ai', ...over });
+const item = (over: Partial<GameItem> = {}): GameItem => ({ kind: 'game', files, for: { role: NO_ROLE }, ...over });
+const PASSED: GameReviewStatus = { passed: true, reasons: [], current: true };
 const SHAPE = { [ROLE_QUESTION]: NO_ROLE, [LEADERBOARD_QUESTION]: 'My team only' };
 const WITH_ROLE = { ...SHAPE, [ROLE_QUESTION]: 'Suspect to question' };
 const problems = (items: StudioEntry[], shape: Record<string, string> = SHAPE) => gameProblems(items, shape).join(' | ');
@@ -44,12 +45,11 @@ describe('the rows of a Game', () => {
 });
 
 describe('the built game', () => {
-  it('is read strictly: exact keys, the two files, a role answer, a review or none, made by AI', () => {
+  it('is read strictly: exact keys (kind, files, for), the two files, a role answer; a client-sent review or made is refused', () => {
     expect(isGameItem(item())).toBe(true);
-    expect(isGameItem(item({ review: null }))).toBe(true);
-    for (const bad of [{ ...item(), extra: 1 }, item({ made: 'scripted' as 'ai' }), item({ for: { role: 'Judge' } }), item({ files: { 'index.html': 'x', 'style.css': 'y' } as never }),
-      item({ files: { 'index.html': 'x'.repeat(16001), 'game.js': '' } }), item({ files: { 'index.html': 'x', 'game.js': 'y'.repeat(32001) } }),
-      item({ review: { passed: true, reasons: Array(11).fill('x') } }), item({ review: { passed: true, reasons: ['x'.repeat(301)] } }), item({ review: { passed: 'yes' } as never }), null, [], 'game']) {
+    for (const bad of [{ ...item(), extra: 1 }, { ...item(), made: 'ai' }, { ...item(), review: null }, { ...item(), review: { passed: true, reasons: [] } },
+      item({ for: { role: 'Judge' } }), item({ files: { 'index.html': 'x', 'style.css': 'y' } as never }),
+      item({ files: { 'index.html': 'x'.repeat(16001), 'game.js': '' } }), item({ files: { 'index.html': 'x', 'game.js': 'y'.repeat(32001) } }), null, [], 'game']) {
       expect(isGameItem(bad)).toBe(false);
     }
     expect(gameOf([...ROWS, item()])).toEqual(item());
@@ -58,8 +58,8 @@ describe('the built game', () => {
   it('survives a reload of a saved draft, and is shown as one line for reviewers and scanned for client names', () => {
     const all = [...ROWS, item()];
     expect(itemsFromSaved('Game', all)).toEqual(all);
-    expect(itemRows('Game', all as never).at(-1)).toEqual({ front: 'Game · built by AI', back: 'House rules check passed' });
-    expect(itemRows('Game', [...ROWS, item({ review: null })] as never).at(-1)!.back).toBe('House rules check not run yet');
+    expect(itemRows('Game', all as never).at(-1)).toEqual({ front: 'Game · built by AI', back: 'Screens and logic written' });
+    expect(itemRows('Game', [...ROWS, item({ files: { ...files, 'game.js': '' } })] as never).at(-1)!.back).toBe('Screens only · logic to write');
     expect(itemsText(all as never)).toEqual(expect.arrayContaining([files['index.html'], files['game.js']]));
   });
 });
@@ -96,14 +96,19 @@ describe('what a Game publishes as', () => {
 
 describe('what the check gate reports for a Game (gameProblems)', () => {
   const ALL: StudioEntry[] = [...ROWS, item()];
-  it('is nothing for a built game that passed, with no role', () => expect(gameProblems(ALL, SHAPE)).toEqual([]));
+  it('is nothing for a built game that passed, with no role', () => expect(gameProblems(ALL, SHAPE, PASSED)).toEqual([]));
   it('asks to build the game first', () => expect(problems(ROWS)).toBe('Build the game in Produce first'));
   it('reports the scan problems verbatim', () => {
     expect(problems([...ROWS, item({ files: { ...files, 'game.js': 'fetch("x")' } })])).toBe('game.js contacts another website (fetch()');
   });
-  it('wants a passed review on the build, and says why when it has not passed', () => {
-    expect(problems([...ROWS, item({ review: null })])).toBe('The house-rules check has not passed');
-    expect(problems([...ROWS, item({ review: { passed: false, reasons: ['No way to lose', 'x'] } })])).toBe('The house-rules check has not passed: No way to lose');
+  it('wants the server\'s passed review of these files, and says why when it has not passed or is out of date', () => {
+    const say = (r: GameReviewStatus | null | undefined) => gameProblems(ALL, SHAPE, r).join(' | ');
+    expect(say(null)).toBe('The house-rules check has not passed');
+    expect(say({ passed: false, reasons: ['No way to lose', 'x'], current: true })).toBe('The house-rules check has not passed: No way to lose');
+    expect(say({ passed: true, reasons: [], current: false })).toBe('Run the house-rules check again');
+    expect(say({ passed: false, reasons: ['No way to lose'], current: false })).toBe('Run the house-rules check again');
+    expect(say(PASSED)).toBe('');
+    expect(say(undefined)).toBe(''); // not known in this session: the server's check reads it
   });
   it('wants the role chosen now to be the role the game was built for', () => {
     expect(problems([...ROWS, ROLE_ROW, item({ for: { role: 'Opponent' } })], WITH_ROLE)).toBe('You changed the AI role after the build · build the game again');
@@ -130,9 +135,9 @@ describe('what the check gate reports for a Game (gameProblems)', () => {
   });
   it('wants the built game after the rows', () => {
     expect(problems([item(), ...ROWS])).toBe('The built game must come after the rows · build the game again');
-    expect(gameProblems([...ROWS, item()], SHAPE)).toEqual([]);
+    expect(gameProblems([...ROWS, item()], SHAPE, PASSED)).toEqual([]);
   });
-  it('is the Produce problem list of a Game studio piece', () => expect(outputProblems(def, ROWS, SHAPE)).toEqual(['Build the game in Produce first']));
+  it('is the Produce problem list of a Game studio piece', () => expect(outputProblems(def, ROWS, SHAPE, true, null)).toEqual(['Build the game in Produce first']));
 });
 
 describe('the AI role row', () => {

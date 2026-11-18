@@ -7,8 +7,8 @@ export type AiProvider = 'anthropic' | 'openai_compatible' | 'elevenlabs' | 'hey
 export type AiKind = 'text' | 'embedding' | 'voice' | 'avatar';
 // The text uses the app calls today, each seeded in public.ai_uses (src/logic/ai.test.ts checks). Most have a scripted
 // fallback; draft_items has one for flash cards only (exam questions are AI or CSV); studio_draft has one for every
-// studio but Game; studio_motion (the Motion Studio's animation) has the scripted flow of boxes and arrows.
-export const AI_USE_KEYS = ['profile_chat', 'curriculum_copilot', 'learners_eye', 'kb_answer', 'draft_outline', 'teach_back', 'draft_items', 'studio_draft', 'studio_motion'] as const;
+// studio but Game; studio_motion (the Motion Studio's animation) has the scripted flow of boxes and arrows; studio_game (the Game Studio's code and its house-rules review) has no script: there is no scripted game.
+export const AI_USE_KEYS = ['profile_chat', 'curriculum_copilot', 'learners_eye', 'kb_answer', 'draft_outline', 'teach_back', 'draft_items', 'studio_draft', 'studio_motion', 'studio_game'] as const;
 export type AiUseKey = (typeof AI_USE_KEYS)[number];
 
 export type AiConnection = { id: string; name: string; provider: AiProvider; base_url: string | null; default_model: string | null; region: string | null; key_hint: string | null; updated_at?: string };

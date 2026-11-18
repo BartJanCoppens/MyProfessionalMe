@@ -6,7 +6,7 @@
 //   openai_compatible  Chat completions at <base URL>/chat/completions, key as a bearer token (and api-key for
 //                      Azure). Covers OpenAI, Azure OpenAI and EU-hosted OpenAI-compatible services such as Mistral.
 // The key is only ever put in a request header; errors are scrubbed of it before they leave the function.
-import { isLimitError, scrub } from '../_shared/aiGuard.ts';
+import { isLimitError, scrub, USE_LIMITS } from '../_shared/aiGuard.ts';
 import type { Provider } from '../_shared/aiGuard.ts';
 
 export { isLimitError, scrub };
@@ -16,13 +16,14 @@ export const TEXT_PROVIDERS: Provider[] = ['anthropic', 'openai_compatible'];
 export type Msg = { role: 'user' | 'assistant'; content: string };
 export type Ask = { system?: string; messages: Msg[]; max_tokens: number };
 export type Target = { provider: Provider; baseUrl: string | null; model: string; key: string };
-export type Outcome = { ok: true; text: string } | { ok: false; error: string };
+// cut: the answer stopped at its length limit (a file written in parts continues from it).
+export type Outcome = { ok: true; text: string; cut: boolean } | { ok: false; error: string };
 
 export const LIMITS = {
   body: 100_000, // characters in the raw request
   chars: 60_000, // characters across system and messages
   messages: 40,
-  maxTokens: 2048, // what a caller may ask for
+  maxTokens: 2048, // what a caller may ask for (USE_LIMITS raises it for a use)
   defaultTokens: 600,
   timeoutMs: 30_000,
 };
@@ -52,7 +53,7 @@ export function readAsk(body: unknown): { ok: true; use: string; ask: Ask } | { 
   const chars = (b.system as string | undefined || '').length + messages.reduce((a, m) => a + m.content.length, 0);
   if (chars > LIMITS.chars) return { ok: false, error: 'The request is too long (at most ' + LIMITS.chars + ' characters)' };
   const n = Number(b.max_tokens);
-  const max_tokens = Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), LIMITS.maxTokens) : LIMITS.defaultTokens;
+  const max_tokens = Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), USE_LIMITS[use]?.maxTokens ?? LIMITS.maxTokens) : LIMITS.defaultTokens;
   return { ok: true, use, ask: { ...(b.system ? { system: b.system as string } : {}), messages, max_tokens } };
 }
 
@@ -100,11 +101,11 @@ export function parseReply(provider: Provider, status: number, json: unknown): O
   if (provider === 'anthropic') {
     if (j.stop_reason === 'refusal') return { ok: false, error: 'The model declined to answer' };
     const text = (Array.isArray(j.content) ? j.content : []).filter((c: any) => c && c.type === 'text').map((c: any) => String(c.text)).join('').trim();
-    return text ? { ok: true, text } : { ok: false, error: j.stop_reason === 'max_tokens' ? 'The model ran out of tokens before answering' : 'The model returned no text' };
+    return text ? { ok: true, text, cut: j.stop_reason === 'max_tokens' } : { ok: false, error: j.stop_reason === 'max_tokens' ? 'The model ran out of tokens before answering' : 'The model returned no text' };
   }
   const c = j.choices?.[0]?.message?.content;
   const text = (typeof c === 'string' ? c : Array.isArray(c) ? c.map((p: any) => (p && typeof p.text === 'string' ? p.text : '')).join('') : '').trim();
-  return text ? { ok: true, text } : { ok: false, error: j.choices?.[0]?.finish_reason === 'length' ? 'The model ran out of tokens before answering' : 'The model returned no text' };
+  return text ? { ok: true, text, cut: j.choices?.[0]?.finish_reason === 'length' } : { ok: false, error: j.choices?.[0]?.finish_reason === 'length' ? 'The model ran out of tokens before answering' : 'The model returned no text' };
 }
 
 // One call: build, send with a timeout, read. fetchFn is injectable for tests.

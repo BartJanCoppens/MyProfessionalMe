@@ -2,6 +2,7 @@
 // requests for Anthropic and OpenAI-compatible services, reply and error parsing, and that the key never leaks.
 import { describe, expect, it, vi } from 'vitest';
 import { ANTHROPIC_MIN_TOKENS, ANTHROPIC_VERSION, buildRequest, callProvider, inputChars, isLimitError, limitMessage, LIMITS, parseReply, readAsk, scrub, TEST_ASK, withPreamble } from '../../supabase/functions/ai/core.ts';
+import { USE_LIMITS } from '../../supabase/functions/_shared/aiGuard.ts';
 import type { Target } from '../../supabase/functions/ai/core.ts';
 
 const user = (content: string) => ({ role: 'user', content });
@@ -17,6 +18,13 @@ describe('readAsk', () => {
     expect(r.ok && r.ask.max_tokens).toBe(LIMITS.maxTokens);
     expect(LIMITS.maxTokens).toBe(2048);
     expect(readAsk({ use: 'studio_draft', messages: [user('Q')], max_tokens: 2000 })).toMatchObject({ ok: true, ask: { max_tokens: 2000 } });
+  });
+  it('lets the game build ask for more, and every other use keeps 2048', () => {
+    expect(USE_LIMITS.studio_game).toEqual({ maxTokens: 8000, timeoutMs: 110_000 });
+    expect(readAsk({ use: 'studio_game', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 8000 } });
+    expect(readAsk({ use: 'studio_game', messages: [user('Q')], max_tokens: 5000 })).toMatchObject({ ok: true, ask: { max_tokens: 5000 } });
+    expect(readAsk({ use: 'kb_answer', messages: [user('Q')], max_tokens: 9000 })).toMatchObject({ ok: true, ask: { max_tokens: 2048 } });
+    expect(Object.keys(USE_LIMITS)).toEqual(['studio_game']);
   });
   it('refuses what is malformed or too large', () => {
     expect(readAsk(null)).toEqual({ ok: false, error: 'Name the AI use' });
@@ -59,16 +67,21 @@ describe('buildRequest', () => {
 
 describe('parseReply', () => {
   it('reads Anthropic text blocks and skips thinking', () => {
-    expect(parseReply('anthropic', 200, { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: 'Hello ' }, { type: 'text', text: 'there' }], stop_reason: 'end_turn' })).toEqual({ ok: true, text: 'Hello there' });
+    expect(parseReply('anthropic', 200, { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: 'Hello ' }, { type: 'text', text: 'there' }], stop_reason: 'end_turn' })).toEqual({ ok: true, text: 'Hello there', cut: false });
   });
   it('says when Anthropic declined or ran out of tokens', () => {
     expect(parseReply('anthropic', 200, { content: [], stop_reason: 'refusal' })).toEqual({ ok: false, error: 'The model declined to answer' });
     expect(parseReply('anthropic', 200, { content: [{ type: 'thinking', thinking: '' }], stop_reason: 'max_tokens' })).toEqual({ ok: false, error: 'The model ran out of tokens before answering' });
   });
   it('reads OpenAI-compatible content as text or parts', () => {
-    expect(parseReply('openai_compatible', 200, { choices: [{ message: { content: ' OK ' } }] })).toEqual({ ok: true, text: 'OK' });
-    expect(parseReply('openai_compatible', 200, { choices: [{ message: { content: [{ type: 'text', text: 'A' }, { type: 'text', text: 'B' }] } }] })).toEqual({ ok: true, text: 'AB' });
+    expect(parseReply('openai_compatible', 200, { choices: [{ message: { content: ' OK ' } }] })).toEqual({ ok: true, text: 'OK', cut: false });
+    expect(parseReply('openai_compatible', 200, { choices: [{ message: { content: [{ type: 'text', text: 'A' }, { type: 'text', text: 'B' }] } }] })).toEqual({ ok: true, text: 'AB', cut: false });
     expect(parseReply('openai_compatible', 200, { choices: [{ message: { content: '' }, finish_reason: 'length' }] })).toEqual({ ok: false, error: 'The model ran out of tokens before answering' });
+  });
+  it('says when an answer was cut at the length limit but has text (a file written in parts)', () => {
+    expect(parseReply('anthropic', 200, { stop_reason: 'max_tokens', content: [{ type: 'text', text: 'abc' }] })).toEqual({ ok: true, text: 'abc', cut: true });
+    expect(parseReply('openai_compatible', 200, { choices: [{ message: { content: 'abc' }, finish_reason: 'length' }] })).toEqual({ ok: true, text: 'abc', cut: true });
+    expect(parseReply('openai_compatible', 200, { choices: [{ message: { content: 'abc' }, finish_reason: 'stop' }] })).toMatchObject({ cut: false });
   });
   it('turns provider errors into one line', () => {
     expect(parseReply('anthropic', 401, { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } })).toEqual({ ok: false, error: 'The provider answered 401: invalid x-api-key' });
@@ -81,7 +94,7 @@ describe('callProvider', () => {
   const reply = (status: number, json: unknown) => vi.fn(async () => new Response(JSON.stringify(json), { status })) as unknown as typeof fetch;
   it('returns the text', async () => {
     const f = reply(200, { content: [{ type: 'text', text: 'OK' }] });
-    expect(await callProvider(claude, TEST_ASK, f)).toEqual({ ok: true, text: 'OK' });
+    expect(await callProvider(claude, TEST_ASK, f)).toEqual({ ok: true, text: 'OK', cut: false });
     expect(vi.mocked(f).mock.calls[0][0]).toBe('https://api.anthropic.com/v1/messages');
   });
   it('never returns the key, also when the provider echoes it', async () => {

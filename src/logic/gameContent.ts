@@ -1,6 +1,7 @@
 // The Game format (studios plan, Task 4.2): a game's rows (one Concept, the Rounds, at most one AI role) and, after them, the
-// one built game item {kind, files, for, review, made}: its two files, the AI role answer it was built for, the house-rules
-// review of this build (null until it ran) and who made it. The database repeats these rules (private.game_item_ok,
+// one built game item {kind, files, for}: its two files and the AI role answer it was built for. The house-rules verdict is not in it
+// and neither is who made it: the verdict is a server record (game_reviews, written only by the `ai` function) for a hash of the
+// files, and a game is always AI built (GameContent.made). The database repeats these rules (private.game_item_ok,
 // private.game_ok, private.game_content and the Game part of private.contribution_problems).
 import { roleOf, GAME_ROLES, ROLE_LABEL } from '../../supabase/functions/_shared/gameRules.ts';
 import type { GameContent, GameData } from '../types';
@@ -13,7 +14,6 @@ export const NO_ROLE = 'No AI role';
 export const ROLES: string[] = [...GAME_ROLES, NO_ROLE];
 export const LEADERBOARD_QUESTION = 'Leaderboard?';
 export const LEADERBOARDS: GameContent['leaderboard'][] = ['Firm-wide', 'My team only', 'None'];
-export const REASONS_MAX = 10, REASON_MAX = 300;
 export const BUILD_FIRST = 'Build the game in Produce first';
 export const ROLE_MISSING = 'Add the AI role: who it plays and what it knows';
 export const ROLE_UNUSED = 'Remove the AI role row, or choose a role in Shape it';
@@ -22,22 +22,21 @@ export const ECHOED = "The game's code repeats what the AI role hides";
 export const ECHOED_TEXT = "The game's text repeats what the AI role hides";
 export const GAME_LAST = 'The built game must come after the rows · build the game again';
 export const NOT_PASSED = 'The house-rules check has not passed';
+export const RERUN = 'Run the house-rules check again';
 // A hidden text shorter than this is too common to look for in the code.
 const ECHO_MIN = 12;
 
-export type GameReview = { passed: boolean; reasons: string[] };
-export type GameItem = { kind: 'game'; files: { 'index.html': string; 'game.js': string }; for: { role: string }; review: GameReview | null; made: 'ai' };
+// The server's verdict as game_review_status gives it: current is true while it is for the files as they are now.
+export type GameReviewStatus = { passed: boolean; reasons: string[]; current: boolean };
+export type GameItem = { kind: 'game'; files: { 'index.html': string; 'game.js': string }; for: { role: string } };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const keysAre = (x: Record<string, unknown>, keys: string[]) => Object.keys(x).length === keys.length && keys.every((k) => k in x);
-const isReview = (r: unknown): r is GameReview => isObject(r) && keysAre(r, ['passed', 'reasons']) && typeof r.passed === 'boolean'
-  && Array.isArray(r.reasons) && r.reasons.length <= REASONS_MAX && r.reasons.every((x) => typeof x === 'string' && x.length <= REASON_MAX);
-
 export function isGameItem(v: unknown): v is GameItem {
-  if (!isObject(v) || !keysAre(v, ['kind', 'files', 'for', 'review', 'made']) || v.kind !== 'game' || v.made !== 'ai') return false;
+  if (!isObject(v) || !keysAre(v, ['kind', 'files', 'for']) || v.kind !== 'game') return false;
   const { files, for: built } = v;
   return isObject(files) && keysAre(files, FILE_NAMES) && FILE_NAMES.every((n) => typeof files[n] === 'string' && (files[n] as string).length <= GAME_FILE_MAX[n])
-    && isObject(built) && keysAre(built, ['role']) && typeof built.role === 'string' && ROLES.includes(built.role) && (v.review === null || isReview(v.review));
+    && isObject(built) && keysAre(built, ['role']) && typeof built.role === 'string' && ROLES.includes(built.role);
 }
 export const gameOf = (items: readonly unknown[]): GameItem | null => (items.find(isGameItem) as GameItem | undefined) ?? null;
 
@@ -64,8 +63,14 @@ export function gameContent(items: StudioEntry[], shape: Record<string, string>)
 // Case-insensitive containment. JavaScript's toLowerCase and Postgres' lower() can differ for a few Unicode letters (decisions.md).
 const hasIn = (text: string, part: string) => text.toLowerCase().includes(part.toLowerCase());
 
-/** What stops a game being sent (the Game part of private.contribution_problems, in the same order and words). */
-export function gameProblems(items: StudioEntry[], shape: Record<string, string>): string[] {
+/** What the check gate says about the verdict, in the words of private.contribution_problems. */
+export function reviewProblem(review: GameReviewStatus | null): string[] {
+  return !review ? [NOT_PASSED] : !review.current ? [RERUN] : review.passed ? [] : [NOT_PASSED + (review.reasons[0] ? ': ' + review.reasons[0] : '')];
+}
+
+/** What stops a game being sent (the Game part of private.contribution_problems, in the same order and words). `review` is the
+ *  server's verdict when this session knows it (null: none yet); undefined leaves the verdict to the server's check, which reads it. */
+export function gameProblems(items: StudioEntry[], shape: Record<string, string>, review?: GameReviewStatus | null): string[] {
   const game = gameOf(items), answer = roleAnswer(shape), role = roleOf(items);
   const roleRow = answer !== NO_ROLE && !role ? [ROLE_MISSING] : answer === NO_ROLE && role ? [ROLE_UNUSED] : [];
   if (!game) return [...roleRow, BUILD_FIRST];
@@ -74,6 +79,6 @@ export function gameProblems(items: StudioEntry[], shape: Record<string, string>
   // The published texts (concept, win, rounds, who the AI plays) must not carry it either; the role's own text 2 is the one place it lives.
   const leaked = !!role && role.knows.length >= ECHO_MIN && rowsOf(items).some((r) => hasIn(r.text, role.knows) || (r.label !== ROLE_LABEL && hasIn(r.text2, role.knows)));
   return [...(misplaced ? [GAME_LAST] : []), ...roleRow, ...scanGameFiles(game.files),
-    ...(game.review?.passed ? [] : [NOT_PASSED + (game.review?.reasons[0] ? ': ' + game.review.reasons[0] : '')]),
+    ...(review === undefined ? [] : reviewProblem(review)),
     ...(game.for.role === answer ? [] : [ROLE_CHANGED]), ...(echoed ? [ECHOED] : []), ...(leaked ? [ECHOED_TEXT] : [])];
 }

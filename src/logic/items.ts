@@ -71,7 +71,7 @@ const isItem = (type: string) => (isFlash(type) ? isCard : type === 'Practice ex
 export const firstSentence = (p: string) => p.trim().split(/(?<=[.!?])\s+/)[0];
 export const leadWords = (s: string, n: number) => s.split(/\s+/).slice(0, n).join(' ').replace(/[.,;:!?]+$/, '');
 // A creator's or passage's text inside a data block of an AI request; a marker inside it cannot close the block.
-export const marked = (t: string, max = 600) => '<<<' + t.replace(/[<>]{3,}/g, ' ').slice(0, max) + '>>>';
+export { marked } from '../../supabase/functions/_shared/promptData.ts';
 
 // Scripted cards: each passage becomes one card, a short question about its opening words and the first sentence as the answer.
 export function cardsFromPassages(passages: string[]): Card[] {
@@ -157,7 +157,7 @@ export const validItems = (type: string, list: Item[]): Item[] => list.filter(is
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
   return validItems(type, list).map((x) => (Array.isArray(x) ? { front: x[0], back: x.slice(1).filter(Boolean).join(' · ') }
     : isDrawing(x) ? { front: 'Animation · ' + madeLabel(x.made), back: x.alt } : isHorizonItem(x) ? { front: 'Horizon presentation · ' + deckLine(x), back: x.title }
-      : isGameItem(x) ? { front: 'Game · built by AI', back: x.review?.passed ? 'House rules check passed' : 'House rules check not run yet' }
+      : isGameItem(x) ? { front: 'Game · built by AI', back: x.files['game.js'] ? 'Screens and logic written' : 'Screens only · logic to write' }
       : isVoiceItem(x) ? { front: 'Voice-over · AI voice', back: (type === 'Podcast' ? x.clips.length + (x.clips.length === 1 ? ' line' : ' lines') : slideCount(x.clips.length)) + ' voiced · ' + Math.round(x.clips.reduce((t, c) => t + c.seconds, 0)) + ' s' }
       : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
 }

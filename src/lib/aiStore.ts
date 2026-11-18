@@ -87,8 +87,17 @@ export async function setStockVoiceActive(id: string, active: boolean) {
 export const testConnection = (id: string) => invokeFunction<{ ok: boolean; model?: string; error?: string }>('ai', { action: 'test', connection_id: id });
 
 export type AiRequest = { system?: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens?: number };
-export async function askAi(use: string, req: AiRequest): Promise<string> {
-  const data = await invokeFunction<{ text?: string }>('ai', { use, ...req });
+export async function askAi(use: string, req: AiRequest): Promise<{ text: string; cut: boolean }> {
+  const data = await invokeFunction<{ text?: string; cut?: boolean }>('ai', { use, ...req });
   if (!data || typeof data.text !== 'string') throw new Error('The AI function returned no text');
-  return data.text;
+  return { text: data.text, cut: data.cut === true };
+}
+
+// The house-rules review of a Game contribution: the function loads the contribution's own files and records the verdict itself;
+// the client only names the contribution and reads the answer.
+export type GameVerdict = { passed: boolean; reasons: string[] };
+export async function reviewGame(contributionId: string): Promise<GameVerdict> {
+  const data = await invokeFunction<Partial<GameVerdict>>('ai', { action: 'review_game', contribution_id: contributionId });
+  if (!data || typeof data.passed !== 'boolean' || !Array.isArray(data.reasons)) throw new Error('The AI function returned no review');
+  return { passed: data.passed, reasons: data.reasons.map(String) };
 }

@@ -3,16 +3,39 @@
 //   { use, system?, messages, max_tokens? }  any signed-in user: answers a live text use (see ai_live_uses()) with the
 //                                            connection and model the System Admin chose for it -> { text }
 //   { action: 'test', connection_id }        System Admins: one tiny call with that connection -> { ok, model } or { ok: false, error }
+//   { action: 'review_game', contribution_id } the author of a built Game: the house-rules review (use studio_game) of the files the
+//                                            database holds for that contribution -> { passed, reasons }, recorded by the database
+//                                            for those files (public.record_game_review); the verdict is never the client's
 //
 // Guard rails: the use's fixed instruction (ai_uses.preamble) always goes first and the client's system text after it;
 // each person has a daily limit per use (ai_uses.daily_limit), counted in ai_usage before the call (429 beyond it);
 // uses marked admins_only (curriculum copilot, learner's eye, test retrieval) need an admin role; max_tokens and the
 // request size are capped (core.ts). Nothing of the messages or the reply is logged; a log line holds the use, the
-// outcome and the duration.
+// outcome and the duration. A use may raise the answer size and wait (USE_LIMITS in _shared/aiGuard.ts); an answer cut at its limit says so (cut).
 import { withSupabase } from '@supabase/server';
 import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '../_shared/aiUse.ts';
-import type { Conn } from '../_shared/aiUse.ts';
+import type { Conn, UseRow } from '../_shared/aiUse.ts';
+import { USE_LIMITS } from '../_shared/aiGuard.ts';
 import { callProvider, inputChars, limitMessage, LIMITS, readAsk, TEST_ASK, TEXT_PROVIDERS, withPreamble } from './core.ts';
+import { reviewGame } from './review.ts';
+import type { ReviewLoad } from './review.ts';
+
+const GAME_USE = 'studio_game';
+
+type Admin = Parameters<typeof isLive>[0];
+// The use as the caller may use it now (live, a text use, theirs to use), or the answer that says why not.
+async function openUse(admin: Admin, key: string, roles: string[]): Promise<{ use: UseRow } | Response> {
+  // The same rule the app reads: enabled, built, with a connection that has a key (and a model, for text).
+  const live = await isLive(admin, key);
+  if (live === null) return fail(500, 'Could not read the AI settings');
+  if (!live) return fail(409, 'This AI use is not live: a System Admin sets its connection in Administration · AI connections');
+  const use = await readUse(admin, key);
+  if (!use || !use.connection) return fail(409, 'This AI use has no connection');
+  // Voice uses are live too (ai_live_uses), but only the `voice` function serves them.
+  if (use.kind !== 'text') return fail(409, 'This is not a text use: the voice function serves it');
+  if (use.admins_only && !roles.length) return fail(403, 'Only admins use this assistant');
+  return { use };
+}
 
 export default {
   fetch: withSupabase({ auth: 'user' }, async (req, ctx) => {
@@ -41,25 +64,37 @@ export default {
       return Response.json(out.ok ? { ok: true, model: conn.default_model } : { ok: false, error: out.error });
     }
 
+    if (body.action === 'review_game') {
+      const opened = await openUse(admin, GAME_USE, roles);
+      if (opened instanceof Response) return opened;
+      const { use } = opened, conn = use.connection!, contribution = String(body.contribution_id || '');
+      const key = await connectionKey(admin, conn.id);
+      if (!key) return fail(409, 'The connection has no key');
+      const target = { provider: conn.provider, baseUrl: conn.base_url, model: use.model || conn.default_model!, key };
+      const out = await reviewGame({
+        preamble: use.preamble, dailyLimit: use.daily_limit,
+        load: async () => ((await admin.rpc('game_review_input', { p_user: callerId, p_contribution: contribution })).data as ReviewLoad | null) ?? null,
+        count: (chars) => countCall(admin, callerId, GAME_USE, chars),
+        call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_USE].timeoutMs),
+        record: async (hash, v) => (await admin.rpc('record_game_review', { p_contribution: contribution, p_files_hash: hash, p_passed: v.passed, p_reasons: v.reasons })).error?.message ?? null,
+      });
+      console.log(JSON.stringify({ action: 'review_game', status: out.status, ms: Date.now() - started }));
+      return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
+    }
+
     const r = readAsk(body);
     if (!r.ok) return fail(400, r.error);
-    // The same rule the app reads: enabled, built, with a connection that has a key (and a model, for text).
-    const live = await isLive(admin, r.use);
-    if (live === null) return fail(500, 'Could not read the AI settings');
-    if (!live) return fail(409, 'This AI use is not live: a System Admin sets its connection in Administration · AI connections');
-    const use = await readUse(admin, r.use);
-    if (!use || !use.connection) return fail(409, 'This AI use has no connection');
-    // Voice uses are live too (ai_live_uses), but only the `voice` function serves them.
-    if (use.kind !== 'text') return fail(409, 'This is not a text use: the voice function serves it');
-    if (use.admins_only && !roles.length) return fail(403, 'Only admins use this assistant');
+    const opened = await openUse(admin, r.use, roles);
+    if (opened instanceof Response) return opened;
+    const { use } = opened;
     const ask = withPreamble(r.ask, use.preamble);
     // Counted before the call, atomically; beyond the limit nothing is counted and nothing is sent.
     const counted = await countCall(admin, callerId, r.use, inputChars(ask));
     if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit)) : fail(500, 'Could not count the call');
-    const key = await connectionKey(admin, use.connection.id);
+    const key = await connectionKey(admin, use.connection!.id);
     if (!key) return fail(409, 'The connection has no key');
-    const out = await callProvider({ provider: use.connection.provider, baseUrl: use.connection.base_url, model: use.model || use.connection.default_model!, key }, ask);
+    const out = await callProvider({ provider: use.connection!.provider, baseUrl: use.connection!.base_url, model: use.model || use.connection!.default_model!, key }, ask, fetch, USE_LIMITS[r.use]?.timeoutMs);
     console.log(JSON.stringify({ use: r.use, ok: out.ok, ms: Date.now() - started }));
-    return out.ok ? Response.json({ text: out.text }) : fail(502, out.error);
+    return out.ok ? Response.json({ text: out.text, cut: out.cut }) : fail(502, out.error);
   }),
 };

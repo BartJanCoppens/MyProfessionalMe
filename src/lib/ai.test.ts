@@ -17,13 +17,13 @@ describe('complete: the fallback order', () => {
     const design = vi.fn(async () => 'from design');
     vi.stubGlobal('window', { claude: { complete: design } });
     const ask = vi.fn(async () => 'from connection');
-    expect(await complete('profile_chat', req, { ...live, ask })).toEqual({ text: 'from design', via: 'design' });
+    expect(await complete('profile_chat', req, { ...live, ask })).toEqual({ text: 'from design', via: 'design', cut: false });
     expect(design).toHaveBeenCalledWith(req);
     expect(ask).not.toHaveBeenCalled();
   });
   it('calls the ai function for a live use outside Claude Design', async () => {
     const ask = vi.fn(async () => 'from connection');
-    expect(await complete('profile_chat', req, { ...live, ask })).toEqual({ text: 'from connection', via: 'connection' });
+    expect(await complete('profile_chat', req, { ...live, ask })).toEqual({ text: 'from connection', via: 'connection', cut: false });
     expect(ask).toHaveBeenCalledWith('profile_chat', req);
   });
   it('returns null (scripted) for a use that is not live, without calling anything', async () => {
@@ -46,6 +46,21 @@ describe('complete: the fallback order', () => {
   it('gives up after the timeout', async () => {
     expect(await complete('profile_chat', req, { ...live, timeoutMs: 5, ask: () => new Promise<string>(() => {}) })).toBeNull();
   });
+  it('passes on that an answer was cut at its length limit (a file written in parts), as a string-or-object ask', async () => {
+    db.client.functions.invoke.mockImplementation(async () => ({ data: { text: 'abc', cut: true }, error: null }));
+    expect(await complete('profile_chat', req, live)).toEqual({ text: 'abc', via: 'connection', cut: true });
+    expect(await complete('profile_chat', req, { ...live, ask: async () => ({ text: 'x', cut: true }) })).toEqual({ text: 'x', via: 'connection', cut: true });
+  });
+  it('waits for the game build the time its use allows plus ten seconds, and every other use 45 s', async () => {
+    vi.useFakeTimers();
+    const slow = () => new Promise<string>((res) => setTimeout(() => res('late'), 100_000));
+    const game = complete('studio_game', req, { enabled: true, live: ['studio_game'], ask: slow });
+    await vi.advanceTimersByTimeAsync(100_001);
+    expect(await game).toEqual({ text: 'late', via: 'connection', cut: false });
+    const other = complete('profile_chat', req, { ...live, ask: slow });
+    await vi.advanceTimersByTimeAsync(46_000);
+    expect(await other).toBeNull();
+  });
   it('says beforehand whether AI would answer', () => {
     expect(canComplete('profile_chat', live)).toBe(true);
     expect(canComplete('kb_answer', live)).toBe(false);
@@ -55,7 +70,7 @@ describe('complete: the fallback order', () => {
   });
   it('reaches the ai edge function through the store by default', async () => {
     db.client.functions.invoke.mockImplementation(async () => ({ data: { text: 'Hello' }, error: null }));
-    expect(await complete('profile_chat', req, live)).toEqual({ text: 'Hello', via: 'connection' });
+    expect(await complete('profile_chat', req, live)).toEqual({ text: 'Hello', via: 'connection', cut: false });
     expect(db.client.functions.invoke).toHaveBeenCalledWith('ai', { body: { use: 'profile_chat', ...req } });
   });
 });

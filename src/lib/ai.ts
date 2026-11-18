@@ -6,11 +6,13 @@
 import { askAi } from './aiStore';
 import type { AiRequest } from './aiStore';
 import type { AiUseKey } from '../logic/ai';
+import { USE_LIMITS } from '../../supabase/functions/_shared/aiGuard.ts';
 
 export type { AiRequest };
 export type AiSource = 'design' | 'connection';
 // onError hears why a source failed (e.g. "Daily AI limit reached …"); the caller still gets null.
-export type CompleteOpts = { enabled: boolean; live: readonly string[]; timeoutMs?: number; ask?: (use: string, req: AiRequest) => Promise<string>; onError?: (err: Error) => void };
+// cut: the answer stopped at its length limit (a file written in parts). An injected ask may answer with the text alone.
+export type CompleteOpts = { enabled: boolean; live: readonly string[]; timeoutMs?: number; ask?: (use: string, req: AiRequest) => Promise<string | { text: string; cut?: boolean }>; onError?: (err: Error) => void };
 
 declare global {
   interface Window { claude?: { complete?: (req: unknown) => Promise<string> } }
@@ -25,12 +27,18 @@ const within = <T>(p: Promise<T>, ms: number) => new Promise<T>((resolve, reject
   p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
 });
 
-export async function complete(use: AiUseKey, req: AiRequest, opts: CompleteOpts): Promise<{ text: string; via: AiSource } | null> {
+// A use that writes long answers waits for the time the function allows it, plus ten seconds for the round trip.
+const waitFor = (use: AiUseKey) => (USE_LIMITS[use] ? USE_LIMITS[use].timeoutMs + 10_000 : 45_000);
+
+export async function complete(use: AiUseKey, req: AiRequest, opts: CompleteOpts): Promise<{ text: string; via: AiSource; cut: boolean } | null> {
   if (!opts.enabled) return null;
-  const ms = opts.timeoutMs ?? 45_000;
+  const ms = opts.timeoutMs ?? waitFor(use);
   try {
-    if (designAi()) return { text: String(await within(window.claude!.complete!(req), ms)), via: 'design' };
-    if (opts.live.includes(use)) return { text: await within((opts.ask || askAi)(use, req), ms), via: 'connection' };
+    if (designAi()) return { text: String(await within(window.claude!.complete!(req), ms)), via: 'design', cut: false };
+    if (opts.live.includes(use)) {
+      const got = await within((opts.ask || askAi)(use, req), ms);
+      return typeof got === 'string' ? { text: got, via: 'connection', cut: false } : { text: got.text, via: 'connection', cut: !!got.cut };
+    }
   } catch (err) { opts.onError?.(err as Error); }
   return null;
 }
