@@ -1,7 +1,7 @@
 // What the media adapter sends to Supabase Storage, and the sentences it turns refusals into. The client is a fake.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, op } from '../test/fakeSupabase';
-import { mediaUrl, removeContributionMedia, removeMedia, uploadMedia } from './mediaStore';
+import { mediaText, mediaUrl, removeContributionMedia, removeMedia, uploadMedia } from './mediaStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 const USER = '0f8fad5b-d9cb-469f-a165-70867728950e', CONTRIBUTION = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -56,6 +56,26 @@ describe('reading', () => {
     await expect(mediaUrl(PATH)).rejects.toThrow('This file is not there, or not open to you');
     db.answer(() => ({ error: { message: 'The object exceeded the maximum allowed size' } }));
     await expect(mediaUrl(PATH)).rejects.toThrow('The object exceeded the maximum allowed size');
+  });
+});
+
+describe('reading a file as text (a .horizon presentation)', () => {
+  it('fetches the signed URL, for a minute, and returns the text', async () => {
+    db.answer(() => ({ data: { signedUrl: 'https://x/sign/media/a?token=t' } }));
+    const fetch = vi.fn(async () => new Response('{"format":"horizon"}', { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    expect(await mediaText(PATH)).toBe('{"format":"horizon"}');
+    expect(fetch).toHaveBeenCalledWith('https://x/sign/media/a?token=t');
+    expect(db.calls[0].steps).toEqual([['createSignedUrl', [PATH, 60]]]);
+    vi.unstubAllGlobals();
+  });
+  it('says the file is not there when the download fails', async () => {
+    db.answer(() => ({ data: { signedUrl: 'https://x/sign/media/a?token=t' } }));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 400 })));
+    await expect(mediaText(PATH)).rejects.toThrow('This file is not there, or not open to you');
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    await expect(mediaText(PATH)).rejects.toThrow('The file could not be downloaded · check your connection and try again');
+    vi.unstubAllGlobals();
   });
 });
 

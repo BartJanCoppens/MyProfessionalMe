@@ -1,4 +1,4 @@
-// The one adapter for media files in Supabase Storage (private bucket `media`): upload, signed URL, remove.
+// The one adapter for media files in Supabase Storage (private bucket `media`): upload, signed URL, read as text, remove.
 // Paths and size rules are in src/logic/mediaFiles.ts; row-level security on storage.objects decides who writes
 // (the author while the contribution is a draft or has changes requested) and who reads (author, reviewers, and
 // everyone once the published learning names the path). Nothing is public: reading is always a signed URL.
@@ -41,6 +41,15 @@ export async function mediaUrl(path: string, seconds = 3600): Promise<string> {
   fail(error, READ);
   if (!data?.signedUrl) throw new Error(NOT_THERE);
   return data.signedUrl;
+}
+
+// A file's text (a .horizon presentation), downloaded once through a signed URL valid for a minute.
+export async function mediaText(path: string): Promise<string> {
+  const url = await mediaUrl(path, 60);
+  let res: Response;
+  try { res = await fetch(url); } catch { throw new Error('The file could not be downloaded · check your connection and try again'); }
+  if (!res.ok) throw new Error(NOT_THERE);
+  return res.text();
 }
 
 // Removes every path or throws: Storage skips a file the caller may not remove instead of refusing.
