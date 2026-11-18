@@ -11,7 +11,9 @@ import type { CompleteOpts } from './ai';
 import { supabase } from './supabase';
 
 export type AvatarTurn = { who: 'learner' | 'character'; text: string; guard: GuardCode | null };
-export type AvatarRunRow = { id: string; learning_id: string | null; contribution_id: string | null; test: boolean; started_at: string; finished_at: string | null; turns: AvatarTurn[] };
+/** One of my runs: the AI's score without the server's injection flags (never shown to the learner), whether I shared it and whether my counsellor confirmed it. */
+export type AvatarRunRow = { id: string; learning_id: string | null; contribution_id: string | null; test: boolean; started_at: string; finished_at: string | null; turns: AvatarTurn[];
+  score: Omit<AvatarScore, 'flags'> | null; shared_at: string | null; confirmed_at: string | null };
 /** What the character answered: its line, the number of lines in the run so far, and whether a guard put in the substitute line. */
 export type CharacterReply = { say: string; turn: number; held: boolean };
 
@@ -94,8 +96,8 @@ export async function withdrawAvatarRun(runId: string): Promise<void> {
 export async function myAvatarRuns(learningId: string): Promise<AvatarRunRow[]> {
   const me = (await supabase.auth.getSession()).data.session?.user.id;
   if (!me) return [];
-  const { data, error } = await supabase.from('avatar_runs').select('id, learning_id, contribution_id, test, started_at, finished_at, turns')
+  const { data, error } = await supabase.from('avatar_runs').select('id, learning_id, contribution_id, test, started_at, finished_at, turns, score, shared_at, confirmed_at')
     .eq('learning_id', learningId).eq('user_id', me).order('started_at', { ascending: false });
   fail(error);
-  return (data || []) as AvatarRunRow[];
+  return ((data || []) as AvatarRunRow[]).map((r) => { if (!r.score) return r; const { flags: _flags, ...score } = r.score as AvatarScore; return { ...r, score }; });
 }

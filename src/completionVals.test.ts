@@ -163,7 +163,7 @@ describe('avatar practice: the evaluation quiz', () => {
     const vm = learnerOn('L38').vm();
     expect(vm.done.quiz).toMatchObject({ done: false, disabled: false, canCheck: false, lead: 'After your practice session: answer all three questions. Three right answers complete the learning.' });
     expect(vm.det.approvalNote).toBe('After your practice session, three right answers in the evaluation quiz complete it. No acceptance needed.');
-    vm.det.av!.start();
+    expect(vm.det.av).toMatchObject({ seeded: true, conversation: false }); // L38 keeps its quiz; live practice comes with the Avatar Studio
   });
   it('completes the learning when all three are right', async () => {
     const h = learnerOn('L38');

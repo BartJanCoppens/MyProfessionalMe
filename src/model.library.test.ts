@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from 'react';
 import { BLS, DOMAINS, LEARN, MAPS0 } from './data';
+import { SEEDED_NOTE } from './fmtAvatar';
 import * as learner from './lib/learnerStore';
 import * as record from './lib/recordStore';
 import { domainAdmin, flush, harness, member, person, stubWindow, systemAdmin, withProgress } from './test/harness';
@@ -176,15 +177,12 @@ describe('learning detail', () => {
     expect(det.hasSugg).toBe(true);
     expect(det.why).toBe('Builds leadership, which this ambition depends on. Suggested by Ambition · Lead a team. Not on a Consulting path at your stage; it counts toward your hours and levels once added.');
   });
-  it('shows the avatar persona, skills and runs of an avatar-practice learning', () => {
+  it('shows the avatar persona and skills of a seeded avatar-practice learning (L38 to L41), without a live run', () => {
     const h = detail('L38', { subject: person({ counsellor: coach }) });
     const av = h.vm().det.av!;
-    expect(av).toMatchObject({ persona: 'Marc Verhoeven', initials: 'MV', sub: 'No runs yet · 3 runs available', hasRuns: false });
+    expect(av).toMatchObject({ persona: 'Marc Verhoeven', initials: 'MV', seeded: true, conversation: false, note: SEEDED_NOTE });
     expect(av.skills.map((s) => [s.name, s.val])).toEqual([['Assertiveness', '—'], ['Clarity', '—'], ['Listening', '—']]);
-    av.start();
-    expect(h.lastToast()).toMatch(/^Coming with the avatar studio$/);
-    av.share();
-    expect(h.lastToast()).toBe('Best run shared with Sam Coach · they see scores and the transcript, not the recording');
+    expect(['L39', 'L40', 'L41'].map((id) => detail(id).vm().det.av?.seeded)).toEqual([true, true, true]);
     expect(detail('L1').vm().det.av).toBeNull();
   });
   it('falls back to the first learning for an unknown id', () => {

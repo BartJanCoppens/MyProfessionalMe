@@ -245,12 +245,12 @@ describe('a learner walking through the app', () => {
     button('+ Add to my path');
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L3', { chosen: true });
   });
-  it('practises with an avatar from the detail page', () => {
+  it('opens a seeded avatar learning (L38) with its persona and the note that the quiz completes it', () => {
     setup();
     nav('Library');
     fireEvent.click(screen.getByText('Holding scope with a procurement director'));
-    button('Start a session');
-    expect(screen.getByRole('status').textContent).toMatch(/^Coming with the avatar studio$/);
+    expect(screen.getByText(/Live practice comes with scenarios made in the Avatar Studio/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start a session' })).toBeNull();
   });
   it('says ratings and notes are not available yet on a learning', () => {
     setup({ subject: person({ data: withProgress({ L7: ['in-progress', 40] }) }) });

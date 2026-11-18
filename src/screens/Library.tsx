@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { Avatar, Banner, Button, Card, Checkbox, Eyebrow, Field, FilterChip, Hover, Input, KeyValueList, LinkButton, PageTitle, ProgressRing, SegmentedControl, Select, StatusChip, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
 import AiMadeTag from './AiMadeTag';
+import AvatarPanel from './AvatarPanel';
 import { AvatarBadge } from './Map';
 import { CoverArt } from './Cover';
 import { FormatPanels } from './FormatPanels';
@@ -115,7 +116,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
           <FormatPanels vm={vm} />
           {vm.rec.showEvidence && <EvidenceCard rec={vm.rec} />}
           {vm.rec.hasHistory && <RecordCard rec={vm.rec} />}
-          {det.av && <AvatarPractice av={det.av} counsellorFirst={vm.counsellorFirst} />}
+          {det.av && <AvatarPanel av={det.av} />}
           {vm.done.quiz && <QuizCard quiz={vm.done.quiz} />}
           {vm.done.feedback && <FeedbackCard fb={vm.done.feedback} />}
           {vm.done.attendance && <AttendanceCard att={vm.done.attendance} />}
@@ -265,54 +266,6 @@ function DecideBox({ decide }: { decide: NonNullable<Rec['decide']> }) {
       <Button size="xl" fullWidth onClick={decide.accept}>Accept</Button>
       <Button size="xl" variant="secondary" fullWidth onClick={decide.sendBack}>Request changes</Button>
     </div>
-  );
-}
-
-function AvatarPractice({ av, counsellorFirst }: { av: NonNullable<VM['det']['av']>; counsellorFirst: string }) {
-  return (
-    <Card title="Practise with the avatar" subtitle={av.sub}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', width: 56, height: 56, borderRadius: '50%', background: '#1a1d18', color: '#fff', fontSize: 17, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-            {av.initials}
-            <span style={{ position: 'absolute', right: 0, bottom: 0, width: 14, height: 14, borderRadius: '50%', background: '#86BC25', border: '3px solid #fff', animation: 'pmDot 2.4s ease-in-out infinite' }} />
-          </div>
-          <div style={{ flex: '1 1 240px', minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 15 }}>{av.persona}</div>
-            <div style={{ fontSize: 12.5, color: '#5a6058' }}>{av.role}</div>
-            <p style={{ margin: '6px 0 0', textWrap: 'pretty' }}>{av.brief}</p>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Button onClick={av.start}>Start a session</Button>
-            {av.hasRuns && <LinkButton onClick={av.share}>Share best run with {counsellorFirst}</LinkButton>}
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' }}>Best scores · the target is 4 of 5 on every skill</div>
-          {av.skills.map((sk) => (
-            <div key={sk.name} style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) 44px', gap: 10, alignItems: 'center', fontSize: 12.5 }}>
-              <span>{sk.name}</span>
-              <div style={{ position: 'relative', height: 8, borderRadius: 999, background: '#eef0ec' }}>
-                <div style={{ height: '100%', borderRadius: 999, width: sk.w, background: sk.color, transition: 'width .3s' }} />
-                <div style={{ position: 'absolute', top: -3, bottom: -3, left: sk.tgt, width: 2, background: '#1a1d18' }} />
-              </div>
-              <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#5a6058' }}>{sk.val}</span>
-            </div>
-          ))}
-        </div>
-        {av.hasRuns && (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {av.runs.map((rn) => (
-              <div key={rn.date} style={{ display: 'grid', gridTemplateColumns: '90px minmax(0,1fr)', gap: 10, padding: '8px 0', borderTop: '1px solid #eef0ea', fontSize: 12.5 }}>
-                <span style={{ color: '#8b918a' }}>{rn.date}</span>
-                <div style={{ minWidth: 0 }}><div style={{ textWrap: 'pretty' }}>{rn.note}</div><div style={{ fontSize: 11.5, color: '#5a6058' }}>{rn.scores}</div></div>
-              </div>
-            ))}
-          </div>
-        )}
-        <div style={{ fontSize: 12, color: '#8b918a', textWrap: 'pretty' }}>Runs are private until you share one. The avatar scores the conversation; your counsellor sees scores and the transcript, never the recording.</div>
-      </div>
-    </Card>
   );
 }
 

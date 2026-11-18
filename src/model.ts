@@ -482,16 +482,6 @@ export class Logic {
       // What completes this learning: the format's own rule, or acceptance by the counsellor.
       approvalNote: completionOf(d0.format) !== 'acceptance' ? completionText(d0.format, this.counsellorFull(), !!LEARN_META[d0.id]?.content) : d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
       canAcceptIt: this.canAccept(d0.state), paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
-      av: AVATARS[d0.id] ? (() => {
-        const AV = AVATARS[d0.id]; const best = AV.skills.map((_sk, k) => Math.max(0, ...AV.attempts.map((a) => a[1][k])));
-        return {
-          persona: AV.persona, role: AV.role, initials: AV.initials, brief: AV.brief, sub: AV.attempts.length ? AV.attempts.length + ' of 3 runs used · best run counts' : 'No runs yet · 3 runs available',
-          skills: AV.skills.map((sk, k) => ({ name: sk, w: (best[k] / 5 * 100) + '%', val: best[k] ? best[k] + ' / 5' : '—', color: best[k] >= AV.target ? '#86BC25' : '#e0a100', tgt: (AV.target / 5 * 100) + '%' })),
-          hasRuns: AV.attempts.length > 0, runs: AV.attempts.slice().reverse().map((a) => ({ date: a[0], scores: AV.skills.map((sk, k) => sk + ' ' + a[1][k]).join(' · '), note: a[2] })),
-          start: () => this.say('Coming with the avatar studio'),
-          share: () => this.say('Best run shared with ' + this.counsellorFull() + ' · they see scores and the transcript, not the recording'),
-        };
-      })() : null,
     };
     if (d0.ob === 'open' && det.hasSugg) det.why = det.sugg[0].text + ' Suggested by ' + det.sugg[0].src + '. Not on a ' + bl + ' path at your stage; it counts toward your hours and levels once added.';
 

@@ -12,7 +12,7 @@ import * as content from '../lib/contentStore';
 import * as learner from '../lib/learnerStore';
 import * as record from '../lib/recordStore';
 import * as attendance from '../lib/attendanceStore';
-import { AVATAR_QUIZ, LEARN_BY } from '../data';
+import { AVATAR_QUIZ, AVATARS, LEARN_BY } from '../data';
 import type { Subject } from '../lib/useSubject';
 import type { Member } from '../logic/team';
 import { cfg, emptyData, person, systemAdmin, withProgress } from '../test/harness';
@@ -112,6 +112,10 @@ describe('the growth map screen', () => {
 });
 
 describe('the library screen', () => {
+  it('still reads "Practise with …" on the avatar cards of the seeded L38 to L41', () => {
+    show((vm) => <LibraryScreen vm={vm} />, { screen: 'library' });
+    ['L38', 'L39', 'L40', 'L41'].forEach((id) => expect(screen.getAllByText(new RegExp('^Practise with ' + AVATARS[id].persona)).length).toBeGreaterThan(0));
+  });
   it('lists the seeded reels L44 to L47 in the quick-learning strip', () => {
     show((vm) => <LibraryScreen vm={vm} />, { screen: 'library' });
     expect(screen.getByText('Quick learning')).toBeTruthy();
@@ -121,12 +125,12 @@ describe('the library screen', () => {
 
 describe('the learning detail screen', () => {
   const detail = (id: string, subject = person(), access: Access = { isSystem: false, domains: [], userId: subject.id }) => show((vm) => <DetailScreen vm={vm} />, { screen: 'detail', detailId: id }, subject, access);
-  it('introduces the avatar of a practice learning and starts a session', () => {
+  it('introduces the avatar of a practice learning (L38 to L41): the brief and the note, no live run', () => {
     detail('L39', person({ counsellor: { id: 'c1', name: 'Sam Coach' } }));
     expect(screen.getAllByText(/Noah Claes/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/^Share best run with/)).toBeNull();
-    click('Start a session');
-    expect(toast()).toMatch(/^Coming with the avatar studio$/);
+    expect(screen.getByText('Live practice comes with scenarios made in the Avatar Studio · the quiz below completes this learning')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start a practice run' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Start a session/ })).toBeNull();
   });
   it('plays a seeded reel (L44) on the step player and completes it on the right answer, with no app clock', async () => {
     const interval = vi.spyOn(window, 'setInterval');

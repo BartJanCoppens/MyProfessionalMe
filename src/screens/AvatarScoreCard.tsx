@@ -9,6 +9,8 @@ import AiMadeTag from './AiMadeTag';
 /** What the learner is told about their score; the counsellor's row says the same of "what the learner said". */
 export const LEARNER_SCORE_NOTE = 'Scored by AI from what you said · advice, never progress · your counsellor confirms it if you share it';
 export const COUNSELLOR_SCORE_NOTE = 'Scored by AI from what the learner said · advice, never progress';
+/** What stands where a held line was: the line itself is never shown, nor the guard's code. */
+export const HELD_MARKER = 'Held back by the guardrail · the character answered in role';
 const small = { fontSize: 12, color: '#5a6058' } as const;
 
 export function AvatarScoreCard({ score, note }: { score: Omit<AvatarScore, 'flags'>; note: string }) {
@@ -43,7 +45,7 @@ export function AvatarTranscript({ turns: given, load }: { turns?: AvatarTurn[];
       <ol style={{ margin: '6px 0 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
         {(turns || []).map((t, k) => (
           <li key={k}>
-            <b>{t.who === 'learner' ? 'Learner' : 'Character'}</b> · {t.guard ? <i>Held back by the guardrail · the character answered in role</i> : <span>{t.text}</span>}
+            <b>{t.who === 'learner' ? 'Learner' : 'Character'}</b> · {t.guard ? <i>{HELD_MARKER}</i> : <span>{t.text}</span>}
           </li>
         ))}
       </ol>

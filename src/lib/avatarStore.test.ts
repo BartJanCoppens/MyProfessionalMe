@@ -57,8 +57,10 @@ describe('avatar runs', () => {
   });
   it('reads my runs of a learning, newest first, whoever else\'s shared runs I may see', async () => {
     db.client.auth.getSession.mockImplementation(async () => ({ data: { session: { user: { id: 'me' } } } }));
-    db.answer(() => ({ data: [{ id: 'r2', learning_id: 'L70', test: false, started_at: 'b', finished_at: null, turns: [] }] }));
-    expect((await myAvatarRuns('L70')).map((r) => r.id)).toEqual(['r2']);
+    db.answer(() => ({ data: [{ id: 'r2', learning_id: 'L70', test: false, started_at: 'b', finished_at: null, turns: [], score: { overall: 50, flags: ['marker_forgery'] }, shared_at: null, confirmed_at: null }] }));
+    const runs = await myAvatarRuns('L70');
+    expect(runs.map((r) => r.id)).toEqual(['r2']);
+    expect(runs[0].score).toEqual({ overall: 50 }); // the server's injection flags are never given to the learner
     const c = db.calls[0];
     expect(op(c)).toBe('select');
     expect(has(c, 'eq', 'learning_id', 'L70') && has(c, 'eq', 'user_id', 'me') && has(c, 'order', 'started_at', { ascending: false })).toBe(true);

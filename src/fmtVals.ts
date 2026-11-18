@@ -6,6 +6,7 @@
 // fmtExplainer.ts, the Animated flow in fmtMotion.ts, a Presentation in fmtHorizon.ts, a deck in fmtSlides.ts, a podcast (stored or v3) in fmtPodcast.ts, a reel (studio or v3) in fmtReel.ts, a game and its runs in fmtGame.ts.
 import { completedToast, contentOf, detailOf, downloadText, handedIn, saveDetail } from './fmtShared';
 import { explainerVals } from './fmtExplainer';
+import { avatarVals } from './fmtAvatar';
 import { gameVals } from './fmtGame';
 import { flowVals } from './fmtMotion';
 import { horizonVals } from './fmtHorizon';
@@ -92,6 +93,6 @@ export function fmtVals(L: Logic, it: Item) {
     fl: flash && flashVals(L, it, flash), ex: exam && { ...examVals(L, it, exam), ...examTrajectory(L, it.id) }, ce: kase && caseVals(L, it, kase), tb: teach && teachVals(L, it, teach),
     sa: stretch && stretchVals(L, it, stretch), wb: webinar && webinarVals(L, it, webinar), ja: aid && aidVals(L, it, aid), ie: explainer && explainerVals(L, it, explainer),
     af: motion && flowVals(L, it, motion), hz: horizon && horizonVals(L, it, horizon), sl: slides && slidesVals(L, it, slides), pc: podcast && podcastVals(L, it, podcast, M?.kind === 'pod' ? M.by : undefined), gm: game && gameVals(L, it, game),
-    rl: reel && reelVals(L, it, reel, M?.kind === 'reel' ? M.take : null),
+    rl: reel && reelVals(L, it, reel, M?.kind === 'reel' ? M.take : null), av: avatarVals(L, it),
   };
 }
