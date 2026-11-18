@@ -19,6 +19,7 @@ import {
 } from './createSave';
 import { bundleFinder, draftAi, usableBundles } from './createGrounding';
 import { horizonCheck, horizonPanel } from './createHorizon';
+import { avatarChecks } from './logic/avatarContent';
 import { studioById } from './logic/studios';
 import { stillMotion } from './fmtMotion';
 import { changeFormat } from './studioRules';
@@ -32,6 +33,8 @@ const ini = (name: string) => name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).
 const dot = (c: Check) => ({ text: c.text, dot: c.ok ? '#86BC25' : '#e0a100', fg: c.ok ? '#3d423b' : '#7a5000' });
 // A studio reel always publishes its transcript (the scenes' words) and, when voiced, its caption track.
 const REEL_CAPTIONS = dot({ ok: true, text: 'Captions or transcript included' });
+// An avatar's looks and voices are stock ones only (a creator cannot upload or clone a face or voice).
+const AVATAR_STOCK = dot({ ok: true, text: 'Stock looks and voices only · no colleague’s face or voice is copied' });
 
 // ---------- view-model ----------
 
@@ -147,7 +150,7 @@ function createScreen(L: Logic) {
     nwAiOutline: nw.outline.map((o, k) => ({ n: (k + 1) + '.', text: o })), nwAiCites: nw.sources.map((c, k) => ({ n: String(k + 1), text: c })),
     itemsPanel: itemsPanel(L, nw, picked, setNw), horizonPanel: horizonPanel(L, nw),
     nwFileText: nw.type + ' · the file itself (video, audio or document) is attached later; this prototype stores the text only.',
-    nwChecks: [...checks.map(dot), ...(studioOf(s) === 'reel' ? [REEL_CAPTIONS] : [])], nwBlocked: !checksPass(checks) || s.createBusy || !ok,
+    nwChecks: [...checks.map(dot), ...(studioOf(s) === 'reel' ? [REEL_CAPTIONS] : []), ...(studioOf(s) === 'avatar' ? [...avatarChecks(nw.items?.list ?? []).map(dot), AVATAR_STOCK] : [])], nwBlocked: !checksPass(checks) || s.createBusy || !ok,
     nwSubmitLabel: editing?.status === 'changes' ? 'Resubmit' : policyLabel(policy).startsWith('no review') ? 'Publish' : 'Submit for review',
     nwSubmit: () => saveForm(L, true), nwDraft: () => saveForm(L, false), nwCancel: () => setState({ editing: null, nw: fresh(), nwKb: [], nwKbQ: '', createTab: 'mine', studio: HUB }),
     nwRoute, nwRouteEmpty: !nwRoute.length, nwRouteWarn: short ? 'Only ' + d.peers + ' colleague' + (d.peers === 1 ? '' : 's') + ' can peer-review you; this combination needs ' + policy.peers + '. Submitting is refused until an admin lowers the peer requirement.' : '',

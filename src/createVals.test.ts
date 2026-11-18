@@ -10,6 +10,8 @@ import { MAKEABLE_FORMATS, emptyParts } from './logic/contribution';
 import type { CreateData, PolicyRow, Rule, RuleParts } from './logic/contribution';
 import { contribution, review } from './test/contributions';
 import { domainAdmin, flush, harness, member, person, stubWindow, systemAdmin } from './test/harness';
+import { STUDIOS } from './studioData';
+import type { StudioItem } from './logic/studios';
 import type { AppState } from './types';
 
 vi.mock('./lib/contributionStore', () => ({
@@ -472,6 +474,16 @@ describe('grounding in knowledge bundles (scales to hundreds)', () => {
     h.c().nwKbSetQuery(ev('zzz'));
     expect(h.c().nwKbFound).toEqual([]);
     expect(h.c().nwKbEmpty).toBe('No bundle matches “zzz”');
+  });
+});
+
+describe('an avatar draft', () => {
+  const base = { line: 'Consulting', aud: '', type: 'Avatar', title: 'Selling an HR system', dom: 'prof', lvl: '3', stage: 'Analyst', take: 'Ask before you defend.', outline: [], sources: [], ai: false, aiNote: '' };
+  const rows = (STUDIOS.find((x) => x.id === 'avatar')!.items as StudioItem[]);
+  const at = (list: StudioItem[]) => cs({ state: { createTab: 'new', nw: { ...base, items: { list, how: 'manual' as const, note: '', problems: [] } }, nwKb: ['B1'], studio: { view: 'studio', step: 5, id: 'avatar' } } }).c().nwChecks;
+  it('lists the learning points, the three quiz questions and the stock-only line, the first two open until they hold', () => {
+    expect(at(rows).slice(-3)).toMatchObject([{ text: 'Learning points add up to 100 %' }, { text: 'Three quiz questions · the quiz completes the learning' }, { text: 'Stock looks and voices only · no colleague\u2019s face or voice is copied' }]);
+    expect(at(rows.filter((r) => r[0] !== 'Quiz 3')).slice(-3).map((c) => c.dot)).toEqual(['#86BC25', '#e0a100', '#86BC25']);
   });
 });
 

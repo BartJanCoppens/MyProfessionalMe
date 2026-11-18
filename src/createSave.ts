@@ -12,6 +12,7 @@ import type { Attrs, Contribution, CreateData, Review, RuleParts } from './logic
 import { checkContribution, decideReview, loadCreate, removeDraft, saveDraft, submitContribution } from './lib/contributionStore';
 import type { DraftFields } from './lib/contributionStore';
 import { latestDraft, sameDraft } from './studioDraft';
+import { studioById } from './logic/studios';
 import { changeFormat, uploadFormat } from './studioRules';
 import { HUB, studioOf } from './studioVals';
 
@@ -46,9 +47,10 @@ export function submittedEdit(s: AppState) {
 // made in; null for the upload form.
 const draftStudio = (s: AppState) => studioOf(s) ?? s.create?.contributions.find((c) => c.id === (s.editing ?? s.nw.savedId))?.studio ?? null;
 // The draft as a row. Items go with the card formats and with every studio draft (its rows), the "Shape it" answers with
-// a studio draft that has any; the upload form's other formats save neither.
-const fieldsOf = (nw: NewDraft, bundles: string[], studio: string | null): DraftFields => {
-  const shape = studio && nw.shape && Object.keys(nw.shape).length ? nw.shape : null;
+// a studio draft that has any (an Avatar's Produce answers and cast too: the database reads them); the upload form's other formats save neither.
+export const fieldsOf = (nw: NewDraft, bundles: string[], studio: string | null): DraftFields => {
+  const answers = studioById(studio ?? '')?.savesProduce ? { ...nw.shape, ...nw.produce, ...nw.cast } : nw.shape;
+  const shape = studio && answers && Object.keys(answers).length ? answers : null;
   return { business_line: nw.line || null, audience: nw.aud || null, type: nw.type, title: nw.title.trim().slice(0, 120), domain: nw.dom, level: +nw.lvl, audience_stage: nw.stage,
     takeaway: nw.take.trim().slice(0, 400), outline: nw.outline.join('\n'), sources: nw.sources, ai_assisted: aiAssisted(nw), bundle_ids: bundles,
     items: carriesItems(nw.type, studio) ? nw.items?.list ?? [] : null, shape };

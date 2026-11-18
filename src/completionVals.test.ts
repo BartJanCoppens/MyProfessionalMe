@@ -1,9 +1,13 @@
 // Completion per learning type (v0.7.2): e-learning "Mark as completed", the classroom feedback form, the avatar
 // evaluation quiz, the Attendance card for admins (roster and register_attendance), the last hour per type, the copy,
 // and View as writing nothing.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from 'react';
-import { AVATAR_QUIZ } from './data';
+import { AVATAR_QUIZ, LEARN, LEARN_BY, LEARN_META } from './data';
+import { avatarContent } from './logic/avatarContent';
+import type { StudioItem } from './logic/studios';
+import type { Learn } from './types';
+import { STUDIOS } from './studioData';
 import * as learner from './lib/learnerStore';
 import * as attendance from './lib/attendanceStore';
 import type { RosterRow } from './lib/attendanceStore';
@@ -116,6 +120,32 @@ describe('classroom: the feedback form', () => {
     h.vm().done.feedback!.setText(field(apply));
     const other = harness({ subject: person({ id: 'u9', name: 'Other Person', data: withProgress({}) }), state: { screen: 'detail', detailId: 'L10', fbDraft: h.state.fbDraft } });
     expect(other.vm().done.feedback!.text).toBe('');
+  });
+});
+
+describe('a studio avatar: its own three-question quiz completes it', () => {
+  const rows = STUDIOS.find((x) => x.id === 'avatar')!.items as StudioItem[];
+  const content = avatarContent(rows, {}, [], [])!;
+  // A published studio avatar, added to the catalogue for these tests only.
+  const row: Learn = ['LAV1', 'Selling an HR system', 'prof', 3, 'Avatar', 'Peer contribution', 0.25, 0, '', 'Practise it'];
+  beforeAll(() => { LEARN.push(row); LEARN_BY.LAV1 = row; LEARN_META.LAV1 = { line: null, status: 'published', content }; });
+  afterAll(() => { LEARN.splice(LEARN.indexOf(row), 1); delete LEARN_BY.LAV1; delete LEARN_META.LAV1; });
+  const right = (h: ReturnType<typeof learnerOn>, qi: number) => h.vm().done.quiz!.items[qi].opts.find((o) => o.label === content.quiz[qi].opts[0])!;
+  it('reads the quiz from the published content and shows the options with the right one not always first', () => {
+    const items = learnerOn('LAV1').vm().done.quiz!.items;
+    expect(items).toHaveLength(3);
+    expect(items.map((i) => i.opts.length)).toEqual([3, 3, 3]);
+    expect(items.some((i) => i.opts[0].label !== content.quiz[items.indexOf(i)].opts[0])).toBe(true);
+  });
+  it('completes on three right answers, never on a run', async () => {
+    const h = learnerOn('LAV1');
+    [0, 1, 2].forEach((qi) => right(h, qi).pick());
+    h.vm().done.quiz!.check();
+    await flush();
+    expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'LAV1', { state: 'accepted', pct: 100 });
+  });
+  it('keeps the seeded avatars on their own quiz', () => {
+    expect(learnerOn('L38').vm().done.quiz!.items[0].opts.map((o) => o.label).sort()).toEqual([...AVATAR_QUIZ.L38[0].opts].sort());
   });
 });
 

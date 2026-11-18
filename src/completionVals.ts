@@ -6,6 +6,8 @@
 import type { ChangeEvent } from 'react';
 import { AVATAR_QUIZ, LEARN_BY, LEARN_META } from './data';
 import type { Item, Logic } from './model';
+import { quizOf } from './logic/avatarContent';
+import { rotated } from './logic/checkRow';
 import { FEEDBACK_MIN, completionOf, completionText, feedbackProblem } from './logic/record';
 import { saveProgress } from './lib/learnerStore';
 import { loadRoster, registerAttendance } from './lib/attendanceStore';
@@ -69,7 +71,9 @@ function feedbackVals(L: Logic, it: Item) {
 // ---------- Avatar evaluation quiz ----------
 
 function quizVals(L: Logic, it: Item) {
-  const Q = AVATAR_QUIZ[it.id]; if (!Q) return null;
+  // The seeded avatars have their own quiz; a published studio avatar carries its own, right-first (shown rotated, as the reel's check is).
+  const content = LEARN_META[it.id]?.content, Q = AVATAR_QUIZ[it.id] ?? (content?.kind === 'avatar' ? quizOf(content).map(rotated) : undefined);
+  if (!Q) return null;
   if (it.state === 'accepted') return { done: true, disabled: true, lead: 'Quiz passed · this practice is complete.', items: [], canCheck: false, check: () => {}, retry: () => {}, hasResult: false, result: '', resultColor: '', checked: false, passed: true };
   const k = key(L, it.id), ro = L.subject.readOnly;
   const st = L.state.quiz && L.state.quiz.key === k ? L.state.quiz : { key: k, picks: {} as Record<number, number>, checked: false };
