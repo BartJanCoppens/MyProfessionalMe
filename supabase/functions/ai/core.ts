@@ -10,13 +10,13 @@ import { isLimitError, NO_SCRIPT, scrub, SERVER_ONLY_USES, USE_LIMITS } from '..
 import { GAME_ASK } from '../_shared/gameRules.ts';
 import { marked } from '../_shared/promptData.ts';
 import type { Provider } from '../_shared/aiGuard.ts';
+import type { Ask, Msg } from '../_shared/promptData.ts';
 
 export { isLimitError, NO_SCRIPT, scrub };
 export type { Provider };
 
 export const TEXT_PROVIDERS: Provider[] = ['anthropic', 'openai_compatible'];
-export type Msg = { role: 'user' | 'assistant'; content: string };
-export type Ask = { system?: string; messages: Msg[]; max_tokens: number };
+export type { Ask, Msg };
 export type Target = { provider: Provider; baseUrl: string | null; model: string; key: string };
 // cut: the answer stopped at its length limit (a file written in parts continues from it).
 export type Outcome = { ok: true; text: string; cut: boolean } | { ok: false; error: string };

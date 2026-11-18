@@ -2,6 +2,9 @@
 // function's game review share.
 
 // A creator's, passage's or game's text inside a data block of an AI request; a marker inside it cannot close the block.
+// A provider request: the one definition (the `ai` function's core.ts re-exports it, the guards build asks of it).
+export type Msg = { role: 'user' | 'assistant'; content: string };
+export type Ask = { system?: string; messages: Msg[]; max_tokens: number };
 export const MARKER_RUN = /[<>]{3,}/;
 export const marked = (t: string, max = 600) => '<<<' + t.replace(new RegExp(MARKER_RUN, 'g'), ' ').slice(0, max) + '>>>';
 

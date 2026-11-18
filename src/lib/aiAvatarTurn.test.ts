@@ -169,7 +169,7 @@ describe('the guards around the character', () => {
     expect(vi.mocked(short.call).mock.calls.map((c) => c[0].system?.slice(0, 12))).toHaveLength(2); // persona + input classifier, no output one
   });
   it('lets the turn through when a classifier does not answer in time or returns nonsense (fail open), logging no content', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const never = new Promise<never>(() => {});
@@ -182,6 +182,14 @@ describe('the guards around the character', () => {
       const garbled = deps({ call: provider({ input: 'not json', output: '???' }) });
       expect(await playAvatarTurn(garbled, ask('What happened with the vendor?'))).toMatchObject({ body: { say: LONG, held: false } });
     } finally { vi.useRealTimers(); warn.mockRestore(); }
+  });
+  it('clears the classifier timers once the turn is done', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const d = deps({ call: provider() }), before = vi.getTimerCount();
+      await playAvatarTurn(d, ask('What happened with the vendor?'));
+      expect(vi.getTimerCount()).toBe(before);
+    } finally { vi.useRealTimers(); }
   });
   it('makes one count per turn, before any provider call, covering the persona and both classifier asks', async () => {
     const d = deps({ call: provider() });
