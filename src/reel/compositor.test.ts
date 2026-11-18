@@ -15,7 +15,7 @@ function fake(o: Opts = {}) {
   const listeners: Record<string, (() => void)[]> = {};
   const doc = { hidden: false, addEventListener: (n: string, f: () => void) => { (listeners[n] ||= []).push(f); }, removeEventListener: (n: string, f: () => void) => { listeners[n] = (listeners[n] || []).filter((x) => x !== f); } };
   class Recorder {
-    static isTypeSupported = (m: string) => (o.supported ?? ['video/mp4;codecs=avc1,mp4a']).includes(m);
+    static isTypeSupported = (m: string) => (o.supported ?? ['video/mp4;codecs=avc1.42E01E,mp4a.40.2']).includes(m);
     ondataavailable: ((e: { data: Blob }) => void) | null = null; onstop: (() => void) | null = null; onerror: (() => void) | null = null; state = 'inactive';
     private rec: (typeof log.recorders)[number];
     constructor(_s: unknown, opts: Record<string, unknown>) { this.rec = { opts, stopped: false }; log.recorders.push(this.rec); }
@@ -54,7 +54,7 @@ const refusal = async (p: Promise<unknown>) => p.then(() => null, (e: CutError) 
 describe('renderCut', () => {
   it('records at the bitrate of the size, in slices of 500 ms, and the audio at 128 kbit/s', async () => {
     const a = fake(); await go(cut(), a.env);
-    expect(a.log.recorders[0].opts).toMatchObject({ videoBitsPerSecond: 2_500_000, audioBitsPerSecond: 128_000, mimeType: 'video/mp4;codecs=avc1,mp4a' });
+    expect(a.log.recorders[0].opts).toMatchObject({ videoBitsPerSecond: 2_500_000, audioBitsPerSecond: 128_000, mimeType: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2' });
     expect(a.log.recorders[0].slice).toBe(500);
     const b = fake(); await go(cut({ size: { w: 1080, h: 1080 } }), b.env);
     expect(b.log.recorders[0].opts.videoBitsPerSecond).toBe(3_000_000);
@@ -64,7 +64,7 @@ describe('renderCut', () => {
     const a = fake(), r = await go(cut({ audio: [{ url: 'a', at: 0 }, { url: 'b', at: 4.3 }] }), a.env);
     const [first, second] = a.log.starts; // on the audio clock, from the moment the clock was seen running
     expect(first).toBeGreaterThanOrEqual(0); expect(second - first).toBeCloseTo(4.3);
-    expect(r).toMatchObject({ mime: 'video/mp4;codecs=avc1,mp4a', ext: 'mp4', seconds: 10 });
+    expect(r).toMatchObject({ mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', ext: 'mp4', seconds: 10 });
     expect(r.blob.type).toBe('video/mp4');
   });
   it('draws the frame at each time and ends the progress at 100', async () => {
