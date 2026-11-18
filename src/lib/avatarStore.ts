@@ -59,32 +59,33 @@ export async function shareAvatarRun(runId: string): Promise<void> {
   fail((await supabase.rpc('share_avatar_run', { p_run: runId })).error);
 }
 
-// The counsellor's note on a run shared with them: never completion.
+// The counsellor's note on a run shared with them (once): never completion.
 export async function confirmAvatarRun(runId: string, note: string): Promise<void> {
   fail((await supabase.rpc('confirm_avatar_run', { p_run: runId, p_note: note })).error);
 }
 
-export type SharedRun = { runId: string; userId: string; name: string; learningId: string; title: string; score: AvatarScore; turns: AvatarTurn[]; sharedAt: string; confirmed: { by: string; at: string; note: string } | null };
-type SharedRow = { id: string; user_id: string; learning_id: string; score: AvatarScore; turns: AvatarTurn[]; shared_at: string; confirmed_by: string | null; confirmed_at: string | null; counsellor_note: string | null };
+/** What the counsellor sees of a shared run: the AI's reading (without the server's injection flags), never the transcript until it is opened. */
+export type SharedRun = { runId: string; userId: string; name: string; learningId: string; title: string; score: Omit<AvatarScore, 'flags'>; sharedAt: string };
+type SharedRow = { run_id: string; user_id: string; name: string; learning_id: string; title: string; score: SharedRun['score']; shared_at: string };
 
-// The runs people shared with me (the read policy shows only those I may see the track of), newest first, with who and which learning.
+// The unconfirmed runs shared with me as their counsellor (an admin only when the learner has none), oldest first, at most 50: the database's rule, the same as
+// the approvals queue's. My own runs are never in it.
 export async function sharedAvatarRuns(): Promise<SharedRun[]> {
-  const me = (await supabase.auth.getSession()).data.session?.user.id;
-  if (!me) return [];
-  const { data, error } = await supabase.from('avatar_runs').select('id, user_id, learning_id, score, turns, shared_at, confirmed_by, confirmed_at, counsellor_note')
-    .not('shared_at', 'is', null).eq('test', false).neq('user_id', me).order('shared_at', { ascending: false });
+  const { data, error } = await supabase.rpc('shared_avatar_runs');
   fail(error);
-  const rows = (data || []) as SharedRow[];
-  if (!rows.length) return [];
-  const people = [...new Set(rows.flatMap((r) => [r.user_id, r.confirmed_by].filter((x): x is string => !!x)))];
-  const [names, titles] = await Promise.all([supabase.from('profiles').select('id, full_name').in('id', people), supabase.from('learnings').select('id, title').in('id', [...new Set(rows.map((r) => r.learning_id))])]);
-  fail(names.error); fail(titles.error);
-  const nameOf = new Map(((names.data || []) as { id: string; full_name: string | null }[]).map((p) => [p.id, p.full_name]));
-  const titleOf = new Map(((titles.data || []) as { id: string; title: string }[]).map((l) => [l.id, l.title]));
-  return rows.map((r) => ({
-    runId: r.id, userId: r.user_id, name: nameOf.get(r.user_id) || 'A learner', learningId: r.learning_id, title: titleOf.get(r.learning_id) || r.learning_id, score: r.score, turns: r.turns, sharedAt: r.shared_at,
-    confirmed: r.confirmed_at ? { by: (r.confirmed_by && nameOf.get(r.confirmed_by)) || 'A counsellor', at: r.confirmed_at, note: r.counsellor_note || '' } : null,
-  }));
+  return ((data || []) as SharedRow[]).map((r) => ({ runId: r.run_id, userId: r.user_id, name: r.name, learningId: r.learning_id, title: r.title, score: r.score, sharedAt: r.shared_at }));
+}
+
+// One shared run's transcript, read when it is opened; the text of a line a guard held is blank (its guard code marks it).
+export async function sharedRunTurns(runId: string): Promise<AvatarTurn[]> {
+  const { data, error } = await supabase.rpc('shared_avatar_run_turns', { p_run: runId });
+  fail(error);
+  return (data || []) as AvatarTurn[];
+}
+
+// Take a share back, until the counsellor has confirmed it.
+export async function withdrawAvatarRun(runId: string): Promise<void> {
+  fail((await supabase.rpc('withdraw_avatar_run', { p_run: runId })).error);
 }
 
 // Mine only: the read policy also shows a shared run of someone whose track I may see (a counsellee's), which is not mine.

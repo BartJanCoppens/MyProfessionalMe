@@ -6,9 +6,13 @@
 --               as readScore, in SQL) and a run that changed after the input was read (the hash covers the turns, the learning points and the prompt version).
 --               Recording a score ends the run (finished_at). A score is advice: nothing here writes a completion, a record or progress (S6: a practice run
 --               never counts either); the learning is completed by its quiz only.
--- sharing       share_avatar_run is the learner's choice, on their own finished, scored, non-test run; what is shared is the score and the transcript.
---               The read policy of 20261118200000 lets whoever may see the learner's track (their counsellor, a managing admin, a General Admin) read a shared run.
--- confirming    confirm_avatar_run: the counsellor (private.can_accept, the rule that accepts learnings) puts a note on a shared run. It is a note, never completion.
+-- sharing       share_avatar_run is the learner's choice, on their own finished, scored, non-test run; what is shared is the score and the transcript. The learner
+--               may withdraw it (withdraw_avatar_run) until it is confirmed. A client reads only its own runs (policy); a shared run is read through
+--               shared_avatar_runs (unconfirmed ones, newest first, at most 50, without the transcript and the injection flags) and shared_avatar_run_turns
+--               (the transcript on open, the text of a held line blanked: the counsellor sees that a line was held, never what it said).
+-- who decides   private.is_run_decider: the learner's counsellor, or an admin who may accept when the learner has no counsellor (the clause of waiting_submissions,
+--               20261102092834, which is inline there). One rule for reading a shared run and for confirming it.
+-- confirming    confirm_avatar_run: that person puts a note on a shared run, once. It is a note, never completion; a confirmed run leaves the queue.
 -- metering      a scoring call counts as one call under avatar_conversation (its limits, its connection); no new use.
 
 -- 1. The band of a 0 to 100 score (Taxatar's bands) and the credit rules the TypeScript scorer applies (_shared/avatarScore.ts, src/logic/avatarScore.sync.test.ts).
@@ -59,18 +63,19 @@ declare
   v_sum numeric := 0;
   v_weights numeric := 0;
 begin
-  if jsonb_typeof(p_score) <> 'object' or jsonb_typeof(p_score -> 'points') <> 'array' or jsonb_array_length(p_score -> 'points') <> jsonb_array_length(p_points) then return false; end if;
-  if p_score ->> 'version' is distinct from '1.0.0' or jsonb_typeof(p_score -> 'flags') <> 'array' or jsonb_typeof(p_score -> 'summary') <> 'string' or char_length(p_score ->> 'summary') > 600 then return false; end if;
-  if exists (select 1 from jsonb_array_elements(p_score -> 'flags') f where jsonb_typeof(f) <> 'string' or (f #>> '{}') not in ('meta_or_injection', 'offensive', 'marker_forgery')) then return false; end if;
+  -- every key is required with its type: an absent key is null, and a null test never fires, so every test says "is distinct from"
+  if jsonb_typeof(p_score) is distinct from 'object' or jsonb_typeof(p_score -> 'points') is distinct from 'array' or jsonb_array_length(p_score -> 'points') <> jsonb_array_length(p_points) then return false; end if;
+  if p_score ->> 'version' is distinct from '1.0.0' or jsonb_typeof(p_score -> 'flags') is distinct from 'array' or jsonb_typeof(p_score -> 'summary') is distinct from 'string' or char_length(p_score ->> 'summary') > 600 then return false; end if;
+  if exists (select 1 from jsonb_array_elements(p_score -> 'flags') f where jsonb_typeof(f) is distinct from 'string' or (f #>> '{}') not in ('meta_or_injection', 'offensive', 'marker_forgery')) then return false; end if;
   for k in 0..jsonb_array_length(p_points) - 1 loop
     e := p_score -> 'points' -> k;
     p := p_points -> k;
-    if jsonb_typeof(e) <> 'object' or e -> 'id' is distinct from p -> 'id' or e -> 'weight' is distinct from p -> 'weight' or e -> 'text' is distinct from p -> 'text' then return false; end if;
-    if jsonb_typeof(e -> 'score') <> 'number' or (e ->> 'score')::numeric <> trunc((e ->> 'score')::numeric) or (e ->> 'score')::numeric not between 0 and 100 then return false; end if;
-    if e ->> 'band' is distinct from private.score_band((e ->> 'score')::numeric) or jsonb_typeof(e -> 'comment') <> 'string' or char_length(e ->> 'comment') > 300 then return false; end if;
-    if jsonb_typeof(e -> 'turns') <> 'array' then return false; end if;
+    if jsonb_typeof(e) is distinct from 'object' or e -> 'id' is distinct from p -> 'id' or e -> 'weight' is distinct from p -> 'weight' or e -> 'text' is distinct from p -> 'text' then return false; end if;
+    if jsonb_typeof(e -> 'score') is distinct from 'number' or (e ->> 'score')::numeric <> trunc((e ->> 'score')::numeric) or (e ->> 'score')::numeric not between 0 and 100 then return false; end if;
+    if e ->> 'band' is distinct from private.score_band((e ->> 'score')::numeric) or jsonb_typeof(e -> 'comment') is distinct from 'string' or char_length(e ->> 'comment') > 300 then return false; end if;
+    if jsonb_typeof(e -> 'turns') is distinct from 'array' then return false; end if;
     for n in select x from jsonb_array_elements(e -> 'turns') x loop
-      if jsonb_typeof(n) <> 'number' or (n #>> '{}')::numeric <> trunc((n #>> '{}')::numeric) or (n #>> '{}')::numeric < 1 or (n #>> '{}')::numeric > jsonb_array_length(p_turns)
+      if jsonb_typeof(n) is distinct from 'number' or (n #>> '{}')::numeric <> trunc((n #>> '{}')::numeric) or (n #>> '{}')::numeric < 1 or (n #>> '{}')::numeric > jsonb_array_length(p_turns)
         or p_turns -> ((n #>> '{}')::integer - 1) ->> 'who' is distinct from 'learner' or p_turns -> ((n #>> '{}')::integer - 1) ->> 'guard' is not null then return false; end if;
     end loop;
     if jsonb_array_length(e -> 'turns') = 0 and (e ->> 'score')::numeric > 30 then return false; end if;
@@ -78,9 +83,9 @@ begin
     v_sum := v_sum + (p ->> 'weight')::numeric * (e ->> 'score')::numeric;
     v_weights := v_weights + (p ->> 'weight')::numeric;
   end loop;
-  if jsonb_typeof(p_score -> 'overall') <> 'number' or (p_score ->> 'overall')::numeric is distinct from round(v_sum / nullif(v_weights, 0)) or p_score ->> 'band' is distinct from private.score_band(round(v_sum / nullif(v_weights, 0))) then return false; end if;
+  if jsonb_typeof(p_score -> 'overall') is distinct from 'number' or (p_score ->> 'overall')::numeric is distinct from round(v_sum / nullif(v_weights, 0)) or p_score ->> 'band' is distinct from private.score_band(round(v_sum / nullif(v_weights, 0))) then return false; end if;
   for n in select x from jsonb_array_elements(jsonb_build_array(p_score -> 'strengths', p_score -> 'missed')) x loop
-    if jsonb_typeof(n) <> 'array' or jsonb_array_length(n) > 5 or exists (select 1 from jsonb_array_elements(n) s where jsonb_typeof(s) <> 'string' or char_length(s #>> '{}') > 200) then return false; end if;
+    if jsonb_typeof(n) is distinct from 'array' or jsonb_array_length(n) > 5 or exists (select 1 from jsonb_array_elements(n) s where jsonb_typeof(s) is distinct from 'string' or char_length(s #>> '{}') > 200) then return false; end if;
   end loop;
   return true;
 end;
@@ -154,7 +159,7 @@ begin
 end;
 $$;
 
--- 7. The counsellor's confirmation: a note on a shared run (once), by whoever may accept the learner's work; never the learner. It changes no progress.
+-- 7. The counsellor's confirmation: a note on a shared run (once), by the learner's counsellor (an admin only when there is none); never the learner. It changes no progress.
 create function public.confirm_avatar_run(p_run uuid, p_note text)
 returns void
 language plpgsql
@@ -166,7 +171,7 @@ declare
   v_note text := private.trimmed(coalesce(p_note, ''));
 begin
   select * into r from public.avatar_runs where id = p_run for update;
-  if not found or not private.can_accept(r.user_id) then raise exception 'Only their counsellor or an admin confirms a run'; end if;
+  if not found or not private.is_run_decider(r.user_id) then raise exception 'Only their counsellor or an admin confirms a run'; end if;
   if r.shared_at is null then raise exception 'That run is not shared'; end if;
   if r.confirmed_at is not null then raise exception 'This run is already confirmed'; end if;
   if char_length(v_note) > 600 then raise exception 'A note is at most 600 characters'; end if;
@@ -174,9 +179,66 @@ begin
 end;
 $$;
 
--- 8. Who may execute what.
-revoke execute on function private.score_band(numeric), private.avatar_score_hash(uuid), private.avatar_score_ok(jsonb, jsonb, jsonb) from public, anon, authenticated;
+-- 8. Who decides, and what a decider reads of a shared run.
+create function private.is_run_decider(p_user uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p_user <> (select auth.uid()) and exists (select 1 from public.profiles p where p.id = p_user
+    and (p.counsellor_id = (select auth.uid()) or (p.counsellor_id is null and private.can_accept(p_user))));
+$$;
+
+-- The unconfirmed shared runs waiting for the caller: who, which learning and the AI's reading (without the injection flags, which are for the server).
+create function public.shared_avatar_runs()
+returns table (run_id uuid, user_id uuid, name text, learning_id text, title text, score jsonb, shared_at timestamptz)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select r.id, r.user_id, coalesce(p.full_name, p.email), r.learning_id, coalesce(l.title, r.learning_id), r.score - 'flags', r.shared_at
+  from public.avatar_runs r join public.profiles p on p.id = r.user_id left join public.learnings l on l.id = r.learning_id
+  where r.shared_at is not null and not r.test and r.confirmed_at is null and private.is_run_decider(r.user_id)
+  order by r.shared_at, r.id limit 50;
+$$;
+
+-- The transcript of one such run, read on open; the text of a line a guard held is blanked (the line is still there, marked by its guard code).
+create function public.shared_avatar_run_turns(p_run uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(case when x.t ->> 'guard' is not null then jsonb_set(x.t, '{text}', '""') else x.t end order by x.n), '[]'::jsonb)
+  from public.avatar_runs r, jsonb_array_elements(r.turns) with ordinality as x(t, n)
+  where r.id = p_run and r.shared_at is not null and not r.test and r.confirmed_at is null and private.is_run_decider(r.user_id);
+$$;
+
+-- The learner takes a share back until it is confirmed; after that it stays (the counsellor's note is on it).
+create function public.withdraw_avatar_run(p_run uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  r public.avatar_runs;
+begin
+  select * into r from public.avatar_runs where id = p_run for update;
+  if not found or r.user_id is distinct from (select auth.uid()) then raise exception 'That run is not yours'; end if;
+  if r.shared_at is null then raise exception 'That run is not shared'; end if;
+  if r.confirmed_at is not null then raise exception 'This run is confirmed · it stays shared'; end if;
+  update public.avatar_runs set shared_at = null where id = p_run;
+end;
+$$;
+
+-- 9. Who may execute what.
+revoke execute on function private.score_band(numeric), private.avatar_score_hash(uuid), private.avatar_score_ok(jsonb, jsonb, jsonb), private.is_run_decider(uuid) from public, anon, authenticated;
 revoke execute on function public.avatar_score_input(uuid, uuid), public.record_avatar_score(uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function public.avatar_score_input(uuid, uuid), public.record_avatar_score(uuid, text, jsonb) to service_role;
-revoke execute on function public.share_avatar_run(uuid), public.confirm_avatar_run(uuid, text) from public, anon;
-grant execute on function public.share_avatar_run(uuid), public.confirm_avatar_run(uuid, text) to authenticated;
+revoke execute on function public.share_avatar_run(uuid), public.withdraw_avatar_run(uuid), public.confirm_avatar_run(uuid, text), public.shared_avatar_runs(), public.shared_avatar_run_turns(uuid) from public, anon;
+grant execute on function public.share_avatar_run(uuid), public.withdraw_avatar_run(uuid), public.confirm_avatar_run(uuid, text), public.shared_avatar_runs(), public.shared_avatar_run_turns(uuid) to authenticated;

@@ -3,7 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import { SCORE_REFUSED } from '../../supabase/functions/ai/avatarScore.ts';
 import { REFUSED } from '../../supabase/functions/ai/avatarTurn.ts';
-import { COMMENT_MAX, ITEM_MAX, LIST_MAX, NO_EVIDENCE_MAX, ONE_LINE_MAX, SCORE_PROMPT_VERSION, SUMMARY_MAX, bandOf } from '../../supabase/functions/_shared/avatarScore.ts';
+import { INJECTION_FLAGS } from '../../supabase/functions/_shared/avatarGuard.ts';
+import { COMMENT_MAX, ITEM_MAX, LIST_MAX, NO_EVIDENCE_MAX, NOTE_MAX, ONE_LINE_MAX, SCORE_PROMPT_VERSION, SUMMARY_MAX, bandOf } from '../../supabase/functions/_shared/avatarScore.ts';
 import { migrationText } from '../test/migrations';
 
 const sql = migrationText('20261118210000_avatar_scores.sql');
@@ -24,7 +25,13 @@ describe('the score\'s rules in SQL', () => {
     expect(ok).toContain(`jsonb_array_length(n) > ${LIST_MAX}`);
     expect(ok).toContain(`char_length(s #>> '{}') > ${ITEM_MAX}`);
     expect(ok).toContain(`char_length(p_score ->> 'summary') > ${SUMMARY_MAX}`);
-    expect(fn('confirm_avatar_run')).toContain('char_length(v_note) > 600');
+    expect(fn('confirm_avatar_run')).toContain(`char_length(v_note) > ${NOTE_MAX}`);
+    expect(fn('confirm_avatar_run')).toContain(sqlText(`A note is at most ${NOTE_MAX} characters`));
+  });
+  it('take exactly the injection codes the guard gives, and require every key (a missing key is null: tests say "is distinct from")', () => {
+    expect(ok).toContain("not in (" + INJECTION_FLAGS.map((f) => `'${f}'`).join(', ') + ")");
+    expect(ok).not.toMatch(/jsonb_typeof\([^)]*\) <> /);
+    expect(ok).toContain("jsonb_typeof(e -> 'turns') is distinct from 'array'");
   });
   it('take the bands of bandOf', () => {
     const band = fn('score_band');
@@ -63,13 +70,31 @@ describe('who may execute what', () => {
   it('lets only the service role read the input and write the score; the learner shares and the counsellor confirms', () => {
     expect(sql).toContain('revoke execute on function public.avatar_score_input(uuid, uuid), public.record_avatar_score(uuid, text, jsonb) from public, anon, authenticated;');
     expect(sql).toContain('grant execute on function public.avatar_score_input(uuid, uuid), public.record_avatar_score(uuid, text, jsonb) to service_role;');
-    expect(sql).toContain('grant execute on function public.share_avatar_run(uuid), public.confirm_avatar_run(uuid, text) to authenticated;');
-    for (const name of ['avatar_score_input', 'record_avatar_score', 'share_avatar_run', 'confirm_avatar_run', 'avatar_score_hash']) expect(fn(name), name).toMatch(/security definer\s+set search_path = ''/);
+    expect(sql).toContain('grant execute on function public.share_avatar_run(uuid), public.withdraw_avatar_run(uuid), public.confirm_avatar_run(uuid, text), public.shared_avatar_runs(), public.shared_avatar_run_turns(uuid) to authenticated;');
+    for (const name of ['avatar_score_input', 'record_avatar_score', 'share_avatar_run', 'withdraw_avatar_run', 'confirm_avatar_run', 'avatar_score_hash', 'shared_avatar_runs', 'shared_avatar_run_turns', 'is_run_decider']) expect(fn(name), name).toMatch(/security definer\s+set search_path = ''/);
     expect(sql).not.toMatch(/grant (update|insert)[^;]*avatar_runs/);
   });
   it('says the shared and confirmed refusals in the words the screens show', () => {
     for (const t of ['That run is not yours', 'A practice run in the studio is never shared', 'Score the run before sharing it']) expect(fn('share_avatar_run')).toContain(sqlText(t));
     for (const t of ['Only their counsellor or an admin confirms a run', 'That run is not shared']) expect(fn('confirm_avatar_run')).toContain(sqlText(t));
-    expect(fn('confirm_avatar_run')).toContain('private.can_accept(r.user_id)');
+    expect(fn('confirm_avatar_run')).toContain('private.is_run_decider(r.user_id)');
   });
 });
+
+describe('who reads a shared run', () => {
+  it('is the waiting_submissions rule: the counsellor, an admin only when there is none, for the list, the transcript and the confirmation', () => {
+    const rule = fn('is_run_decider');
+    expect(rule).toContain('p.counsellor_id = (select auth.uid()) or (p.counsellor_id is null and private.can_accept(p_user))');
+    expect(migrationText('20261102092834_learning_record.sql')).toContain('p.counsellor_id = (select auth.uid()) or (p.counsellor_id is null and (select private.can_accept(l.user_id)))');
+    for (const name of ['shared_avatar_runs', 'shared_avatar_run_turns']) expect(fn(name), name).toContain('private.is_run_decider(r.user_id)');
+    expect(fn('shared_avatar_runs')).toContain("r.score - 'flags'");
+    expect(fn('shared_avatar_runs')).toContain('r.confirmed_at is null');
+    expect(fn('shared_avatar_runs')).toContain('limit 50');
+    expect(fn('shared_avatar_run_turns')).toContain(`jsonb_set(x.t, '{text}', '""')`);
+  });
+  it('leaves a client only its own runs: the read policy no longer shows a shared run', () => {
+    const runs = migrationText('20261118200000_avatar_runs.sql');
+    expect(runs).toContain('create policy "avatar_runs: read" on public.avatar_runs for select to authenticated\n  using (user_id = (select auth.uid()));');
+  });
+});
+

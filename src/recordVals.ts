@@ -161,7 +161,7 @@ export function recordVals(L: Logic, it: Item) {
   return {
     rec: detailRecord(L, it),
     appr: s.screen === 'approvals' ? approvals(L) : null,
-    approvalsBadge: (s.queue || []).length + (s.sharedRuns || []).filter((r) => !r.confirmed).length,
+    approvalsBadge: (s.queue || []).length + (s.sharedRuns || []).length,
     navApprovals: s.screen === 'approvals' || (s.screen === 'detail' && s.origin === 'approvals'),
     goApprovals: () => { L.go('approvals'); reloadQueue(L); },
   };

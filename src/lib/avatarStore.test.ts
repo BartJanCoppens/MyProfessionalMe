@@ -1,7 +1,7 @@
 // Avatar practice runs against the in-memory Supabase fake (studios plan, Task 6.2): start, say, end, read. A run on a contribution is a test.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, has, op } from '../test/fakeSupabase';
-import { confirmAvatarRun, endAvatarRun, myAvatarRuns, sayToCharacter, scoreAvatarRun, sharedAvatarRuns, shareAvatarRun, startAvatarRun } from './avatarStore';
+import { confirmAvatarRun, endAvatarRun, myAvatarRuns, sayToCharacter, scoreAvatarRun, sharedAvatarRuns, sharedRunTurns, shareAvatarRun, startAvatarRun, withdrawAvatarRun } from './avatarStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 
@@ -87,24 +87,19 @@ describe('scoring, sharing and confirming', () => {
     await expect(shareAvatarRun('run-2')).rejects.toThrow('Score the run before sharing it');
     await expect(confirmAvatarRun('run-2', 'x')).rejects.toThrow('Score the run before sharing it');
   });
-  it('reads the runs shared with me, not mine: shared, not a practice, newest first, with names and titles', async () => {
-    db.client.auth.getSession.mockImplementation(async () => ({ data: { session: { user: { id: 'me' } } } }));
-    db.answer((c) => c.table === 'avatar_runs' ? { data: [
-      { id: 'r1', user_id: 'u1', learning_id: 'L70', score, turns: [{ who: 'learner', text: 'Hi', guard: null }], shared_at: '2026-11-18T10:00:00Z', confirmed_by: 'me', confirmed_at: '2026-11-18T11:00:00Z', counsellor_note: 'Good' },
-      { id: 'r2', user_id: 'u2', learning_id: 'L70', score, turns: [], shared_at: '2026-11-17T10:00:00Z', confirmed_by: null, confirmed_at: null, counsellor_note: null }] }
-      : c.table === 'profiles' ? { data: [{ id: 'u1', full_name: 'Kim Learner' }, { id: 'u2', full_name: null }, { id: 'me', full_name: 'Sam Counsellor' }] }
-      : { data: [{ id: 'L70', title: 'Selling an HR system' }] });
-    const runs = await sharedAvatarRuns();
-    expect(runs).toEqual([
-      { runId: 'r1', userId: 'u1', name: 'Kim Learner', learningId: 'L70', title: 'Selling an HR system', score, turns: [{ who: 'learner', text: 'Hi', guard: null }], sharedAt: '2026-11-18T10:00:00Z', confirmed: { by: 'Sam Counsellor', at: '2026-11-18T11:00:00Z', note: 'Good' } },
-      { runId: 'r2', userId: 'u2', name: 'A learner', learningId: 'L70', title: 'Selling an HR system', score, turns: [], sharedAt: '2026-11-17T10:00:00Z', confirmed: null }]);
-    const c = db.calls[0];
-    expect(c.table).toBe('avatar_runs');
-    expect(has(c, 'eq', 'test', false) && has(c, 'neq', 'user_id', 'me') && has(c, 'not', 'shared_at', 'is', null) && has(c, 'order', 'shared_at', { ascending: false })).toBe(true);
+  it('reads the runs shared with me through the database\'s rule, with names and titles, and no transcript', async () => {
+    const { flags: _flags, ...shown } = score;
+    db.answer(() => ({ data: [{ run_id: 'r1', user_id: 'u1', name: 'Kim Learner', learning_id: 'L70', title: 'Selling an HR system', score: shown, shared_at: '2026-11-18T10:00:00Z' }] }));
+    expect(await sharedAvatarRuns()).toEqual([{ runId: 'r1', userId: 'u1', name: 'Kim Learner', learningId: 'L70', title: 'Selling an HR system', score: shown, sharedAt: '2026-11-18T10:00:00Z' }]);
+    expect(db.calls[0].table).toBe('rpc:shared_avatar_runs');
   });
-  it('reads nothing when nobody is signed in', async () => {
-    expect(await sharedAvatarRuns()).toEqual([]);
-    expect(db.calls).toHaveLength(0);
+  it('reads one transcript when it is opened, and takes a share back', async () => {
+    db.answer(() => ({ data: [{ who: 'learner', text: '', guard: 'offensive' }] }));
+    expect(await sharedRunTurns('r1')).toEqual([{ who: 'learner', text: '', guard: 'offensive' }]);
+    expect(db.calls[0]).toEqual({ table: 'rpc:shared_avatar_run_turns', steps: [['args', [{ p_run: 'r1' }]]] });
+    await withdrawAvatarRun('r1');
+    expect(db.calls[1]).toEqual({ table: 'rpc:withdraw_avatar_run', steps: [['args', [{ p_run: 'r1' }]]] });
+    db.answer(() => ({ error: { message: 'This run is confirmed · it stays shared' } }));
+    await expect(withdrawAvatarRun('r1')).rejects.toThrow('it stays shared');
   });
 });
-

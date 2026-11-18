@@ -13,7 +13,9 @@ import type { Ask } from './promptData.ts';
 
 export const GUARD_PROMPT_VERSION = '1.0.0';
 export type GuardCode = typeof GUARD_CODES[number];
-export type InjectionFlag = 'meta_or_injection' | 'offensive' | 'marker_forgery';
+/** The codes `injectionFlags` gives (private.avatar_score_ok takes exactly these). */
+export const INJECTION_FLAGS = ['meta_or_injection', 'offensive', 'marker_forgery'] as const;
+export type InjectionFlag = typeof INJECTION_FLAGS[number];
 
 // ---------- normalise (what the patterns read) ----------
 // Look-alike letters a line may swap for Latin ones to slip a phrase past the patterns (Cyrillic and Greek capitals and small letters).

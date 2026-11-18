@@ -26,6 +26,7 @@ import { callerRoles, connectionKey, countCall, fail, isLive, readUse } from '..
 import type { Conn, UseRow } from '../_shared/aiUse.ts';
 import { NO_SCRIPT, USE_LIMITS } from '../_shared/aiGuard.ts';
 import { callProvider, inputChars, limitMessage, LIMITS, readAsk, readGameAsk, TEST_ASK, TEXT_PROVIDERS, UUID, withPreamble } from './core.ts';
+import { SCORE_TIMEOUT_MS } from '../_shared/avatarScore.ts';
 import { scoreAvatarRun } from './avatarScore.ts';
 import type { ScoreLoad } from './avatarScore.ts';
 import { AVATAR_USE, playAvatarTurn, readAvatarAsk } from './avatarTurn.ts';
@@ -139,7 +140,7 @@ async function scoreAvatar(call: Call): Promise<Response> {
     preamble: '', dailyLimit: use.daily_limit, dailyChars: use.daily_chars,
     load: async () => ((await call.admin.rpc('avatar_score_input', { p_user: call.callerId, p_run: runId })).data as ScoreLoad | RoleRefusal | null) ?? null,
     count: (chars) => countCall(call.admin, call.callerId, AVATAR_USE, chars),
-    call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[AVATAR_USE]?.timeoutMs),
+    call: (ask) => callProvider(target, ask, fetch, SCORE_TIMEOUT_MS),
     record: async (hash, score) => (await call.admin.rpc('record_avatar_score', { p_run: runId, p_hash: hash, p_score: score })).error?.message ?? null,
   });
   console.log(JSON.stringify({ action: 'score_avatar', status: out.status, ms: Date.now() - call.started }));

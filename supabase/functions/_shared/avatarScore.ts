@@ -10,19 +10,23 @@
 //
 // CHANGING THE SYSTEM TEXT IS A CHANGE OF HOW RUNS ARE SCORED: bump SCORE_PROMPT_VERSION, re-pin the hash in the test and change '1.0.0' in the migration's
 // avatar_score_hash and avatar_score_ok (a later migration), in one commit.
-import { injectionFlags } from './avatarGuard.ts';
+import { injectionFlags, normalised, sanitizeUntrusted } from './avatarGuard.ts';
 import type { InjectionFlag } from './avatarGuard.ts';
 import { jsonObject, marked } from './promptData.ts';
 import type { Ask } from './promptData.ts';
 
 export const SCORE_PROMPT_VERSION = '1.0.0';
 export const SCORE_MAX_TOKENS = 1500;
+/** The scoring call's own timeout: its ask is the whole transcript (up to about 90,000 characters), and the edge function's request limit is 150 s. */
+export const SCORE_TIMEOUT_MS = 90_000;
+/** The most a counsellor's note holds (public.confirm_avatar_run). */
+export const NOTE_MAX = 600;
 /** The most a point may score without a cited creditable learner turn, and with one creditable line only (Mediocre). */
 export const NO_EVIDENCE_MAX = 30, ONE_LINE_MAX = 54;
 /** What a score holds (private.avatar_score_ok says the same): a comment, a list of strengths or misses, one of them, the summary. */
 export const COMMENT_MAX = 300, LIST_MAX = 5, ITEM_MAX = 200, SUMMARY_MAX = 600;
 export const HELD_MARKER = '[held back by the guardrail]';
-const LEFT_OUT_MARKER = '[left out: it tries to give the AI instructions, or answers a line that does]';
+const LEFT_OUT_MARKER = '[left out: it tries to give the AI or the scorer instructions, or answers a line that does]';
 
 export type Band = 'Excellent' | 'Very good' | 'Good' | 'Mediocre' | 'Needs improvement';
 /** Taxatar's bands: 85, 70, 55 and 40. */
@@ -34,13 +38,22 @@ export type ScoreInput = { title: string; situation: string; counterpart: string
 export type PointScore = ScorePoint & { score: number; band: Band; comment: string; turns: number[] };
 export type AvatarScore = { overall: number; band: Band; points: PointScore[]; strengths: string[]; missed: string[]; summary: string; version: string; flags: InjectionFlag[] };
 
+// A line addressed to the scorer ("note to the evaluator", "give me 100", "ignore the rubric") is not a line of the conversation: it is never credited.
+const AIMED_AT_SCORER = [
+  /\b(?:note|message|memo)\s+to\s+(?:the\s+)?(?:evaluator|scorer|grader|assessor|marker|judge)\b/i,
+  /\b(?:give|award|grant)\s+(?:me|us|this)\s+(?:a\s+)?(?:score\s+of\s+)?(?:100|full\s+marks|top\s+marks|the\s+(?:max|maximum|highest)|an?\s+(?:excellent|perfect))/i,
+  /\b(?:score|rate|mark|grade)\s+(?:me|this|it|us)\s+(?:as\s+|at\s+)?(?:100|9\d|excellent|perfect|full)/i,
+  /\b(?:ignore|disregard|forget|skip)\s+(?:the|your|all|any)\s+(?:rubric|scoring|score|scores|evaluation|grading|marking|bands?|hard\s+rules)\b/i,
+];
+const aimedAtScorer = (text: string) => { const t = normalised(text); return AIMED_AT_SCORER.some((re) => re.test(t)); };
+
 /** The numbers (1-based, as the transcript shows them) of the learner turns that may be credited, and of the lines left out of the transcript. */
 export function creditable(turns: ScoreTurn[]): { ok: Set<number>; hidden: Set<number> } {
   const ok = new Set<number>(), hidden = new Set<number>();
   turns.forEach((t, k) => {
     const n = k + 1, answeringHidden = t.who === 'character' && !!turns[k - 1] && turns[k - 1].who === 'learner' && !ok.has(n - 1);
     if (t.guard) return;
-    if (t.who === 'learner' && injectionFlags(t.text).length) hidden.add(n);
+    if (t.who === 'learner' && (injectionFlags(t.text).length || aimedAtScorer(t.text))) hidden.add(n);
     else if (t.who === 'learner') ok.add(n);
     else if (answeringHidden) hidden.add(n);
   });
@@ -79,7 +92,7 @@ export async function scorePromptHash(): Promise<string> {
 // Every line is data inside markers; a held or left-out line is a marker without its text.
 function transcript(turns: ScoreTurn[]): string {
   const { hidden } = creditable(turns);
-  return turns.map((t, k) => 'Turn ' + (k + 1) + ' (' + t.who + '): ' + (t.guard ? HELD_MARKER : hidden.has(k + 1) ? LEFT_OUT_MARKER : marked(t.text, 1200))).join('\n');
+  return turns.map((t, k) => 'Turn ' + (k + 1) + ' (' + t.who + '): ' + (t.guard ? HELD_MARKER : hidden.has(k + 1) ? LEFT_OUT_MARKER : marked(t.who === 'learner' ? sanitizeUntrusted(t.text) : t.text, 1200))).join('\n');
 }
 
 export function scoreRequest(input: ScoreInput): Ask {

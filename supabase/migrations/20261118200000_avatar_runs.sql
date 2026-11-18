@@ -6,7 +6,7 @@
 --              keeps it off learnings, the learning is completed by its quiz only (private.is_self_complete) and nothing here writes a completion or a
 --              record. `turns` holds the conversation, written only by avatar_add_turns (the server holds it, so no character line can be forged); at
 --              most 72 (RUN_TURNS: 36 learner lines of a 15-minute run, and as many replies). The score, sharing and confirmation columns are for 6.4.
--- grants       authenticated may read own runs (and a shared, non-test run of someone whose track they may see, once sharing exists) and insert
+-- grants       authenticated may read own runs (a counsellor reads a shared one only through shared_avatar_runs, Task 6.4) and insert
 --              (learning_id, contribution_id, test); user_id is the default auth.uid(). No update or delete: turns, score, sharing and confirmation are
 --              written only by definer functions.
 -- context      public.avatar_run_context (service role only, read by the `ai` function): the character with what it reveals and hides, for the caller's own
@@ -107,7 +107,7 @@ grant select on public.avatar_runs to authenticated;
 grant insert (learning_id, contribution_id, test) on public.avatar_runs to authenticated;
 
 create policy "avatar_runs: read" on public.avatar_runs for select to authenticated
-  using (user_id = (select auth.uid()) or (shared_at is not null and not test and (select private.can_view_track(user_id))));
+  using (user_id = (select auth.uid()));
 create policy "avatar_runs: start" on public.avatar_runs for insert to authenticated
   with check (user_id = (select auth.uid()) and (
     (not test and (select private.is_avatar_learning(learning_id)))

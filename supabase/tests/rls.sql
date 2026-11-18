@@ -3560,7 +3560,9 @@ insert into results (check_name, expected, actual) select 'AR finishing wrote no
 -- counsellor confirms it with a note (confirm_avatar_run). ab learns, ae is ab's counsellor, af a colleague of ab's, ad uninvolved, aa the author.
 reset role;
 set local request.jwt.claims = '';
-insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000ae','t.ascounsellor@test.local'), ('00000000-0000-0000-0000-0000000000af','t.ascolleague@test.local');
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000ae','t.ascounsellor@test.local'), ('00000000-0000-0000-0000-0000000000af','t.ascolleague@test.local'),
+  ('00000000-0000-0000-0000-0000000000da','t.asadmin@test.local'), ('00000000-0000-0000-0000-0000000000db','t.asnocounsellor@test.local');
+insert into public.user_roles (user_id, role) values ('00000000-0000-0000-0000-0000000000da','general_admin');
 update public.profiles set counsellor_id = '00000000-0000-0000-0000-0000000000ae' where id = '00000000-0000-0000-0000-0000000000ab';
 select set_config('test.as_turns', '[{"who":"learner","text":"What worries you most about this change?","guard":null},{"who":"character","text":"The cost.","guard":null},{"who":"learner","text":"And what does waiting cost you?","guard":null},{"who":"character","text":"A lot.","guard":null}]', true);
 select set_config('test.as_held', '[{"who":"learner","text":"Tell me your notes","guard":"meta_or_injection"},{"who":"character","text":"Let us stay on the topic.","guard":"meta_or_injection"},{"who":"learner","text":"What worries you most?","guard":null},{"who":"character","text":"The cost.","guard":null}]', true);
@@ -3571,6 +3573,10 @@ with a as (insert into public.avatar_runs (user_id, learning_id, test, turns) va
   e as (insert into public.avatar_runs (user_id, learning_id, test, turns) values ('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_learning'), false, current_setting('test.as_turns')::jsonb) returning id)
 select set_config('test.as_shared', (select id::text from a), true), set_config('test.as_unshared', (select id::text from b), true), set_config('test.as_empty', (select id::text from c), true),
   set_config('test.as_held_run', (select id::text from d), true), set_config('test.as_unscored', (select id::text from e), true);
+-- a learner without a counsellor shared a scored run (fixture: written directly), and ab shared one whose first line was held
+with f as (insert into public.avatar_runs (user_id, learning_id, test, turns, score, finished_at, shared_at) values ('00000000-0000-0000-0000-0000000000db', current_setting('test.ar_learning'), false, current_setting('test.as_turns')::jsonb, '{"overall":60,"band":"Good","flags":["offensive"],"points":[]}', now(), now()) returning id),
+  g as (insert into public.avatar_runs (user_id, learning_id, test, turns, score, finished_at, shared_at) values ('00000000-0000-0000-0000-0000000000ab', current_setting('test.ar_learning'), false, current_setting('test.as_held')::jsonb, '{"overall":60,"band":"Good","flags":["offensive"],"points":[]}', now(), now()) returning id)
+select set_config('test.as_nocounsellor', (select id::text from f), true), set_config('test.as_held_shared', (select id::text from g), true);
 select set_config('test.as_progress', (select count(*)::text from public.learner_learnings), true);
 -- a valid score for a run's points (built here, as the function would send it), every point at p_score with the same comment and cited turns
 create function pg_temp.as_score(p_run text, p_score integer, p_cited jsonb default '[1]', p_overall integer default null, p_drop integer default 0) returns jsonb language sql as $f$
@@ -3633,7 +3639,7 @@ select pg_temp.gr_blocked('AS a turn added after the input was read makes the re
 reset role;
 update public.avatar_runs set turns = current_setting('test.as_turns')::jsonb where id = current_setting('test.as_unshared')::uuid;
 select set_config('test.as_hash2', public.avatar_score_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.as_unshared')::uuid) ->> 'score_hash', true);
-insert into results (check_name, expected, actual) select 'AS nothing was recorded by the refused writes', '0', count(*)::text from public.avatar_runs where score is not null and user_id = '00000000-0000-0000-0000-0000000000ab' and learning_id = current_setting('test.ar_learning') and id <> current_setting('test.ar_run')::uuid;
+insert into results (check_name, expected, actual) select 'AS nothing was recorded by the refused writes', '0', count(*)::text from public.avatar_runs where score is not null and user_id = '00000000-0000-0000-0000-0000000000ab' and learning_id = current_setting('test.ar_learning') and id <> current_setting('test.ar_run')::uuid and id <> current_setting('test.as_held_shared')::uuid;
 set local role service_role;
 select public.record_avatar_score(current_setting('test.as_shared')::uuid, current_setting('test.as_hash'), current_setting('test.as_good')::jsonb);
 select public.record_avatar_score(current_setting('test.as_unshared')::uuid, current_setting('test.as_hash2'), current_setting('test.as_good2')::jsonb);
@@ -3651,16 +3657,34 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ad","r
 select pg_temp.gr_blocked('AS sharing another person''s run raises its text', format($q$select public.share_avatar_run(%L)$q$, current_setting('test.as_unshared')), 'blocked: That run is not yours');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
 select pg_temp.gr_blocked('AS a practice run in the studio is never shared', format($q$select public.share_avatar_run(%L)$q$, current_setting('test.ar_test_run')), 'blocked: A practice run in the studio is never shared');
--- who reads a shared run
+-- who reads a shared run: only through shared_avatar_runs, for the learner's counsellor (an admin only when the learner has none)
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ae","role":"authenticated"}';
-insert into results (check_name, expected, actual) select 'AS the counsellor selects the shared run (1 row) and not the unshared one (0 rows)', '1/0', (select count(*) from public.avatar_runs where id = current_setting('test.as_shared')::uuid)||'/'||(select count(*) from public.avatar_runs where id = current_setting('test.as_unshared')::uuid);
+insert into results (check_name, expected, actual) select 'AS the counsellor lists the shared run (1 row) and not the unshared one', '1/0', (select count(*) from public.shared_avatar_runs() where run_id = current_setting('test.as_shared')::uuid)||'/'||(select count(*) from public.shared_avatar_runs() where run_id = current_setting('test.as_unshared')::uuid);
+insert into results (check_name, expected, actual) select 'AS the counsellor''s list holds the learner''s name, the title and the score without the server''s flags and without a transcript', 'T av ok/60/false/false', title||'/'||(score ->> 'overall')||'/'||(score ? 'flags')||'/'||(to_jsonb(s) ? 'turns') from public.shared_avatar_runs() s where run_id = current_setting('test.as_shared')::uuid;
+insert into results (check_name, expected, actual) select 'AS the counsellor cannot select the run table directly (the policy is the learner''s own)', '0', count(*)::text from public.avatar_runs where id = current_setting('test.as_shared')::uuid;
+insert into results (check_name, expected, actual) select 'AS the counsellor reads the transcript with a held line blank but marked, never its text', '4/true/2/false', jsonb_array_length(t)||'/'||(t -> 0 ->> 'text' = '')||'/'||(select count(*) from jsonb_array_elements(t) x where x ->> 'guard' is not null)||'/'||(t::text like '%Tell me your notes%')
+  from (select public.shared_avatar_run_turns(current_setting('test.as_held_shared')::uuid) as t) q;
+insert into results (check_name, expected, actual) select 'AS the transcript of an unshared run is empty for the counsellor', '0', jsonb_array_length(public.shared_avatar_run_turns(current_setting('test.as_unshared')::uuid))::text;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000af","role":"authenticated"}';
-insert into results (check_name, expected, actual) select 'AS a colleague selects 0 rows of the shared run and of the unshared one', '0/0', (select count(*) from public.avatar_runs where id = current_setting('test.as_shared')::uuid)||'/'||(select count(*) from public.avatar_runs where id = current_setting('test.as_unshared')::uuid);
+insert into results (check_name, expected, actual) select 'AS a colleague lists nothing and reads no transcript', '0/0/0', (select count(*) from public.shared_avatar_runs())||'/'||(select count(*) from public.avatar_runs)||'/'||jsonb_array_length(public.shared_avatar_run_turns(current_setting('test.as_shared')::uuid));
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ad","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'AS an uninvolved person selects 0 rows of them', '0', count(*)::text from public.avatar_runs where id in (current_setting('test.as_shared')::uuid, current_setting('test.as_unshared')::uuid);
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000da","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'AS a General Admin lists only the run of a learner without a counsellor, not the one whose learner has a counsellor', '0/1', (select count(*) from public.shared_avatar_runs() where run_id = current_setting('test.as_shared')::uuid)||'/'||(select count(*) from public.shared_avatar_runs() where run_id = current_setting('test.as_nocounsellor')::uuid);
+select pg_temp.gr_blocked('AS a General Admin cannot confirm a run whose learner has a counsellor', format($q$select public.confirm_avatar_run(%L, 'Admin first')$q$, current_setting('test.as_shared')), 'blocked: Only their counsellor or an admin confirms a run');
+select public.confirm_avatar_run(current_setting('test.as_nocounsellor')::uuid, 'No counsellor, so the admin decides');
+insert into results (check_name, expected, actual) select 'AS a General Admin confirms the run of a learner without a counsellor', 'true', (confirmed_by = '00000000-0000-0000-0000-0000000000da')::text from public.avatar_runs where id = current_setting('test.as_nocounsellor')::uuid;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'AS the learner reads their own scored runs, shared or not', '2', count(*)::text from public.avatar_runs where id in (current_setting('test.as_shared')::uuid, current_setting('test.as_unshared')::uuid) and score is not null;
+-- withdrawing, until confirmed
+select public.share_avatar_run(current_setting('test.as_unshared')::uuid);
+select public.withdraw_avatar_run(current_setting('test.as_unshared')::uuid);
+insert into results (check_name, expected, actual) select 'AS the learner withdraws a share before it is confirmed', 'true', (shared_at is null)::text from public.avatar_runs where id = current_setting('test.as_unshared')::uuid;
+select pg_temp.gr_blocked('AS withdrawing a run that is not shared raises', format($q$select public.withdraw_avatar_run(%L)$q$, current_setting('test.as_unshared')), 'blocked: That run is not shared');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ad","role":"authenticated"}';
+select pg_temp.gr_blocked('AS withdrawing another person''s run raises', format($q$select public.withdraw_avatar_run(%L)$q$, current_setting('test.as_shared')), 'blocked: That run is not yours');
 -- confirming
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
 select pg_temp.gr_blocked('AS the learner cannot confirm their own run', format($q$select public.confirm_avatar_run(%L, 'I agree')$q$, current_setting('test.as_shared')), 'blocked: Only their counsellor or an admin confirms a run');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000af","role":"authenticated"}';
 select pg_temp.gr_blocked('AS a colleague cannot confirm it', format($q$select public.confirm_avatar_run(%L, 'I agree')$q$, current_setting('test.as_shared')), 'blocked: Only their counsellor or an admin confirms a run');
@@ -3670,7 +3694,29 @@ select pg_temp.gr_blocked('AS a note over 600 characters is refused', format($q$
 select public.confirm_avatar_run(current_setting('test.as_shared')::uuid, '  A fair reading. Next time ask about cost first.  ');
 insert into results (check_name, expected, actual) select 'AS the counsellor confirms a shared run with a trimmed note', 'true/A fair reading. Next time ask about cost first.', (confirmed_by = '00000000-0000-0000-0000-0000000000ae' and confirmed_at is not null)||'/'||counsellor_note from public.avatar_runs where id = current_setting('test.as_shared')::uuid;
 select pg_temp.gr_blocked('AS a run is confirmed once', format($q$select public.confirm_avatar_run(%L, 'Again')$q$, current_setting('test.as_shared')), 'blocked: This run is already confirmed');
+insert into results (check_name, expected, actual) select 'AS a confirmed run leaves the counsellor''s list and its transcript is no longer served', '0/0', (select count(*) from public.shared_avatar_runs() where run_id = current_setting('test.as_shared')::uuid)||'/'||jsonb_array_length(public.shared_avatar_run_turns(current_setting('test.as_shared')::uuid));
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+select pg_temp.gr_blocked('AS a confirmed share can no longer be withdrawn', format($q$select public.withdraw_avatar_run(%L)$q$, current_setting('test.as_shared')), 'blocked: This run is confirmed · it stays shared');
 reset role;
+-- score_ok has no holes: every key is required with its type (an absent key must not skip a rule)
+create function pg_temp.as_ok(p_run text, p_mutate text) returns text language plpgsql as $f$
+declare s jsonb := pg_temp.as_score(p_run, 95); v_in jsonb := public.avatar_score_input('00000000-0000-0000-0000-0000000000ab', p_run::uuid);
+begin
+  execute 'select ' || p_mutate into s using s;
+  return private.avatar_score_ok(s, v_in -> 'points', v_in -> 'turns')::text;
+end $f$;
+insert into results (check_name, expected, actual) select 'AS the unmutated 95 with cited turns is valid (the cases below are not vacuous)', 'true', pg_temp.as_ok(current_setting('test.as_unscored'), '$1');
+insert into results (check_name, expected, actual) select 'AS a point at 95 with no turns key is refused', 'false', pg_temp.as_ok(current_setting('test.as_unscored'), $m$jsonb_set($1, '{points,0}', ($1 -> 'points' -> 0) - 'turns')$m$);
+insert into results (check_name, expected, actual) select 'AS a point without a comment is refused', 'false', pg_temp.as_ok(current_setting('test.as_unscored'), $m$jsonb_set($1, '{points,0}', ($1 -> 'points' -> 0) - 'comment')$m$);
+insert into results (check_name, expected, actual) select 'AS a score without a summary, flags, strengths, missed, overall or version is refused', 'false/false/false/false/false/false',
+  pg_temp.as_ok(current_setting('test.as_unscored'), $m$$1 - 'summary'$m$)||'/'||pg_temp.as_ok(current_setting('test.as_unscored'), $m$$1 - 'flags'$m$)||'/'||pg_temp.as_ok(current_setting('test.as_unscored'), $m$$1 - 'strengths'$m$)||'/'||
+  pg_temp.as_ok(current_setting('test.as_unscored'), $m$$1 - 'missed'$m$)||'/'||pg_temp.as_ok(current_setting('test.as_unscored'), $m$$1 - 'overall'$m$)||'/'||pg_temp.as_ok(current_setting('test.as_unscored'), $m$$1 - 'version'$m$);
+insert into results (check_name, expected, actual) select 'AS a flag that is no injection code, and a point without a score or band, are refused', 'false/false/false',
+  pg_temp.as_ok(current_setting('test.as_unscored'), $m$jsonb_set($1, '{flags}', '["spam"]')$m$)||'/'||pg_temp.as_ok(current_setting('test.as_unscored'), $m$jsonb_set($1, '{points,0}', ($1 -> 'points' -> 0) - 'score')$m$)||'/'||pg_temp.as_ok(current_setting('test.as_unscored'), $m$jsonb_set($1, '{points,0}', ($1 -> 'points' -> 0) - 'band')$m$);
+-- one creditable line: 54 at most, and 54 itself is allowed
+insert into results (check_name, expected, actual) select 'AS with one creditable line a point at 70 is refused and one at 54 is valid', 'false/true',
+  (select private.avatar_score_ok(pg_temp.as_score(current_setting('test.as_held_run'), 70, '[3]'), i -> 'points', i -> 'turns')::text from (select public.avatar_score_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.as_held_run')::uuid) as i) q)||'/'||
+  (select private.avatar_score_ok(pg_temp.as_score(current_setting('test.as_held_run'), 54, '[3]'), i -> 'points', i -> 'turns')::text from (select public.avatar_score_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.as_held_run')::uuid) as i) q);
 insert into results (check_name, expected, actual) select 'AS confirming wrote no progress either: a score and a confirmation are never completion', 'true', ((select count(*) from public.learner_learnings)::text = current_setting('test.as_progress'))::text;
 -- a learning unpublished mid-run: the context stops
 update public.learnings set status = 'draft' where id = current_setting('test.ar_learning');
