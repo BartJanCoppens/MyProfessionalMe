@@ -15,6 +15,7 @@
   "dependencies": {
     "@heygen/liveavatar-web-sdk": "0.0.19",
     "@supabase/supabase-js": "2.118.0",
+    "pdfjs-dist": "6.5.438",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
