@@ -58,6 +58,20 @@ describe('the step player', () => {
     tick(5000);
     expect(onEnd).toHaveBeenCalledTimes(1);
   });
+  it('does not tell the end for skipping to the last step and playing only that one; every step played through, in any order, does', () => {
+    const onEnd = vi.fn();
+    render(<StepPlayer steps={STEPS} onEnd={onEnd}>{show}</StepPlayer>);
+    click('Next');
+    click('Play');
+    tick(2200);
+    expect(onEnd).not.toHaveBeenCalled();
+    click('Previous');
+    click('Play');
+    tick(3200);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    tick(5000);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
   it('steps back and forth, stopped, within the run', () => {
     render(<StepPlayer steps={STEPS}>{show}</StepPlayer>);
     expect((screen.getByRole('button', { name: 'Previous' }) as HTMLButtonElement).disabled).toBe(true);

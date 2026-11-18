@@ -12,6 +12,7 @@ import { CHUNK_CHARS, chunkText } from './narration';
 import { CHAPTER, FORMAT_QUESTION, INTERVIEW, PODCAST_MAX_SECONDS, SOLO, TWO_HOSTS, partsOf, podcastBuilt, podcastLine, podcastProblems, podcastSeconds, podcastSteps, scriptOf, seededPodcast, speakersOf } from './podcastContent';
 import { COMPLETION, completionTodo, completionText } from './record';
 import { studioContent } from './studioContent';
+import { scriptedItems } from './studioItems';
 import { itemsValid, studioById } from './studios';
 import type { StudioEntry, StudioItem } from './studios';
 import { LONG_MAX } from './items';
@@ -43,6 +44,7 @@ describe('the script of a Podcast piece', () => {
     ['chapters not numbered from 1', [['Chapter 2 · 0:00', 'a'], ROWS[1], ROWS[2]], 'Number the chapters'],
     ['a chapter without a line', [ROWS[0], ROWS[1], ['Chapter 2 · 1:00', 'c']], 'has no lines'],
     ['a speaker that is not one', [ROWS[0], ROWS[1], ['Narrator', 'c']], 'is not a speaker'],
+    ['a speaker with a space around it (the database does not trim labels)', [ROWS[0], ROWS[1], [' Guest', 'c']], 'is not a speaker'],
     ['three speakers', [ROWS[0], ROWS[1], ROWS[2], ['Co-host', 'd']], 'at most two speakers'],
     ['a line of marks only', [ROWS[0], ROWS[1], ['Guest', '⟨next⟩']], 'add what is said'],
   ] as [string, StudioItem[], string][])('refuses %s', (_, rows, why) => { expect(itemsValid(def, rows).join(' ')).toContain(why); });
@@ -50,6 +52,16 @@ describe('the script of a Podcast piece', () => {
     expect(itemsValid(def, ROWS.slice(0, 2))).toContain('Add at least 3 items');
     const many = Array.from({ length: ITEM_MAX.Podcast }, (_, k): StudioItem => (k ? ['Host', 'x'] : ['Chapter 1 · 0:00', 'x']));
     expect(itemsValid(def, many).join(' ')).toContain('Keep at most ' + (ITEM_MAX.Podcast - 1) + ' rows');
+  });
+});
+
+describe('the scripted draft', () => {
+  it('never ends on a chapter without a turn, however many passages there are', () => {
+    const passages = Array.from({ length: 40 }, (_, k) => 'Passage number ' + k + ' says something useful about the close.');
+    const rows = scriptedItems(def, { shape: {} } as never, passages)!;
+    expect(rows.length).toBeLessThanOrEqual(ITEM_MAX.Podcast - 1);
+    expect(CHAPTER.test(rows.at(-1)![0])).toBe(false);
+    expect(itemsValid(def, rows)).toEqual([]);
   });
 });
 
@@ -162,10 +174,10 @@ describe('hours and completion', () => {
     expect([mediaHours(26), mediaHours(1800)]).toEqual([0.05, 0.5]);
     expect(podcastLine({ chapters: [{}, {}], seconds: 26 })).toBe('2 chapters · 26 s · counts 0.05 h');
   });
-  it('completes itself at the end (media), the existing rule, said in words', () => {
+  it('completes itself when every step has been listened to its end (media), said in words', () => {
     expect(COMPLETION.Podcast).toBe('media');
-    expect(completionTodo('Podcast')).toBe('listen to the end');
-    expect(completionText('Podcast', 'Sam')).toBe('Listening to the end completes it. It counts right away; no acceptance needed.');
+    expect(completionTodo('Podcast')).toBe('listen to all of it');
+    expect(completionText('Podcast', 'Sam')).toBe('Listening to all of it, every chapter to its end, completes it. It counts right away; no acceptance needed.');
   });
 });
 

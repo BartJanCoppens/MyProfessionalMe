@@ -1,5 +1,5 @@
 // The signed links of a piece's stored audio (a deck's slides, an episode's turns), in order: null while they load, or why they
-// could not be opened. Shared by every panel that plays stored voice-over on the step player.
+// could not be opened.
 import { useEffect, useState } from 'react';
 import { mediaUrl } from '../lib/mediaStore';
 

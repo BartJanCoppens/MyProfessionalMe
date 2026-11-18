@@ -5,28 +5,21 @@
 // reads the view-model (fmtPodcast.ts); the step player keeps the step it is on.
 import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
-import { Card, Hover } from '../ds';
+import { Hover } from '../ds';
 import type { PodcastView } from '../fmtPodcast';
 import { fmtTime } from '../logic/media';
 import { podcastSteps } from '../logic/podcastContent';
 import StepPlayer from './StepPlayer';
 import type { StepAt } from './StepPlayer';
-import { useAudioLinks } from './useAudioLinks';
+import { AudioGate } from './AudioGate';
 
-const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 const caps: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
 
 export default function PodcastPanel({ pc }: { pc: PodcastView }) {
-  const links = useAudioLinks(pc.paths);
   return (
-    <Card title="Listen" subtitle={pc.sub}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {pc.note && <div style={muted}>{pc.note}</div>}
-        {!links ? <div role="status" style={muted}>Loading the episode</div>
-          : 'error' in links ? <div role="alert" style={{ ...muted, color: '#7a5000' }}>The episode could not be opened · {links.error}</div>
-            : <Episode pc={pc} urls={links.urls} />}
-      </div>
-    </Card>
+    <AudioGate title="Listen" subtitle={pc.sub} note={pc.note} paths={pc.paths} loading="Loading the episode" failed="The episode could not be opened">
+      {(urls) => <Episode pc={pc} urls={urls} />}
+    </AudioGate>
   );
 }
 

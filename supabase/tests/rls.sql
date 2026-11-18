@@ -2641,7 +2641,8 @@ do $$ declare r record; begin
   for r in select * from (values ('no chapter first', '[["Host","a"],["Chapter 1 · 0:00","b"],["Guest","c"]]'::jsonb), ('a chapter not at 0:00', '[["Chapter 1 · 0:10","a"],["Host","b"],["Guest","c"]]'),
     ('chapters not rising', '[["Chapter 1 · 0:00","a"],["Host","b"],["Chapter 2 · 0:00","c"],["Guest","d"]]'), ('chapters not numbered from 1', '[["Chapter 2 · 0:00","a"],["Host","b"],["Guest","c"]]'),
     ('a chapter without a line', '[["Chapter 1 · 0:00","a"],["Host","b"],["Chapter 2 · 1:00","c"]]'), ('two chapters in a row', '[["Chapter 1 · 0:00","a"],["Chapter 2 · 1:00","b"],["Host","c"],["Guest","d"]]'),
-    ('a speaker that is not one', '[["Chapter 1 · 0:00","a"],["Host","b"],["Narrator","c"]]'), ('three speakers', '[["Chapter 1 · 0:00","a"],["Host","b"],["Guest","c"],["Co-host","d"]]'),
+    ('a speaker that is not one', '[["Chapter 1 · 0:00","a"],["Host","b"],["Narrator","c"]]'),
+    ('a speaker with a space around it', '[["Chapter 1 · 0:00","a"],["Host","b"],[" Guest","c"]]'), ('three speakers', '[["Chapter 1 · 0:00","a"],["Host","b"],["Guest","c"],["Co-host","d"]]'),
     ('a line of marks only', '[["Chapter 1 · 0:00","a"],["Host","⟨next⟩"],["Guest","c"]]'), ('a text of 3 fields', '[["Chapter 1 · 0:00","a"],["Host","b","x"],["Guest","c"]]'),
     ('50 rows', (select jsonb_agg(jsonb_build_array(case when g = 1 then 'Chapter 1 · 0:00' else 'Host' end, 'x')) from generate_series(1, 50) g))) as t(k, v) loop
     update public.contributions set items = r.v where title = 'T pd bad';

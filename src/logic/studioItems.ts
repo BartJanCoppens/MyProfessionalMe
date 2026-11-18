@@ -4,7 +4,7 @@
 import type { AiRequest } from '../lib/ai';
 import type { NewDraft } from '../types';
 import { jsonObject } from './json';
-import { LONG_MAX, SHORT_MAX, fieldOk, firstSentence, leadWords, marked, readQuestions, rowFieldMax } from './items';
+import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, firstSentence, leadWords, marked, readQuestions, rowFieldMax } from './items';
 import { wrongSpeaker } from './podcastContent';
 import { END_CHECK, explainerEnd } from './studioContent';
 import { CHECK_SIZE, itemsValid, rowsMax } from './studios';
@@ -69,7 +69,7 @@ const SCRIPTS: Record<string, (s: string[], nw: NewDraft) => StudioItem[]> = {
     ['Reveals if asked', s[1] ?? s[0]], ['Hides unless probed', s[2] ?? s[0]], ...WEIGHTS.map((w, k): StudioItem => ['Learning point · ' + w + ' %', s[k] ?? s[0]])],
   reel: (s, nw) => [['Hook', nw.title, 'On screen: ' + leadWords(nw.title, 6)], ...s.slice(0, 6).map((x, k): StudioItem => ['Scene ' + (k + 1), x, 'On screen: ' + leadWords(x, 6)]),
     ['Close', nw.take || nw.title, 'On screen: ' + leadWords(nw.take || nw.title, 6)]],
-  podcast: (s) => s.flatMap((x, k): StudioItem[] => [[stamp(k), leadWords(x, 10)], ['Host', x]]),
+  podcast: (s) => s.slice(0, Math.floor((ITEM_MAX.Podcast - 1) / 2)).flatMap((x, k): StudioItem[] => [[stamp(k), leadWords(x, 10)], ['Host', x]]),
   slides: (s) => s.map((x, k): StudioItem => [leadWords(x, 5) || 'Slide ' + (k + 1), x, x]),
   motion: (s) => numbered('Stage', s),
   explainer: (s) => numbered('Step', s),

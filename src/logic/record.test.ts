@@ -130,14 +130,14 @@ describe('completion per learning type (owner, 2 Nov 2026)', () => {
     expect(feedbackProblem(5, 'x'.repeat(40))).toBeNull();
   });
   it('says what completes each type, and what is left once the hours are logged', () => {
-    expect(completionText('Podcast', 'Sam Coach')).toBe('Listening to the end completes it. It counts right away; no acceptance needed.');
+    expect(completionText('Podcast', 'Sam Coach')).toBe('Listening to all of it, every chapter to its end, completes it. It counts right away; no acceptance needed.');
     expect(completionText('Reel', 'Sam Coach')).toBe('A right answer to the question completes it. It counts right away; no acceptance needed.');
     expect(completionText('E-learning', 'Sam Coach')).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
     expect(completionText('Classroom', 'Sam Coach')).toBe('It completes when the faculty registers your attendance, or when you give your feedback on the session. No acceptance needed.');
     expect(completionText('Avatar', 'Sam Coach')).toBe('After your practice session, three right answers in the evaluation quiz complete it. No acceptance needed.');
     expect(completionText('Certification', 'Sam Coach')).toBe('Log your hours and add your evidence; Sam Coach accepts the certification.');
     expect(completionText('Something new', 'Sam Coach')).toBe('Log your hours, then Sam Coach accepts the something new.');
-    expect(['E-learning', 'Classroom', 'Avatar', 'Podcast', 'Reel', 'Book'].map((f) => completionTodo(f))).toEqual(['mark it as completed', 'give your feedback', 'take the evaluation quiz', 'listen to the end', 'answer the question', '']);
+    expect(['E-learning', 'Classroom', 'Avatar', 'Podcast', 'Reel', 'Book'].map((f) => completionTodo(f))).toEqual(['mark it as completed', 'give your feedback', 'take the evaluation quiz', 'listen to all of it', 'answer the question', '']);
   });
   it('says what the panel needs for the four formats that complete in their panel, only when they have one', () => {
     const four = ['Flash cards', 'Job aid', 'Practice exam', 'Teach-back'];

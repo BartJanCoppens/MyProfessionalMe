@@ -19,7 +19,7 @@ export function evidenceRule(format: string): EvidenceRule {
 // (private.is_self_complete); the rest go to the counsellor or an admin for acceptance. 'feedback' is
 // private.completion_rule(): the database refuses a learner's completion without it. record.sync.test.ts compares these
 // lists with the latest migration.
-//   media: a podcast listened to the end, a reel on a right answer, a presentation at its last slide · mark: the learner marks it completed
+//   media: a podcast or a deck played through, a reel on a right answer, a presentation at its last slide · mark: the learner marks it completed
 //   feedback: the learner's feedback, or the faculty registers attendance · quiz: three right answers after the practice session
 export type Completion = 'acceptance' | 'media' | 'mark' | 'feedback' | 'quiz';
 export const COMPLETION: Record<string, Exclude<Completion, 'acceptance'>> = {
@@ -50,9 +50,9 @@ const PANEL_TODO: Record<string, string> = {
 const panelTodo = (format: string, panel: boolean) => (panel ? PANEL_TODO[format] : undefined);
 // How a 'media' format completes, in a sentence and as a to-do; a reel's question is the rest.
 const MEDIA_DONE: Record<string, [string, string]> = {
-  Podcast: ['Listening to the end completes it. It counts right away; no acceptance needed.', 'listen to the end'],
+  Podcast: ['Listening to all of it, every chapter to its end, completes it. It counts right away; no acceptance needed.', 'listen to all of it'],
   Presentation: ['Playing it to the last slide completes it. It counts right away; no acceptance needed.', 'play it to the last slide'],
-  Slides: ['Playing it to the end completes it. It counts right away; no acceptance needed.', 'play it to the end'],
+  Slides: ['Playing every slide through to its end completes it. It counts right away; no acceptance needed.', 'play every slide through'],
 };
 
 // What completes this format, in the learner's words (detail sidebar and help). accepter: the counsellor's full name.

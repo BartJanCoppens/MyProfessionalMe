@@ -6,30 +6,23 @@
 // the view-model (fmtSlides.ts); the step player keeps the slide it is on.
 import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
-import { Card } from '../ds';
 import type { SlidesView } from '../fmtSlides';
 import { FADE_IN, FLIGHT_EASING } from '../horizon/motion';
 import { PACE, narrationSteps, spoken } from '../logic/narration';
 import type { NarrationPart } from '../logic/narration';
 import SafeSvg from './SafeSvg';
 import StepPlayer from './StepPlayer';
-import { useAudioLinks } from './useAudioLinks';
+import { AudioGate } from './AudioGate';
 import type { StepAt } from './StepPlayer';
 
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 const FLY_SECONDS = 0.9;
 
 export default function SlidesPanel({ sl }: { sl: SlidesView }) {
-  const links = useAudioLinks(sl.paths);
   return (
-    <Card title="Play the deck" subtitle={sl.sub}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {sl.note && <div style={muted}>{sl.note}</div>}
-        {!links ? <div role="status" style={muted}>Loading the voice-over</div>
-          : 'error' in links ? <div role="alert" style={{ ...muted, color: '#7a5000' }}>The voice-over could not be opened · {links.error}</div>
-            : <Deck sl={sl} urls={links.urls} />}
-      </div>
-    </Card>
+    <AudioGate title="Play the deck" subtitle={sl.sub} note={sl.note} paths={sl.paths} loading="Loading the voice-over" failed="The voice-over could not be opened">
+      {(urls) => <Deck sl={sl} urls={urls} />}
+    </AudioGate>
   );
 }
 

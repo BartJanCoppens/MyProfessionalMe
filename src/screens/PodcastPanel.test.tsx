@@ -108,6 +108,14 @@ describe('a stored episode', () => {
     expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy();
     expect(o.onEnd).not.toHaveBeenCalled();
   });
+  it('does not tell the end for jumping to the last chapter and playing its turns only', async () => {
+    const o = await panel(STORED);
+    click(/What to fix first/);
+    click('Play');
+    tick(2200);
+    tick(3200);
+    expect(o.onEnd).not.toHaveBeenCalled();
+  });
   it('says so, and plays nothing, when the audio cannot be opened', async () => {
     vi.mocked(media.mediaUrl).mockRejectedValueOnce(new Error('This file is not there, or not open to you'));
     await panel(STORED);
@@ -130,7 +138,7 @@ describe('the seeded episodes (v3) on the same player', () => {
     tick(1000);
     expect(screen.getByText(/Step 1 of 3 · 1 \/ /)).toBeTruthy();
   });
-  it('jumps to a chapter and completes the learning once, at the end of the last chapter', async () => {
+  it('does not complete by jumping to the last chapter and playing only that; every chapter played through completes it once', async () => {
     render(<Live id="L42" />);
     await act(async () => {});
     click(/What to put in writing/);
@@ -139,6 +147,13 @@ describe('the seeded episodes (v3) on the same player', () => {
     tick(524000);
     expect(learner.saveProgress).not.toHaveBeenCalled();
     tick(2000);
+    await act(async () => {});
+    expect(learner.saveProgress).not.toHaveBeenCalled();
+    click(/Why tenders reopen scope/);
+    click('Play');
+    tick(581000);
+    expect(learner.saveProgress).not.toHaveBeenCalled(); // the middle chapter is still unplayed
+    tick(576000);
     await act(async () => {});
     expect(learner.saveProgress).toHaveBeenCalledTimes(1);
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L42', { state: 'accepted', pct: 100, detail: { last: true } });

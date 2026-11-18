@@ -142,7 +142,7 @@ describe('hours and completion', () => {
   });
   it('completes itself when the last slide has finished (media)', () => {
     expect(COMPLETION.Slides).toBe('media');
-    expect(completionTodo('Slides')).toBe('play it to the end');
+    expect(completionTodo('Slides')).toBe('play every slide through');
   });
   it('is a studio with its own questions: who presents, the length, the template and the transitions; nothing that does nothing', () => {
     const qs = def.qs.map((q) => q[0]);

@@ -84,7 +84,7 @@ function podcast(items: StudioItem[]): string[] {
     } else if (i[0].startsWith('Chapter')) out.push(i[0] + ': needs a timestamp after the previous chapter, like “Chapter 2 · 4:30”');
     else {
       if (!k) out.push('Start with a chapter, like “Chapter 1 · 0:00”');
-      if (!ALL_SPEAKERS.includes(i[0].trim())) out.push(i[0] + ' is not a speaker: use Host, Guest or Co-host');
+      if (!ALL_SPEAKERS.includes(i[0])) out.push(i[0] + ' is not a speaker: use Host, Guest or Co-host');
       if (!hasWords(i[1])) out.push(i[0] + ': add what is said (marks are not spoken words)');
       lines++;
     }

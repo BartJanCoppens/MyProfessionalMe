@@ -257,6 +257,19 @@ as $$
   end;
 $$;
 
+-- Whether any of these voice-over files is outside the contribution's own folder (<author>/<contribution>/) or not in Storage: the
+-- one check Slides and Podcast share.
+create function private.voice_files_missing(p_author uuid, p_contribution uuid, p_paths text[])
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select exists (select 1 from unnest(p_paths) as f(path)
+    where split_part(f.path, '/', 1) <> p_author::text or split_part(f.path, '/', 2) <> p_contribution::text
+       or not exists (select 1 from storage.objects o where o.bucket_id = 'media' and o.name = f.path));
+$$;
+
 -- As before (20261117300000), with the Podcast: the script, the speakers of its format, the voice, the 30 minutes and the files.
 create or replace function private.contribution_problems(c public.contributions)
 returns text[]
@@ -305,10 +318,8 @@ begin
       p := array_append(p, 'The talk runs longer than 15 minutes: shorten the talk-over or cut slides');
     end if;
     -- every voice-over file the slides use must be in the contribution's own folder and in Storage
-    if private.slides_voiced(c.items, c.shape) and exists (
-      select 1 from generate_series(0, jsonb_array_length(private.rows_of(c.items)) - 1) n
-      where split_part(private.slide_clip(c.items, n) ->> 'path', '/', 1) <> c.author_id::text or split_part(private.slide_clip(c.items, n) ->> 'path', '/', 2) <> c.id::text
-         or not exists (select 1 from storage.objects o where o.bucket_id = 'media' and o.name = private.slide_clip(c.items, n) ->> 'path')) then
+    if private.slides_voiced(c.items, c.shape) and private.voice_files_missing(c.author_id, c.id,
+        array(select private.slide_clip(c.items, n) ->> 'path' from generate_series(0, jsonb_array_length(private.rows_of(c.items)) - 1) n)) then
       p := array_append(p, 'A voice-over file is not there · voice the slides again');
     end if;
   end if;
@@ -324,10 +335,8 @@ begin
       p := array_append(p, 'The episode runs longer than 30 minutes: shorten the script');
     end if;
     -- every voice-over file the episode uses must be in the contribution's own folder and in Storage
-    if private.podcast_voiced(c.items) and exists (
-      select 1 from generate_series(0, jsonb_array_length(private.podcast_turns(c.items)) - 1) n
-      where split_part(private.turn_clip(c.items, n) ->> 'path', '/', 1) <> c.author_id::text or split_part(private.turn_clip(c.items, n) ->> 'path', '/', 2) <> c.id::text
-         or not exists (select 1 from storage.objects o where o.bucket_id = 'media' and o.name = private.turn_clip(c.items, n) ->> 'path')) then
+    if private.podcast_voiced(c.items) and private.voice_files_missing(c.author_id, c.id,
+        array(select private.turn_clip(c.items, n) ->> 'path' from generate_series(0, jsonb_array_length(private.podcast_turns(c.items)) - 1) n)) then
       p := array_append(p, 'A voice-over file is not there · voice the episode again');
     end if;
   end if;
@@ -389,4 +398,4 @@ $$;
 drop function private.horizon_hours(numeric);
 
 revoke execute on function private.media_hours(numeric), private.clip_for(jsonb, integer, text), private.script_ok(jsonb), private.podcast_ok(jsonb), private.podcast_turns(jsonb),
-  private.turn_clip(jsonb, integer), private.podcast_voiced(jsonb), private.podcast_seconds(jsonb), private.podcast_content(jsonb) from public, anon, authenticated;
+  private.turn_clip(jsonb, integer), private.voice_files_missing(uuid, uuid, text[]), private.podcast_voiced(jsonb), private.podcast_seconds(jsonb), private.podcast_content(jsonb) from public, anon, authenticated;

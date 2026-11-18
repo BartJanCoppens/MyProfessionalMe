@@ -1,7 +1,8 @@
 // The narration step player that Slides, Podcast and Horizon presentations share (studios plan, Task 3.2): Previous,
 // Play or Pause, and Next over a run of steps (src/logic/narration.ts). Each step runs on the shared clock (useClock);
 // its audio, when it has some, plays along and follows the clock; a timed step (no audio) simply runs at its pace. At
-// the end of a step the next one plays; after the last, onEnd is told once. What a step shows is the caller's: it gets
+// the end of a step the next one plays. onEnd is told once, when every step has been played through on the clock (in any order):
+// Next, Previous and jumps navigate freely but do not count a step as played, so the last step alone never completes. What a step shows is the caller's: it gets
 // the step, its place, the time and the marks passed so far (⟨next⟩ to move on inside a slide, ⟨cue⟩ to build).
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -16,25 +17,25 @@ type Props = { steps: RunStep[]; note?: string; onEnd?: () => void; children?: (
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 
 export default function StepPlayer({ steps, note, onEnd, children }: Props) {
-  const [at, setAt] = useState({ index: 0, auto: false });
+  const [at, setAt] = useState({ index: 0, auto: false }), played = useRef(new Set<number>()), told = useRef(false);
   const index = Math.min(at.index, Math.max(steps.length - 1, 0));
   if (!steps.length) return <div style={muted}>Nothing to play yet</div>;
   const go = (i: number, auto: boolean) => setAt({ index: Math.max(0, Math.min(steps.length - 1, i)), auto });
   // Another step is a new run of the clock: it starts at 0, playing when the last one was.
   return <StepRun key={index} step={steps[index]} index={index} count={steps.length} auto={at.auto} note={note}
-    go={go} onLast={() => onEnd?.()} show={children} />;
+    go={go} onPlayed={(i) => { played.current.add(i); if (!told.current && played.current.size >= steps.length) { told.current = true; onEnd?.(); } }} show={children} />;
 }
 
-type RunProps = { step: RunStep; index: number; count: number; auto: boolean; note?: string; go: (i: number, auto: boolean) => void; onLast: () => void; show?: Props['children'] };
+type RunProps = { step: RunStep; index: number; count: number; auto: boolean; note?: string; go: (i: number, auto: boolean) => void; onPlayed: (index: number) => void; show?: Props['children'] };
 
-function StepRun({ step, index, count, auto, note, go, onLast, show }: RunProps) {
+function StepRun({ step, index, count, auto, note, go, onPlayed, show }: RunProps) {
   const sound = useRef<HTMLAudioElement | null>(null), [held, setHeld] = useState(false);
   const audio = () => (step.audio ? (sound.current ??= new Audio(step.audio)) : null);
   const c = useClock(step.seconds, 0, {
     onSeek: (v) => { const a = audio(); if (a) a.currentTime = v; },
     onPlay: () => { setHeld(false); audio()?.play()?.catch(() => { c.pause(); setHeld(true); }); },
     onPause: () => sound.current?.pause(),
-    onEnd: () => (index < count - 1 ? go(index + 1, true) : onLast()),
+    onEnd: () => { onPlayed(index); if (index < count - 1) go(index + 1, true); },
   });
   // A step reached by playing on starts playing, once; leaving a step silences it.
   const start = useRef(auto ? c.play : null);
