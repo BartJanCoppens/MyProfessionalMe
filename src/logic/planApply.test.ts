@@ -99,6 +99,12 @@ describe('applyPlan on a trajectory that already has an exam', () => {
     expect(r.steps[4]).toMatchObject({ id: 'x0', pre: 'n2', title: 'Final assessment' });
     expect(r.added).toBe(3);
   });
+  it('keeps the exam\'s own prerequisite: the first new step waits for it, and the exam for the last new step', () => {
+    const own = { ...exam, pre: 's1' };
+    const r = apply(trajectory([log, own]), plan([m2, m3], null));
+    expect(r.steps[1].pre).toBe('s1');
+    expect(r.steps[4]).toMatchObject({ id: 'x0', pre: 'n2' });
+  });
   it('is idempotent and leaves the exam alone when nothing is added', () => {
     const once = apply(trajectory([log, exam]), plan([m2], null));
     const twice = apply(trajectory(once.steps), plan([m2], null));

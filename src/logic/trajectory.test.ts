@@ -185,3 +185,21 @@ describe('what waits for a placeholder', () => {
     expect(pg.next).toBe(1);
   });
 });
+
+describe('a prerequisite that is not required for this enrolment never locks what follows', () => {
+  const added = { id: 'a1', k: 'evidence' as const, title: 'Added by Apply', win: 6, req: true, pre: null, from: 'p:x', linked_at: '2026-11-10T10:00:00+00:00' };
+  const t: Trajectory = { ...base, steps: [added, { id: 'x1', k: 'exam', title: 'Exam', hours: 2, win: 12, req: true, pre: 'a1' }] };
+  const at = (created_at: string): Enrolment => ({ ...enrol(), created_at });
+  it('an earlier enrolee reaches the exam without the added step, and x of y agrees with the lock', () => {
+    const pg = trajectoryProgress(t, at('2026-11-01T00:00:00+00:00'), byId);
+    expect(pg.steps.map((x) => x.locked)).toEqual([false, false]);
+    expect(pg.reqN).toBe(1);
+    expect(pg.next).toBe(0);
+  });
+  it('a new enrolee must do it first: it counts and the exam waits', () => {
+    const pg = trajectoryProgress(t, at('2026-11-12T00:00:00+00:00'), byId);
+    expect(pg.steps.map((x) => x.locked)).toEqual([false, true]);
+    expect(pg.reqN).toBe(2);
+  });
+});
+

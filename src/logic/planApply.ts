@@ -97,6 +97,8 @@ export function applyPlan(t: Trajectory, p: TrajectoryPlan, ids: string[], used:
   else if (exam && run.taken(exam.title)) run.skip('Final exam', TITLE_TAKEN);
   else if (exam) run.add({ k: 'exam', title: exam.title, hours: exam.hours, win: t.months, req: true, pre: (fresh[fresh.length - 1] ?? t.steps[t.steps.length - 1])?.id ?? null, from: EXAM_FROM });
   // New steps go before an exam that was already there, which then waits for the last of them.
+  // The exam's own prerequisite is kept: the first new step waits for it, so the exam still waits for it through the chain.
+  if (has && fresh.length && has.pre && !fresh[0].pre) fresh[0] = { ...fresh[0], pre: has.pre };
   const steps = has && fresh.length
     ? [...t.steps.slice(0, at), ...fresh, { ...has, pre: fresh[fresh.length - 1].id }, ...t.steps.slice(at + 1)]
     : [...t.steps, ...fresh];
