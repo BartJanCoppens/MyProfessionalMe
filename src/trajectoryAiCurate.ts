@@ -2,7 +2,7 @@
 // (two clicks; the sources and bundles stay). Edits go through editRecord (shown now, saved soon); nothing here changes the trajectory itself.
 import type { ChangeEvent } from 'react';
 import type { Logic } from './model';
-import { acceptModule, editModule, moveModule, removeModule } from './logic/trajectoryPlan';
+import { acceptModule, applySuggestion, dismissSuggestion, editModule, moveModule, removeModule } from './logic/trajectoryPlan';
 import type { PlanModule, TrajectoryPlan } from './logic/trajectoryPlan';
 import { emptyPlan } from './logic/trajectoryPlan';
 import { startOver as clearStored } from './lib/planStore';
@@ -16,6 +16,8 @@ const panel = (L: Logic, p: Partial<Logic['state']['trjPanel']>) => L.setState((
 export const acceptCard = (L: Logic, id: string, moduleId: string, on: boolean) => planEdit(L, id, (p) => acceptModule(p, moduleId, on));
 export const editCard = (L: Logic, id: string, moduleId: string, patch: Patch) => planEdit(L, id, (p) => editModule(p, moduleId, patch));
 export const moveCard = (L: Logic, id: string, moduleId: string, by: -1 | 1) => planEdit(L, id, (p) => moveModule(p, moduleId, by));
+export const applyCard = (L: Logic, id: string, moduleId: string) => planEdit(L, id, (p) => applySuggestion(p, moduleId));
+export const dismissCard = (L: Logic, id: string, moduleId: string) => planEdit(L, id, (p) => dismissSuggestion(p, moduleId));
 export function removeCard(L: Logic, id: string, moduleId: string) {
   planEdit(L, id, (p) => removeModule(p, moduleId));
   panel(L, { focus: null, editing: null });
@@ -31,7 +33,8 @@ export async function startOver(L: Logic, id: string): Promise<void> {
   panel(L, { confirm: false, focus: null, editing: null });
   L.setState((s) => ({ trjAi: { ...s.trjAi, busy: 'reset', error: null } }));
   try {
-    if (L.latest().state.trjPlans[id]?.record) await clearStored(id);
+    const record = L.latest().state.trjPlans[id]?.record;
+    if (record) await clearStored(id, record.bundleIds);
   } catch (err) { return failed(L, (err as Error).message); }
   change(L, id, (p) => ({ ...p, record: p.record ? { ...p.record, plan: emptyPlan(), messages: [] } : p.record }));
   failed(L, null);

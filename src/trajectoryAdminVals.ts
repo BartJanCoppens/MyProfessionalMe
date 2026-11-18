@@ -85,7 +85,7 @@ export function trajectoryAdminVals(L: Logic) {
   const list = visible.map((x) => {
     const tot = totals(x, byId), on = !!t && x.id === t.id;
     return {
-      id: x.id, name: x.name, on, pick: () => L.setState({ trjSel: x.id, trjStep: null }), bg: on ? '#f6f9ef' : '#fff', bar: on ? 'inset 3px 0 0 #86BC25' : 'none',
+      id: x.id, name: x.name, on, pick: () => L.setState((st) => ({ trjSel: x.id, trjStep: null, trjPanel: { ...st.trjPanel, focus: null, editing: null, confirm: false } })), bg: on ? '#f6f9ef' : '#fff', bar: on ? 'inset 3px 0 0 #86BC25' : 'none',
       meta: [x.issuer, x.steps.length + ' steps', fmtHours(tot.tot) + (tot.cpd ? ' · ' + tot.cpd + ' CPD units' : ''), x.months + ' months'].filter(Boolean).join(' · '),
       st: x.status === 'live' ? 'accepted' : x.status === 'retired' ? 'na' : 'not-started', stLabel: statusLabel(x.status), enrolLabel: enrolLabel(x.enrol),
       auds: x.maps.length ? x.maps.map((m) => ({ color: lensOf(m[0])?.[2] ?? '#d5dacf', label: (AUD_INFO[m[0]]?.name ?? m[0]) + ' · ' + m[1] + ' · ' + (m[2] === 'mandatory' ? 'mandatory' : 'suggested') })) : [{ color: '#d5dacf', label: 'Not mapped yet' }],
@@ -127,7 +127,7 @@ export function trajectoryAdminVals(L: Logic) {
       dotBg: st.k === 'exam' ? '#1a1d18' : sel ? '#86BC25' : '#fff', dotFg: st.k === 'exam' ? '#fff' : '#1a1d18', dotBd: st.req || st.k === 'exam' ? '1.5px solid #1a1d18' : '1.5px dashed #8b918a',
       bd: sel ? '#1a1d18' : '#e1e5dc', ring: sel ? '0 0 0 3px rgba(134,188,37,.45)' : 'none', pick: () => L.setState({ trjStep: sel ? null : st.id }),
       up: () => edit((x) => ({ ...x, steps: moveStep(x.steps, st.id, -1) })), down: () => edit((x) => ({ ...x, steps: moveStep(x.steps, st.id, 1) })),
-      noUp: i === 0, noDown: i === n - 1, upOp: i === 0 ? 0.35 : 1, downOp: i === n - 1 ? 0.35 : 1,
+      noUp: i === 0, noDown: i === n - 1,
       remove: () => { if (edit((x) => ({ ...x, steps: removeStep(x.steps, st.id) }))) L.setState({ trjStep: null }); },
     };
   });

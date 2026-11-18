@@ -91,26 +91,24 @@ describe('savePlanSoon', () => {
 });
 
 describe('startOver', () => {
-  it('sets the plan to the empty plan and the messages to none, and touches nothing else', async () => {
-    db.answer(() => ({ data: [{ trajectory_id: 'T1' }] }));
-    await startOver('T1');
+  it('writes the empty plan and no messages, keeping the bundles, and touches nothing else', async () => {
+    await startOver('T1', ['b1']);
     const call = db.on('trajectory_plans')[0];
-    expect(op(call)).toBe('update');
-    expect(call.steps[0][1][0]).toEqual({ plan: emptyPlan(), messages: [] });
-    expect(has(call, 'eq', 'trajectory_id', 'T1')).toBe(true);
+    expect(op(call)).toBe('upsert');
+    expect(call.steps[0][1][0]).toEqual({ trajectory_id: 'T1', plan: emptyPlan(), messages: [], bundle_ids: ['b1'] });
+    expect(call.steps[0][1][1]).toEqual({ onConflict: 'trajectory_id' });
     expect(db.on('trajectory_plan_sources')).toHaveLength(0);
   });
-  it('holds back a pending save, so the old plan is not written back', async () => {
+  it('holds back a pending save, so the old plan is not written back, and still writes the plan whole', async () => {
     vi.useFakeTimers();
-    db.answer(() => ({ data: [{ trajectory_id: 'T1' }] }));
     savePlanSoon(record(), vi.fn());
-    await startOver('T1');
+    await startOver('T1', ['b1']);
     await vi.advanceTimersByTimeAsync(1000);
-    expect(db.on('trajectory_plans').map(op)).toEqual(['update']);
+    expect(db.on('trajectory_plans').map(op)).toEqual(['upsert']);
   });
-  it('says so when no row changed', async () => {
-    db.answer(() => ({ data: [] }));
-    await expect(startOver('T1')).rejects.toThrow('Not changed · there is no plan, or you cannot change it');
+  it('says so when the database refuses', async () => {
+    db.answer(() => ({ error: { message: 'new row violates row-level security policy', code: '42501' } as never }));
+    await expect(startOver('T1', [])).rejects.toThrow('Not saved · you can only plan trajectories of your own business line');
   });
 });
 

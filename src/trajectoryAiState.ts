@@ -11,8 +11,9 @@ export const blankRecord = (trajectoryId: string): PlanRecord => ({ trajectoryId
 export const failed = (L: Logic, error: string | null) => L.setState((s) => ({ trjAi: { ...s.trjAi, busy: null, error } }));
 export const change = (L: Logic, id: string, f: (p: TrjPlanState) => TrjPlanState) => L.setState((s) => ({ trjPlans: { ...s.trjPlans, [id]: f(s.trjPlans[id] ?? emptyPlanState()) } }));
 
-// An edit of the plan record of one trajectory (made on the first edit): shown now, saved soon (the last edit wins). `f` is pure: it runs on the
-// latest record for the save and again inside the state update.
+// An edit of the plan record of one trajectory (made on the first edit): shown now, saved soon (the last edit wins). `f` is pure (anything with a clock or a
+// random, such as a message's time, is made once by the caller): it runs on the latest record for the save and again inside the state update, so what is
+// saved is what is shown.
 export function editRecord(L: Logic, trajectoryId: string, f: (r: PlanRecord) => PlanRecord): void {
   const next = f(L.latest().state.trjPlans[trajectoryId]?.record ?? blankRecord(trajectoryId));
   change(L, trajectoryId, (p) => ({ ...p, record: f(p.record ?? blankRecord(trajectoryId)) }));

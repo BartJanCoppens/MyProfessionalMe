@@ -72,13 +72,13 @@ export function savePlanSoon(record: PlanRecord, onError: (message: string) => v
   saveSoon(key(record.trajectoryId), () => record, writePlan, onError, wait);
 }
 
-// The plan back to empty and the conversation cleared; the knowledge bundles and the sources stay. A pending save is dropped first.
-export async function startOver(trajectoryId: string): Promise<void> {
+// The plan back to empty and the conversation cleared; the knowledge bundles (as the screen has them) and the sources stay. An upsert, so a plan whose
+// first save was still pending (and is dropped here) is written whole instead of failing. A refusal is the database's (row-level security).
+export async function startOver(trajectoryId: string, bundleIds: string[]): Promise<void> {
   cancelSoon(key(trajectoryId));
   await inOrder(key(trajectoryId), async () => {
-    const { data, error } = await supabase.from('trajectory_plans').update({ plan: emptyPlan(), messages: [] }).eq('trajectory_id', trajectoryId).select('trajectory_id');
+    const { error } = await supabase.from('trajectory_plans').upsert({ trajectory_id: trajectoryId, plan: emptyPlan(), messages: [], bundle_ids: bundleIds }, { onConflict: 'trajectory_id' });
     fail(error);
-    if (!(data as unknown[] | null)?.length) throw new Error('Not changed · there is no plan, or you cannot change it');
   });
 }
 

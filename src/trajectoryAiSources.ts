@@ -12,6 +12,7 @@ import { readPdfText } from './lib/pdfText';
 import { addPlanSourceRow, removePlanSource as removeStoredSource, setPlanSourcePath } from './lib/planStore';
 import { removePaths, uploadSourceFile } from './lib/mediaStore';
 import { blankRecord, change, editRecord, failed } from './trajectoryAiState';
+import { plural } from './logic/values';
 
 const NO_TEXT = 'No text found in this PDF · it may be a scan · scanned PDFs are not read (no OCR)';
 
@@ -77,7 +78,6 @@ export type SourcesPanel = {
   rows: { id: string; title: string; by: string; notes: string[]; remove?: () => void }[];
   error: string | null; busy: boolean; canEdit: boolean; accept: string; add: (e: ChangeEvent<HTMLInputElement>) => void;
 };
-const plural = (n: number, one: string, many: string) => n + ' ' + (n === 1 ? one : many);
 const INJECTION = 'Contains text that reads like instructions to an AI · treated as data only';
 
 export function sourcesPanel(L: Logic, trajectoryId: string): SourcesPanel {

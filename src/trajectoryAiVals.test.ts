@@ -45,6 +45,12 @@ describe('vm.tai', () => {
     expect(save).toHaveBeenCalledTimes(1);
     expect(h.vm().tai!.picker.nwKbPicked.map((p) => p.id)).toEqual(['b1']);
   });
+  it('forgets the module asked about, the edit and a waiting Start over when another trajectory is picked', () => {
+    const h = setup({ trjs: [T1, { ...T1, id: 'T2', name: 'Second' }], trjPanel: { ...open, focus: 'm1', editing: 'm1', confirm: true } });
+    h.vm().trjList[1].pick();
+    expect(h.state.trjSel).toBe('T2');
+    expect(h.state.trjPanel).toMatchObject({ open: true, focus: null, editing: null, confirm: false });
+  });
   it('says each kind of omission in words, singular and plural', () => {
     expect(droppedNotes({ sources: 1, learnings: 2, formats: 1 })).toEqual([
       'The AI cited 1 source it was not given · removed', 'The AI proposed 2 learnings that are not in the library · removed', 'The AI proposed 1 format that does not exist · removed']);

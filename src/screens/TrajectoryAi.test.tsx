@@ -39,7 +39,7 @@ const T1 = { ...blankTrajectory('Audit'), id: 'T1', name: 'Tax certificate', cre
 const mod = (id: string, over: Partial<PlanModule> = {}): PlanModule => ({ id, title: 'Module ' + id, depth: 'applied', goals: ['Know the VAT rules'], hours: 6, material: [{ kind: 'existing', learningId: 'L1', reason: 'Covers it' }], sources: [], checks: ['evidence'], accepted: false, ...over });
 const brief: PlanBrief = { goal: 'Prepare advisers', credential: 'Certified adviser', issuer: 'ITAA', audience: 'Seniors', stage: null, line: 'Audit', level: 'applied', hoursBudget: 40, deadline: null, bodyRules: '', constraints: '', domain: 'tax' };
 const record = (over: Partial<PlanRecord> = {}): PlanRecord => ({ trajectoryId: 'T1', plan: emptyPlan(), messages: [], bundleIds: [], updatedAt: null, ...over });
-const source = (): PlanSource => ({ id: 's1', trajectoryId: 'T1', name: 'syllabus.pdf', path: 'u/s1/syllabus.pdf', pages: 4, passages: [[1, 'x']], chars: 1, flags: [], addedBy: 'u1', addedAt: '' });
+const source = (): PlanSource => ({ id: 's1', trajectoryId: 'T1', name: 'syllabus.pdf', path: 'u/s1/syllabus.pdf', pages: 4, passages: [[4, 'The exam covers VAT.']], chars: 1, flags: [], addedBy: 'u1', addedAt: '' });
 const show = (plans: Record<string, TrjPlanState> = { T1: { record: record(), sources: [] } }, state: Partial<AppState> = {}, readOnly = false) =>
   render(<Live readOnly={readOnly} state={{ trjs: [T1, T2], trjSel: 'T1', aiLive: ['trajectory_ai'], trjPanel: { open: true, say: '', focus: null, editing: null, kbq: '', confirm: false }, trjPlans: plans, ...state }} />);
 const answer = (over: Record<string, unknown> = {}) => ({ text: JSON.stringify({ reply: 'Here is a plan.', questions: [], brief: null, modules: null, ...over }), cut: false });
@@ -177,6 +177,34 @@ describe('the Build with AI panel', () => {
     expect(mediaUrl).toHaveBeenCalledWith('u/s1/syllabus.pdf');
     vi.unstubAllGlobals();
   });
+  it('shows "No source yet" when none of a module\'s citations resolve any more, and says which are gone', () => {
+    const gone = { ref: { kind: 'file' as const, sourceId: 'removed', page: 1, passage: 0 }, label: 'old.pdf · p. 1', quote: 'Old quote' };
+    const here = { ref: { kind: 'file' as const, sourceId: 's1', page: 4, passage: 0 }, label: 'syllabus.pdf · p. 4', quote: 'The exam covers VAT.' };
+    show(planned(mod('m1', { sources: [gone] }), mod('m2', { sources: [gone, here] })));
+    expect(screen.getAllByText('No source yet')).toHaveLength(1);
+    expect(screen.getAllByText('old.pdf · p. 1 · no longer available')).toHaveLength(2);
+    fireEvent.focus(screen.getAllByText('old.pdf · p. 1 · no longer available')[0]);
+    expect(screen.queryByText('“Old quote”')).toBeNull();
+  });
+  it('shows the AI\'s suggestion for an accepted module, and applies it or dismisses it only on request', () => {
+    const suggestion = { title: 'Sharper', depth: 'expert' as const, goals: ['New goal'], hours: 4, material: [], sources: [], checks: [] };
+    show(planned(mod('m1', { accepted: true, suggestion })));
+    expect(screen.getByText('The AI suggests a change to this accepted module · nothing changed yet')).toBeTruthy();
+    expect(current.trjPlans.T1.record!.plan.modules[0].title).toBe('Module m1');
+    fireEvent.click(screen.getByText('Apply the suggestion'));
+    expect(current.trjPlans.T1.record!.plan.modules[0]).toMatchObject({ title: 'Sharper', depth: 'expert', hours: 4, accepted: true });
+    expect(current.trjPlans.T1.record!.plan.modules[0].suggestion).toBeUndefined();
+    cleanup();
+    show(planned(mod('m1', { accepted: true, suggestion })));
+    fireEvent.click(screen.getByText('Dismiss'));
+    expect(current.trjPlans.T1.record!.plan.modules[0]).toMatchObject({ title: 'Module m1', accepted: true });
+    expect(screen.queryByText('Apply the suggestion')).toBeNull();
+  });
+  it('says what the merge kept for the admin', () => {
+    show({ T1: { record: record({ messages: [{ role: 'ai', text: 'Done', at: '', merged: { kept: 2, suggested: 1 } }] }), sources: [] } });
+    expect(screen.getByText('The AI left out 2 accepted modules · kept')).toBeTruthy();
+    expect(screen.getByText('The AI suggests changes to 1 accepted module · yours until you apply them')).toBeTruthy();
+  });
   it('View as shows the plan read-only: no Send, Apply, Start over, or card actions', () => {
     show(planned(mod('m1')), {}, true);
     expect(screen.getByText('Module m1', { exact: false })).toBeTruthy();
@@ -193,7 +221,7 @@ describe('the Build with AI panel', () => {
     expect(screen.getByText('This clears the plan and the conversation. Your sources stay.')).toBeTruthy();
     fireEvent.click(screen.getByText('Yes, start over'));
     await waitFor(() => expect(current.trjPlans.T1.record!.messages).toEqual([]));
-    expect(startOver).toHaveBeenCalledWith('T1');
+    expect(startOver).toHaveBeenCalledWith('T1', ['b1']);
     expect(current.trjPlans.T1.record!.plan.modules).toEqual([]);
     expect(current.trjPlans.T1.record!.bundleIds).toEqual(['b1']);
     expect(current.trjPlans.T1.sources).toHaveLength(1);

@@ -5,12 +5,13 @@ import { Button, Checkbox, Field, Input, LinkButton, SegmentedControl, Select, S
 import type { VM } from '../model';
 import { TrajectoryAudiences, TrajectoryLane } from './TrajectoryMapping';
 import TrajectoryAi from './TrajectoryAi';
+import { MoveButtons } from './MoveButtons';
+import { iconButton } from './labelStyle';
 
 const card: CSSProperties = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, overflow: 'hidden' };
 const cardHead: CSSProperties = { padding: '12px 18px', borderBottom: '1px solid #eef0ea', background: '#fafbf8' };
 const label: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
 const diamond = (size: number, radius: number, font: number): CSSProperties => ({ width: size, height: size, flex: 'none', borderRadius: radius, background: '#fdf3dc', border: '1px solid #f0dca3', color: '#7a5000', fontSize: font, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' });
-const iconButton: CSSProperties = { width: 28, height: 28, border: '1px solid #d5dacf', borderRadius: 4, background: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 13, color: '#1a1d18', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 
 export default function TrajectoryEditor({ vm }: { vm: VM }) {
   return (
@@ -25,7 +26,7 @@ export default function TrajectoryEditor({ vm }: { vm: VM }) {
           <div style={{ flex: '999 1 600px', minWidth: 0, ...card, padding: '18px', color: '#5a6058' }}>No trajectory yet. Use + New to start a draft.</div>
         )}
       </div>
-      {vm.tai && <TrajectoryAi tai={vm.tai} />}
+      {vm.tai && <TrajectoryAi key={vm.tai.id} tai={vm.tai} />}
     </>
   );
 }
@@ -121,8 +122,7 @@ function Steps({ vm }: { vm: VM }) {
                 <span style={{ display: 'block', fontSize: 11.5, color: '#5a6058', marginTop: 3 }}>{ts.meta}</span>
               </button>
               <span style={{ display: 'flex', gap: 4, alignItems: 'center', flex: 'none' }}>
-                <button type="button" aria-label={'Move step ' + ts.n + ' up'} onClick={ts.up} disabled={ts.noUp} style={{ ...iconButton, opacity: ts.upOp }}>↑</button>
-                <button type="button" aria-label={'Move step ' + ts.n + ' down'} onClick={ts.down} disabled={ts.noDown} style={{ ...iconButton, opacity: ts.downOp }}>↓</button>
+                <MoveButtons what={'step ' + ts.n} noUp={ts.noUp} noDown={ts.noDown} up={ts.up} down={ts.down} />
                 <button type="button" aria-label={'Remove step ' + ts.n} onClick={ts.remove} style={iconButton}>×</button>
               </span>
             </div>
