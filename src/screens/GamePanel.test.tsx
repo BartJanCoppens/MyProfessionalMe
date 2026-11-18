@@ -73,8 +73,9 @@ describe('Game panel', () => {
     expect(store.leaderboard).not.toHaveBeenCalled();
     expect(frame.props!.leaderboard).toBeNull();
   });
-  it('View as starts no run and says playing saves nothing', async () => {
+  it('View as starts no run, shows no leaderboard and says playing saves nothing', async () => {
     render(<GamePanel gm={view({ ro: true })} />);
+    expect(screen.queryByText(/Best finished runs/)).toBeNull();
     expect(screen.getByText('Viewing someone else: playing saves nothing')).toBeTruthy();
     await play();
     expect(store.startRun).not.toHaveBeenCalled();
@@ -92,7 +93,7 @@ describe('Game panel', () => {
     render(<GamePanel gm={view({ learningId: null, contributionId: null })} />);
     await play();
     expect(store.startRun).not.toHaveBeenCalled();
-    expect(screen.getByText(/A play-test: nothing is saved or counted/)).toBeTruthy();
+    expect(screen.getByText(/A play-test never counts and never shows on a leaderboard/)).toBeTruthy();
   });
   it('a saved contribution\'s game, as its author or a reviewer sees it, plays a test run on that contribution', async () => {
     render(<SavedContent t={{ key: 'c-1', contributionId: 'c-1', content: CONTENT, hours: 0.25, still: false }} />);
@@ -108,6 +109,16 @@ describe('Game panel', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy());
     expect(screen.queryByTestId('frame')).toBeNull();
+  });
+  it('a panel keyed by gm.key starts clean when View as changes (no run, no best carried over)', async () => {
+    vi.mocked(store.myBest).mockResolvedValue({ score: 80, seconds: 75 });
+    const { rerender } = render(<GamePanel key={view().key} gm={view()} />);
+    await play();
+    expect(await screen.findByText(/Your best/)).toBeTruthy();
+    const ro = view({ ro: true });
+    rerender(<GamePanel key={ro.key} gm={ro} />);
+    expect(screen.queryByTestId('frame')).toBeNull();
+    expect(screen.queryByText(/Your best/)).toBeNull();
   });
   it('the completion text stays the counsellor-accepted reflection', () => {
     expect(completionOf('Game')).toBe('acceptance');

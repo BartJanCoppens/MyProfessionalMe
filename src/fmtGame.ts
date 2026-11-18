@@ -26,12 +26,14 @@ export function gameView(c: GameContent, o: GameOpts) {
     key: (learning ?? '') + (o.ro ? ':ro' : ''), content: c, files: c.files, player: o.player, test: !learning,
     data: { concept: c.concept, win: c.win, rounds: c.rounds },
     sub: c.rounds.length + ' rounds · ' + (c.role ? 'an AI plays ' + c.role.kind.toLowerCase() : 'no AI role') + ' · ' + (c.leaderboard === 'None' ? 'no leaderboard' : c.leaderboard + ' leaderboard') + ' · Made with AI',
-    note: o.ro ? 'Viewing someone else: playing saves nothing' : learning ? 'A finished run goes on the leaderboard; only your reflection completes the learning.' : 'A play-test: nothing is saved or counted.',
+    note: o.ro ? 'Viewing someone else: playing saves nothing' : !learning ? 'A play-test never counts and never shows on a leaderboard.'
+      : c.leaderboard === 'None' ? 'There is no leaderboard; only your reflection completes the learning.' : 'A finished run goes on the leaderboard; only your reflection completes the learning.',
     completion: completionText('Game', o.accepter, true),
     // The run to play on: null when nothing is saved.
     start: async (): Promise<string | null> => (target ? startRun(target) : null),
     finish: finishRun,
-    board: learning && c.leaderboard !== 'None' ? () => leaderboard(learning) : null,
+    // In View as the board would be the viewer's (a team is relative to the signed-in person), so it is not shown.
+    board: learning && !o.ro && c.leaderboard !== 'None' ? () => leaderboard(learning) : null,
     best: learning && !o.ro ? () => myBest(learning) : null,
   };
 }

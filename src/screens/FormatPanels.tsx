@@ -125,7 +125,7 @@ export function FormatPanels({ vm }: { vm: VM }) {
       {det.hz && <PresentationPanel hz={det.hz} />}
       {det.sl && <SlidesPanel sl={det.sl} />}
       {det.pc && <PodcastPanel pc={det.pc} />}
-      {det.gm && <GamePanel gm={det.gm} />}
+      {det.gm && <GamePanel key={det.gm.key} gm={det.gm} />}
       <WorkPanels det={det} />
     </>
   );

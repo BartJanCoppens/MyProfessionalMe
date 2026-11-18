@@ -52,6 +52,12 @@ describe('the learner\'s game', () => {
     expect(await gm.start()).toBeNull();
     expect(store.startRun).not.toHaveBeenCalled();
     expect(gm.best).toBeNull();
+    expect(gm.board).toBeNull();
+  });
+  it('says what a finished run does only when there is a leaderboard', () => {
+    expect(learnerGame().note).toBe('A finished run goes on the leaderboard; only your reflection completes the learning.');
+    const none = gameView({ ...(parseFormatContent(RAW) as GameContent), leaderboard: 'None' }, { ro: false, learningId: 'L969', contributionId: null, player: 'Jan P.', accepter: 'x' });
+    expect(none.note).toBe('There is no leaderboard; only your reflection completes the learning.');
   });
 });
 
@@ -64,6 +70,9 @@ describe('gameView targets', () => {
     expect(store.startRun).toHaveBeenCalledWith({ contributionId: 'c-1' });
     expect(await preview.start()).toBeNull();
     expect([saved.test, preview.test, saved.board, saved.best]).toEqual([true, true, null, null]);
+  });
+  it('a play-test says it never counts and never shows on a leaderboard', () => {
+    expect(gameView(content, o).note).toBe('A play-test never counts and never shows on a leaderboard.');
   });
   it('no leaderboard means no board; a game with no AI role says so', () => {
     const v = gameView({ ...content, leaderboard: 'None' }, { ...o, learningId: 'L969' });
