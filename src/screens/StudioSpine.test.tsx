@@ -20,10 +20,6 @@ import StudioBuild from './StudioBuild';
 
 vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.fn(), removeDraft: vi.fn(), submitContribution: vi.fn(), decideReview: vi.fn(async () => 'review'), savePolicy: vi.fn(), removePolicy: vi.fn(),
   checkContribution: vi.fn() }));
-vi.mock('../studioData', async (orig) => {
-  const real = await orig<typeof import('../studioData')>();
-  return { ...real, STUDIOS: real.STUDIOS.map((s) => (s.id === 'reel' ? { ...s, available: true } : s)) };
-});
 
 function Live({ state, readOnly = false }: { state: Partial<AppState>; readOnly?: boolean }) {
   const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'create', ...state }));
@@ -35,7 +31,7 @@ const rule = (formats: string[]) => ({ id: 1, user_id: 'u1', lines: ['Consulting
 const data = (formats: string[] = []): CreateData => ({ contributions: [], reviews: [], rules: [rule(formats)], policies: [], peers: 3 });
 const nw = { line: 'Consulting', aud: '', type: 'Reel', title: 'Pillar Two', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'One takeaway.', outline: [], sources: [], ai: false, aiNote: '' };
 const looks = [{ id: 'l1', name: 'HR director · 50s', portrait: 'p1' as const, color: '#8a5a8c', licence: 'Drawn in code', active: true }];
-const atStep = (step: number, readOnly = false) => <Live readOnly={readOnly} state={{ create: data(), createTab: 'new', nw, stockLooks: looks, studio: { view: 'studio', step, id: 'reel' } }} />;
+const atStep = (step: number, readOnly = false, extra: Partial<AppState['nw']> = {}) => <Live readOnly={readOnly} state={{ create: data(), createTab: 'new', nw: { ...nw, ...extra }, stockLooks: looks, studio: { view: 'studio', step, id: 'reel' } }} />;
 // StudioBuild is controlled (the steps live on the draft); this holds them the way the draft does.
 function Held({ initial, ...rest }: { initial: BuildStepState[]; runner: Parameters<typeof StudioBuild>[0]['runner']; readOnly?: boolean }) {
   const [steps, setSteps] = useState(initial);
@@ -61,6 +57,11 @@ describe('the hub', () => {
     expect(card(/Podcast Studio/).disabled).toBe(true);
     expect(card(/Podcast Studio/).textContent).toContain('Not in your creation rules');
     expect(card(/Flash card & Exam Studio/).disabled).toBe(false);
+  });
+  it('offers the Reel Studio on the hub (it is built)', () => {
+    render(<Live state={{ create: data(['Reel']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
+    expect(card(/Reel Studio/).disabled).toBe(false);
+    expect(card(/Reel Studio/).textContent).not.toContain('Coming in a later release');
   });
   it('opens an available studio the rules allow', () => {
     render(<Live state={{ create: data(['Reel']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
@@ -88,22 +89,22 @@ describe('the steps', () => {
     render(atStep(2));
     fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
     expect(screen.getAllByRole('alert').map((a) => a.textContent).join(' ')).toMatch(/Add at least 3 items/);
-    fireEvent.change(screen.getByLabelText('Label of item 1'), { target: { value: 'Hook' } });
-    fireEvent.change(screen.getByLabelText('Text of item 1'), { target: { value: 'Your project is drifting.' } });
-    fireEvent.change(screen.getByLabelText('Text 2 of item 1'), { target: { value: 'On screen: three signs' } });
-    expect((screen.getByLabelText('Label of item 1') as HTMLInputElement).value).toBe('Hook');
+    fireEvent.change(screen.getByLabelText('Scene, or Check of item 1'), { target: { value: 'Hook' } });
+    fireEvent.change(screen.getByLabelText('Voice-over, or the check question of item 1'), { target: { value: 'Your project is drifting.' } });
+    fireEvent.change(screen.getByLabelText(/^On-screen text, or the options/), { target: { value: 'three signs' } });
+    expect((screen.getByLabelText('Scene, or Check of item 1') as HTMLInputElement).value).toBe('Hook');
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    expect(screen.queryByLabelText('Label of item 1')).toBeNull();
+    expect(screen.queryByLabelText('Scene, or Check of item 1')).toBeNull();
   });
-  it('offers produce rows and stock looks and voices as chips, with nothing to play yet', () => {
-    render(atStep(3));
+  it('offers produce rows and, for the stock presenter, stock looks as chips, with nothing to play yet', () => {
+    render(atStep(3, false, { shape: { 'Who presents?': 'Stock presenter and AI voice' } }));
     fireEvent.click(screen.getByRole('button', { name: 'Upbeat' }));
     expect(screen.getByRole('button', { name: 'Upbeat' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: /HR director/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Warm · Flemish English' })).toBeNull();
   });
   it('says a preview comes with the studio when its kind is not registered', () => {
-    render(atStep(4));
+    render(<Live state={{ create: data(), createTab: 'new', nw, studio: { view: 'studio', step: 4, id: 'avatar' } }} />);
     expect(screen.getByText('Preview comes with this studio')).toBeTruthy();
   });
 });
@@ -117,8 +118,8 @@ describe('Check & send', () => {
     vi.mocked(store.loadCreate).mockResolvedValue(data());
     vi.mocked(store.saveDraft).mockResolvedValue('p1');
     vi.mocked(store.checkContribution).mockResolvedValue({ passed: false, reasons: ['Add the items first'] });
-    const rows = studioById('reel')!.items.map((r) => [...r]) as StudioRow[];
-    render(<Live state={{ create: data(), createTab: 'new', nw: { ...nw, items: { list: rows, how: 'manual', problems: [], note: '' } }, studio: { view: 'studio', step: 5, id: 'reel' } }} />);
+    const rows = studioById('aid')!.items.map((r) => [...r]) as StudioRow[];
+    render(<Live state={{ create: data(), createTab: 'new', nw: { ...nw, type: 'Job aid', items: { list: rows, how: 'manual', problems: [], note: '' } }, studio: { view: 'studio', step: 5, id: 'aid' } }} />);
     const send = screen.getByRole('button', { name: 'Send for review' }) as HTMLButtonElement;
     expect(send.disabled).toBe(true);
     expect(screen.getByText('Saves your draft and checks it on the server. Send for review opens when it passes.')).toBeTruthy();
@@ -200,7 +201,7 @@ describe('one draft', () => {
   });
   it('keeps the build state on the draft so it survives Back and Next', () => {
     const h = open();
-    const steps: BuildStepState[] = [{ name: 'Writing the voice-over', status: 'done' }, { name: 'Recording the avatar take', status: 'failed', error: 'x' }, { name: 'Adding visuals and captions', status: 'todo' }];
+    const steps: BuildStepState[] = [{ name: 'Writing the voice-over', status: 'todo' }, { name: 'No voice · text and music only', status: 'failed', error: 'x' }, { name: 'Adding visuals and captions', status: 'todo' }];
     h.st().build!.set(steps);
     h.L().setState({ studio: { view: 'studio', step: 1, id: 'reel' } });
     h.L().setState({ studio: { view: 'studio', step: 3, id: 'reel' } });

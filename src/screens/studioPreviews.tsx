@@ -15,13 +15,15 @@ import { caseHours } from '../logic/studioContent';
 import type { VM } from '../model';
 import { horizonView } from '../fmtHorizon';
 import { podcastView } from '../fmtPodcast';
+import { reelView } from '../fmtReel';
 import { slidesView } from '../fmtSlides';
-import type { AidContent, ExplainerContent, FormatContent, GameContent, HorizonContent, MotionContent, PodcastContent, SlidesContent } from '../types';
+import type { AidContent, ExplainerContent, FormatContent, GameContent, HorizonContent, MotionContent, PodcastContent, ReelContent, SlidesContent } from '../types';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
 import GamePanel from './GamePanel';
 import ExplainerPanel from './ExplainerPanel';
 import PodcastPanel from './PodcastPanel';
 import PresentationPanel from './PresentationPanel';
+import ReelPanel from './ReelPanel';
 import SlidesPanel from './SlidesPanel';
 import SlidesVideo from './SlidesVideo';
 import { AidPanel, CasePanel } from './FormatWork';
@@ -61,6 +63,12 @@ const SlidesTry = ({ content, still }: { content: SlidesContent; still: boolean 
 const PodcastTry = ({ content }: { content: PodcastContent }) =>
   <PodcastPanel pc={podcastView(content, { ro: false, done: false, onEnd: () => {} })} />;
 
+// The learner's reel; the answer to its check lives in this preview only, and playing or answering completes nothing.
+function ReelTry({ content }: { content: ReelContent }) {
+  const [answer, setAnswer] = useState<number | undefined>();
+  return <ReelPanel rl={reelView(content, { ro: false, done: false, takeaway: null, answer, pick: setAnswer, onEnd: () => {} })} />;
+}
+
 // The learner's game as a play-test: a saved contribution plays on a test run (never counted), an unsaved preview on none; the
 // name a game sees is "Player".
 const GameTry = ({ content, contributionId, ai }: { content: GameContent; contributionId: string | null; ai?: GameOpts['ai'] }) =>
@@ -70,6 +78,7 @@ const GameTry = ({ content, contributionId, ai }: { content: GameContent; contri
 // contribution, its id (a game's play-test is recorded against it); ai: whether the AI role can answer (a game's play-test asks it).
 export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean; contributionId?: string; ai?: GameOpts['ai'] };
 export const GAME_PLAYTEST = 'Play-test · not saved, never counts as progress';
+export const REEL_PREVIEW = 'Preview · music is added in the final cut · not saved, never counts as progress';
 
 // The format's own learner panel over the content, as a play-test: its state lives here only.
 function LearnerPanel({ t }: { t: LearnerTry }) {
@@ -84,6 +93,7 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
       {content.kind === 'slides' && <SlidesTry content={content} still={t.still} />}
       {content.kind === 'podcast' && <PodcastTry content={content} />}
       {content.kind === 'game' && <GameTry content={content} contributionId={t.contributionId ?? null} ai={t.ai} />}
+      {content.kind === 'reel' && <ReelTry content={content} />}
     </>
   );
 }
@@ -94,7 +104,7 @@ function Learner({ c }: { c: CS }) {
   if (!content) return <div style={note}>{c.studio.previewNote}</div>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={note}>{content.kind === 'game' ? GAME_PLAYTEST : 'A play-test, as learners will see it: nothing is saved or counted.'}</div>
+      <div style={note}>{content.kind === 'game' ? GAME_PLAYTEST : content.kind === 'reel' && !content.video ? REEL_PREVIEW : 'A play-test, as learners will see it: nothing is saved or counted.'}</div>
       {content.kind === 'game' && c.studio.reviewNote && <div role="status" style={{ ...note, color: '#7a5000' }}>{c.studio.reviewNote}</div>}
       <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still, contributionId: c.nw.savedId, ai: c.studio.ai }} />
       {content.kind === 'slides' && !c.readOnly && <SlidesVideo content={content} title={c.nw.title} />}
@@ -123,6 +133,7 @@ const PREVIEWS: Record<string, (p: { c: CS }) => ReactNode> = {
   slides: ({ c }) => <Learner c={c} />,
   podcast: ({ c }) => <Learner c={c} />,
   game: ({ c }) => <Learner c={c} />,
+  reel: ({ c }) => <Learner c={c} />,
 };
 
 export function Preview({ kind, c }: { kind: string; c: CS }) {

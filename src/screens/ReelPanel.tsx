@@ -20,7 +20,7 @@ export default function ReelPanel({ rl }: { rl: ReelView }) {
     <AudioGate title="Watch" subtitle={rl.sub} note={rl.note} paths={rl.paths} loading="Loading the reel" failed="The reel could not be opened">
       {(urls) => (
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div style={{ flex: '0 1 300px', minWidth: 0 }}>{rl.rc.video ? <Video rl={rl} url={urls[0]} /> : <Scenes rl={rl} />}</div>
+          <div style={{ flex: '0 1 300px', minWidth: 0 }}>{rl.rc.video ? <Video key={urls[0]} rl={rl} url={urls[0]} /> : <Scenes rl={rl} />}</div>
           <Below rl={rl} />
         </div>
       )}
@@ -34,7 +34,7 @@ function Scenes({ rl }: { rl: ReelView }) {
 }
 
 function Video({ rl, url }: { rl: ReelView; url: string }) {
-  const [failed, setFailed] = useState(false), track = useRef<HTMLTrackElement>(null), video = rl.rc.video!;
+  const [failed, setFailed] = useState<MediaError | null | 'unknown'>(null), track = useRef<HTMLTrackElement>(null), video = rl.rc.video!;
   const vtt = rl.cues ? toVtt(rl.cues) : null;
   // The text track reads a Blob URL of the cues; it is revoked when the cues change or the video goes.
   useEffect(() => {
@@ -43,9 +43,10 @@ function Video({ rl, url }: { rl: ReelView; url: string }) {
     track.current.src = u;
     return () => URL.revokeObjectURL(u);
   }, [vtt]);
-  if (failed) return <div role="alert" style={{ ...muted, color: '#7a5000' }}>This browser cannot play this video ({video.mime === 'video/webm' ? 'WebM' : 'MP4'}) · the transcript has every word</div>;
+  // Only a format the browser cannot play says so (MEDIA_ERR_SRC_NOT_SUPPORTED, 4); any other failure is a file that could not be loaded.
+  if (failed) return <div role="alert" style={{ ...muted, color: '#7a5000' }}>{failed !== 'unknown' && failed.code === 4 ? 'This browser cannot play this video (' + (video.mime === 'video/webm' ? 'WebM' : 'MP4') + ')' : 'The video could not be loaded · try again later'} · the transcript has every word</div>;
   return (
-    <video controls playsInline src={url} onError={() => setFailed(true)} onEnded={rl.onEnd} style={{ width: rl.rc.size === '1080x1080' ? 260 : 210, maxWidth: '100%', borderRadius: 6, background: '#171a16', display: 'block' }}>
+    <video controls playsInline src={url} onError={(e) => setFailed(e.currentTarget.error ?? 'unknown')} onEnded={rl.onEnd} style={{ width: rl.rc.size === '1080x1080' ? 260 : 210, maxWidth: '100%', borderRadius: 6, background: '#171a16', display: 'block' }}>
       {vtt && <track ref={track} kind="captions" srcLang="en" label="Captions" default={!rl.rc.burned} />}
     </video>
   );

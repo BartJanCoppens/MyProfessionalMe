@@ -25,6 +25,8 @@ import type { Chip } from './screens/ChipGroup';
 import { gameProduce } from './studioGame';
 import { motionProduce } from './studioMotion';
 import { podcastProduce, castKey, dropSpeakerVoice, speakerVoiceName } from './studioPodcast';
+import { PORTRAIT_VOICE, PRESENTER, wantsVoice as reelVoiced } from './logic/reelContent';
+import { reelVoiceName } from './studioReel';
 import { deckVoiceName, dropOtherVoices, slidesProduce } from './studioSlides';
 import { NO_STOCK_VOICES, stockVoicesOf } from './studioVoicing';
 import { BUILDS } from './studioRunners';
@@ -37,12 +39,16 @@ const choices = (nw: NewDraft, setNw: SetNw, field: Field, key: string, options:
   key, hint: steers ? STEERS[steers] : note, chips: options.map((o) => ({ key: o, label: o, on: nw[field]?.[key] === o, pick: () => setNw((cur) => ({ [field]: { ...cur[field], [key]: o } })) })),
 });
 
+// What a Produce row says under its question when it changes what is published or made (the reel's captions and music).
+const PRODUCE_NOTES: Record<string, string> = { 'reel:Captions': 'Burned in also draws them on the video · both publish the text track and the transcript', 'reel:Music': 'Made in code · a short loop, no recording' };
 const NO_STOCK_LOOKS = 'No stock looks are offered yet. A General Admin adds them on the AI connections page.';
 // Which stock looks and voices a studio casts. A look is one of the active stock looks. A voice is one of the active stock voices, offered once the AI voice is live: for a deck
 // once the AI voice is chosen, for an episode one for each speaker of its format.
 function castPickers(L: Logic, def: StudioDef, nw: NewDraft) {
   const looks = (L.state.stockLooks ?? []).filter((l) => l.active).map((l) => l.id), voices = stockVoicesOf(L), names = (voices ?? []).map((v) => v.name), note = voices && !voices.length ? NO_STOCK_VOICES : '';
   if (def.cast === 'voice') return wantsVoice(nw.shape ?? {}) && voiceOn(L.aiOpts()) ? [{ key: 'Voice', options: names, note }] : [];
+  // A reel casts a voice once the AI voice is chosen and live, and a stock look only for the stock presenter.
+  if (def.id === 'reel') return [...(reelVoiced(nw.shape ?? {}) && voiceOn(L.aiOpts()) ? [{ key: 'Voice', options: names, note }] : []), ...(nw.shape?.[PRESENTER] === PORTRAIT_VOICE ? [{ key: 'Look', options: looks, note: L.state.stockLooks && !looks.length ? NO_STOCK_LOOKS : '' }] : [])];
   if (def.cast === 'voices') return voiceOn(L.aiOpts()) ? speakersOf(nw.shape ?? {}).map((speaker) => ({ key: castKey(speaker), options: names, note, speaker })) : [];
   return def.cast === 'look' ? [{ key: 'Look', options: looks, note: L.state.stockLooks && !looks.length ? NO_STOCK_LOOKS : '' }] : [];
 }
@@ -68,9 +74,11 @@ function offered(on: Record<'draft' | 'voice' | 'role', boolean>, q: string, opt
 
 // The build steps as stored on the draft, fitted to the studio's own output when it has a runner that makes one.
 function built(def: StudioDef, nw: NewDraft, list: StudioEntry[]) {
-  const steps = nw.build ?? startBuild(def.build ?? []), b = BUILDS[def.id];
-  return b ? fitBuilt(steps, b.built(list, nw.shape ?? {}, nw)) : steps;
+  const steps = nw.build ?? startBuild(def.build ?? []), b = BUILDS[def.id], fit = b ? fitBuilt(steps, b.built(list, nw.shape ?? {}, nw)) : steps;
+  // A reel told by text and music only has no voice to make: its second step says so.
+  return def.id === 'reel' && !reelVoiced(nw.shape ?? {}) ? fit.map((s, k) => (k === 1 ? { ...s, name: NO_VOICE_STEP } : s)) : fit;
 }
+const NO_VOICE_STEP = 'No voice · text and music only';
 
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
   const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list), aiOn = L.aiCan('studio_draft'), on = { draft: aiOn, voice: voiceOn(L.aiOpts()), role: L.aiCan('game_role') };
@@ -79,9 +87,9 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     return { items: { ...it, list: [...f(stepsOf(all), questionsOf(all)), ...all.filter((x) => isVoiceItem(x) || isGameItem(x))] as Item[], how: it.how || 'manual', problems: [] } }; });
   return {
     shape: def.qs.map(([q, options, steers]) => { const o = offered(on, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
-    produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers)),
+    produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers, PRODUCE_NOTES[def.id + ':' + row])),
     cast: castPickers(L, def, nw).map((p) => ('speaker' in p ? voiceChoice(L, nw, setNw, p.key, p.options, p.note, speakerVoiceName(L, nw, p.speaker), (cur, id) => dropSpeakerVoice(cur, p.speaker, id))
-      : p.key === 'Voice' ? voiceChoice(L, nw, setNw, p.key, p.options, 'note' in p ? p.note : '', deckVoiceName(L, nw), dropOtherVoices) : lookChoice(L, nw, setNw, p.key, p.options, p.note))),
+      : p.key === 'Voice' ? voiceChoice(L, nw, setNw, p.key, p.options, 'note' in p ? p.note : '', def.id === 'reel' ? reelVoiceName(L, nw) : deckVoiceName(L, nw), dropOtherVoices) : lookChoice(L, nw, setNw, p.key, p.options, p.note))),
     rows: stepsOf(list).map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
       edit: (f: 0 | 1 | 2, v: string) => change((rows, q) => [...rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x)), ...q]),
       remove: () => change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]) })),

@@ -3,7 +3,8 @@
 // step; a studio without a runner cannot build (the UI says so, it never shows a made-up success).
 export type StepStatus = 'todo' | 'running' | 'done' | 'failed';
 export type BuildStepState = { name: string; status: StepStatus; error?: string };
-export type BuildRunner = (name: string, index: number) => Promise<void>;
+// `prepare`: what a runner needs done in the click that starts a build, before any await (the Reel's final cut opens its audio context there).
+export type BuildRunner = ((name: string, index: number) => Promise<void>) & { prepare?: () => void };
 type OnChange = (steps: BuildStepState[]) => void;
 
 export const startBuild = (names: string[]): BuildStepState[] => names.map((name) => ({ name, status: 'todo' }));

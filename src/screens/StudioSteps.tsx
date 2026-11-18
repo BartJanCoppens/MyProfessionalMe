@@ -7,6 +7,7 @@ import type { VM } from '../model';
 import ChipGroup from './ChipGroup';
 import { ItemRows, Problems } from './CreateShared';
 import BrowserVoice from './BrowserVoice';
+import ReelBuild from './ReelBuild';
 import StudioBuild from './StudioBuild';
 
 type ST = NonNullable<VM['create']>['studio'];
@@ -86,7 +87,7 @@ export function Produce({ st }: { st: ST }) {
     <>
       {st.cast.map((g) => <Group key={g.key} g={g} st={st} />)}
       {st.produce.map((g) => <Group key={g.key} g={g} st={st} />)}
-      {st.build && <StudioBuild steps={st.build.steps} onChange={st.build.set} runner={st.buildRunner} readOnly={st.readOnly} />}
+      {st.build && (st.reel ? <ReelBuild st={st} /> : <StudioBuild steps={st.build.steps} onChange={st.build.set} runner={st.buildRunner} readOnly={st.readOnly} />)}
       {st.motion && <MotionOutput m={st.motion} readOnly={st.readOnly} />}
       {st.slides && <VoiceOutput s={st.slides} readOnly={st.readOnly} />}
       {st.podcast && <VoiceOutput s={st.podcast} readOnly={st.readOnly} />}

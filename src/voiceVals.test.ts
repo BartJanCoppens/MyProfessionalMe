@@ -163,7 +163,7 @@ describe('the Reel Studio\'s look picker', () => {
     expect(chips().map((c) => [c.label, c.on])).toEqual([['CFO · 40s', false], ['Renamed', true]]);
   });
   const reel = (looks = LOOKS) => harness({ access: member('u1'), subject: person(), state: { screen: 'create', createTab: 'new', stockLooks: looks, studio: { view: 'studio', step: 3, id: 'reel' },
-    nw: { line: 'Consulting', aud: '', type: 'Reel', title: 'Pricing', dom: 'prof', lvl: '3', stage: 'Manager', take: 'x', outline: [], sources: [], ai: false, aiNote: '' } } });
+    nw: { line: 'Consulting', aud: '', type: 'Reel', title: 'Pricing', dom: 'prof', lvl: '3', stage: 'Manager', take: 'x', outline: [], sources: [], ai: false, aiNote: '', shape: { 'Who presents?': 'Stock presenter and AI voice' } } } });
   const picker = (h: ReturnType<typeof reel>) => h.vm().create!.studio.cast.find((g) => g.key === 'Look');
   it('lists the active looks with their portrait, and no longer a look an admin switched off', async () => {
     const h = reel();

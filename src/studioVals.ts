@@ -18,6 +18,7 @@ import type { StudioDef, StudioEntry } from './logic/studios';
 import { STUDIOS } from './studioData';
 import { changeFormat, reachable, uploadFormat } from './studioRules';
 import { BUILDS } from './studioRunners';
+import { reelProduce } from './studioReel';
 import { stepVals } from './studioStepVals';
 import { stillMotion } from './fmtMotion';
 
@@ -69,7 +70,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
   // the studio's minimum, worded as in the design ("Draft at least 4 items in step 2").
   const problems = !flash ? parts.problems : tooFew(def, items.length) ? ['Draft at least ' + def.min + ' items in step ' + (steps.indexOf('Draft') + 1)] : [];
   // What the Produce step still has to make (the Motion Studio's animation and its text alternative): blocks the check, not the Draft step.
-  const unsent = [...problems, ...outputProblems(def, (nw.items?.list ?? []) as StudioEntry[], nw.shape ?? {}, voiceOn(L.aiOpts()), shownReview(nw))];
+  const unsent = [...problems, ...outputProblems(def, (nw.items?.list ?? []) as StudioEntry[], nw.shape ?? {}, voiceOn(L.aiOpts()), shownReview(nw), L.state.stockLooks)];
   // Server reasons the checks above already show (a client name) are not listed twice.
   const reasons = (src.checkReasons ?? []).filter((r) => !src.checks.some((c) => c.text === r));
   const next = () => {
@@ -91,12 +92,14 @@ export function studioVals(L: Logic, src: StudioSrc) {
     prev: () => set({ step: Math.max(0, step - 1) }), next, noPrev: step === 0, hasNext: step < steps.length - 1, nextLabel: 'Next: ' + (steps[step + 1] ?? ''),
     formats: formats.map((f) => ({ label: f, on: nw.type === f, pick: () => pick(f) })),
     ...parts, buildRunner: BUILDS[def.id]?.runner({ L, nw, setNw, withFile: src.withFile }),
+    // The Reel's final cut runs on the screen's host (progress, Cancel), so the screen builds its runner from this.
+    reel: def.id === 'reel' ? reelProduce({ L, nw, setNw, withFile: src.withFile }) : null,
     // Only "Made with AI" when the items are AI's; a scripted deck says so.
     itemsLabel: itemsLabel(nw.items?.how),
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }
       : { kind: 'cards' as const, cards: items as [string, string][], questions: [] },
     // Any other studio previews the content publishing makes of its rows (studioContent), once they are valid.
-    content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioEntry[], nw.shape ?? {}),
+    content: flash || parts.problems.length ? null : studioContent(nw.type, items as StudioEntry[], nw.shape ?? {}, { looks: L.state.stockLooks ?? [], draft: { produce: nw.produce, cast: nw.cast } }),
     // A game's preview says so when the server's verdict on it is missing, failed or out of date.
     reviewNote: parts.game?.problem ?? '',
     // Why there is nothing to preview yet.

@@ -53,11 +53,27 @@ describe('a studio reel', () => {
     expect(t).toContain('Check your group.');
     expect(t).toContain('On screen: 15% floor');
   });
-  it('says so when the browser cannot play a WebM video', async () => {
+  const fail = (code: number) => { const v = document.querySelector('video')!; Object.defineProperty(v, 'error', { value: { code }, configurable: true }); act(() => { fireEvent.error(v); }); };
+  it('says the browser cannot play the format only for MEDIA_ERR_SRC_NOT_SUPPORTED (4)', async () => {
     await panel(studio());
-    act(() => { fireEvent.error(document.querySelector('video')!); });
+    fail(4);
     expect(screen.getByRole('alert').textContent).toBe('This browser cannot play this video (WebM) · the transcript has every word');
     expect(screen.getByTestId('transcript')).toBeTruthy();
+  });
+  it('says the video could not be loaded for any other failure (a network or decode error is not a format problem)', async () => {
+    await panel(studio());
+    fail(2);
+    expect(screen.getByRole('alert').textContent).toBe('The video could not be loaded · try again later · the transcript has every word');
+  });
+  it('shows the video again once its link changes (a failure does not stick to the next file)', async () => {
+    const c = studio(), o = opts(), { rerender } = render(<ReelPanel rl={reelView(c, o)} />);
+    await act(async () => {});
+    fail(2);
+    expect(screen.getByRole('alert')).toBeTruthy();
+    rerender(<ReelPanel rl={reelView({ ...c, video: { path: 'a/b/other.webm', mime: 'video/webm' } }, o)} />);
+    await act(async () => {});
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.querySelector('video')!.getAttribute('src')).toBe('blob:other.webm');
   });
   it('tells the end once the video has played through', async () => {
     const o = await panel(studio());
@@ -66,7 +82,7 @@ describe('a studio reel', () => {
   });
   it('says Square video for 1:1 and shows the takeaway only when there is one', async () => {
     await panel(studio({ size: '1080x1080' }), opts({ takeaway: 'Check it.' }));
-    expect(screen.getByText('Square video · 0:52')).toBeTruthy();
+    expect(screen.getByText('Square video · 0:52 · Made with AI')).toBeTruthy();
     expect(screen.getByText('Check it.')).toBeTruthy();
   });
 });

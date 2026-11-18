@@ -13,8 +13,8 @@ export default function StudioBuild({ steps, onChange, runner, readOnly }: { ste
   const [busy, setBusy] = useState(false);
   if (!runner) return <div style={{ fontSize: 12.5, color: '#5a6058' }}>Building comes with this studio</div>;
   const go = async (job: () => Promise<unknown>) => { setBusy(true); try { await job(); } finally { setBusy(false); } };
-  const start = () => go(() => runBuild(steps, runner, onChange));
-  const retry = (k: number) => go(() => retryStep(steps, k, runner, onChange));
+  const start = () => { runner.prepare?.(); return go(() => runBuild(steps, runner, onChange)); };
+  const retry = (k: number) => { runner.prepare?.(); return go(() => retryStep(steps, k, runner, onChange)); };
   const started = steps.some((s) => s.status !== 'todo');
   // After a retried step, the steps still to do run on (runBuild skips the done ones).
   const more = steps.some((s) => s.status === 'todo') && !steps.some((s) => s.status === 'failed' || s.status === 'running');
