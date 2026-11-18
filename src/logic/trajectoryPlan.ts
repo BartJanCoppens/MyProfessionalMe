@@ -19,7 +19,7 @@ export const PLAN_FORMATS: string[] = STUDIOS.flatMap(studioFormats);
 
 export const PLAN_CAPS = {
   modules: 12, goals: 5, goalChars: 200, titleChars: 120, reasonChars: 240, material: 3, sources: 6, quoteChars: 160, hoursMin: 0.25, hoursMax: 80,
-  replyChars: 1200, questions: 3, removed: 30, messages: 60, messageChars: 4000, bundles: 12, sourcesPerTrajectory: 10,
+  replyChars: 1200, questions: 3, questionChars: 300, briefChars: 400, removed: 30, messages: 60, messageChars: 4000, bundles: 12, sourcesPerTrajectory: 10,
 } as const;
 
 export type SourceRef = { kind: 'kb'; bundleId: string; chunk: number } | { kind: 'file'; sourceId: string; page: number; passage: number } | { kind: 'learning'; learningId: string };
@@ -43,7 +43,9 @@ export type PlanBrief = {
 export type FinalExam = { title: string; hours: number; reason: string };
 // removed: the titles the admin removed; the AI is told not to propose them again.
 export type TrajectoryPlan = { version: 1; brief: PlanBrief | null; modules: PlanModule[]; finalExam: FinalExam | null; removed: string[] };
-export type PlanMessage = { role: 'admin' | 'ai'; text: string; at: string; focus?: string; dropped?: number };
+// What a reply cited or proposed that was not given or not allowed, removed and counted (never repaired).
+export type Dropped = { sources: number; learnings: number; formats: number };
+export type PlanMessage = { role: 'admin' | 'ai'; text: string; at: string; focus?: string; dropped?: Dropped };
 export type PlanRecord = { trajectoryId: string; plan: TrajectoryPlan; messages: PlanMessage[]; bundleIds: string[]; updatedAt: string | null };
 // An admin's uploaded document, read into numbered passages [page, text] the AI may cite; the original file is path (null: removed).
 export type PlanSource = { id: string; trajectoryId: string; name: string; path: string | null; pages: number; passages: [number, string][]; chars: number; flags: string[]; addedBy: string; addedAt: string };
