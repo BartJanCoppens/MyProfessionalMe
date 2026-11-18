@@ -17,7 +17,7 @@ describe('the built game item in SQL and TypeScript', () => {
   it('keeps the file limits', () => expect(item).toContain(`> ${GAME_FILE_MAX['index.html']} or char_length(e -> 'files' ->> 'game.js') > ${GAME_FILE_MAX['game.js']}`));
 });
 
-describe('the check gate reads the verdict for the files as they are now', () => {
+describe('the check gate reads the verdict for everything the review read, as it is now', () => {
   const problems = sql.slice(sql.indexOf('function private.contribution_problems'));
   it('says the same things as reviewProblem', () => {
     expect(problems).toContain(`'${NOT_PASSED}'`);
@@ -26,7 +26,10 @@ describe('the check gate reads the verdict for the files as they are now', () =>
     expect(reviewProblem({ passed: false, reasons: ['a'], current: true })).toEqual([NOT_PASSED + ': a']);
   });
   it('compares the stored hash with the hash of the current items, in SQL only', () => {
-    expect(problems).toContain('v_review.files_hash is distinct from private.game_files_hash(c.items)');
-    expect(fn('game_files_hash')).toContain('sha256(');
+    expect(problems).toContain('v_review.files_hash is distinct from private.game_review_hash(c.title, c.items, c.shape)');
+    expect(fn('game_review_hash')).toContain('sha256(');
+    // one basis for the hash and for what the model reads: the title and the game's content
+    expect(fn('game_review_basis')).toContain("jsonb_build_object('title', p_title, 'content', private.game_content(p_items, p_shape))");
+    expect(fn('game_review_input')).toContain('private.game_review_basis(c.title, c.items, c.shape)');
   });
 });

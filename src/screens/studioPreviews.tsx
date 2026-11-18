@@ -67,6 +67,7 @@ const GameTry = ({ content, contributionId }: { content: GameContent; contributi
 // A studio piece's content and what its learner panel needs: the case's hours, whether motion is off and, for a saved
 // contribution, its id (a game's play-test is recorded against it).
 export type LearnerTry = { key: string; content: FormatContent; hours: number; still: boolean; contributionId?: string };
+export const GAME_PLAYTEST = 'Play-test · not saved, never counts as progress';
 
 // The format's own learner panel over the content, as a play-test: its state lives here only.
 function LearnerPanel({ t }: { t: LearnerTry }) {
@@ -91,8 +92,9 @@ function Learner({ c }: { c: CS }) {
   if (!content) return <div style={note}>{c.studio.previewNote}</div>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={note}>A play-test, as learners will see it: nothing is saved or counted.</div>
-      <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still }} />
+      <div style={note}>{content.kind === 'game' ? GAME_PLAYTEST : 'A play-test, as learners will see it: nothing is saved or counted.'}</div>
+      {content.kind === 'game' && c.studio.reviewNote && <div role="status" style={{ ...note, color: '#7a5000' }}>{c.studio.reviewNote}</div>}
+      <LearnerPanel t={{ key: 'preview', content, hours: caseHours(c.nw.shape ?? {}), still: c.studio.still, contributionId: c.nw.savedId }} />
     </div>
   );
 }
@@ -117,6 +119,7 @@ const PREVIEWS: Record<string, (p: { c: CS }) => ReactNode> = {
   motion: ({ c }) => <Learner c={c} />,
   slides: ({ c }) => <Learner c={c} />,
   podcast: ({ c }) => <Learner c={c} />,
+  game: ({ c }) => <Learner c={c} />,
 };
 
 export function Preview({ kind, c }: { kind: string; c: CS }) {

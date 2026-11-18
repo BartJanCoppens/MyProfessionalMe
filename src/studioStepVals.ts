@@ -3,7 +3,7 @@
 // rows, `nw.items` (the one item store, with its `how` provenance, like every format). The Explainer's check questions
 // follow its rows in `nw.items`; they are shown as a block and removed as a whole. An Animated flow's drawing follows its
 // rows too; editing the rows drops it (it was built from them), and the build steps show how far it got (fitBuilt). A deck's or episode's
-// voice-over item follows its rows and stays through an edit: a clip counts only while its slide's talk-over is what it was made from.
+// voice-over item follows its rows and stays through an edit (so does a built game: it reads the rows when played): a clip counts only while its slide's talk-over is what it was made from.
 import type { Logic } from './model';
 import type { Bundle, ExamQuestion, NewDraft } from './types';
 import type { SetNw } from './createItems';
@@ -15,11 +15,13 @@ import { AI_ONLY, studioProblems } from './logic/studioContent';
 import { speakersOf } from './logic/podcastContent';
 import { wantsVoice } from './logic/slidesContent';
 import { isVoiceItem } from './logic/voiceItem';
+import { isGameItem } from './logic/gameContent';
 import { voiceOn } from './lib/voice';
 import { STEERS, questionsOf, stepsOf } from './logic/studios';
 import type { Steers, StudioDef, StudioEntry, StudioItem } from './logic/studios';
 import { STOCK_LOOKS } from './studioData';
 import type { Chip } from './screens/ChipGroup';
+import { gameProduce } from './studioGame';
 import { motionProduce } from './studioMotion';
 import { podcastProduce, castKey, dropSpeakerVoice, speakerVoiceName } from './studioPodcast';
 import { deckVoiceName, dropOtherVoices, slidesProduce } from './studioSlides';
@@ -59,14 +61,14 @@ function offered(on: Record<'draft' | 'voice', boolean>, q: string, options: str
 // The build steps as stored on the draft, fitted to the studio's own output when it has a runner that makes one.
 function built(def: StudioDef, nw: NewDraft, list: StudioEntry[]) {
   const steps = nw.build ?? startBuild(def.build ?? []), b = BUILDS[def.id];
-  return b ? fitBuilt(steps, b.built(list, nw.shape ?? {})) : steps;
+  return b ? fitBuilt(steps, b.built(list, nw.shape ?? {}, nw)) : steps;
 }
 
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
   const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list), aiOn = L.aiCan('studio_draft'), on = { draft: aiOn, voice: voiceOn(L.aiOpts()) };
   // Editing the rows keeps the items' provenance and any check after them; a hand-made list says 'manual'.
   const change = (f: (rows: StudioItem[], check: ExamQuestion[]) => StudioEntry[]) => setNw((cur) => { const it = cur.items ?? noItems(), all = it.list as StudioEntry[];
-    return { items: { ...it, list: [...f(stepsOf(all), questionsOf(all)), ...all.filter(isVoiceItem)] as Item[], how: it.how || 'manual', problems: [] } }; });
+    return { items: { ...it, list: [...f(stepsOf(all), questionsOf(all)), ...all.filter((x) => isVoiceItem(x) || isGameItem(x))] as Item[], how: it.how || 'manual', problems: [] } }; });
   return {
     shape: def.qs.map(([q, options, steers]) => { const o = offered(on, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers)),
@@ -85,5 +87,6 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     motion: def.id === 'motion' ? motionProduce(L, nw, setNw) : null,
     slides: def.id === 'slides' ? slidesProduce({ L, nw }) : null,
     podcast: def.id === 'podcast' ? podcastProduce({ L, nw }) : null,
+    game: def.id === 'game' ? gameProduce(L, nw, setNw) : null,
   };
 }

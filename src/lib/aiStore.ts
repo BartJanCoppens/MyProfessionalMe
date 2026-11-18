@@ -98,6 +98,6 @@ export async function askAi(use: string, req: AiRequest): Promise<{ text: string
 export type GameVerdict = { passed: boolean; reasons: string[] };
 export async function reviewGame(contributionId: string): Promise<GameVerdict> {
   const data = await invokeFunction<Partial<GameVerdict>>('ai', { action: 'review_game', contribution_id: contributionId });
-  if (!data || typeof data.passed !== 'boolean' || !Array.isArray(data.reasons)) throw new Error('The AI function returned no review');
+  if (!data || typeof data.passed !== 'boolean' || !Array.isArray(data.reasons)) throw new Error('AI did not return a usable review · retry this step');
   return { passed: data.passed, reasons: data.reasons.map(String) };
 }

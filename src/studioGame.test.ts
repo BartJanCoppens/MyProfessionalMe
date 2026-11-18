@@ -98,7 +98,7 @@ describe('the four build steps', () => {
   it('fail a fifth part with "too long · try a simpler game", and store nothing', async () => {
     answers(...Array.from({ length: 4 }, () => ({ text: '<p>x</p>', cut: true })));
     const h = open(); await h.build(); await flush();
-    expect(h.statuses()).toEqual(['done', 'failed', 'todo', 'todo']);
+    expect(h.statuses()).toEqual(['todo', 'failed', 'todo', 'todo']); // the rows step shows done only with a built game (gameBuilt)
     expect(h.st().build!.steps[1].error).toBe(TOO_LONG_SCREENS);
     expect(calls()).toHaveLength(4);
     expect(h.game()).toBeNull();

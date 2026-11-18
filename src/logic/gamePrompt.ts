@@ -52,7 +52,8 @@ function briefText(g: GameBrief): string {
 }
 const request = (system: string, content: string): AiRequest => ({ system, max_tokens: USE_LIMITS.studio_game.maxTokens, messages: [{ role: 'user', content }] });
 
-export const screensRequest = (g: GameBrief): AiRequest => request(SCREENS, briefText(g) + '\n\nWrite index.html.');
+/** soFar: what index.html already holds when an answer was cut; the model continues it. */
+export const screensRequest = (g: GameBrief, soFar = ''): AiRequest => request(SCREENS, briefText(g) + '\n\nWrite index.html.' + (soFar ? '\n\n' + continueText(soFar) : ''));
 
 /** soFar: what game.js already holds when an answer was cut; the model continues it. */
 export const logicRequest = (g: GameBrief, html: string, soFar = ''): AiRequest =>

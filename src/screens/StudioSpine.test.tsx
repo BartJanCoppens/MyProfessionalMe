@@ -53,7 +53,7 @@ describe('the hub', () => {
     expect(card(/Avatar Studio/).disabled).toBe(true);
     expect(card(/Avatar Studio/).textContent).toContain('Coming in a later release');
     expect(card(/Flash card & Exam Studio/).disabled).toBe(false);
-    expect(screen.getAllByText('Coming in a later release')).toHaveLength(2);
+    expect(screen.getAllByText('Coming in a later release')).toHaveLength(1);
   });
   it('greys an available studio the creation rules do not allow, with the reason', () => {
     render(<Live state={{ create: data(['Flash cards']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);

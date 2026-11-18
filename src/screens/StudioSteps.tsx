@@ -69,6 +69,18 @@ function VoiceOutput({ s, readOnly }: { s: NonNullable<ST['slides'] | ST['podcas
   );
 }
 
+// The Game Studio's code: who made it, why it cannot be built, what the server said of the house-rules review, and building again.
+function GameOutput({ g, readOnly }: { g: NonNullable<ST['game']>; readOnly: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {g.note && <div style={{ fontSize: 12.5, color: '#5a6058' }}>{g.note}</div>}
+      {g.made && <div style={{ fontSize: 12, fontWeight: 600, color: '#3f6a0a' }}>{g.made}</div>}
+      {g.review && <div style={{ fontSize: 12.5, color: '#5a6058' }}>{g.review}</div>}
+      {g.made && !readOnly && <div><LinkButton tone="muted" onClick={g.restart}>Build it again</LinkButton></div>}
+    </div>
+  );
+}
+
 export function Produce({ st }: { st: ST }) {
   return (
     <>
@@ -78,6 +90,7 @@ export function Produce({ st }: { st: ST }) {
       {st.motion && <MotionOutput m={st.motion} readOnly={st.readOnly} />}
       {st.slides && <VoiceOutput s={st.slides} readOnly={st.readOnly} />}
       {st.podcast && <VoiceOutput s={st.podcast} readOnly={st.readOnly} />}
+      {st.game && <GameOutput g={st.game} readOnly={st.readOnly} />}
     </>
   );
 }

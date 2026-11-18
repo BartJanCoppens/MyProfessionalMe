@@ -46,12 +46,13 @@ describe('the build requests', () => {
     expect(body(requests.continued)).toContain(continueText('const a = 1;'));
     expect(body(requests.logic)).not.toContain('<written_so_far>');
   });
+  it('continue the screens from what is written so far too', () => expect(body(screensRequest(brief, '<main'))).toContain(continueText('<main')));
   it('ask for as many tokens as the game build may', () => {
     for (const r of Object.values(requests)) expect(r.max_tokens).toBe(USE_LIMITS.studio_game.maxTokens);
   });
   it('stay within what the ai function accepts, also for the largest screens and a game.js written so far', () => {
     const big = logicRequest(brief, 'h'.repeat(GAME_FILE_MAX['index.html']), 'j'.repeat(GAME_FILE_MAX['game.js']));
-    expect(inputChars(big)).toBeLessThanOrEqual(60_000);
-    expect(inputChars(big)).toBeLessThanOrEqual(LIMITS.chars);
+    expect(inputChars({ ...big, max_tokens: big.max_tokens! } as never)).toBeLessThanOrEqual(60_000);
+    expect(inputChars({ ...big, max_tokens: big.max_tokens! } as never)).toBeLessThanOrEqual(LIMITS.chars);
   });
 });

@@ -183,7 +183,7 @@ describe('labels and the live path in the app', () => {
     expect(h.state.aiLive).toEqual([]);
   });
   it('answers the profile chat through the connection and says so', async () => {
-    vi.mocked(store.askAi).mockResolvedValueOnce('{"reply":"Tell me more.","interests":[],"ambition":null}');
+    vi.mocked(store.askAi).mockResolvedValueOnce('{"reply":"Tell me more.","interests":[],"ambition":null}' as never);
     const h = harness({ config: { liveAssistant: true }, state: { aiLive: ['profile_chat'] } });
     expect(h.vm().chatSub).toMatch(/^AI assistant · /);
     await h.L().send('I like data');
@@ -207,7 +207,7 @@ describe('labels and the live path in the app', () => {
     expect(h.state.cpReply).toMatch(/twice|Nothing arrives twice/);
   });
   it('sends the copilot through its connection when live', async () => {
-    vi.mocked(store.askAi).mockResolvedValueOnce('{"reply":"Add negotiation.","ops":[]}');
+    vi.mocked(store.askAi).mockResolvedValueOnce('{"reply":"Add negotiation.","ops":[]}' as never);
     const h = harness({ access: systemAdmin(), config: { liveAssistant: true }, state: { screen: 'adminMap', aiLive: ['curriculum_copilot'] } });
     await h.L().askCp('What do Energy seniors still miss?');
     expect(vi.mocked(store.askAi).mock.calls[0][0]).toBe('curriculum_copilot');

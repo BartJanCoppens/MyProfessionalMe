@@ -153,6 +153,6 @@ describe('the AI role row', () => {
     const nw = { title: 't', take: 'x', shape: { [ROLE_QUESTION]: 'Opponent' }, produce: {} } as never;
     expect(studioRequest(def, nw, ['a passage']).messages[0].content).toContain('AI role');
     expect(scriptedItems(def, nw, ['A passage.'])).toBeNull();
-    expect(STUDIOS.find((s) => s.id === 'game')!.available).toBe(false);
+    expect(STUDIOS.find((s) => s.id === 'game')!.available).toBe(true);
   });
 });

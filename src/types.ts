@@ -1,3 +1,4 @@
+import type { GameReviewStatus } from './logic/gameContent';
 import type { DraftItems } from './logic/items';
 import type { BuildStepState } from './logic/studioBuild';
 import type { CreateData } from './logic/contribution';
@@ -188,7 +189,9 @@ export type NewDraft = { line: string; aud: string; type: string; title: string;
   shape?: Record<string, string>; produce?: Record<string, string>; cast?: Record<string, string>; build?: BuildStepState[];
   // The row this draft was saved as while it is on screen (a studio check saves it); the studio and the upload form both continue it.
   // A new draft (blankDraft) has none.
-  savedId?: string };
+  savedId?: string;
+  // The server's house-rules verdict on the built game, as this session last read it: undefined not known, null none yet (studioGame.ts).
+  gameReview?: GameReviewStatus | null };
 
 // Knowledge library: retrieval models and bundles
 export type RagPreset = { name: string; embed: string; chunk: string; overlap: string; topk: string; hybrid: number; thresh: string; rerank: boolean; gen: string; temp: string; cite: string };

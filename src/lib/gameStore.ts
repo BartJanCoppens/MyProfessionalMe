@@ -2,6 +2,7 @@
 // contribution), finished once through finish_game_run (the server clock and the score), and read back as the leaderboard, a
 // definer function with first names and initials only, and the player's own best. Nothing reads another person's raw runs.
 import type { LeaderRow } from '../game/protocol';
+import type { GameReviewStatus } from '../logic/gameContent';
 import { supabase } from './supabase';
 
 export type RunTarget = { learningId: string } | { contributionId: string };
@@ -15,6 +16,13 @@ export async function startRun(target: RunTarget): Promise<string> {
   const { data, error } = await supabase.from('game_runs').insert(row).select('id').single();
   fail(error);
   return (data as { id: string }).id;
+}
+
+// The server's house-rules verdict on a Game contribution (author or assigned reviewer), for the files and texts as they are now; null when none.
+export async function loadGameReview(contributionId: string): Promise<GameReviewStatus | null> {
+  const { data, error } = await supabase.rpc('game_review_status', { p_contribution: contributionId });
+  fail(error);
+  return (data as GameReviewStatus | null) ?? null;
 }
 
 export async function finishRun(runId: string, score: number): Promise<void> {

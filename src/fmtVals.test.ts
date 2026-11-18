@@ -187,7 +187,7 @@ describe('teach-back', () => {
     expect(vi.mocked(learner.saveProgress).mock.calls[0][2]).toMatchObject({ state: 'accepted' });
   });
   it('asks the teach_back use when it is live and says "AI assistant" only when it answered', async () => {
-    vi.mocked(store.askAi).mockResolvedValueOnce('{"met":[true,true,false,true],"feedback":"Good.","follow":"Why?"}');
+    vi.mocked(store.askAi).mockResolvedValueOnce('{"met":[true,true,false,true],"feedback":"Good.","follow":"Why?"}' as never);
     const h = on('L65', {}, {}, { config: { liveAssistant: true }, state: { screen: 'detail', detailId: 'L65', aiLive: ['teach_back'] } });
     h.vm().det.tb!.setText(field(full));
     await h.vm().det.tb!.send();

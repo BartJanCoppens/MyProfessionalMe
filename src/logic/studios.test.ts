@@ -13,10 +13,10 @@ describe('studio definitions', () => {
     expect(def('avatar').qs).toHaveLength(4);
     expect(def('reel').build).toEqual(['Writing the voice-over', 'Recording the avatar take', 'Adding visuals and captions', 'Final cut']);
   });
-  it('names a learning format per studio; Podcast, Slides, Motion, Explainer, Job aid, Flash and Case are available', () => {
+  it('names a learning format per studio; Podcast, Game, Slides, Motion, Explainer, Job aid, Flash and Case are available', () => {
     expect(STUDIOS.map((s) => s.format)).toEqual(['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Flash cards', 'Case exercise']);
     expect(def('flash').alsoFormats).toEqual(['Practice exam']);
-    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['podcast', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
+    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
   });
   it('names no person: examples and stock looks use roles', () => {
     const text = JSON.stringify([STUDIOS, STOCK_LOOKS]);

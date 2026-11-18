@@ -54,7 +54,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('the Motion Studio\'s AI use', () => {
   it('animates through its own use studio_motion, whose instruction asks for one SVG', async () => {
-    vi.mocked(aiStore.askAi).mockResolvedValue(AI_SVG);
+    vi.mocked(aiStore.askAi).mockResolvedValue(AI_SVG as never);
     const h = open({ uses: ['studio_motion'] });
     expect(h.st().motion).toMatchObject({ note: '' });
     await h.build();
