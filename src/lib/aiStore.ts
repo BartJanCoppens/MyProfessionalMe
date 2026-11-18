@@ -34,7 +34,7 @@ export async function keepaliveFunction(name: 'avatar', body: Record<string, unk
 export async function loadAiAdmin(): Promise<AiAdmin> {
   const [c, u, n] = await Promise.all([
     supabase.from('ai_connections').select('id, name, provider, base_url, default_model, region, key_hint, updated_at').order('name'),
-    supabase.from('ai_uses').select('key, label, description, place, kind, waiting_for, admins_only, connection_id, model, enabled, preamble, daily_limit, daily_chars').order('sort'),
+    supabase.from('ai_uses').select('key, label, description, place, kind, waiting_for, admins_only, connection_id, model, enabled, preamble, daily_limit, daily_chars, daily_seconds').order('sort'),
     supabase.rpc('ai_usage_summary'),
   ]);
   fail(c.error || u.error || n.error);
@@ -72,7 +72,7 @@ export async function deleteConnection(id: string) {
   if (!(data as unknown[] | null)?.length) throw new Error('Only a System Admin can remove AI connections');
 }
 
-export async function updateUse(key: string, patch: Partial<Pick<AiUse, 'connection_id' | 'model' | 'enabled' | 'preamble' | 'daily_limit' | 'daily_chars'>>) {
+export async function updateUse(key: string, patch: Partial<Pick<AiUse, 'connection_id' | 'model' | 'enabled' | 'preamble' | 'daily_limit' | 'daily_chars' | 'daily_seconds'>>) {
   const { data, error } = await supabase.from('ai_uses').update(patch).eq('key', key).select('key');
   fail(error);
   if (!(data as unknown[] | null)?.length) throw new Error('Only a System Admin can change AI uses');
@@ -102,8 +102,8 @@ export const loadStockVoices = () => loadStock<StockVoice>('stock_voices', 'id, 
 export const addStockVoice = (f: StockVoiceForm) => addStock('stock_voices', 'stock voices', { ...f, accent: f.accent || null }, [/duplicate key|stock_voices_voice_id_key/i, 'That ElevenLabs voice id is on the list already']);
 export const setStockVoiceActive = (id: string, active: boolean) => setStockActive('stock_voices', 'stock voices', id, active);
 
-export const loadStockLooks = () => loadStock<StockLook>('stock_looks', 'id, name, portrait, color, licence, active', 'created_at');
-export const addStockLook = (f: StockLookForm) => addStock('stock_looks', 'stock looks', { ...f, color: f.color.toLowerCase() }, [/duplicate key|stock_looks_name_key/i, 'A look with that name is on the list already']);
+export const loadStockLooks = () => loadStock<StockLook>('stock_looks', 'id, name, portrait, color, licence, active, heygen_avatar_id, heygen_voice_id', 'created_at');
+export const addStockLook = (f: StockLookForm) => addStock('stock_looks', 'stock looks', { ...f, color: f.color.toLowerCase(), heygen_avatar_id: f.heygen_avatar_id || null, heygen_voice_id: f.heygen_voice_id || null }, [/duplicate key|stock_looks_name_key/i, 'A look with that name is on the list already']);
 export const setStockLookActive = (id: string, active: boolean) => setStockActive('stock_looks', 'stock looks', id, active);
 
 export const testConnection = (id: string) => invokeFunction<{ ok: boolean; model?: string; error?: string }>('ai', { action: 'test', connection_id: id });

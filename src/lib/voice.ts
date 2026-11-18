@@ -33,6 +33,14 @@ export async function hearStockVoice(voiceId: string): Promise<string> {
   return data.audio;
 }
 
+// The portrait's voice in avatar practice: the run's last character line (the server reads it; no text is sent) in the scenario's stock voice, as an object URL to play.
+// Never stored; the caller revokes the URL. A failure is thrown in words: the panel then offers the browser voice, labelled as such, or text.
+export async function sayRunLine(runId: string): Promise<string> {
+  const data = await invokeFunction<{ audio?: string }>('voice', { action: 'say', runId });
+  if (!data || typeof data.audio !== 'string') throw new Error('The voice function returned no audio');
+  return URL.createObjectURL(new Blob([Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0))], { type: 'audio/mpeg' }));
+}
+
 export type BrowserOutcome = 'ended' | 'stopped' | 'blocked' | 'failed' | 'unsupported';
 export type BrowserSpeech = { label: typeof BROWSER_VOICE; done: Promise<BrowserOutcome>; stop: () => void };
 

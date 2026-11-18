@@ -136,7 +136,7 @@ describe('the stock looks', () => {
     h.vm().ai!.looks.add();
     const f = () => h.vm().ai!.looks.form!;
     const fill = (label: string, v: string) => f().fields.find((x) => x.label === label)!.set(ev(v));
-    expect(f().fields.map((x) => x.label)).toEqual(['Name, as a role and an age', 'Portrait', 'Colour', 'Licence']);
+    expect(f().fields.map((x) => x.label)).toEqual(['Name, as a role and an age', 'Portrait', 'Colour', 'Licence', 'HeyGen avatar id (optional)', 'HeyGen voice id (optional)']);
     expect(f().fields[1].preview).toMatchObject({ src: expect.stringMatching(/^data:image\/svg/), color: '#2f7fc1' });
     fill('Colour', 'red');
     expect(f().fields[2].preview).toBeUndefined();
@@ -145,7 +145,7 @@ describe('the stock looks', () => {
     fill('Name, as a role and an age', ' Auditor · 40s '); fill('Colour', 'red'); await f().save();
     expect(h.lastToast()).toBe('The colour is six hex digits, e.g. #2f7fc1');
     fill('Colour', '#AA5500'); fill('Portrait', 'p3'); await f().save(); await flush();
-    expect(store.addStockLook).toHaveBeenCalledWith({ name: 'Auditor · 40s', portrait: 'p3', color: '#aa5500', licence: expect.stringContaining('no real person') });
+    expect(store.addStockLook).toHaveBeenCalledWith({ name: 'Auditor · 40s', portrait: 'p3', color: '#aa5500', licence: expect.stringContaining('no real person'), heygen_avatar_id: '', heygen_voice_id: '' });
     expect(h.state.lookForm).toBeNull();
   });
 });

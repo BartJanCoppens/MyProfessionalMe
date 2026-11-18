@@ -18,7 +18,8 @@ class FakeSession {
   // like the SDK's start(): it opens the microphone through voiceChat.start()
   start = vi.fn(async () => { if (startError) throw startError; await this.voiceChat.start(); });
   on(e: string, h: Handler) { this.handlers[e] = h; }
-  constructor(public token: string) { sessions.push(this); }
+  token: string;
+  constructor(token: string) { this.token = token; sessions.push(this); }
 }
 vi.mock('@heygen/liveavatar-web-sdk', () => ({
   LiveAvatarSession: function (token: string) { return new FakeSession(token); },

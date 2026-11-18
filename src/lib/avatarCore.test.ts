@@ -5,9 +5,9 @@ import { liveAvatarLanguage, readReport, readStart, readToken, reportResponse, s
 import type { StartDeps } from '../../supabase/functions/avatar/core.ts';
 
 const KEY = 'hg-secret-key-4321';
-const UID = '0f8fad5b-d9cb-469f-a165-70867728950e', RID = '7c9e6679-7425-40de-944b-e07fc1f90ae7', SID = '3b241101-e2bb-4255-8caf-4136c566a962';
+const RID = '7c9e6679-7425-40de-944b-e07fc1f90ae7', SID = '3b241101-e2bb-4255-8caf-4136c566a962';
 const AVATAR = '11111111-2222-4333-8444-555555555555';
-const OPENED = { session_id: SID, max_seconds: 660, avatar_id: AVATAR, voice_id: null, language: 'nl' };
+const OPENED = { session_id: SID, max_seconds: 660, avatar_id: AVATAR, voice_id: null, language: 'nl' as const };
 const PID = 'hg-session-77';
 const body = async (r: Response) => JSON.parse(await r.text());
 

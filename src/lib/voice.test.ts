@@ -5,7 +5,7 @@
 // that never starts speaking.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../test/fakeSupabase';
-import { BROWSER_VOICE, hearStockVoice, speak, speakInBrowser, voiceLive } from './voice';
+import { BROWSER_VOICE, hearStockVoice, sayRunLine, speak, speakInBrowser, voiceLive } from './voice';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 const CID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -85,5 +85,25 @@ describe('speakInBrowser', () => {
   it('says when the browser has no voice at all', async () => {
     vi.stubGlobal('speechSynthesis', undefined);
     expect(await speakInBrowser('Hello').done).toBe('unsupported');
+  });
+});
+
+describe('sayRunLine (the portrait\'s voice)', () => {
+  const RUN = '3b241101-e2bb-4255-8caf-4136c566a962';
+  it('asks only for the run (never a text) and answers an object URL of the mp3', async () => {
+    const make = vi.fn(() => 'blob:line-1');
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: make }));
+    db.client.functions.invoke.mockResolvedValueOnce({ data: { audio: btoa('mp3') }, error: null });
+    expect(await sayRunLine(RUN)).toBe('blob:line-1');
+    expect(db.client.functions.invoke).toHaveBeenCalledWith('voice', { body: { action: 'say', runId: RUN } });
+    const blob = (make.mock.calls[0] as unknown as [Blob])[0];
+    expect([blob.type, blob.size]).toEqual(['audio/mpeg', 3]);
+  });
+  it('says the refusal in words and never falls through to the browser voice', async () => {
+    db.client.functions.invoke.mockResolvedValueOnce(refusal(409, 'The avatar voice is not switched on'));
+    await expect(sayRunLine(RUN)).rejects.toThrow('The avatar voice is not switched on');
+    db.client.functions.invoke.mockResolvedValueOnce({ data: {}, error: null });
+    await expect(sayRunLine(RUN)).rejects.toThrow('The voice function returned no audio');
+    expect(synth.speak).not.toHaveBeenCalled();
   });
 });

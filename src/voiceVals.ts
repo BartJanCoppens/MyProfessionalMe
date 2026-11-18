@@ -6,7 +6,7 @@ import type { ChangeEvent } from 'react';
 import type { Logic } from './model';
 import { blankVoice, stockVoiceProblem } from './logic/ai';
 import type { StockVoice, StockVoiceForm } from './logic/ai';
-import { blankLook, stockLookProblem } from './logic/stockLooks';
+import { blankLook, HEYGEN_LICENCE, liveVideoOf, stockLookProblem } from './logic/stockLooks';
 import type { StockLookForm } from './logic/stockLooks';
 import { PORTRAIT_KEYS, portraitUrl } from './reel/portraits';
 import type { PortraitKey } from './reel/portraits';
@@ -79,14 +79,14 @@ export function stockVoicesVals(L: Logic, write: Write) {
 export function stockLooksVals(L: Logic, write: Write) {
   const s = L.state, f = s.lookForm;
   const save = () => {
-    const row: StockLookForm | null = f && { name: f.name.trim(), portrait: f.portrait, color: f.color.trim().toLowerCase(), licence: f.licence.trim() };
+    const row: StockLookForm | null = f && { name: f.name.trim(), portrait: f.portrait, color: f.color.trim().toLowerCase(), licence: f.licence.trim(), heygen_avatar_id: f.heygen_avatar_id.trim(), heygen_voice_id: f.heygen_voice_id.trim() };
     return saveWith(L, write, row, stockLookProblem, addStockLook, 'Added ' + row?.name + ' to the stock looks', () => L.setState({ lookForm: null }));
   };
   const update = (k: string, v: string) => L.setState((st) => ({ lookForm: st.lookForm && { ...st.lookForm, [k]: v } }));
   return {
     loading: !s.stockLooks && !s.aiError, empty: !!s.stockLooks && !s.stockLooks.length, note: '',
     rows: (s.stockLooks || []).map((l): StockRow => ({
-      ...toggleRow(L, write, { id: l.id, name: l.name, active: l.active, meta: l.licence }, (a) => setStockLookActive(l.id, a)),
+      ...toggleRow(L, write, { id: l.id, name: l.name, active: l.active, meta: liveVideoOf(l) + ' · ' + l.licence }, (a) => setStockLookActive(l.id, a)),
       thumb: { src: portraitUrl(l.portrait), color: l.color },
     })),
     add: () => L.setState({ lookForm: blankLook() }),
@@ -96,7 +96,9 @@ export function stockLooksVals(L: Logic, write: Write) {
         ['name', { label: 'Name, as a role and an age', hint: 'A role and an age, never a person\'s name.', placeholder: 'e.g. HR director · 50s' }],
         ['portrait', { label: 'Portrait', options: PORTRAIT_KEYS.map((k: PortraitKey, i) => ({ value: k, label: 'Portrait ' + (i + 1) })), preview: { src: portraitUrl(f.portrait), color: HEX.test(f.color) ? f.color : undefined } }],
         ['color', { label: 'Colour', placeholder: '#2f7fc1', preview: HEX.test(f.color) ? { color: f.color } : undefined }],
-        ['licence', { label: 'Licence', hint: 'Where the picture comes from.' }],
+        ['licence', { label: 'Licence', hint: 'Where the picture comes from. A HeyGen stock avatar: "' + HEYGEN_LICENCE + '".' }],
+        ['heygen_avatar_id', { label: 'HeyGen avatar id (optional)', hint: 'A stock avatar from the LiveAvatar library gives the look live video; without it the look is portrait only.', placeholder: 'uuid' }],
+        ['heygen_voice_id', { label: 'HeyGen voice id (optional)', hint: 'The voice the live video speaks with. The portrait uses the stock ElevenLabs voice chosen for the scenario, so the two can differ.', placeholder: 'uuid' }],
       ]),
       save, cancel: () => L.setState({ lookForm: null }), busy: s.aiBusy,
     } : null,

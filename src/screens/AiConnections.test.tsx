@@ -27,17 +27,17 @@ const data = (): AiAdmin => ({
   uses: [
     { key: 'profile_chat', label: 'Talk it through', description: 'Profile chat', place: 'My profile', kind: 'text', waiting_for: null, admins_only: false, connection_id: 'c1', model: null, enabled: true, preamble: 'Only discuss learning.', daily_limit: 50, daily_chars: null },
     { key: 'kb_answer', label: 'Test retrieval answer', description: 'Answers tests', place: 'Knowledge library', kind: 'text', waiting_for: null, admins_only: true, connection_id: null, model: null, enabled: true, preamble: '', daily_limit: 50, daily_chars: null },
-    { key: 'avatar_video', label: 'Avatar video', description: 'Talking avatar', place: 'Library', kind: 'avatar', waiting_for: 'the avatar studio', admins_only: false, connection_id: null, model: null, enabled: true, preamble: '', daily_limit: 50, daily_chars: null },
+    { key: 'avatar_video', label: 'Avatar video', description: 'Talking avatar', place: 'Library', kind: 'avatar', waiting_for: null, admins_only: false, connection_id: null, model: null, enabled: true, preamble: '', daily_limit: 10, daily_chars: null, daily_seconds: 1800 },
     { key: 'studio_voice', label: 'Studio voice-over', description: 'Reads narration', place: 'Create & share', kind: 'voice', waiting_for: null, admins_only: false, connection_id: null, model: null, enabled: false, preamble: '', daily_limit: 50, daily_chars: 30000 },
   ],
   usage: { uses: { profile_chat: { today: 2, week: 5 } }, top: [{ name: 'Robin Test', calls: 5 }] },
 });
 
 const VOICES: StockVoice[] = [{ id: 'v1', name: 'Narrator · warm, 40s', voice_id: 'tVoiceWarm01', language: 'en', accent: 'British', active: true }];
-const LOOKS: StockLook[] = [{ id: 'l1', name: 'CFO · 40s', portrait: 'p2', color: '#2f7fc1', licence: 'Drawn in code for MyProfessionalMe · no real person · no third-party image', active: true }];
+const LOOKS: StockLook[] = [{ id: 'l1', name: 'CFO · 40s', portrait: 'p2', color: '#2f7fc1', licence: 'Drawn in code for MyProfessionalMe · no real person · no third-party image', active: true, heygen_avatar_id: null, heygen_voice_id: null }];
 let current: AppState;
-function Live({ access = systemAdmin(), live = [] as string[] }) {
-  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'adminAi', aiAdmin: access.isSystem ? data() : null, stockVoices: VOICES, stockLooks: LOOKS, aiLive: live }));
+function Live({ access = systemAdmin(), live = [] as string[], admin = data(), looks = LOOKS }: { access?: ReturnType<typeof systemAdmin>; live?: string[]; admin?: AiAdmin; looks?: StockLook[] }) {
+  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'adminAi', aiAdmin: access.isSystem ? admin : null, stockVoices: VOICES, stockLooks: looks, aiLive: live }));
   useEffect(() => { current = st; });
   const refs = { toastTimer: { current: undefined }, drag: { current: null }, file: { current: null }, chat: { current: null } };
   const conf = { ...cfg, liveAssistant: true };
@@ -61,7 +61,8 @@ describe('the AI connections screen', () => {
     expect(within(row('profile_chat')).getByText('Live')).toBeTruthy();
     expect(within(row('profile_chat')).getByText('2 calls today · 5 in 7 days · limit 50 a day per person')).toBeTruthy();
     expect(within(row('kb_answer')).getByText('Scripted · no connection')).toBeTruthy();
-    expect(within(row('avatar_video')).getByText('Waiting for the avatar studio')).toBeTruthy();
+    expect(within(row('avatar_video')).getByText('Portrait only · no connection')).toBeTruthy();
+    expect(within(row('avatar_video')).getByText('0 calls today · 0 in 7 days · limit 10 a day per person · 1800 seconds a day')).toBeTruthy();
     expect(screen.getByText('Robin Test')).toBeTruthy();
   });
   it('adds a connection with a key in a password field that is gone after saving', async () => {
@@ -181,5 +182,39 @@ describe('the stock voices', () => {
     fireEvent.change(screen.getByLabelText('Characters per person per day'), { target: { value: '12000' } });
     await click('Save');
     expect(store.updateUse).toHaveBeenCalledWith('studio_voice', { daily_limit: 50, daily_chars: 12000 });
+  });
+  it('edits the seconds of live video a day for an avatar use, as sessions and seconds, with no instruction', async () => {
+    render(<Live />);
+    await act(async () => { fireEvent.click(within(row('avatar_video')).getByRole('button', { name: 'Daily limits' })); });
+    expect(screen.queryByLabelText('Fixed instruction')).toBeNull();
+    expect(screen.queryByLabelText('Characters per person per day')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Sessions per person per day'), { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Seconds a day per person'), { target: { value: '1200' } });
+    await click('Save');
+    expect(store.updateUse).toHaveBeenCalledWith('avatar_video', { daily_limit: 8, daily_seconds: 1200 });
+  });
+  it('says the HeyGen connection is the live video avatar and its key stays on the server', async () => {
+    const d = data(); d.connections.push({ id: 'c3', name: 'HeyGen', provider: 'heygen', base_url: null, default_model: null, region: null, key_hint: 'wxyz' });
+    render(<Live admin={d} />);
+    expect(screen.getByText(/The live video avatar · the key stays on the server/)).toBeTruthy();
+  });
+  it('lists a look as Live video when it has a HeyGen avatar, else Portrait only; a General Admin adds one with its avatar id', async () => {
+    render(<Live access={generalAdmin()} looks={[...LOOKS, { ...LOOKS[0], id: 'l2', name: 'HR director · 50s', heygen_avatar_id: '11111111-2222-4333-8444-555555555555' }]} />);
+    expect(screen.getAllByText(/^Portrait only/).length).toBe(1);
+    expect(screen.getAllByText(/^Live video/).length).toBe(1);
+    await click('+ Add look');
+    fireEvent.change(screen.getByLabelText('Name, as a role and an age'), { target: { value: 'Auditor · 40s' } });
+    fireEvent.change(screen.getByLabelText('HeyGen avatar id (optional)'), { target: { value: '11111111-2222-4333-8444-555555555556' } });
+    await click('Add look');
+    expect(store.addStockLook).toHaveBeenCalledWith(expect.objectContaining({ name: 'Auditor · 40s', heygen_avatar_id: '11111111-2222-4333-8444-555555555556', heygen_voice_id: '' }));
+  });
+  it('refuses a HeyGen id that is not a uuid', async () => {
+    render(<Live access={generalAdmin()} />);
+    await click('+ Add look');
+    fireEvent.change(screen.getByLabelText('Name, as a role and an age'), { target: { value: 'Auditor · 40s' } });
+    fireEvent.change(screen.getByLabelText('HeyGen avatar id (optional)'), { target: { value: 'abc' } });
+    await click('Add look');
+    expect(store.addStockLook).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toMatch(/HeyGen avatar id is a uuid/);
   });
 });

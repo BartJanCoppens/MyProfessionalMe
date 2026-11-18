@@ -110,9 +110,10 @@ export default function AiConnectionsScreen({ ai }: { ai: AiVM }) {
       {ai.useEdit && (
         <Drawer title={ai.useEdit.title} subtitle={ai.useEdit.subtitle} onClose={ai.useEdit.cancel} width={480}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {!ai.useEdit.hasChars && <Field label="Fixed instruction" hint={ai.useEdit.count}><Textarea minHeight={140} aria-label="Fixed instruction" value={ai.useEdit.preamble} onChange={ai.useEdit.setPreamble} /></Field>}
-            <Field label="Calls per person per day" hint="0 stops the use for everyone."><Input aria-label="Calls per person per day" inputMode="numeric" value={ai.useEdit.limit} onChange={ai.useEdit.setLimit} /></Field>
+            {ai.useEdit.hasInstruction && <Field label="Fixed instruction" hint={ai.useEdit.count}><Textarea minHeight={140} aria-label="Fixed instruction" value={ai.useEdit.preamble} onChange={ai.useEdit.setPreamble} /></Field>}
+            <Field label={ai.useEdit.limitLabel} hint="0 stops the use for everyone."><Input aria-label={ai.useEdit.limitLabel} inputMode="numeric" value={ai.useEdit.limit} onChange={ai.useEdit.setLimit} /></Field>
             {ai.useEdit.hasChars && <Field label="Characters per person per day" hint="Spoken characters; empty for no character limit."><Input aria-label="Characters per person per day" inputMode="numeric" value={ai.useEdit.chars} onChange={ai.useEdit.setChars} /></Field>}
+            {ai.useEdit.hasSeconds && <Field label="Seconds a day per person" hint="Seconds of live video; empty for no limit. A session reserves its length when it starts."><Input aria-label="Seconds a day per person" inputMode="numeric" value={ai.useEdit.seconds} onChange={ai.useEdit.setSeconds} /></Field>}
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <Button onClick={ai.useEdit.save} disabled={ai.useEdit.busy}>Save</Button>
               <LinkButton tone="muted" onClick={ai.useEdit.cancel}>Cancel</LinkButton>

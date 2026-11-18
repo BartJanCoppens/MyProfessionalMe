@@ -19,7 +19,7 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
   const [status, setStatus] = useState<LiveStatus>('idle');
   const session = useRef<LiveAvatarSession | null>(null), meter = useRef<UsageMeter | null>(null), video = useRef<HTMLVideoElement | null>(null);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null), generation = useRef(0), fallback = useRef(onFallback);
-  fallback.current = onFallback;
+  useEffect(() => { fallback.current = onFallback; });
 
   // Stops everything once: the meter's final report (which also returns the seconds of a session that never started) and the SDK session.
   const release = useCallback(async () => {
@@ -82,7 +82,7 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
   const resume = useCallback(() => { if (!session.current) void connect(); }, [connect]);
 
   useEffect(() => {
-    if (!enabled) { setStatus('idle'); return; }
+    if (!enabled) return;
     void connect();
     return () => { void release(); };
   }, [enabled, connect, release]);
@@ -92,5 +92,5 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
     return () => window.removeEventListener('pagehide', onHide);
   }, [release]);
 
-  return { status, attach, speak, stop, resume };
+  return { status: enabled ? status : 'idle' as LiveStatus, attach, speak, stop, resume };
 }

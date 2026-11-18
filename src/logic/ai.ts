@@ -19,12 +19,15 @@ export type AiUse = {
   connection_id: string | null; model: string | null; enabled: boolean;
   // The fixed instruction the ai function sends first, calls per person per day and (voice uses) characters per day.
   preamble: string; daily_limit: number; daily_chars: number | null;
+  // Seconds of live video per person per day (the avatar use; null: no limit).
+  daily_seconds?: number | null;
 };
 // Calls per use today and over the last 7 days (UTC), and the five heaviest users this week. No content.
 export type AiUsage = { uses: Record<string, { today: number | null; week: number | null }>; top: { name: string; calls: number }[] };
 export type AiAdmin = { connections: AiConnection[]; uses: AiUse[]; usage: AiUsage };
 // The instruction-and-limit editor of one use.
-export type AiUseEdit = { key: string; preamble: string; limit: string; chars: string | null };
+// chars: voice uses only, seconds: the avatar use only; with neither it is a text use's instruction.
+export type AiUseEdit = { key: string; preamble: string; limit: string; chars: string | null; seconds?: string | null };
 // The connection form. key is the new key typed in, never a stored one; it is cleared when the form closes.
 export type AiForm = { id: string | null; name: string; provider: AiProvider; base_url: string; default_model: string; region: string; key: string; hint: string | null };
 
@@ -33,7 +36,7 @@ export const PROVIDERS: Record<AiProvider, { label: string; note: string; url: s
   anthropic: { label: 'Anthropic (Claude)', note: 'Messages API. Processing is global or US only; no EU-only option on the direct API.', url: 'https://api.anthropic.com (default)', model: 'claude-opus-5-5' },
   openai_compatible: { label: 'OpenAI-compatible', note: 'Chat completions at a base URL: OpenAI, Azure OpenAI (EU regions) or EU-hosted services such as Mistral.', url: 'https://api.mistral.ai/v1', model: 'mistral-large-latest' },
   elevenlabs: { label: 'ElevenLabs (voices)', note: 'Speaks the studios\' narration in the stock voices below (Studio voice-over), through the voice function. Base URL and model are optional.', url: 'https://api.elevenlabs.io (default)', model: VOICE_MODEL },
-  heygen: { label: 'HeyGen (avatars)', note: 'Key stored for the avatar uses; the app does not call it yet.', url: '', model: '' },
+  heygen: { label: 'HeyGen (avatars)', note: 'Key for the live video avatar (LiveAvatar)', url: '', model: '' },
   other: { label: 'Other', note: 'Key stored for a future use; the app does not call it.', url: '', model: '' },
 };
 export const PROVIDER_KEYS = Object.keys(PROVIDERS) as AiProvider[];
@@ -55,16 +58,17 @@ export type UseStatusInfo = { live: boolean; chip: 'accepted' | 'in-progress' | 
 // What a use does now. Live: the app calls it with this connection. Anything else: the app keeps its scripted reply
 // (text uses) or the feature does not exist yet (waiting).
 export function statusOfUse(u: AiUse, conns: AiConnection[]): UseStatusInfo {
-  const c = conns.find((x) => x.id === u.connection_id) || null, voice = u.kind === 'voice';
-  // Without AI a text use answers with its script; a voice use leaves the studios the browser voice, for a preview.
-  const fallback = voice ? 'Browser voice · ' : 'Scripted · ';
+  const c = conns.find((x) => x.id === u.connection_id) || null, voice = u.kind === 'voice', avatar = u.kind === 'avatar';
+  // Without AI a text use answers with its script; a voice use leaves the studios the browser voice, for a preview; live video leaves the portrait and typing.
+  const fallback = voice ? 'Browser voice · ' : avatar ? 'Portrait only · ' : 'Scripted · ';
   if (u.waiting_for) return { live: false, chip: 'not-started', label: 'Waiting for ' + u.waiting_for, why: c ? 'The connection is stored for when it is built.' : 'Nothing calls it yet.' };
-  if (!u.enabled) return { live: false, chip: 'not-started', label: 'Off', why: voice ? 'Switched off: the studios offer the browser voice for a preview only.' : 'Switched off: the app uses its scripted reply.' };
+  if (!u.enabled) return { live: false, chip: 'not-started', label: 'Off', why: voice ? 'Switched off: the studios offer the browser voice for a preview only.' : avatar ? 'Switched off: learners practise with the portrait or by typing.' : 'Switched off: the app uses its scripted reply.' };
   if (!c) return { live: false, chip: 'clarification', label: fallback + 'no connection', why: 'Choose a connection to make it live.' };
   if (!fits(u.kind, c.provider)) return { live: false, chip: 'clarification', label: fallback + 'provider does not fit', why: PROVIDERS[c.provider].label + ' cannot serve this use.' };
   if (voice && c.provider !== 'elevenlabs') return { live: false, chip: 'clarification', label: fallback + 'only ElevenLabs speaks', why: 'The voice function calls ElevenLabs only; choose an ElevenLabs connection.' };
   if (!c.key_hint) return { live: false, chip: 'clarification', label: fallback + 'no key', why: 'Store a key on ' + c.name + '.' };
   const model = u.model || c.default_model;
+  if (avatar) return c.provider === 'heygen' ? { live: true, chip: 'accepted', label: 'Live', why: 'Live video through ' + c.name + ' · the key stays on the server' } : { live: false, chip: 'clarification', label: fallback + 'only HeyGen runs it', why: 'The avatar function calls HeyGen LiveAvatar only; choose a HeyGen connection.' };
   if (voice) return { live: true, chip: 'accepted', label: 'Live', why: 'Speaks through ' + c.name + ' · ' + (model || VOICE_MODEL) + (u.model ? '' : c.default_model ? ' (connection default)' : ' (default)') };
   if (!model) return { live: false, chip: 'clarification', label: 'Scripted · no model', why: 'Set a model here or a default model on ' + c.name + '.' };
   return { live: true, chip: 'accepted', label: 'Live', why: 'Answers through ' + c.name + ' · ' + model + (u.model ? '' : ' (connection default)') };
@@ -75,6 +79,7 @@ export const PREAMBLE_MAX = 4000;
 export function aiUseEditProblem(e: AiUseEdit): string | null {
   if (!/^\d{1,5}$/.test(e.limit.trim()) || Number(e.limit) > 10000) return 'The daily limit is a whole number from 0 to 10000';
   if (e.chars !== null && e.chars.trim() !== '' && (!/^\d{1,8}$/.test(e.chars.trim()) || Number(e.chars) > 10_000_000)) return 'The daily characters are a whole number from 0 to 10000000';
+  if (e.seconds != null && (!/^\d{1,5}$/.test(e.seconds.trim()) || Number(e.seconds) > 86400)) return 'The daily seconds are a whole number from 0 to 86400';
   if (e.preamble.length > PREAMBLE_MAX) return 'The instruction is at most ' + PREAMBLE_MAX + ' characters';
   return null;
 }
