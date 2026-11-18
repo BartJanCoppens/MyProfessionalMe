@@ -2890,7 +2890,12 @@ select pg_temp.gr_blocked('GR anon cannot execute finish_game_run', $q$select pu
 reset role;
 select pg_temp.gr_blocked('GR the check keeps a test run off a learning, whoever inserts it', $q$insert into public.game_runs (user_id, learning_id, test) values ('00000000-0000-0000-0000-000000000a01', 'LGR1', true)$q$, 'blocked: 23514');
 select pg_temp.gr_blocked('GR the check refuses a score above 1,000,000 on a finished run', $q$insert into public.game_runs (user_id, learning_id, test, finished_at, score) values ('00000000-0000-0000-0000-000000000a01', 'LGR1', false, now(), 1000001)$q$, 'blocked: 23514');
-insert into results (check_name, expected, actual) select 'GR first_and_initial: Jan P., one name stays, blank and email are Player', 'Jan P./Cher/Player/Player/Player/ann V.',
-  private.first_and_initial('Jan Peeters')||'/'||private.first_and_initial('Cher')||'/'||private.first_and_initial('')||'/'||private.first_and_initial(null)||'/'||private.first_and_initial('a@b.test')||'/'||private.first_and_initial(' ann  de vries ');
+-- the same samples as src/game/nameSql.sync.test.ts, answered by firstNameInitial there: no-break and other Unicode spaces, tabs, only spaces, emails
+insert into results (check_name, expected, actual) select 'GR first_and_initial answers as firstNameInitial for every sample (NBSP, tab, em and ideographic space, BOM, blank, email, one name)', 'none wrong',
+  coalesce(nullif(string_agg(quote_literal(v.s) || ' gave ' || coalesce(private.first_and_initial(v.s), 'null'), '; ') filter (where private.first_and_initial(v.s) is distinct from v.e), ''), 'none wrong')
+  from (values (E'Jan Peeters', 'Jan P.'), (E'Jan\u00a0Peeters', 'Jan P.'), (E'\u0009Jan Peeters', 'Jan P.'), (E'\u0009', 'Player'), (E'   ', 'Player'), (E'', 'Player'),
+    (E'a@b.test', 'Player'), (E'Jan <jan@x.test>', 'Player'), (E'Cher', 'Cher'), (E'Jan\u2003van\u3000Peeters', 'Jan P.'), (E'\ufeffJan Peeters\ufeff', 'Jan P.'),
+    (E' ann  de vries ', 'ann V.')) as v(s, e);
+insert into results (check_name, expected, actual) select 'GR first_and_initial of null is Player', 'Player', private.first_and_initial(null);
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

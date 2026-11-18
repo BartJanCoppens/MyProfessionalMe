@@ -62,7 +62,28 @@ create policy "game_runs: start" on public.game_runs for insert to authenticated
     (not test and (select private.is_game_learning(learning_id)))
     or (test and (select private.can_test_game(contribution_id)))));
 
--- "Jan Peeters" -> "Jan P."; an email address or a blank name -> "Player" (firstNameInitial in src/game/protocol.ts).
+-- The characters JavaScript's trim() and \s treat as spaces: the one list, for trimmed (Slides, redefined here to read it) and
+-- for first_and_initial. Postgres' own \s is a different set (no no-break or em space), so it is not used for names.
+create function private.js_space()
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select E'\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
+$$;
+
+create or replace function private.trimmed(p_text text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select btrim(p_text, private.js_space());
+$$;
+
+-- "Jan Peeters" -> "Jan P."; an email address or a blank name -> "Player" (firstNameInitial in src/game/protocol.ts: trim, split
+-- on runs of JavaScript whitespace, the first word and the last word's initial).
 create function private.first_and_initial(p_name text)
 returns text
 language sql
@@ -70,11 +91,11 @@ immutable
 set search_path = ''
 as $$
   select case
-    when coalesce(btrim(p_name), '') = '' or p_name like '%@%' then 'Player'
+    when coalesce(private.trimmed(p_name), '') = '' or p_name like '%@%' then 'Player'
     when array_length(parts, 1) = 1 then parts[1]
     else parts[1] || ' ' || upper(left(parts[array_length(parts, 1)], 1)) || '.'
   end
-  from (select regexp_split_to_array(btrim(p_name), '\s+') as parts) s;
+  from (select regexp_split_to_array(private.trimmed(p_name), '[' || private.js_space() || ']+') as parts) s;
 $$;
 
 -- Yourself, the people who share your counsellor, that counsellor and your own counsellees.
@@ -134,6 +155,7 @@ as $$
   order by 1 limit 10;
 $$;
 
-revoke execute on function private.is_game_learning(text), private.can_test_game(uuid), private.first_and_initial(text), private.team_ids(uuid),
+revoke execute on function private.js_space() from authenticated;
+revoke execute on function private.js_space(), private.is_game_learning(text), private.can_test_game(uuid), private.first_and_initial(text), private.team_ids(uuid),
   public.finish_game_run(uuid, integer), public.game_leaderboard(text) from public, anon;
 grant execute on function private.is_game_learning(text), private.can_test_game(uuid), public.finish_game_run(uuid, integer), public.game_leaderboard(text) to authenticated;
