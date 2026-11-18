@@ -38,7 +38,7 @@ const open = (o: { list?: StudioEntry[]; shape?: Record<string, string>; uses?: 
   stubWindow({});
   const h = harness({ access: member('u1'), subject: person({ readOnly: !!o.readOnly }), config: { liveAssistant: true },
     state: { screen: 'create', create: data(), createTab: 'new', nwKb: ['B1'], aiLive: o.uses ?? ['studio_game'], studio: { view: 'studio', step: PRODUCE, id: 'game' },
-      nw: nwOf({ shape: o.shape ?? { [ROLE_QUESTION]: NO_ROLE }, produce: { Look: 'Film noir', Timer: '60 s per round' }, items: { list: (o.list ?? ROWS) as never, how: 'manual', problems: [], note: '' } }) } });
+      nw: nwOf({ key: 'k1', shape: o.shape ?? { [ROLE_QUESTION]: NO_ROLE }, produce: { Look: 'Film noir', Timer: '60 s per round' }, items: { list: (o.list ?? ROWS) as never, how: 'manual', problems: [], note: '' } }) } });
   vi.mocked(store.loadCreate).mockImplementation(async () => h.state.create!);
   const st = () => h.vm().create!.studio;
   const build = () => runBuild(st().build!.steps, st().buildRunner!, st().build!.set);
@@ -204,6 +204,36 @@ describe('the game is saved without overwriting what was edited during the build
     expect((h.state.nw.items!.list as StudioItem[])[1][1]).toBe('Edited during the build');
     // and the verdict is for what was saved: nothing changed since, so it still passes
     expect(h.st().game!.review).toBe('The house-rules check passed on this version');
+  });
+});
+
+describe('a build that finishes after the creator moved to another draft', () => {
+  const leave = async (move: (h: ReturnType<typeof open>) => void) => {
+    const h = open();
+    let first = true;
+    vi.mocked(aiStore.askAi).mockImplementation(async () => { if (!first) move(h); const out = first ? HTML : JS; first = false; return { text: out, cut: false }; });
+    await h.build(); await flush();
+    return h;
+  };
+  const saves = () => vi.mocked(store.saveDraft).mock.calls as unknown as [{ title: string; items: StudioEntry[] }, string | null][];
+  it('saves into the draft it was built for, and leaves the other contribution untouched', async () => {
+    const other = nwOf({ title: 'Other draft', items: { list: ROWS as never, how: 'manual', problems: [], note: '' } });
+    const h = await leave((x) => x.L().setState({ editing: 'other-id', nw: { ...other, savedId: undefined } }));
+    expect(saves().every(([f, id]) => f.title === 'Invoice detective' && id !== 'other-id')).toBe(true);
+    expect(saves().some(([f]) => gameOf(f.items))).toBe(true);
+    expect(h.state.editing).toBe('other-id');
+    expect(h.state.nw.title).toBe('Other draft');
+    expect(gameOf(h.state.nw.items!.list as StudioEntry[])).toBeNull();
+    expect(h.lastToast()).toMatch(/after you left this draft · it was saved to “Invoice detective”/);
+  });
+  it('"New" or Cancel mid-build: the build writes no new row from the fresh form and nothing into it', async () => {
+    const h = await leave((x) => x.L().setState({ editing: null, nw: nwOf({ key: 'k2', title: '', items: { list: [], how: '', problems: [], note: '' } }) }));
+    expect(saves().every(([f]) => f.title === 'Invoice detective')).toBe(true);
+    expect(saves()).toHaveLength(2); // one row for the build: the first save, then the same row with the game
+    expect(saves()[1][1]).toBe('new1');
+    expect(h.state.nw.title).toBe('');
+    expect(h.state.nw.savedId).toBeUndefined();
+    expect(h.state.nw.items!.list).toEqual([]);
   });
 });
 

@@ -6,6 +6,7 @@
 // or a maker. Without the AI use there is no scripted game, and the studio says so.
 import type { Logic } from './model';
 import type { NewDraft } from './types';
+import { latestDraft, sameDraft } from './studioDraft';
 import type { BuildCtx, SetNw } from './studioDraft';
 import { reviewGame } from './lib/aiStore';
 import { loadGameReview } from './lib/gameStore';
@@ -77,7 +78,7 @@ async function reviewed(ctx: BuildCtx, game: GameItem) {
   let id = '', saved: { list: StudioEntry[]; nw: NewDraft } | null = null;
   const stored = await ctx.withFile(async (i) => {
     id = i;
-    const now = ctx.L.latest().state.nw, list = [...stepsOf(listOf(now)), game] as StudioEntry[];
+    const now = latestDraft(ctx.L).nw, list = [...stepsOf(listOf(now)), game] as StudioEntry[];
     saved = { list, nw: now };
     return list as Item[];
   }, 'Saved as draft · the game is stored with it', ctx.nw.items?.how ?? '');
@@ -90,8 +91,10 @@ async function reviewed(ctx: BuildCtx, game: GameItem) {
 }
 
 export function gameRunner(ctx: BuildCtx): BuildRunner {
-  const { L, nw, setNw } = ctx, def = studioById('game')!, brief = briefOf(nw), role = roleAnswer(nw.shape ?? {});
+  const { L, nw } = ctx, def = studioById('game')!, brief = briefOf(nw), role = roleAnswer(nw.shape ?? {});
   const files = { 'index.html': '', 'game.js': '' };
+  // What the build writes to the screen goes only to the draft it was started on; once the creator moved on it is kept in `files` and saved to its own draft.
+  const setNw: SetNw = (p) => { if (sameDraft(L.state, L.latest().state)) ctx.setNw(p); };
   // The files as the steps leave them; a step run alone (a retry, a reloaded draft) starts from the saved game.
   const have = () => { if (!files['index.html']) Object.assign(files, gameOf(listOf(nw))?.files ?? {}); };
   const steps = [
@@ -119,7 +122,7 @@ export function gameRunner(ctx: BuildCtx): BuildRunner {
       if (!live.enabled || !live.live.includes(USE)) throw new Error(NO_AI);
       have();
       if (!files['game.js']) throw new Error('Write the game logic first');
-      await reviewed(ctx, { kind: 'game', files: { ...files }, for: { role } });
+      await reviewed({ ...ctx, setNw }, { kind: 'game', files: { ...files }, for: { role } });
     },
   ];
   return async (_name, index) => {

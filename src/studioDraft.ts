@@ -2,7 +2,7 @@
 // answer strictly, fall back to scripted rows when there are any, and set the items with their provenance (`how`). Flash cards
 // and exams (createItems.ts) and the other studios differ only in the DraftSpec they hand in.
 import type { Logic } from './model';
-import type { Bundle, NewDraft } from './types';
+import type { AppState, Bundle, NewDraft } from './types';
 import { domainName } from './logic/contribution';
 import { retrieve, usablePassage } from './logic/okf';
 import type { Hit } from './logic/okf';
@@ -12,6 +12,14 @@ import type { StudioDef } from './logic/studios';
 import type { AiUseKey } from './logic/ai';
 import { canComplete } from './lib/ai';
 import type { AiRequest } from './lib/ai';
+
+// Whether the screen still holds the draft a job started on: the same saved row, or, for a draft not saved yet, the same form.
+const idOf = (s: AppState) => s.editing ?? s.nw.savedId ?? null;
+export const sameDraft = (started: AppState, now: AppState): boolean => (idOf(started) ? idOf(now) === idOf(started) : now.nw.key === started.nw.key);
+// The state a long job (a build) saves from: the newest, so edits made meanwhile are kept, but only while the screen is still on the
+// draft the job started on; after the creator moved to another draft, New or Cancel, the state the job started with, so it never
+// writes into the wrong draft and the build is not lost.
+export const latestDraft = (L: Logic): AppState => { const now = L.latest().state; return sameDraft(L.state, now) ? now : L.state; };
 
 export type SetNw = (p: Partial<NewDraft> | ((cur: NewDraft) => Partial<NewDraft>)) => void;
 // What a studio's build runner works with: the view-model, the draft on screen, how to change it, and the one save step that stores a

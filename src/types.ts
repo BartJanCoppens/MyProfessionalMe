@@ -190,6 +190,8 @@ export type NewDraft = { line: string; aud: string; type: string; title: string;
   // The row this draft was saved as while it is on screen (a studio check saves it); the studio and the upload form both continue it.
   // A new draft (blankDraft) has none.
   savedId?: string;
+  // Which new draft this is (blankDraft gives each form its own): a long job tells its draft from a fresh form by it (sameDraft).
+  key?: string;
   // The server's house-rules verdict on the built game, as this session last read it: undefined not known, null none yet (studioGame.ts).
   gameReview?: GameReviewStatus | null;
   // What that verdict was for (reviewBasis): an edit of the title, rows or answers it read makes it stale on screen, as the server's hash will say.

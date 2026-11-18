@@ -11,6 +11,7 @@ import { attrsOf, checksPass, contentChecks, mayCreate, rubricComplete } from '.
 import type { Attrs, Contribution, CreateData, Review, RuleParts } from './logic/contribution';
 import { checkContribution, decideReview, loadCreate, removeDraft, saveDraft, submitContribution } from './lib/contributionStore';
 import type { DraftFields } from './lib/contributionStore';
+import { latestDraft, sameDraft } from './studioDraft';
 import { changeFormat, uploadFormat } from './studioRules';
 import { HUB, studioOf } from './studioVals';
 
@@ -21,11 +22,12 @@ const without = <T,>(o: Record<string, T>, k: string) => { const n = { ...o }; d
 
 // A fresh form that one of the person's rules allows: the first rule's first values, the person's own line when the
 // rule leaves lines open, and the first upload-form format the rules allow (a studio sets its own when it opens).
+export const newKey = () => Math.random().toString(36).slice(2);
 export function blankDraft(rules: RuleParts[] | null, myLine: string | null): NewDraft {
   const r = rules && rules[0];
   const line = !r ? myLine || '' : r.lines.length ? (myLine && r.lines.includes(myLine) ? myLine : r.lines[0]) : myLine || 'Consulting';
   const base: NewDraft = { line, aud: r?.audiences[0] || '', type: '', title: '', dom: r?.domains[0] || 'prof', lvl: '2', stage: 'Senior consultant', take: '',
-    outline: [], sources: [], ai: false, aiNote: '', items: noItems() };
+    outline: [], sources: [], ai: false, aiNote: '', items: noItems(), key: newKey() };
   return { ...base, ...changeFormat(base, uploadFormat(rules ?? [], base), rules ?? undefined) };
 }
 export const attrsOfDraft = (nw: NewDraft): Attrs => ({ line: nw.line || null, format: nw.type, domain: nw.dom, audience: nw.aud || null });
@@ -92,7 +94,7 @@ async function submitChecked(id: string, studio: string | null | undefined) {
 type Saved = { s: AppState; nw: NewDraft; studio: string | null; id: string };
 async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>, patch: Partial<NewDraft> = {}): Promise<boolean> {
   if (busy(L)) return false;
-  const s = L.latest().state, nw = { ...effective(s), ...patch }, rules = s.create?.rules || [], studio = draftStudio(s);
+  const s = latestDraft(L), nw = { ...effective(s), ...patch }, rules = s.create?.rules || [], studio = draftStudio(s);
   if (!rules.length) { L.say('Ask an admin for creation rights first'); return false; }
   if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return false; }
   let id = s.editing ?? nw.savedId ?? null;
@@ -101,7 +103,7 @@ async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: 
     id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
     await next({ s, nw, studio, id });
     return true;
-  } catch (err) { failed(L, err, keep(id)); return false; }
+  } catch (err) { failed(L, err, (st) => (sameDraft(s, st) ? keep(id)(st) : {})); return false; }
 }
 
 // A file the draft names (a Presentation's .horizon file, a deck's voice-over): the draft is saved (the one save step, with
@@ -112,8 +114,10 @@ export async function saveWithFile(L: Logic, attach: (id: string) => Promise<Ite
     const items: DraftItems = { ...noItems(), list: await attach(id), how };
     await saveDraft(rowOf({ ...nw, items }, s.nwKb, studio, id), id);
     const d = await reloaded(L);
-    L.setState((st) => ({ create: d, createError: null, createBusy: false, nw: { ...st.nw, ...patch, items, savedId: id } }));
-    L.say(done);
+    // The creator may have moved on while a long job ran: the build is saved to its own draft, and the screen is left as it is.
+    const here = sameDraft(s, L.latest().state);
+    L.setState((st) => ({ create: d, createError: null, createBusy: false, ...(sameDraft(s, st) ? { nw: { ...st.nw, ...patch, items, savedId: id } } : {}) }));
+    L.say(here ? done : 'The build finished after you left this draft · it was saved to “' + (nw.title || 'untitled') + '”');
   }, (id) => (st) => (id ? { nw: { ...st.nw, ...patch, savedId: id } } : {}), patch);
 }
 
