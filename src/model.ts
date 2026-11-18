@@ -37,6 +37,7 @@ import { canComplete, complete } from './lib/ai';
 import type { AiRequest } from './lib/ai';
 import type { AiUseKey } from './logic/ai';
 import { jsonObject } from './logic/json';
+import { plural } from './logic/values';
 
 const opt = (v: string, l: string) => ({ value: v, label: l });
 export const ADMIN_SCREENS: Screen[] = ['adminLib', 'adminMap', 'adminKb', 'users', 'adminAi'];
@@ -693,9 +694,8 @@ export class Logic {
   logHours(it: Item) { logHour(this, it); }
   greeting() {
     const a = this.privateData().ambitions.length, i = this.privateData().interests.length;
-    const plural = (n: number, w: string) => n + ' ' + w + (n === 1 ? '' : 's');
     return 'I help you put your interests and ambitions into words. Nothing is saved until you confirm it. '
-      + (a || i ? 'You have ' + plural(a, 'ambition') + ' and ' + plural(i, 'interest') + ' on file. ' : '')
+      + (a || i ? 'You have ' + plural(a, 'ambition', 'ambitions') + ' and ' + plural(i, 'interest', 'interests') + ' on file. ' : '')
       + 'What kind of work gave you the most energy this year?';
   }
   sysPrompt() {

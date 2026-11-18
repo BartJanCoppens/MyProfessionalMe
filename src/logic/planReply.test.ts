@@ -125,6 +125,13 @@ describe('mergeReply', () => {
     const r = merge(latest, reply({ modules: [fresh(prev('m1')), fresh(prev('m2')), fresh(prev('zz'), { title: 'Old m2' }), fresh(prev('new1'), { title: 'Fresh idea' })] }), snapshot);
     expect(r.plan.modules.map((m) => m.title)).toEqual(['Old m1', 'Fresh idea']);
   });
+  it('applies the removed-title rule to a module that already exists: a revision titled like a removed one is not taken, and no suggestion carries it', () => {
+    const open = prev('m1', { accepted: false }), accepted = prev('m2');
+    const r = merge(plan([open, accepted], ['Gone', 'Banned']), reply({ modules: [fresh(open, { title: 'Banned' }), fresh(accepted, { title: 'Banned' })] }));
+    expect(r.plan.modules.map((m) => [m.id, m.title])).toEqual([['m1', 'Old m1'], ['m2', 'Old m2']]);
+    expect(r.plan.modules[1].suggestion).toBeUndefined();
+    expect(r.suggested).toBe(0);
+  });
   it('keeps the citations the AI was not shown, whether or not they were numbered, and never drops accepted for it', () => {
     const unseen = cite(20), seenOne = cite(1), seen = new Set([refKey(seenOne.ref)]);
     const accepted = prev('m1', { sources: [unseen, seenOne] }), open = prev('m2', { accepted: false, sources: [unseen, seenOne] });

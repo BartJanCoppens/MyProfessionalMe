@@ -4000,6 +4000,9 @@ insert into results (check_name, expected, actual) select 'TP the Consulting Dom
 insert into results (check_name, expected, actual) select 'TP an Audit Domain Admin may not plan a Consulting draft (plan_trajectory_allowed)', 'false', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a4', 'TP1')::text;
 insert into results (check_name, expected, actual) select 'TP someone with no role may not plan (plan_trajectory_allowed)', 'false', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000ff', 'TP1')::text;
 insert into results (check_name, expected, actual) select 'TP an unknown trajectory is not plannable (plan_trajectory_allowed)', 'false', public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a7', 'TP404')::text;
+set local request.jwt.claims = '{"sub":"caller"}';
+select public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a7', 'TP2');
+insert into results (check_name, expected, actual) select 'TP plan_trajectory_allowed puts the caller''s claim back before returning', '{"sub":"caller"}', current_setting('request.jwt.claims', true);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
 select pg_temp.gr_blocked('TP a signed-in user cannot execute plan_trajectory_allowed', $q$select public.plan_trajectory_allowed('00000000-0000-0000-0000-0000000000a7', 'TP2')$q$, 'blocked: 42501');

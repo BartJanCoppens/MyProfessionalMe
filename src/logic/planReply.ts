@@ -128,7 +128,8 @@ export function mergeReply(latest: TrajectoryPlan, r: PlanReply, ctx: MergeConte
     if (!cur) { if (!was.has(m.id) && !gone.has(m.title)) out.push(m); continue; }
     handled.add(cur.id);
     const proposed = withUnseen(m, cur, ctx.seen);
-    if (!cur.accepted && !edited(cur)) out.push({ ...proposed, accepted: false });
+    if (gone.has(proposed.title) && proposed.title !== cur.title) out.push(cur); // a removed title is not taken back, by a revision or a suggestion
+    else if (!cur.accepted && !edited(cur)) out.push({ ...proposed, accepted: false });
     else if (cur.accepted && content(proposed) !== content(cur)) { out.push({ ...cur, suggestion: suggestionOf(proposed) }); suggested++; }
     else out.push(cur);
   }

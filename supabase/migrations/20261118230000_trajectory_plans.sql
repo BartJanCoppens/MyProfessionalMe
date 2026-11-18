@@ -40,9 +40,14 @@ volatile
 security definer
 set search_path = ''
 as $$
+declare
+  previous text := current_setting('request.jwt.claims', true);
+  allowed boolean;
 begin
   perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', 'authenticated')::text, true);
-  return coalesce(private.can_plan_trajectory(p_trajectory), false);
+  allowed := coalesce(private.can_plan_trajectory(p_trajectory), false);
+  perform set_config('request.jwt.claims', coalesce(previous, ''), true);  -- the caller's claim is back before returning
+  return allowed;
 end;
 $$;
 revoke execute on function public.plan_trajectory_allowed(uuid, text) from public, anon, authenticated;

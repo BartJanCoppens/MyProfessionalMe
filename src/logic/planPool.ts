@@ -33,11 +33,11 @@ export const liveIndex = (known: Bundle[], sources: PlanSource[]): Map<string, P
 
 // A cited passage as it is now, by its reference. One that no longer resolves (its file was removed, its chunk is gone or now restricted, its
 // bundle unknown) is not sent and not numbered, so the AI cannot cite it again; the plan keeps the citation and the screen says it is gone.
-// A learning has no passage text: its stored quote stands.
+// A learning has no passage text: its stored quote stands, while it is published (as the catalogue holds only those).
 function resolveCited(c: { ref: SourceRef; label: string; quote: string }, live: Map<string, PoolPassage>): PoolPassage | null {
   const found = live.get(refKey(c.ref));
   if (found) return out(found.ref, found.label, found.text);
-  return c.ref.kind === 'learning' ? out(c.ref, c.label, clip(c.quote)) : null;
+  return c.ref.kind === 'learning' && LEARN_META[c.ref.learningId]?.status === 'published' ? out(c.ref, c.label, clip(c.quote)) : null;
 }
 
 export function poolFor(a: { plan: TrajectoryPlan; sources: PlanSource[]; bundles: Bundle[]; known: Bundle[]; query: string }): PoolPassage[] {

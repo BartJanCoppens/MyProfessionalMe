@@ -77,6 +77,11 @@ describe('poolFor', () => {
     expect(pool.map((p) => [inner(p.label), inner(p.text).slice(0, 12)])).toEqual([['Guide · VAT basics', 'VAT on expor']]);
     expect(pool.map((p) => p.text).join('')).not.toMatch(/secret quote|unknown quote/);
   });
+  it('does not send or number a cited learning that is no longer published, and keeps one that is', () => {
+    setCatalogue([[learn('L1', 'Live one'), meta(null)], [learn('L2', 'Now a draft'), meta(null, 'draft')]]);
+    const plan = planWith([{ ref: { kind: 'learning', learningId: 'L1' }, quote: 'q1' }, { ref: { kind: 'learning', learningId: 'L2' }, quote: 'q2' }, { ref: { kind: 'learning', learningId: 'L9' }, quote: 'q9' }]);
+    expect(poolFor({ plan, sources: [], bundles: [], known: [], query: '' }).map((p) => refKey(p.ref))).toEqual(['learning:L1']);
+  });
   it('liveIndex resolves exactly the passages that can be cited now', () => {
     const live = liveIndex([bundle()], [source()]);
     expect(['kb:b1#0', 'kb:b1#3', 'file:s1#p1.0'].every((k) => live.has(k))).toBe(true);
