@@ -147,6 +147,8 @@ export type AppState = {
   trjs: Trajectory[]; trjUsed: string[] | null; trjDelete: string | null; mapMode: 'learn' | 'traj'; trjSel: string | null; trjStep: string | null; trjAud: string; trjStage: string;
   // trajectory plans (admin, Phase 7): the plan record and sources loaded per trajectory id, and the Trajectory AI's state (the trajectory it is working on, and its last failure)
   trjPlans: Record<string, TrjPlanState>; trjAi: { busy: string | null; error: string | null };
+  // the "Build with AI" panel beside the trajectory editor (it shows the selected trajectory): open, the message being typed, the module being asked about or edited, the bundle search, and Start over waiting for its second click
+  trjPanel: { open: boolean; say: string; focus: string | null; editing: string | null; kbq: string; confirm: boolean };
   // certification trajectories (learner): the page being viewed and where it was opened from, the subject's enrolments and credentials,
   // the proof being typed per step (key subject|trajectory|step), the external credential being added and the renewal being typed
   trjView: string | null; trjOrigin: Screen; trjMine: TrjMine | null; trjLeave: string | null; stepDraft: Record<string, StepDraft>; credForm: CredDraft | null; renewForm: RenewDraft | null;

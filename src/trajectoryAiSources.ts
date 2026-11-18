@@ -4,18 +4,16 @@
 // logic/planSources.ts; storage is in lib/planStore.ts and lib/mediaStore.ts.
 import type { ChangeEvent } from 'react';
 import type { Logic } from './model';
-import { emptyPlan, PLAN_CAPS } from './logic/trajectoryPlan';
-import type { PlanRecord, PlanSource, TrjPlanState } from './logic/trajectoryPlan';
+import { PLAN_CAPS } from './logic/trajectoryPlan';
+import type { PlanSource } from './logic/trajectoryPlan';
 import { CUT_PAGES, CUT_TEXT, isInjectionFlag, looksScanned, scanSource, SOURCE_CAPS, toPassages } from './logic/planSources';
 import { sourceProblem } from './logic/mediaFiles';
 import { readPdfText } from './lib/pdfText';
-import { addPlanSourceRow, removePlanSource as removeStoredSource, savePlanSoon, setPlanSourcePath } from './lib/planStore';
+import { addPlanSourceRow, removePlanSource as removeStoredSource, setPlanSourcePath } from './lib/planStore';
 import { removePaths, uploadSourceFile } from './lib/mediaStore';
+import { blankRecord, change, editRecord, failed } from './trajectoryAiState';
 
 const NO_TEXT = 'No text found in this PDF · it may be a scan · scanned PDFs are not read (no OCR)';
-const empty = (): TrjPlanState => ({ record: null, sources: [] });
-const failed = (L: Logic, error: string | null) => L.setState((s) => ({ trjAi: { ...s.trjAi, busy: null, error } }));
-const change = (L: Logic, id: string, f: (p: TrjPlanState) => TrjPlanState) => L.setState((s) => ({ trjPlans: { ...s.trjPlans, [id]: f(s.trjPlans[id] ?? empty()) } }));
 
 // The problem with a file before it is read, or null: not a PDF, empty, too large, or the trajectory already holds 10 sources.
 function beforeReading(L: Logic, trajectoryId: string, file: File): string | null {
@@ -68,13 +66,10 @@ export async function removePlanSource(L: Logic, source: PlanSource): Promise<vo
 // Picks or drops a Knowledge bundle for the plan (at most 12); the plan record is made on the first pick. Saved soon.
 export function pickBundle(L: Logic, trajectoryId: string, bundleId: string, on: boolean): void {
   if (L.readOnly()) return;
-  const now = L.latest().state.trjPlans[trajectoryId] ?? empty();
-  const record: PlanRecord = now.record ?? { trajectoryId, plan: emptyPlan(), messages: [], bundleIds: [], updatedAt: null };
-  if (on && record.bundleIds.includes(bundleId)) return;
-  if (on && record.bundleIds.length >= PLAN_CAPS.bundles) return L.say(`At most ${PLAN_CAPS.bundles} knowledge bundles per trajectory`);
-  const next = { ...record, bundleIds: on ? [...record.bundleIds, bundleId] : record.bundleIds.filter((id) => id !== bundleId) };
-  change(L, trajectoryId, (p) => ({ ...p, record: { ...(p.record ?? record), bundleIds: next.bundleIds } }));
-  savePlanSoon(next, (message) => L.say(message));
+  const ids = (L.latest().state.trjPlans[trajectoryId]?.record ?? blankRecord(trajectoryId)).bundleIds;
+  if (on && ids.includes(bundleId)) return;
+  if (on && ids.length >= PLAN_CAPS.bundles) return L.say(`At most ${PLAN_CAPS.bundles} knowledge bundles per trajectory`);
+  editRecord(L, trajectoryId, (r) => ({ ...r, bundleIds: on ? [...r.bundleIds.filter((id) => id !== bundleId), bundleId] : r.bundleIds.filter((id) => id !== bundleId) }));
 }
 
 // What the sources block shows for one trajectory (the screen only reads this).

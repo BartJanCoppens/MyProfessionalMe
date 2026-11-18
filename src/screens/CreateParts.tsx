@@ -1,13 +1,17 @@
 // Create & share, parts shared by the upload form and the Flash card & Exam Studio: the knowledge-bundle picker and
 // the two side cards (automatic checks, who will review it). They only read from the view-model (createVals.ts).
 import { Banner, Button, Input } from '../ds';
+import type { bundlePicker } from '../createGrounding';
 import type { VM } from '../model';
 import { label } from './labelStyle';
 
 type CS = NonNullable<VM['create']>;
 const card = { background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6 };
 
-export function BundlePicker({ c }: { c: CS }) {
+// Only what the picker reads: the Create form and a trajectory plan both hand it the object bundlePicker builds.
+export type BundlePickerProps = ReturnType<typeof bundlePicker>;
+
+export function BundlePicker({ c }: { c: BundlePickerProps }) {
   return (
     <>
       {/* Picked bundles as chips; the rest is found, not listed: there may be hundreds. */}

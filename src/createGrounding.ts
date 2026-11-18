@@ -40,22 +40,37 @@ export function findBundles(bundles: Bundle[], query: string, piece: { title: st
   return { mode: 'popular' as const, rows: bundles.slice().sort(byUse).slice(0, limit), total: bundles.length };
 }
 
-// The grounding picker: the picked bundles as chips, a search box and at most five rows to add from.
-export function bundleFinder(L: Logic, nw: NewDraft, line: string | null) {
-  const s = L.state, usable = usableBundles(s.bundles, line);
+// The grounding picker, for any piece that picks bundles (a creator's draft, a trajectory plan): the picked bundles as chips, a search box and
+// at most five rows to add from. The caller says which bundles may be used, which are picked, the search, and what adding and removing do.
+export type PickerInput = {
+  usable: Bundle[]; picked: string[]; query: string; piece: { title: string; dom: string; line: string }; setQuery: (e: Input) => void;
+  add: (id: string) => void; remove: (id: string) => void; none: string; popular: string;
+};
+export function bundlePicker(p: PickerInput) {
+  const { usable } = p;
   const meta = (b: Bundle) => b.access === 'tl' ? 'Tax & Legal' : b.sources.filter(usablePassage).reduce((a, r) => a + r[3], 0) + ' passages';
-  const f = findBundles(usable.filter((b) => !s.nwKb.includes(b.id)), s.nwKbQ, { title: nw.title, dom: nw.dom, line: nw.line });
+  const f = findBundles(usable.filter((b) => !p.picked.includes(b.id)), p.query, p.piece);
   const n = (k: number, one: string, many: string) => k + ' ' + (k === 1 ? one : many);
   return {
-    nwKbCount: n(usable.length, 'bundle', 'bundles'), nwKbQuery: s.nwKbQ, nwKbSetQuery: (e: Input) => L.setState({ nwKbQ: e.target.value }),
-    nwKbPicked: usable.filter((b) => s.nwKb.includes(b.id)).map((b) => ({ id: b.id, label: b.name, meta: meta(b),
-      remove: () => L.setState((st) => ({ nwKb: st.nwKb.filter((k) => k !== b.id) })) })),
-    nwKbFound: f.rows.map((b) => ({ id: b.id, label: b.name, meta: meta(b) + ' · ' + b.owner, desc: b.desc,
-      add: () => L.setState((st) => ({ nwKb: st.nwKb.includes(b.id) ? st.nwKb : st.nwKb.concat([b.id]), nwKbQ: '' })) })),
-    nwKbFoundTitle: f.mode === 'search' ? n(f.total, 'match', 'matches') + ' for “' + s.nwKbQ.trim() + '”' : f.mode === 'suggest' ? 'Suggested for this piece' : 'Most used by creators',
+    nwKbCount: n(usable.length, 'bundle', 'bundles'), nwKbQuery: p.query, nwKbSetQuery: p.setQuery,
+    nwKbPicked: usable.filter((b) => p.picked.includes(b.id)).map((b) => ({ id: b.id, label: b.name, meta: meta(b), remove: () => p.remove(b.id) })),
+    nwKbFound: f.rows.map((b) => ({ id: b.id, label: b.name, meta: meta(b) + ' · ' + b.owner, desc: b.desc, add: () => p.add(b.id) })),
+    nwKbFoundTitle: f.mode === 'search' ? n(f.total, 'match', 'matches') + ' for “' + p.query.trim() + '”' : f.mode === 'suggest' ? 'Suggested for this piece' : p.popular,
     nwKbMore: f.total > f.rows.length ? (f.total - f.rows.length) + ' more · narrow the search' : '',
-    nwKbEmpty: !usable.length ? 'No knowledge bundles are open to creators yet.' : f.mode === 'search' && !f.total ? 'No bundle matches “' + s.nwKbQ.trim() + '”' : '',
+    nwKbEmpty: !usable.length ? p.none : f.mode === 'search' && !f.total ? 'No bundle matches “' + p.query.trim() + '”' : '',
   };
+}
+
+// The creator's draft: its picked bundles are AppState nwKb.
+export function bundleFinder(L: Logic, nw: NewDraft, line: string | null) {
+  const s = L.state;
+  return bundlePicker({
+    usable: usableBundles(s.bundles, line), picked: s.nwKb, query: s.nwKbQ, piece: { title: nw.title, dom: nw.dom, line: nw.line },
+    setQuery: (e) => L.setState({ nwKbQ: e.target.value }),
+    add: (id) => L.setState((st) => ({ nwKb: st.nwKb.includes(id) ? st.nwKb : st.nwKb.concat([id]), nwKbQ: '' })),
+    remove: (id) => L.setState((st) => ({ nwKb: st.nwKb.filter((k) => k !== id) })),
+    none: 'No knowledge bundles are open to creators yet.', popular: 'Most used by creators',
+  });
 }
 
 // "Draft with AI": an outline and a takeaway from the retrieved passages, by AI when the use is live (ask is null

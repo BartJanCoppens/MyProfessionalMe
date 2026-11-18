@@ -42,8 +42,8 @@ function resolveCited(c: { ref: SourceRef; label: string; quote: string }, live:
   return out(c.ref, c.label + ' (source changed)', clip(c.quote));
 }
 
-export function poolFor(a: { plan: TrajectoryPlan; sources: PlanSource[]; bundles: Bundle[]; known?: Bundle[]; query: string }): PoolPassage[] {
-  const known = a.known ?? a.bundles, pool = new Map<string, PoolPassage>();
+export function poolFor(a: { plan: TrajectoryPlan; sources: PlanSource[]; bundles: Bundle[]; known: Bundle[]; query: string }): PoolPassage[] {
+  const known = a.known, pool = new Map<string, PoolPassage>();
   const live = new Map([...known.flatMap(bundlePassages), ...a.sources.flatMap(filePassages)].map((p) => [refKey(p.ref), p]));
   let used = 0;
   // false once the pool is full (count or budget): ranked order decides what made it in.
