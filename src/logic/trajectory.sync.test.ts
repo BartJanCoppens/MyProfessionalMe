@@ -61,3 +61,19 @@ describe('renewal window: TypeScript and the database agree', () => {
     expect(renewal).toContain(`char_length(rf) > ${PROOF_LIMITS.ref}`);
   });
 });
+
+// Deleting an unused trajectory: the owner's rule lives in the database only (the editor asks trajectories_in_use()).
+describe('delete rule: the migration holds the owner rule', () => {
+  const del = Object.entries(migrations).filter(([f]) => f.includes('_trajectory_delete')).map(([, text]) => text).join('\n').replace(/\s+/g, ' ');
+  it('"in use" is an enrolment or a credential of the trajectory', () => {
+    expect(del).toContain('select exists (select 1 from public.trajectory_enrolments where trajectory_id = p_trajectory) or exists (select 1 from public.credentials where trajectory_id = p_trajectory)');
+  });
+  it('the one delete policy keeps the write rule and refuses a used trajectory', () => {
+    expect(del).toContain('drop policy "trajectories: admins remove"');
+    expect(del).toContain('using ((select private.can_write_trajectory(business_line, status, maps)) and not (select private.trajectory_in_use(id)))');
+    expect(del.match(/create policy "trajectories: admins remove"/g)).toHaveLength(1);
+  });
+  it('the editor\'s list of used ids is the same helper', () => {
+    expect(del).toContain('select t.id from public.trajectories t where private.trajectory_in_use(t.id)');
+  });
+});
