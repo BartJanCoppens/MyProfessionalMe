@@ -17,7 +17,7 @@
 -- limit_plan_sources               a trigger under an advisory lock per trajectory keeps the 10-source limit exact; stamp_plan refuses moving a plan
 --                                   to another trajectory (the grant needs the key column, see below).
 -- removing files                   private.plan_file_orphan: a PDF whose source row is gone may be read and removed by any admin (never written),
---                                   so a file is removed after its row or after the trajectory delete. can_remove_media is the delete policy's rule.
+--                                   so a file is removed after its row or after the trajectory delete (uploader and System Admin only). can_remove_media is the delete policy's rule.
 -- update (trajectory_id, ...)       the plan grant includes the key column because the store upserts (as knowledge_bundles does); the update
 --                                   policy still needs can_plan_trajectory on the new key, and updated_by is never grantable.
 
@@ -157,7 +157,9 @@ create policy "trajectory_plan_sources: editors remove" on public.trajectory_pla
 update storage.buckets set allowed_mime_types = allowed_mime_types || 'application/pdf'::text where id = 'media' and not (allowed_mime_types @> array['application/pdf']);
 
 -- A PDF whose source row is gone (the row was removed first, or the trajectory was deleted and its rows cascaded) is garbage that nothing can
--- authorize through the row any more: any admin may read and remove it. The write rule is unchanged, so an unknown id still cannot be uploaded.
+-- authorize through the row any more: only its uploader (first path segment) and a System Admin may read and remove it. The path carries no trajectory
+-- id, so no editor rule is possible. Storage's remove selects before it deletes, so the read rule needs this too. The write rule is unchanged, so an
+-- unknown id still cannot be uploaded.
 create function private.plan_file_orphan(p_path text)
 returns boolean
 language sql
@@ -165,7 +167,8 @@ stable
 security definer
 set search_path = ''
 as $$
-  select private.media_path_ok(p_path) and p_path ~ '\.pdf$' and private.is_content_admin()
+  select private.media_path_ok(p_path) and p_path ~ '\.pdf$'
+    and (split_part(p_path, '/', 1)::uuid = (select auth.uid()) or private.is_system_admin())
     and not exists (select 1 from public.trajectory_plan_sources s where s.id = split_part(p_path, '/', 2)::uuid)
     and not exists (select 1 from public.contributions c where c.id = split_part(p_path, '/', 2)::uuid);
 $$;
@@ -244,3 +247,25 @@ grant execute on function private.can_remove_media(text) to authenticated;
 drop policy "media: author removes" on storage.objects;
 create policy "media: author removes" on storage.objects for delete to authenticated
   using (bucket_id = 'media' and (select private.can_remove_media(name)));
+
+-- ---------- deleting a trajectory, files included ----------
+-- The same rule as the "trajectories: admins remove" policy (can_write_trajectory and not in use), in one transaction that also returns the source
+-- files the delete cascades away, so the client removes exactly those. The trajectory row is locked first: adding a source takes a key share on it,
+-- so a source added meanwhile waits and then fails. null: refused (not found, not yours, or in use).
+create function public.delete_trajectory_returning_files(p_id text)
+returns text[]
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare t public.trajectories; v_paths text[];
+begin
+  select * into t from public.trajectories where id = p_id for update;
+  if not found or not private.can_write_trajectory(t.business_line, t.status, t.maps) or private.trajectory_in_use(p_id) then return null; end if;
+  select coalesce(array_agg(path) filter (where path is not null), '{}') into v_paths from public.trajectory_plan_sources where trajectory_id = p_id;
+  delete from public.trajectories where id = p_id;
+  return v_paths;
+end;
+$$;
+revoke execute on function public.delete_trajectory_returning_files(text) from public, anon;
+grant execute on function public.delete_trajectory_returning_files(text) to authenticated;

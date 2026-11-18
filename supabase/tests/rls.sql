@@ -3950,16 +3950,46 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","r
 insert into results (check_name, expected, actual) select 'TP a learner cannot read the file', '0', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'TP a creator (with their own files) cannot read the file', '0', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
--- a file whose source row is gone is garbage: any admin may remove it, nobody else; an insert under an unknown id stays refused
+-- a file whose source row is gone is garbage: only its uploader and a System Admin may read and remove it; an insert under an unknown id stays refused
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
 with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP while its source row exists an Audit Domain Admin removes 0 files of it', '0 rows', count(*)||' rows' from d;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
 with d as (delete from public.trajectory_plan_sources where id = current_setting('test.tp_s1')::uuid returning 1) insert into results (check_name, expected, actual) select 'TP an editor removes a source row', '1 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP an Audit Domain Admin reads 0 orphaned files', '0', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
 with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP a learner cannot remove the orphaned file', '0 rows', count(*)||' rows' from d;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
-with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP an admin removes the file whose source row is gone', '1 rows', count(*)||' rows' from d;
+with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP another editor (General Admin, not the uploader) cannot remove the orphaned file', '0 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP the uploader reads their orphaned file', '1', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf';
+with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s1')||'/syllabus.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP the uploader removes the file whose source row is gone', '1 rows', count(*)||' rows' from d;
+with i as (insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars) values ('TP4', 'two.pdf', 1, '[[1,"x"]]', 1) returning id) select set_config('test.tp_s2', (select id::text from i), true);
+insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000a1/'||current_setting('test.tp_s2')||'/two.pdf');
+delete from public.trajectory_plan_sources where id = current_setting('test.tp_s2')::uuid;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.sa'), 'role', 'authenticated')::text, true);
+with d as (delete from storage.objects where bucket_id = 'media' and name like '%/'||current_setting('test.tp_s2')||'/two.pdf' returning 1) insert into results (check_name, expected, actual) select 'TP a System Admin removes an orphaned file of someone else', '1 rows', count(*)||' rows' from d;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a7","role":"authenticated"}';
 select pg_temp.gr_blocked('TP an orphan PDF still cannot be uploaded (the remove rule is not the write rule)', $q$insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000a7/00000000-0000-4000-8000-000000000003/x.pdf')$q$, 'blocked: 42501');
+-- delete_trajectory_returning_files: the delete rule, with the files it cascades away returned
+reset role;
+set local request.jwt.claims = '';
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps) values ('TP5', 'T plan delete with files', 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting', '[]', '[]');
+insert into public.trajectory_plans (trajectory_id) values ('TP5');
+insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars, added_by) values ('TP5', 'a.pdf', 1, '[[1,"x"]]', 1, '00000000-0000-0000-0000-0000000000a1'), ('TP5', 'b.pdf', 1, '[[1,"x"]]', 1, '00000000-0000-0000-0000-0000000000a1');
+update public.trajectory_plan_sources set path = added_by||'/'||id||'/'||name where trajectory_id = 'TP5' and name = 'a.pdf';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP an Audit Domain Admin gets null from delete_trajectory_returning_files on a Consulting draft', 'null', coalesce(public.delete_trajectory_returning_files('TP5')::text, 'null');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'TP a used trajectory is refused by delete_trajectory_returning_files', 'null', coalesce(public.delete_trajectory_returning_files('TU3')::text, 'null');
+insert into results (check_name, expected, actual) select 'TP an unknown trajectory is refused', 'null', coalesce(public.delete_trajectory_returning_files('TP404')::text, 'null');
+insert into results (check_name, expected, actual) select 'TP the line''s Domain Admin deletes the draft and gets the one file path back', '1/true', cardinality(p)||'/'||(p[1] like '00000000-0000-0000-0000-0000000000a1/%/a.pdf')::text from (select public.delete_trajectory_returning_files('TP5') p) x;
+reset role;
+insert into results (check_name, expected, actual) select 'TP ... and the trajectory, its plan and its sources are gone', '0/0/0', (select count(*) from public.trajectories where id = 'TP5')||'/'||(select count(*) from public.trajectory_plans where trajectory_id = 'TP5')||'/'||(select count(*) from public.trajectory_plan_sources where trajectory_id = 'TP5');
+set local role anon;
+select pg_temp.gr_blocked('TP anon cannot call delete_trajectory_returning_files', $q$select public.delete_trajectory_returning_files('TP1')$q$, 'blocked: 42501');
+reset role;
 -- the trajectory goes: plan and sources go with it
 reset role;
 set local request.jwt.claims = '';

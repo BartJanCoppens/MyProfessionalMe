@@ -80,14 +80,7 @@ export async function startOver(trajectoryId: string): Promise<void> {
   });
 }
 
-// The uploaded files of the trajectory's sources (rows without a file are skipped), listed before the trajectory is deleted.
-export async function planFilePaths(trajectoryId: string): Promise<string[]> {
-  const { data, error } = await supabase.from('trajectory_plan_sources').select('path').eq('trajectory_id', trajectoryId);
-  fail(error);
-  return ((data || []) as { path: string | null }[]).map((r) => r.path).filter((p): p is string => !!p);
-}
-
-// After the trajectory's row is gone: the files are cleaned up, and a failure is only warned about (a leftover file is acceptable,
+// After the trajectory is deleted (delete_trajectory_returning_files): the files are cleaned up, and a failure is only warned about (a leftover file is acceptable,
 // a lost one is not, so this never runs before the delete).
 export async function removePlanFiles(paths: string[]): Promise<void> {
   if (!paths.length) return;
@@ -100,7 +93,8 @@ export async function removePlanSource(sourceId: string): Promise<void> {
   fail(error);
   const path = (data as { path: string | null } | null)?.path;
   if (path) {
-    try { await removePaths([path], true); } catch { throw new Error('Not removed · the original file could not be removed, so the source stays'); }
+    // Strict: Storage skips a file the caller may not remove, and the file still has its row, so a shortfall keeps the row (nothing is orphaned).
+    try { await removePaths([path]); } catch { throw new Error('Not removed · the original file could not be removed, so the source stays'); }
   }
   const gone = await supabase.from('trajectory_plan_sources').delete().eq('id', sourceId).select('id');
   fail(gone.error);

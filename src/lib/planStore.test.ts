@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, has, op } from '../test/fakeSupabase';
 import { emptyPlan } from '../logic/trajectoryPlan';
 import type { PlanRecord } from '../logic/trajectoryPlan';
-import { loadPlan, planFilePaths, removePlanFiles, removePlanSource, savePlanSoon, startOver } from './planStore';
+import { loadPlan, removePlanFiles, removePlanSource, savePlanSoon, startOver } from './planStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 
@@ -114,12 +114,7 @@ describe('startOver', () => {
   });
 });
 
-describe('the files of a trajectory\'s sources', () => {
-  it('lists the paths of the sources that have a file', async () => {
-    db.answer(() => ({ data: [{ path: 'u/s1/a.pdf' }, { path: null }, { path: 'u/s2/b.pdf' }] }));
-    expect(await planFilePaths('T1')).toEqual(['u/s1/a.pdf', 'u/s2/b.pdf']);
-    expect(has(db.calls[0], 'eq', 'trajectory_id', 'T1')).toBe(true);
-  });
+describe('the files of a deleted trajectory\'s sources', () => {
   it('removes the files in one call, and nothing when there are none', async () => {
     db.answer(() => ({ data: [{ name: 'x' }, { name: 'y' }] }));
     await removePlanFiles(['u/s1/a.pdf', 'u/s2/b.pdf']);
@@ -138,19 +133,20 @@ describe('the files of a trajectory\'s sources', () => {
 
 describe('removePlanSource', () => {
   it('removes the file first, then the row', async () => {
-    db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? (c.steps[0][0] === 'select' ? { path: 'u/s1/a.pdf' } : [{ id: 's1' }]) : [] }));
+    db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? (c.steps[0][0] === 'select' ? { path: 'u/s1/a.pdf' } : [{ id: 's1' }]) : [{ name: 'a.pdf' }] }));
     await removePlanSource('s1');
     expect(db.calls.map((c) => c.table + ':' + op(c))).toEqual(['trajectory_plan_sources:select', 'storage:media:remove', 'trajectory_plan_sources:delete']);
     expect(has(db.calls[2], 'eq', 'id', 's1')).toBe(true);
   });
-  it('removes the row alone when there is no file, or the file is already gone', async () => {
+  it('removes the row alone when there is no file', async () => {
     db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? (c.steps[0][0] === 'select' ? { path: null } : [{ id: 's1' }]) : [] }));
     await removePlanSource('s1');
     expect(db.calls.map((c) => c.table)).toEqual(['trajectory_plan_sources', 'trajectory_plan_sources']);
-    db.reset();
-    db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? (c.steps[0][0] === 'select' ? { path: 'u/s1/a.pdf' } : [{ id: 's1' }]) : [] }));
-    await removePlanSource('s1');
-    expect(db.on('trajectory_plan_sources').map(op)).toEqual(['select', 'delete']);
+  });
+  it('keeps the row when Storage skips the file (fewer removed than asked): the file still has its row, so nothing is orphaned', async () => {
+    db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? { path: 'u/s1/a.pdf' } : [] }));
+    await expect(removePlanSource('s1')).rejects.toThrow('the source stays');
+    expect(db.on('trajectory_plan_sources').map(op)).toEqual(['select']);
   });
   it('keeps the row when the file cannot be removed, and says so', async () => {
     db.answer((c) => (c.table === 'storage:media' ? { error: { message: 'new row violates row-level security policy' } } : { data: { path: 'u/s1/a.pdf' } }));

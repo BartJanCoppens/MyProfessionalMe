@@ -151,33 +151,25 @@ describe('saving trajectories', () => {
   });
 });
 describe('deleting a trajectory', () => {
-  it('deletes by id and reads back what was removed', async () => {
-    db.answer(() => ({ data: [{ id: 'T100' }] }));
+  it('calls the database function and removes the files it returns', async () => {
+    db.answer((c) => ({ data: c.table === 'rpc:delete_trajectory_returning_files' ? ['u/s1/a.pdf'] : [{ name: 'a.pdf' }] }));
     expect(await deleteTrajectory('T100')).toEqual({ error: null });
-    const [call] = db.on('trajectories');
-    expect(op(call)).toBe('delete');
-    expect(has(call, 'eq', 'id', 'T100')).toBe(true);
-    expect(has(call, 'select', 'id')).toBe(true);
+    expect(db.calls.map((c) => c.table)).toEqual(['rpc:delete_trajectory_returning_files', 'storage:media']);
+    expect(db.calls[0].steps).toEqual([['args', [{ p_id: 'T100' }]]]);
+    expect(db.calls[1].steps).toEqual([['remove', [['u/s1/a.pdf']]]]);
   });
-  it('lists the files, deletes the row, and only then removes the files', async () => {
-    db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? [{ path: 'u/s1/a.pdf' }] : [{ id: 'T100' }] }));
+  it('removes no file when the trajectory had none', async () => {
+    db.answer(() => ({ data: [] }));
     expect(await deleteTrajectory('T100')).toEqual({ error: null });
-    expect(db.calls.map((c) => c.table)).toEqual(['trajectory_plan_sources', 'trajectories', 'storage:media']);
-    expect(op(db.calls[1])).toBe('delete');
-    expect(op(db.calls[2])).toBe('remove');
-  });
-  it('keeps the files when the delete is refused', async () => {
-    db.answer((c) => ({ data: c.table === 'trajectory_plan_sources' ? [{ path: 'u/s1/a.pdf' }] : [] }));
-    expect((await deleteTrajectory('T100')).error).toMatch(/^Not deleted/);
-    expect(db.calls.map((c) => c.table)).toEqual(['trajectory_plan_sources', 'trajectories']);
+    expect(db.calls.map((c) => c.table)).toEqual(['rpc:delete_trajectory_returning_files']);
   });
   it('is deleted even when a file cannot be removed afterwards (a leftover file, warned)', async () => {
-    db.answer((c) => (c.table === 'storage:media' ? { error: { message: 'boom' } } : { data: c.table === 'trajectory_plan_sources' ? [{ path: 'u/s1/a.pdf' }] : [{ id: 'T100' }] }));
+    db.answer((c) => (c.table === 'storage:media' ? { error: { message: 'boom' } } : { data: ['u/s1/a.pdf'] }));
     expect(await deleteTrajectory('T100')).toEqual({ error: null });
     expect(warn).toHaveBeenCalled();
   });
   it('says so when the database refused (used meanwhile, or not the admin\'s)', async () => {
-    db.answer(() => ({ data: [] }));
+    db.answer(() => ({ data: null }));
     expect(await deleteTrajectory('T1')).toEqual({ error: 'Not deleted · it is in use or you cannot delete it · retire it instead' });
   });
   it('returns the database error', async () => {
@@ -186,22 +178,23 @@ describe('deleting a trajectory', () => {
   });
   it('cancels a pending save of that id, so the row is not written again', async () => {
     vi.useFakeTimers();
-    db.answer(() => ({ data: [{ id: 'T1' }] }));
+    db.answer(() => ({ data: [] }));
     saveTrajectorySoon('T1', () => parsed(), vi.fn(), 600);
     await deleteTrajectory('T1');
     await vi.advanceTimersByTimeAsync(700);
-    expect(db.on('trajectories').map(op)).toEqual(['delete']);
+    expect(db.on('trajectories')).toHaveLength(0);
+    expect(db.on('rpc:delete_trajectory_returning_files')).toHaveLength(1);
   });
   it('schedules the held-back save again when the delete is refused, so the edit is not lost', async () => {
     vi.useFakeTimers();
-    db.answer(() => ({ data: [] }));
+    db.answer(() => ({ data: null }));
     const latest = { ...parsed(), name: 'edited' };
     saveTrajectorySoon('T1', () => latest, vi.fn(), 600);
     expect((await deleteTrajectory('T1')).error).toMatch(/^Not deleted/);
     db.answer(() => ({ data: [{ id: 'T1' }] }));
     await vi.advanceTimersByTimeAsync(700);
-    expect(db.on('trajectories').map(op)).toEqual(['delete', 'update']);
-    expect((db.on('trajectories')[1].steps[0][1][0] as { name: string }).name).toBe('edited');
+    expect(db.on('trajectories').map(op)).toEqual(['update']);
+    expect((db.on('trajectories')[0].steps[0][1][0] as { name: string }).name).toBe('edited');
   });
   it('lists the ids in use through the database function', async () => {
     db.answer(() => ({ data: ['T1', 'T3'] }));
