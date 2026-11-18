@@ -4056,6 +4056,9 @@ select set_config('test.tm_steps', format('[{"id":"m1","k":"make","title":"Flash
 update public.trajectories set steps = current_setting('test.tm_steps')::jsonb where id = 'TM1';
 insert into results (check_name, expected, actual) select 'TM an update that sends the stale make step stores learn', 'learn/LM1', (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid') from public.trajectories where id = 'TM1';
 insert into results (check_name, expected, actual) select 'TM ... and keeps the first linked_at', 'true', (extract(epoch from (steps -> 0 ->> 'linked_at')::timestamptz) = extract(epoch from current_setting('test.tm_linked')::timestamptz))::text from public.trajectories where id = 'TM1';
+-- a stale save that lost the cid (loaded before the draft was linked) sends the make step again: the link stays, its linked_at too
+update public.trajectories set steps = '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Micro-guide","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}]' where id = 'TM1';
+insert into results (check_name, expected, actual) select 'TM a stale save without the cid does not turn a linked step back into make', 'learn/LM1/true', (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid')||'/'||(extract(epoch from (steps -> 0 ->> 'linked_at')::timestamptz) = extract(epoch from current_setting('test.tm_linked')::timestamptz))::text from public.trajectories where id = 'TM1';
 -- learners: the make step shows on a live trajectory, and cannot be submitted
 reset role;
 set local request.jwt.claims = '';
@@ -4130,6 +4133,24 @@ end $f$;
 insert into results (check_name, expected, actual) select 'PD the reviewers approve and it is published without the author''s rule', 'published', pg_temp.pd_approve_all(current_setting('test.pd_c1')::uuid);
 insert into results (check_name, expected, actual) select 'PD publishing links the placeholder it was drafted for', 'learn', steps -> 0 ->> 'k' from public.trajectories where id = 'PD1';
 insert into results (check_name, expected, actual) select 'PD ... and the other placeholder is untouched', 'make', steps -> 1 ->> 'k' from public.trajectories where id = 'PD1';
+-- I3: a stale save (the editor was opened before the link) sends the linked placeholder back as a make step without its cid: the link stays
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+update public.trajectories set steps = jsonb_set(steps, '{0}', '{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}') where id = 'PD1';
+insert into results (check_name, expected, actual) select 'PD a stale save does not turn the linked placeholder back into a make step', 'learn', steps -> 0 ->> 'k' from public.trajectories where id = 'PD1';
+reset role;
+-- the link is found by what the draft was made for, not by the step's cid; a draft of another format never links (the format check of link_made_steps)
+insert into public.learnings (id, title, domain, level, format, hours, status) values ('LP1', 'PD linked learning', 'prof', 2, 'Flash cards', 0.5, 'published'), ('LP2', 'PD other-format learning', 'prof', 2, 'Micro-guide', 0.5, 'published');
+insert into public.trajectories (id, name, issuer, credential, enrol, months, status, business_line, steps, maps)
+ select 'PD' || n, 'T plan draft ' || n, 'T issuer', 'T credential', 'open', 6, 'draft', 'Consulting',
+  '[{"id":"m1","k":"make","title":"Flash cards on VAT","fmt":"Flash cards","hours":1,"win":3,"req":true,"pre":null,"from":"p:mx"}]', '[]' from generate_series(8, 9) n;
+insert into public.contributions (author_id, business_line, type, title, domain, takeaway, for_trajectory, for_step) values
+  ('00000000-0000-0000-0000-0000000000a1', 'Consulting', 'Flash cards', 'PD link without cid', 'prof', 'x', 'PD8', 'm1'),
+  ('00000000-0000-0000-0000-0000000000a1', 'Consulting', 'Micro-guide', 'PD wrong format', 'prof', 'x', 'PD9', 'm1');
+update public.contributions set status = 'published', step = 4, learning_id = 'LP1', published_at = now() where title = 'PD link without cid';
+update public.contributions set status = 'published', step = 4, learning_id = 'LP2', published_at = now() where title = 'PD wrong format';
+insert into results (check_name, expected, actual) select 'PD publishing links a placeholder whose step has no cid, through the contribution''s for_trajectory and for_step', 'learn/LP1', (steps -> 0 ->> 'k')||'/'||(steps -> 0 ->> 'lid') from public.trajectories where id = 'PD8';
+insert into results (check_name, expected, actual) select 'PD a published draft of another format than the placeholder''s does not link it', 'make', steps -> 0 ->> 'k' from public.trajectories where id = 'PD9';
 -- the author also has a real creation rule for it: the normal (lax) requirement applies
 insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000a1', '{Consulting}', '{"Flash cards"}');
 set local role authenticated;

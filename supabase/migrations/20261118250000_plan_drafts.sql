@@ -16,8 +16,9 @@
 -- publish_contribution                      as before (20261117310000), except the author's creation rules may be replaced by a matching placeholder the author
 --                                           can still plan (re-checked at publish with public.plan_trajectory_allowed, the one claim-switching function; a removed
 --                                           editor's draft is not published under the grant).
--- link_made_steps                           as before (20261118240000), except a make step links only to a contribution drafted for that very step
---                                           (for_trajectory = the trajectory, for_step = the step, type = the step's fmt), never to any published contribution its cid names.
+-- link_made_steps / relink_trajectories    as before (20261118240000), except a make step links only to a contribution drafted for that very step
+--                                           (for_trajectory = the trajectory, for_step = the step, type = the step's fmt), found without the step's cid, and a stale save
+--                                           that sends a linked step back as a make step keeps the link.
 -- Every other behaviour is unchanged for everyone else.
 
 alter table public.contributions
@@ -239,7 +240,9 @@ begin
 end;
 $$;
 
--- As before (20261118240000), linking only what was drafted for the step.
+-- As before (20261118240000), linking only what was drafted for the step, found by the contribution's own for_trajectory / for_step / type (the
+-- step's cid is only the "taken" marker, so a stale save that lost it cannot stop the link). A make step sent for a step that is already linked (a stale
+-- save from an editor opened before the link) keeps the stored learn step: the link is never undone and its linked_at never restamped.
 create or replace function private.link_made_steps()
 returns trigger
 language plpgsql
@@ -250,22 +253,38 @@ declare
   prev jsonb := '[]'::jsonb;
 begin
   if tg_op = 'UPDATE' and jsonb_typeof(old.steps) = 'array' then prev := old.steps; end if;
-  if jsonb_typeof(new.steps) = 'array' and exists (select 1 from jsonb_array_elements(new.steps) s where s ->> 'k' = 'make' and s ? 'cid') then
+  if jsonb_typeof(new.steps) = 'array' and exists (select 1 from jsonb_array_elements(new.steps) s where s ->> 'k' = 'make') then
     new.steps := (
       select coalesce(jsonb_agg(
-        case when l.learning_id is null then s.v
-          else (s.v - 'cid' - 'fmt' - 'title' - 'hours' - 'dom') || jsonb_build_object('k', 'learn', 'lid', l.learning_id, 'linked_at', to_jsonb(coalesce(l.was, now()))) end
+        coalesce(kept.v, case when l.learning_id is null then s.v
+          else (s.v - 'cid' - 'fmt' - 'title' - 'hours' - 'dom') || jsonb_build_object('k', 'learn', 'lid', l.learning_id, 'linked_at', to_jsonb(now())) end)
         order by s.ord), '[]'::jsonb)
       from jsonb_array_elements(new.steps) with ordinality s(v, ord)
       left join lateral (
-        select c.learning_id, (select (o ->> 'linked_at')::timestamptz from jsonb_array_elements(prev) o where o ->> 'id' = s.v ->> 'id' and o ->> 'k' = 'learn' limit 1) as was
-        from public.contributions c
+        select o.v from jsonb_array_elements(prev) o(v)
+        where s.v ->> 'k' = 'make' and o.v ->> 'id' = s.v ->> 'id' and o.v ->> 'k' = 'learn' and o.v ? 'linked_at' limit 1
+      ) kept on true
+      left join lateral (
+        select c.learning_id from public.contributions c
         where s.v ->> 'k' = 'make' and c.status = 'published' and c.learning_id is not null
           and c.for_trajectory = new.id and c.for_step = s.v ->> 'id' and c.type = s.v ->> 'fmt'
-          and c.id = case when s.v ->> 'cid' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then (s.v ->> 'cid')::uuid end
+        order by c.published_at limit 1
       ) l on true
     );
   end if;
   return new;
+end;
+$$;
+
+-- Touches the trajectory the contribution was drafted for, so the trigger above runs (by for_trajectory, not by a cid that a stale save may have lost).
+create or replace function private.relink_trajectories()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.trajectories set steps = steps where id = new.for_trajectory;
+  return null;
 end;
 $$;

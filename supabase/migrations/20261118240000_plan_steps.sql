@@ -14,6 +14,18 @@
 --                             isRequired). The database stores the moment; no SQL rule reads req (the credential comes with the accepted exam).
 -- submit_trajectory_step and decide_trajectory already refuse any step kind but evidence, check and exam, so a make step cannot be submitted.
 
+-- private.is_uuid: the one lower-case uuid text test of the Trajectory AI migrations (a cid, a step's link). Called by the check constraint as the writer.
+create function private.is_uuid(p text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(p ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', false);
+$$;
+revoke execute on function private.is_uuid(text) from public, anon;
+grant execute on function private.is_uuid(text) to authenticated;
+
 create or replace function private.trajectory_steps_ok(steps jsonb)
 returns boolean
 language sql
@@ -30,7 +42,7 @@ as $$
           jsonb_typeof(s -> 'title') = 'string' and char_length(s ->> 'title') between 1 and 120
           and jsonb_typeof(s -> 'fmt') = 'string'
           and (not (s ? 'cid') or (jsonb_typeof(s -> 'cid') = 'string'
-            and (s ->> 'cid') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')))),
+            and private.is_uuid(s ->> 'cid'))))),
         false)
     )
     and (select count(distinct s ->> 'id') = count(*) from jsonb_array_elements(steps) s)
@@ -58,7 +70,7 @@ begin
         select c.learning_id, (select (o ->> 'linked_at')::timestamptz from jsonb_array_elements(prev) o where o ->> 'id' = s.v ->> 'id' and o ->> 'k' = 'learn' limit 1) as was
         from public.contributions c
         where s.v ->> 'k' = 'make' and c.status = 'published' and c.learning_id is not null
-          and c.id = case when s.v ->> 'cid' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then (s.v ->> 'cid')::uuid end
+          and c.id = case when private.is_uuid(s.v ->> 'cid') then (s.v ->> 'cid')::uuid end
       ) l on true
     );
   end if;
