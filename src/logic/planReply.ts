@@ -7,7 +7,7 @@ import { jsonObject } from './json';
 import type { Numbering } from './planPrompt';
 import { isCount, isObject, isText, isTexts } from './values';
 import { CHECK_POINTS, DEPTHS, emptyPlan, MANUAL_FORMATS, PLAN_CAPS, planProblems, refKey } from './trajectoryPlan';
-import type { CheckPoint, CitedSource, Depth, Dropped, FinalExam, PlanBrief, PlanMaterial, PlanModule, TrajectoryPlan } from './trajectoryPlan';
+import type { CheckPoint, CitedSource, Depth, Dropped, FinalExam, ModuleSuggestion, PlanBrief, PlanMaterial, PlanModule, TrajectoryPlan } from './trajectoryPlan';
 
 export type PlanReply = { reply: string; questions: string[]; brief: PlanBrief | null; modules: PlanModule[] | null; finalExam?: FinalExam | null; dropped: Dropped };
 type Context = { numbering: Numbering; formats: string[]; known: Set<string>; used: Set<string>; newId: () => string; dropped: Dropped };
@@ -100,12 +100,38 @@ export function readPlanReply(raw: string, a: { numbering: Numbering; formats: s
 
 // A stable text of a value whatever the order of its keys (a plan read back from the database has its keys in another order).
 const canon = (v: unknown): string => (Array.isArray(v) ? '[' + v.map(canon).join(',') + ']' : isObject(v) ? '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}' : JSON.stringify(v));
-const content = ({ accepted: _accepted, ...rest }: PlanModule) => canon(rest);
+// The order of the citations is not content.
+const content = ({ id: _id, accepted: _accepted, suggestion: _suggestion, ...rest }: PlanModule) => canon({ ...rest, sources: rest.sources.map((c) => refKey(c.ref)).sort() });
+const suggestionOf = ({ id: _id, accepted: _accepted, suggestion: _suggestion, ...rest }: PlanModule): ModuleSuggestion => rest;
 
-// The reply laid onto the plan as it is now (the admin may have edited it while the AI worked): a module whose content is unchanged keeps
-// its accepted flag; a reply with no modules changes none; the removed titles stay; the brief and the final exam change only when the reply says.
-export function mergeReply(latest: TrajectoryPlan, r: PlanReply): TrajectoryPlan {
-  const before = new Map(latest.modules.map((m) => [m.id, m]));
-  const modules = r.modules ? r.modules.map((m) => { const was = before.get(m.id); return was && content(was) === content(m) ? { ...m, accepted: was.accepted } : m; }) : latest.modules;
-  return { ...latest, brief: r.brief ?? latest.brief, modules, finalExam: r.finalExam === undefined ? latest.finalExam : r.finalExam };
+// The references numbered in a request (passages and learnings): what the AI was shown, so what it could cite.
+export const seenKeys = (n: Numbering): Set<string> => new Set([...Object.values(n.passages).map((c) => refKey(c.ref)), ...n.learnings.map((id) => 'learning:' + id)]);
+
+// The reply's version of a module with the citations the AI was not shown put back from the stored one (it could not have kept them).
+function withUnseen(m: PlanModule, cur: PlanModule, seen: Set<string>): PlanModule {
+  const have = new Set(m.sources.map((c) => refKey(c.ref)));
+  return { ...m, sources: [...m.sources, ...cur.sources.filter((c) => !seen.has(refKey(c.ref)) && !have.has(refKey(c.ref)))] };
+}
+
+export type MergeContext = { snapshot: TrajectoryPlan; seen: Set<string> };
+// The reply laid onto the plan as it is now, knowing the plan as it was when the request was made (snapshot) and what the AI saw (seen).
+// The AI never deletes or overwrites an accepted module or an admin's edit made meanwhile, and never brings back a module the admin removed (or its
+// title): it adds modules and revises the ones not accepted; for an accepted module it leaves a suggestion the admin may apply. A reply with no
+// modules changes none; the removed titles stay; the brief and the final exam change only when the reply says.
+export function mergeReply(latest: TrajectoryPlan, r: PlanReply, ctx: MergeContext): { plan: TrajectoryPlan; kept: number; suggested: number } {
+  const now = new Map(latest.modules.map((m) => [m.id, m])), was = new Map(ctx.snapshot.modules.map((m) => [m.id, m])), gone = new Set(latest.removed);
+  const edited = (cur: PlanModule) => { const old = was.get(cur.id); return !!old && content(old) !== content(cur); };
+  let kept = 0, suggested = 0;
+  const out: PlanModule[] = [], handled = new Set<string>();
+  for (const m of r.modules ?? []) {
+    const cur = now.get(m.id);
+    if (!cur) { if (!was.has(m.id) && !gone.has(m.title)) out.push(m); continue; }
+    handled.add(cur.id);
+    const proposed = withUnseen(m, cur, ctx.seen);
+    if (!cur.accepted && !edited(cur)) out.push({ ...proposed, accepted: false });
+    else if (cur.accepted && content(proposed) !== content(cur)) { out.push({ ...cur, suggestion: suggestionOf(proposed) }); suggested++; }
+    else out.push(cur);
+  }
+  if (r.modules) latest.modules.forEach((cur, i) => { if (!handled.has(cur.id) && (cur.accepted || edited(cur))) { out.splice(Math.min(i, out.length), 0, cur); if (cur.accepted) kept++; } });
+  return { plan: { ...latest, brief: r.brief ?? latest.brief, modules: r.modules ? out : latest.modules, finalExam: r.finalExam === undefined ? latest.finalExam : r.finalExam }, kept, suggested };
 }

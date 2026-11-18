@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { setCatalogue } from '../data';
 import type { Bundle, Learn, LearnMeta } from '../types';
-import { catalogueFor, PLAN_POOL, poolFor } from './planPool';
+import { catalogueFor, liveIndex, PLAN_POOL, poolFor } from './planPool';
 import { emptyPlan, refKey } from './trajectoryPlan';
 import type { PlanModule, PlanSource, SourceRef, TrajectoryPlan } from './trajectoryPlan';
 
@@ -61,27 +61,28 @@ describe('poolFor', () => {
     const passages: [number, string][] = Array.from({ length: 30 }, (_, i) => [i + 1, 'VAT matching passage ' + i]);
     expect(poolFor({ plan: emptyPlan(), sources: [source({ passages })], bundles: [], known: [], query: 'VAT matching passage' })).toHaveLength(PLAN_POOL.passages);
   });
-  it('uses the stored quote for a cited passage that is gone, and says the source changed', () => {
+  it('does not send or number a cited passage that no longer resolves (gone file passage, gone chunk), so it cannot be cited again', () => {
     const plan = planWith([{ ref: { kind: 'kb', bundleId: 'b1', chunk: 99 }, quote: 'Old quote about VAT' }, { ref: fileRef(1, 5), quote: 'Old file quote' }]);
     const pool = poolFor({ plan, sources: [source()], bundles: [bundle()], known: [bundle()], query: '' });
-    expect(pool.map((p) => [refKey(p.ref), inner(p.label), inner(p.text)])).toEqual([
-      ['kb:b1#99', 'lbl (source changed)', 'Old quote about VAT'],
-      ['file:s1#p1.5', 'lbl (source changed)', 'Old file quote'],
-    ]);
+    expect(pool).toEqual([]);
   });
-  it('says a cited passage is no longer available, without its quote, when its source is now client or licensed', () => {
+  it('does not send a cited passage whose source is now client or licensed, nor its quote', () => {
     const plan = planWith([{ ref: { kind: 'kb', bundleId: 'b1', chunk: 1 }, quote: 'secret quote' }]);
     const pool = poolFor({ plan, sources: [], bundles: [bundle()], known: [bundle()], query: '' });
-    expect(pool.map((p) => inner(p.label))).toEqual(['lbl (source no longer available)']);
-    expect(pool.map((p) => p.text).join('')).not.toContain('secret quote');
+    expect(pool).toEqual([]);
   });
   it('checks a cited chunk of a bundle that is not picked against all known bundles', () => {
     const plan = planWith([{ ref: { kind: 'kb', bundleId: 'b1', chunk: 1 }, quote: 'secret quote' }, { ref: { kind: 'kb', bundleId: 'b1', chunk: 0 }, quote: 'q0' }, { ref: { kind: 'kb', bundleId: 'zz', chunk: 0 }, quote: 'unknown quote' }]);
     const pool = poolFor({ plan, sources: [], bundles: [], known: [bundle()], query: '' });
-    expect(pool.map((p) => [inner(p.label), inner(p.text).slice(0, 12)])).toEqual([
-      ['lbl (source no longer available)', 'The cited te'], ['Guide · VAT basics', 'VAT on expor'], ['lbl (source no longer available)', 'The cited te'],
-    ]);
+    expect(pool.map((p) => [inner(p.label), inner(p.text).slice(0, 12)])).toEqual([['Guide · VAT basics', 'VAT on expor']]);
     expect(pool.map((p) => p.text).join('')).not.toMatch(/secret quote|unknown quote/);
+  });
+  it('liveIndex resolves exactly the passages that can be cited now', () => {
+    const live = liveIndex([bundle()], [source()]);
+    expect(['kb:b1#0', 'kb:b1#3', 'file:s1#p1.0'].every((k) => live.has(k))).toBe(true);
+    expect(live.has('kb:b1#1')).toBe(false);
+    expect(live.has('file:s1#p1.5')).toBe(false);
+    expect(live.has('kb:zz#0')).toBe(false);
   });
   it('has no duplicate reference, and cites at most 16 first', () => {
     const refs = Array.from({ length: 20 }, (_, i) => ({ ref: fileRef(i + 1, i), quote: 'q' + i }));

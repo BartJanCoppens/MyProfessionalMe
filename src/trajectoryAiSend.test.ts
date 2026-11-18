@@ -116,6 +116,18 @@ describe('sendToPlan', () => {
     await sending;
     expect(plan(h)!.plan.modules.map((m) => [m.id, m.accepted])).toEqual([['m1', true]]);
   });
+  it('never deletes an accepted module the reply leaves out, never revives one removed meanwhile, and says what it kept', async () => {
+    const gate = deferred<{ text: string; cut: boolean }>();
+    ask.mockReturnValue(gate.promise);
+    const [a, b, c] = [mod('m1', { accepted: true }), mod('m2'), mod('m3')];
+    const h = setup({}, { T1: { record: record({ plan: { ...emptyPlan(), modules: [a, b, c] } }), sources: [] } });
+    const sending = sendToPlan(h.L(), 'T1', 'hi', 'talk', null);
+    h.L().setState((s) => ({ trjPlans: { ...s.trjPlans, T1: { ...s.trjPlans.T1, record: { ...s.trjPlans.T1.record!, plan: { ...s.trjPlans.T1.record!.plan, modules: [a, c], removed: ['Module m2'] } } } } }));
+    gate.resolve(reply({ modules: [{ id: 'm3', title: 'Revised', depth: 'foundation', goals: ['g'], hours: 2, material: [], sources: [], checks: [] }, { id: 'm2', title: 'Module m2', depth: 'foundation', goals: ['g'], hours: 2, material: [], sources: [], checks: [] }] }));
+    await sending;
+    expect(plan(h)!.plan.modules.map((m) => [m.id, m.title])).toEqual([['m1', 'Module m1'], ['m3', 'Revised']]);
+    expect(plan(h)!.messages[1].merged).toEqual({ kept: 1, suggested: 0 });
+  });
   it('sends the module asked about, and the full-plan request in propose mode, and notes the focus on the message', async () => {
     ask.mockResolvedValue(reply({ modules: null }));
     const h = setup();

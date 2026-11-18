@@ -7,7 +7,7 @@ import { completeOrThrow } from './lib/ai';
 import { usableBundles } from './createGrounding';
 import { catalogueFor, poolFor } from './logic/planPool';
 import { PLAN_ASK, planRequest, requestChars } from './logic/planPrompt';
-import { mergeReply, readPlanReply } from './logic/planReply';
+import { mergeReply, readPlanReply, seenKeys } from './logic/planReply';
 import type { PlanReply } from './logic/planReply';
 import { PLAN_CAPS, PLAN_FORMATS } from './logic/trajectoryPlan';
 import type { PlanMessage, PlanRecord } from './logic/trajectoryPlan';
@@ -32,9 +32,9 @@ function requestFor(L: Logic, t: Trajectory, record: PlanRecord, text: string, f
 }
 
 // The AI's message: its words, then its questions.
-const aiMessage = (r: PlanReply, focus: string | null): PlanMessage => ({
+const aiMessage = (r: PlanReply, focus: string | null, merged: { kept: number; suggested: number }): PlanMessage => ({
   role: 'ai', at: new Date().toISOString(), text: r.reply + (r.questions.length ? '\n\n' + r.questions.map((q, i) => `${i + 1}. ${q}`).join('\n') : ''),
-  ...(focus ? { focus } : {}), ...(r.dropped.sources + r.dropped.learnings + r.dropped.formats ? { dropped: r.dropped } : {}),
+  ...(focus ? { focus } : {}), ...(r.dropped.sources + r.dropped.learnings + r.dropped.formats ? { dropped: r.dropped } : {}), ...(merged.kept + merged.suggested ? { merged: { kept: merged.kept, suggested: merged.suggested } } : {}),
 });
 const append = (r: PlanRecord, m: PlanMessage): PlanRecord => ({ ...r, messages: [...r.messages, m].slice(-PLAN_CAPS.messages) });
 
@@ -50,12 +50,18 @@ export async function sendToPlan(L: Logic, trajectoryId: string, say: string, mo
   const built = requestFor(L, t, record, text, focus, mode), { numbering } = built, request = { ...built.request, trajectoryId };
   if (requestChars(request) > PLAN_ASK.budgetChars) return failed(L, 'The request is too large to send · remove a source or a bundle');
   L.setState((st) => ({ trjAi: { busy: 'send', error: null }, trjPanel: { ...st.trjPanel, say: '', focus: null } }));
-  editRecord(L, trajectoryId, (r) => append(r, { role: 'admin', text, at: new Date().toISOString(), ...(focus ? { focus } : {}) }));
+  const said: PlanMessage = { role: 'admin', text, at: new Date().toISOString(), ...(focus ? { focus } : {}) };
+  editRecord(L, trajectoryId, (r) => append(r, said));
   let reply: PlanReply | null = null, failure: string | null = null;
   try {
     const out = await completeOrThrow(TRAJECTORY_AI, request, L.aiOpts(), OFF_TEXT);
     reply = out.cut ? null : readPlanReply(out.text, { numbering, formats: PLAN_FORMATS, prev: record.plan.modules, newId });
   } catch (err) { failure = (err as Error).message; }
-  if (reply) { const r = reply; editRecord(L, trajectoryId, (cur) => append({ ...cur, plan: mergeReply(cur.plan, r) }, aiMessage(r, focus))); }
+  if (reply) {
+    // Merged against the plan as it was when asked (record.plan) and as it is now; the message is made once, so what is saved is what is shown.
+    const r = reply, ctx = { snapshot: record.plan, seen: seenKeys(numbering) };
+    const message = aiMessage(r, focus, mergeReply(L.latest().state.trjPlans[trajectoryId]?.record?.plan ?? record.plan, r, ctx));
+    editRecord(L, trajectoryId, (cur) => append({ ...cur, plan: mergeReply(cur.plan, r, ctx).plan }, message));
+  }
   failed(L, reply ? null : failure ?? UNUSABLE);
 }

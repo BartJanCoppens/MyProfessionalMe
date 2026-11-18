@@ -1,10 +1,10 @@
 // Reading the Trajectory AI's answer: strict (a wrong type or a cap gives null), citations and formats checked against what was
 // sent (dropped and counted, never repaired), and merging a reply into the latest plan without losing what the admin accepted.
 import { describe, expect, it } from 'vitest';
-import { mergeReply, readPlanReply } from './planReply';
+import { mergeReply, readPlanReply, seenKeys } from './planReply';
 import type { PlanReply } from './planReply';
 import type { Numbering } from './planPrompt';
-import { emptyPlan, MANUAL_FORMATS, PLAN_CAPS, PLAN_FORMATS } from './trajectoryPlan';
+import { emptyPlan, MANUAL_FORMATS, PLAN_CAPS, PLAN_FORMATS, refKey } from './trajectoryPlan';
 import type { PlanModule } from './trajectoryPlan';
 
 const numbering: Numbering = {
@@ -83,29 +83,83 @@ describe('readPlanReply', () => {
 
 describe('mergeReply', () => {
   const reply = (over: Partial<PlanReply> = {}): PlanReply => ({ reply: 'r', questions: [], brief: null, modules: null, dropped: { sources: 0, learnings: 0, formats: 0 }, ...over });
-  const plan = (modules: PlanModule[]) => ({ ...emptyPlan(), modules, removed: ['Gone'] });
-  it('keeps accepted on an unchanged module and clears it on a changed one', () => {
+  const plan = (modules: PlanModule[], removed: string[] = ['Gone']) => ({ ...emptyPlan(), modules, removed });
+  const cite = (page: number) => ({ ref: { kind: 'file' as const, sourceId: 's1', page, passage: 0 }, label: 'p. ' + page, quote: 'q' });
+  const seenAll = new Set<string>();
+  const merge = (latest: ReturnType<typeof plan>, r: PlanReply, snapshot = latest, seen = seenAll) => mergeReply(latest, r, { snapshot, seen });
+  const fresh = (m: PlanModule, over: Partial<PlanModule> = {}): PlanModule => ({ ...m, accepted: false, ...over });
+  it('replaces a module that is not accepted and was not edited, never accepted', () => {
+    const m1 = prev('m1', { accepted: false });
+    expect(merge(plan([m1]), reply({ modules: [fresh(m1, { title: 'Better' })] })).plan.modules.map((m) => [m.title, m.accepted])).toEqual([['Better', false]]);
+  });
+  it('keeps an accepted module as it is and offers a changed version as a suggestion', () => {
     const m1 = prev('m1'), m2 = prev('m2');
-    const r = reply({ modules: [{ ...m1, accepted: false }, { ...m2, title: 'Changed', accepted: false }] });
-    expect(mergeReply(plan([m1, m2]), r).modules.map((m) => [m.id, m.accepted])).toEqual([['m1', true], ['m2', false]]);
+    const r = merge(plan([m1, m2]), reply({ modules: [fresh(m1), fresh(m2, { title: 'Changed' })] }));
+    expect(r.plan.modules.map((m) => [m.id, m.title, m.accepted])).toEqual([['m1', 'Old m1', true], ['m2', 'Old m2', true]]);
+    expect(r.plan.modules[0].suggestion).toBeUndefined();
+    expect(r.plan.modules[1].suggestion).toMatchObject({ title: 'Changed' });
+    expect(r.suggested).toBe(1);
   });
   it('compares content whatever the order of the keys (as a stored plan comes back)', () => {
     const stored = JSON.parse(JSON.stringify(prev('m1', { material: [{ kind: 'existing', learningId: 'L1', reason: 'x' }] }), ['reason', 'learningId', 'kind', 'accepted', 'checks', 'sources', 'material', 'hours', 'goals', 'depth', 'title', 'id']));
-    const r = reply({ modules: [{ ...prev('m1', { material: [{ kind: 'existing', learningId: 'L1', reason: 'x' }] }), accepted: false }] });
-    expect(mergeReply(plan([stored]), r).modules[0].accepted).toBe(true);
+    const same = fresh(prev('m1', { material: [{ kind: 'existing', learningId: 'L1', reason: 'x' }] }));
+    expect(merge(plan([stored]), reply({ modules: [same] })).plan.modules[0].suggestion).toBeUndefined();
+  });
+  it('never deletes an accepted module the reply leaves out, and says how many it kept', () => {
+    const m1 = prev('m1'), m2 = prev('m2', { accepted: false }), m3 = prev('m3');
+    const r = merge(plan([m1, m2, m3]), reply({ modules: [fresh(m2, { title: 'Only this' })] }));
+    expect(r.plan.modules.map((m) => m.id)).toEqual(['m1', 'm2', 'm3']);
+    expect(r.kept).toBe(2);
+  });
+  it('lets the AI drop a module that was neither accepted nor edited', () => {
+    const m1 = prev('m1', { accepted: false }), m2 = prev('m2', { accepted: false });
+    expect(merge(plan([m1, m2]), reply({ modules: [fresh(m1)] })).plan.modules.map((m) => m.id)).toEqual(['m1']);
+  });
+  it('keeps the admin\'s edit made while the AI worked, and never overwrites it', () => {
+    const snapshot = plan([prev('m1', { accepted: false })]), latest = plan([prev('m1', { accepted: false, title: 'Admin title' })]);
+    const r = merge(latest, reply({ modules: [fresh(prev('m1'), { title: 'AI title' })] }), snapshot);
+    expect(r.plan.modules.map((m) => m.title)).toEqual(['Admin title']);
+  });
+  it('does not bring back a module the admin removed while it worked, nor one whose title was removed', () => {
+    const snapshot = plan([prev('m1', { accepted: false }), prev('m2', { accepted: false })]), latest = plan([prev('m1', { accepted: false })], ['Old m2']);
+    const r = merge(latest, reply({ modules: [fresh(prev('m1')), fresh(prev('m2')), fresh(prev('zz'), { title: 'Old m2' }), fresh(prev('new1'), { title: 'Fresh idea' })] }), snapshot);
+    expect(r.plan.modules.map((m) => m.title)).toEqual(['Old m1', 'Fresh idea']);
+  });
+  it('keeps the citations the AI was not shown, whether or not they were numbered, and never drops accepted for it', () => {
+    const unseen = cite(20), seenOne = cite(1), seen = new Set([refKey(seenOne.ref)]);
+    const accepted = prev('m1', { sources: [unseen, seenOne] }), open = prev('m2', { accepted: false, sources: [unseen, seenOne] });
+    const r = merge(plan([accepted, open]), reply({ modules: [fresh(accepted, { sources: [seenOne] }), fresh(open, { sources: [], title: 'Revised' })] }), undefined, seen);
+    expect(r.plan.modules[0].accepted).toBe(true);
+    expect(r.plan.modules[0].suggestion).toBeUndefined();
+    expect(r.plan.modules[1].sources).toEqual([unseen]);
+    expect(r.plan.modules[1].title).toBe('Revised');
   });
   it('leaves the modules as they were when the reply has none, and keeps the removed titles', () => {
     const p = plan([prev('m1')]);
-    const merged = mergeReply(p, reply({ reply: 'only talk' }));
+    const merged = merge(p, reply({ reply: 'only talk' })).plan;
     expect(merged.modules).toEqual(p.modules);
     expect(merged.removed).toEqual(['Gone']);
   });
   it('replaces the brief only when the reply has one, and the final exam only when it says', () => {
     const brief = { goal: 'g', credential: 'c', issuer: 'i', audience: 'a', stage: null, line: null, level: 'l', hoursBudget: null, deadline: null, bodyRules: '', constraints: '', domain: 'd' };
     const p = { ...plan([]), brief, finalExam: { title: 'E', hours: 2, reason: 'r' } };
-    expect(mergeReply(p, reply()).brief).toBe(brief);
-    expect(mergeReply(p, reply()).finalExam).toEqual(p.finalExam);
-    expect(mergeReply(p, reply({ finalExam: null })).finalExam).toBeNull();
-    expect(mergeReply(p, reply({ brief: { ...brief, goal: 'new' } })).brief!.goal).toBe('new');
+    expect(merge(p, reply()).plan.brief).toBe(brief);
+    expect(merge(p, reply()).plan.finalExam).toEqual(p.finalExam);
+    expect(merge(p, reply({ finalExam: null })).plan.finalExam).toBeNull();
+    expect(merge(p, reply({ brief: { ...brief, goal: 'new' } })).plan.brief!.goal).toBe('new');
+  });
+});
+
+describe('seenKeys', () => {
+  it('lists the references numbered in the request, passages and learnings', () => {
+    expect([...seenKeys(numbering)].sort()).toEqual(['file:s1#p1.0', 'kb:b1#2', 'learning:L1', 'learning:L2']);
+  });
+});
+
+describe('the final exam caps', () => {
+  it('refuses a title over 120 characters or a reason over 240, so the plan JSON cannot be cut', () => {
+    expect(read(body({ finalExam: { title: 'x'.repeat(121), hours: 2, reason: 'r' } }))).toBeNull();
+    expect(read(body({ finalExam: { title: 'Exam', hours: 2, reason: 'r'.repeat(241) } }))).toBeNull();
+    expect(read(body({ finalExam: { title: 'x'.repeat(120), hours: 2, reason: 'r'.repeat(240) } }))).not.toBeNull();
   });
 });

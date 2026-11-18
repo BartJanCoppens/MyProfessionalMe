@@ -34,7 +34,9 @@ export type PlanMaterial =
   | { kind: 'studio'; format: string; reason: string }
   | { kind: 'manual'; format: ManualFormat; reason: string };
 // id: 'm' + random, made by the app, never by the AI. hours: a multiple of 0.25. Order is the array order.
-export type PlanModule = { id: string; title: string; depth: Depth; goals: string[]; hours: number; material: PlanMaterial[]; sources: CitedSource[]; checks: CheckPoint[]; accepted: boolean };
+// suggestion: what the AI would change in an ACCEPTED module (the AI never overwrites one); the admin applies or dismisses it.
+export type PlanModule = { id: string; title: string; depth: Depth; goals: string[]; hours: number; material: PlanMaterial[]; sources: CitedSource[]; checks: CheckPoint[]; accepted: boolean; suggestion?: ModuleSuggestion };
+export type ModuleSuggestion = { title: string; depth: Depth; goals: string[]; hours: number; material: PlanMaterial[]; sources: CitedSource[]; checks: CheckPoint[] };
 // domain: a DOMAINS code, used for the drafts.
 export type PlanBrief = {
   goal: string; credential: string; issuer: string; audience: string; stage: string | null; line: string | null; level: string;
@@ -45,7 +47,8 @@ export type FinalExam = { title: string; hours: number; reason: string };
 export type TrajectoryPlan = { version: 1; brief: PlanBrief | null; modules: PlanModule[]; finalExam: FinalExam | null; removed: string[] };
 // What a reply cited or proposed that was not given or not allowed, removed and counted (never repaired).
 export type Dropped = { sources: number; learnings: number; formats: number };
-export type PlanMessage = { role: 'admin' | 'ai'; text: string; at: string; focus?: string; dropped?: Dropped };
+// merged: what the merge left alone for the admin (accepted modules the reply left out, accepted modules it suggests changing).
+export type PlanMessage = { role: 'admin' | 'ai'; text: string; at: string; focus?: string; dropped?: Dropped; merged?: { kept: number; suggested: number } };
 export type PlanRecord = { trajectoryId: string; plan: TrajectoryPlan; messages: PlanMessage[]; bundleIds: string[]; updatedAt: string | null };
 // An admin's uploaded document, read into numbered passages [page, text] the AI may cite; the original file is path (null: removed).
 export type PlanSource = { id: string; trajectoryId: string; name: string; path: string | null; pages: number; passages: [number, string][]; chars: number; flags: string[]; addedBy: string; addedAt: string };
@@ -90,6 +93,8 @@ export function planProblems(p: TrajectoryPlan): string[] {
     new Set(ids).size < ids.length ? 'Module ids are unique' : null,
     p.removed.length > PLAN_CAPS.removed ? `A plan remembers at most ${PLAN_CAPS.removed} removed titles` : null,
     p.finalExam ? hoursProblem(p.finalExam.hours) : null,
+    p.finalExam && p.finalExam.title.length > PLAN_CAPS.titleChars ? `The final exam title is at most ${PLAN_CAPS.titleChars} characters` : null,
+    p.finalExam && p.finalExam.reason.length > PLAN_CAPS.reasonChars ? `A reason is at most ${PLAN_CAPS.reasonChars} characters` : null,
     ...p.modules.flatMap(moduleProblems),
   ];
   return [...new Set(found.filter((x): x is string => x !== null))];
@@ -112,3 +117,6 @@ export function removeModule(p: TrajectoryPlan, id: string): TrajectoryPlan {
   if (!gone) return p;
   return { ...p, modules: p.modules.filter((m) => m.id !== id), removed: [...p.removed, gone.title].slice(-PLAN_CAPS.removed) };
 }
+// The AI's suggestion for an accepted module, applied (the module stays accepted) or dismissed.
+export const applySuggestion = (p: TrajectoryPlan, id: string) => mapModules(p, id, ({ suggestion, ...m }) => ({ ...m, ...suggestion }));
+export const dismissSuggestion = (p: TrajectoryPlan, id: string) => mapModules(p, id, ({ suggestion: _gone, ...m }) => m);

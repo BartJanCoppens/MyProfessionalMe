@@ -16,7 +16,6 @@ export type CatalogueRow = { id: string; title: string; format: string; hours: n
 
 const clip = (text: string): string => text.slice(0, PLAN_POOL.passageChars);
 const out = (ref: SourceRef, label: string, text: string): PoolPassage => ({ ref, label: marked(label, PLAN_POOL.labelChars), text: marked(text, PLAN_POOL.passageChars) });
-const GONE = 'The cited text is no longer available.';
 
 // Passages a creator may use, as pool passages (unmarked, clipped to what is sent: ranking reads the same text).
 function bundlePassages(b: Bundle): PoolPassage[] {
@@ -28,23 +27,22 @@ function bundlePassages(b: Bundle): PoolPassage[] {
 // Each uploaded passage has its own reference: its page and its index among the source's passages.
 const filePassages = (s: PlanSource): PoolPassage[] => s.passages.map(([page, text], passage) => ({ ref: { kind: 'file', sourceId: s.id, page, passage }, label: `${s.name} · p. ${page}`, text: clip(text) }));
 
-// A cited passage now: found by its reference, else its stored quote marked as changed. A bundle chunk that exists but is not usable
-// (client or licensed), or whose bundle is unknown, is "no longer available" and its quote is never sent. A learning has no passage
-// text: the quote stands.
-function resolveCited(c: { ref: SourceRef; label: string; quote: string }, live: Map<string, PoolPassage>, known: Bundle[]): PoolPassage {
+// Every passage that can be cited now, by reference: the usable chunks of all known bundles (never a client or licensed source) and the passages of the
+// plan's documents. The one lookup the pool and the cards share: a citation that is not in it no longer resolves.
+export const liveIndex = (known: Bundle[], sources: PlanSource[]): Map<string, PoolPassage> => new Map([...known.flatMap(bundlePassages), ...sources.flatMap(filePassages)].map((p) => [refKey(p.ref), p]));
+
+// A cited passage as it is now, by its reference. One that no longer resolves (its file was removed, its chunk is gone or now restricted, its
+// bundle unknown) is not sent and not numbered, so the AI cannot cite it again; the plan keeps the citation and the screen says it is gone.
+// A learning has no passage text: its stored quote stands.
+function resolveCited(c: { ref: SourceRef; label: string; quote: string }, live: Map<string, PoolPassage>): PoolPassage | null {
   const found = live.get(refKey(c.ref));
   if (found) return out(found.ref, found.label, found.text);
-  if (c.ref.kind === 'learning') return out(c.ref, c.label, clip(c.quote));
-  if (c.ref.kind === 'kb') {
-    const { bundleId, chunk } = c.ref, bundle = known.find((b) => b.id === bundleId);
-    if (!bundle || bundle.chunks[chunk]) return out(c.ref, c.label + ' (source no longer available)', GONE);
-  }
-  return out(c.ref, c.label + ' (source changed)', clip(c.quote));
+  return c.ref.kind === 'learning' ? out(c.ref, c.label, clip(c.quote)) : null;
 }
 
 export function poolFor(a: { plan: TrajectoryPlan; sources: PlanSource[]; bundles: Bundle[]; known: Bundle[]; query: string }): PoolPassage[] {
   const known = a.known, pool = new Map<string, PoolPassage>();
-  const live = new Map([...known.flatMap(bundlePassages), ...a.sources.flatMap(filePassages)].map((p) => [refKey(p.ref), p]));
+  const live = liveIndex(known, a.sources);
   let used = 0;
   // false once the pool is full (count or budget): ranked order decides what made it in.
   const add = (p: PoolPassage): boolean => {
@@ -55,7 +53,9 @@ export function poolFor(a: { plan: TrajectoryPlan; sources: PlanSource[]; bundle
     return true;
   };
   for (const c of a.plan.modules.flatMap((m) => m.sources)) {
-    if (pool.size >= PLAN_POOL.citedFirst || !add(resolveCited(c, live, known))) break;
+    const cited = resolveCited(c, live);
+    if (!cited) continue;
+    if (pool.size >= PLAN_POOL.citedFirst || !add(cited)) break;
   }
   for (const p of rankPassages([...a.sources.flatMap(filePassages), ...a.bundles.flatMap(bundlePassages)], a.query)) {
     if (!add(out(p.ref, p.label, p.text))) break;
