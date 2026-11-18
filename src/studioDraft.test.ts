@@ -194,4 +194,30 @@ describe('the one pipeline, on a studio that is not Flash', () => {
     await h.st().aiDraft!.run();
     expect(h.lastToast()).toBe('Pick at least one knowledge bundle');
   });
+  const brief = { trajectoryId: 'T1', stepId: 'm1', goals: ['Apply the VAT rate rules', 'Spot the exemptions'], depth: 'applied' as const, passages: ['Exports are zero rated.', 'Books are taxed at 6 percent.'], sources: ['Guide'] };
+  it('with the brief\'s passages and no bundle it asks the AI, with the goals and depth, the brief\'s passages first', async () => {
+    const complete = vi.fn(async (_: unknown) => JSON.stringify({ items: [['Stage 1', 'a'], ['Stage 2', 'b'], ['Stage 3', 'c']] }));
+    stubWindow({ claude: { complete } });
+    const h = at('motion', { live: true });
+    h.state.nwKb = []; h.state.nw = { ...h.state.nw, brief };
+    await h.st().aiDraft!.run();
+    expect(h.lastToast()).not.toBe('Pick at least one knowledge bundle');
+    expect(complete).toHaveBeenCalledTimes(1);
+    const text = JSON.stringify(complete.mock.calls[0][0]);
+    expect(text).toContain('Learning goals');
+    expect(text).toContain('Depth: applied');
+    expect(text).toContain('<<<Exports are zero rated.>>>');
+    expect(h.state.nw.items).toMatchObject({ how: 'ai' });
+  });
+  it('with neither bundles nor a brief\'s passages the refusal stands', async () => {
+    const h = at('aid');
+    h.state.nwKb = []; h.state.nw = { ...h.state.nw, brief: { ...brief, passages: [] } };
+    await h.st().aiDraft!.run();
+    expect(h.lastToast()).toBe('Pick at least one knowledge bundle');
+  });
+  it('a request without a brief is unchanged', () => {
+    const text = studioRequest(def('aid'), nw('Job aid'), PASSAGES).messages[0].content as string;
+    expect(text).not.toContain('Learning goals');
+    expect(text).toMatch(/Title: <<<Invoice basics>>>\nTakeaway: <<<Spot the flaw\.>>>\nUse ONLY these passages/);
+  });
 });

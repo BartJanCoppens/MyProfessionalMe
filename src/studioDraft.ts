@@ -42,8 +42,10 @@ export const passagesOf = (bundles: Bundle[], query: string, max = 8): string[] 
 
 export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setNw: SetNw, query: string, spec: (passages: string[]) => DraftSpec) {
   if (L.state.nwAiBusy || L.readOnly()) return;
-  if (!bundles.length) { L.say('Pick at least one knowledge bundle'); return; }
-  const passages = passagesOf(bundles, query);
+  const cited = nw.brief?.passages ?? [];
+  if (!bundles.length && !cited.length) { L.say('Pick at least one knowledge bundle'); return; }
+  // A placeholder's draft starts from the passages its module cites, then the picked bundles' best matches.
+  const passages = [...cited, ...passagesOf(bundles, query)].slice(0, 8);
   if (!passages.length) { L.say('These bundles have no passages a creator may use'); return; }
   const s = spec(passages), live = canComplete(s.use, L.aiOpts());
   if (!live && !s.scripted) { L.say(s.noScript); return; }

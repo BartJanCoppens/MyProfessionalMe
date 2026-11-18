@@ -2,9 +2,9 @@
 // the creation grant a placeholder gives its trajectory's editors (mirrors private.plan_draft_matches).
 import { describe, expect, it } from 'vitest';
 import type { Bundle } from '../types';
-import { briefBundleIds, briefDraft, briefLines, placeholderRules, studioFor } from './planDraft';
+import { briefDraft, briefLines, placeholderRules, studioFor } from './planDraft';
 import { mayCreate } from './contribution';
-import { emptyPlan, refKey } from './trajectoryPlan';
+import { emptyPlan } from './trajectoryPlan';
 import type { PlanModule, PlanSource, SourceRef } from './trajectoryPlan';
 import type { Trajectory, TrjStep } from './trajectory';
 import { blankTrajectory } from './trajectoryEdit';
@@ -62,18 +62,6 @@ describe('briefDraft', () => {
   });
   it('has the goals as the takeaway only when there is one', () => {
     expect(briefDraft(args({ module: mod({ goals: [] }) })).take).toBe('');
-  });
-});
-
-describe('briefBundleIds', () => {
-  it('picks the cited bundles a creator may use: never one that is for admins only, nor another line\'s Tax & Legal bundle', () => {
-    const b1 = bundle(), b2 = bundle({ id: 'b2', access: 'admins' }), b3 = bundle({ id: 'b3', access: 'tl' });
-    const m = mod({ sources: [kb(0, 'b1'), kb(0, 'b2'), kb(0, 'b3'), kb(0, 'b1')] });
-    expect(briefBundleIds(m, [b1, b2, b3], 'Consulting')).toEqual(['b1']);
-    expect(briefBundleIds(m, [b1, b2, b3], 'Tax & Legal')).toEqual(['b1', 'b3']);
-  });
-  it('is the bundle, not the sensitivity of a passage, that a cited client chunk belongs to (its text is not sent)', () => {
-    expect(refKey(kb(1).ref)).toBe('kb:b1#1');
   });
 });
 

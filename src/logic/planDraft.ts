@@ -3,7 +3,6 @@
 // private.plan_draft_matches, which private.may_create reads; planDraft.sync.test.ts compares them).
 import type { Bundle, DraftBrief, NewDraft } from '../types';
 import { STUDIOS } from '../studioData';
-import { usableBundles } from '../createGrounding';
 import { noItems, marked } from './items';
 import type { RuleParts } from './contribution';
 import { citedPassage, liveIndex } from './planPool';
@@ -27,12 +26,6 @@ export function briefDraft({ t, step, module, plan, line, bundles, sources, key 
   return { line: t.business_line ?? line, aud: '', type: format, title: module.title.slice(0, 120), dom: step.dom ?? PLACEHOLDER_DOMAIN, lvl: String(DEPTH_LEVEL[module.depth]),
     stage: plan.brief?.stage || 'Consultant', take: (module.goals[0] ?? '').slice(0, 400), outline: module.goals.slice(), sources: brief.sources, ai: false, aiNote: '', items: noItems(),
     shape: {}, produce: {}, cast: {}, key, brief };
-}
-
-// The cited knowledge bundles a creator of this line may use (the studio's picked bundles).
-export function briefBundleIds(module: PlanModule, bundles: Bundle[], line: string | null): string[] {
-  const cited = new Set(module.sources.flatMap((c) => (c.ref.kind === 'kb' ? [c.ref.bundleId] : [])));
-  return usableBundles(bundles, line).filter((b) => cited.has(b.id)).map((b) => b.id);
 }
 
 // What the AI is told beside the title and takeaway: the goals (each between data markers) and the depth. Nothing without a brief or goals.
