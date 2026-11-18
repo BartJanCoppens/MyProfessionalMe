@@ -196,7 +196,7 @@ describe('the one pipeline, on a studio that is not Flash', () => {
   });
   const brief = { trajectoryId: 'T1', stepId: 'm1', goals: ['Apply the VAT rate rules', 'Spot the exemptions'], depth: 'applied' as const, passages: ['Exports are zero rated.', 'Books are taxed at 6 percent.'], sources: ['Guide'] };
   it('with the brief\'s passages and no bundle it asks the AI, with the goals and depth, the brief\'s passages first', async () => {
-    const complete = vi.fn(async (_: unknown) => JSON.stringify({ items: [['Stage 1', 'a'], ['Stage 2', 'b'], ['Stage 3', 'c']] }));
+    const complete = vi.fn<(req: unknown) => Promise<string>>(async () => JSON.stringify({ items: [['Stage 1', 'a'], ['Stage 2', 'b'], ['Stage 3', 'c']] }));
     stubWindow({ claude: { complete } });
     const h = at('motion', { live: true });
     h.state.nwKb = []; h.state.nw = { ...h.state.nw, brief };
