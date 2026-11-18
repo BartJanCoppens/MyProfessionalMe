@@ -3360,9 +3360,11 @@ with i as (insert into public.contributions (business_line, type, title, domain,
  ('Consulting','Avatar','T av novoice','prof','x','avatar', pg_temp.av_shape('Voice')),
  ('Consulting','Avatar','T av echo','prof','x','avatar', pg_temp.av_shape()),
  ('Consulting','Avatar','T av echoquiz','prof','x','avatar', pg_temp.av_shape()),
- ('Consulting','Avatar','T av echoshape','prof','x','avatar', pg_temp.av_shape(null, '{"Who does the learner talk to?":"Someone whose works-council members oppose"}')),
+ ('Consulting','Avatar','T av echoshape','prof','x','avatar', pg_temp.av_shape(null, '{"Who does the learner talk to?":"Someone whose works-council members already oppose"}')),
+ ('Consulting','Avatar','T av edge23','prof','x','avatar', pg_temp.av_shape()),
+ ('Consulting','Avatar','T av edge24','prof','x','avatar', pg_temp.av_shape()),
  ('Consulting','Avatar','T av many','prof','x','avatar', pg_temp.av_shape()) returning 1)
-  insert into results (check_name, expected, actual) select 'AV an Avatar is made in its studio', '20 rows', count(*)||' rows' from i;
+  insert into results (check_name, expected, actual) select 'AV an Avatar is made in its studio', '22 rows', count(*)||' rows' from i;
 select pg_temp.av_set('T av ok');
 select pg_temp.av_set('T av nochar', pg_temp.av_rows(array['Hides unless probed']));
 select pg_temp.av_set('T av nopoints', pg_temp.av_rows(array['Learning point · 30 %', 'Learning point · 40 %']));
@@ -3376,6 +3378,8 @@ select pg_temp.av_set('T av nolook'); select pg_temp.av_set('T av lookoff'); sel
 select pg_temp.av_set('T av echo', pg_temp.av_rows(array[]::text[], 'Situation', '["Situation","Two Works-Council Members already oppose it, and she has ten minutes."]'));
 select pg_temp.av_set('T av echoquiz', pg_temp.av_rows(array[]::text[], 'Quiz 1', '["Quiz 1","q?","Ask about it · Say the vendor contract ends in 14 months"]'));
 select pg_temp.av_set('T av echoshape');
+select pg_temp.av_set('T av edge23', pg_temp.av_rows(array[]::text[], 'Situation', '["Situation","She fears TWO WORKS-COUNCIL MEMBE."]'));
+select pg_temp.av_set('T av edge24', pg_temp.av_rows(array[]::text[], 'Situation', '["Situation","She fears TWO WORKS-COUNCIL MEMBER."]'));
 insert into results (check_name, expected, actual) select 'AV the design example with three quiz rows, an active look and a voice passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T av ok'))::text;
 insert into results (check_name, expected, actual) select 'AV without a voice it still passes (the voice is optional)', '{}', public.check_contribution((select id from public.contributions where title = 'T av novoice'))::text;
 insert into results (check_name, expected, actual) select 'AV a missing character row is refused', 'Add the character: Persona, Situation, Opening line, Reveals if asked and Hides unless probed', pg_temp.av_problems('T av nochar');
@@ -3394,6 +3398,8 @@ insert into results (check_name, expected, actual) select 'AV a look switched of
 insert into results (check_name, expected, actual) select 'AV a voice switched off is refused', 'That voice is not on the stock list', pg_temp.av_problems('T av voiceoff');
 insert into results (check_name, expected, actual) select 'AV a situation that repeats what the character hides is refused, upper case too', 'The scenario''s public text repeats what the character keeps back', pg_temp.av_problems('T av echo');
 insert into results (check_name, expected, actual) select 'AV a quiz option that repeats what the character reveals is refused', 'The scenario''s public text repeats what the character keeps back', pg_temp.av_problems('T av echoquiz');
+insert into results (check_name, expected, actual) select 'AV 23 shared characters pass, in any case (the window edge)', '{}', public.check_contribution((select id from public.contributions where title = 'T av edge23'))::text;
+insert into results (check_name, expected, actual) select 'AV 24 shared characters fail, in any case', 'The scenario''s public text repeats what the character keeps back', pg_temp.av_problems('T av edge24');
 insert into results (check_name, expected, actual) select 'AV who the learner talks to is read for it too', 'The scenario''s public text repeats what the character keeps back', pg_temp.av_problems('T av echoshape');
 do $$ declare r record; begin
   -- items that break the row rules fail the check even when no specific line explains it

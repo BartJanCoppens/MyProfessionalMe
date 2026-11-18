@@ -3,7 +3,7 @@
 // ("Quiz 1" to "Quiz 3": the question, then 2 to 4 options in text 2, the right one first). The quiz completes the learning (never a run).
 // What the rows publish as is private.avatar_content, which avatarContent repeats for the preview; the checks are private.avatar_row_problems'
 // and the Avatar part of private.contribution_problems', the texts the same. What the character reveals or hides never leaves the rows: it is
-// not in the content, and no public text may repeat it (a window of ECHO_MIN characters, as the Game's echo check, here from any part of it).
+// not in the content, and no public text may repeat it (textEchoes: a window of ECHO_WINDOW characters of it, where the Game's check takes the whole text).
 import { CHARACTER_LABELS, DIFFICULTIES, LANGUAGES, POINT_LABEL, RUN_MINUTES, SCORINGS, characterOf, parseLearningPoints } from '../../supabase/functions/_shared/avatarRules.ts';
 import type { StockVoice } from './ai';
 import { optionsOf, checkOk } from './checkRow';
@@ -11,6 +11,7 @@ import type { Check } from './contribution';
 import { BAD_LOOK } from './reelContent';
 import { stepsOf } from './studioRows';
 import type { StudioItem } from './studioRows';
+import { textEchoes } from './textEcho';
 import { lookOf } from './stockLooks';
 import type { StockLook } from './stockLooks';
 import type { AvatarContent, QuizQ } from '../types';
@@ -19,8 +20,6 @@ export { BAD_LOOK };
 export const QUESTIONS = { who: 'Who does the learner talk to?', scoring: 'How is it scored?', run: 'How long is a run?', language: 'Language', difficulty: 'Difficulty', look: 'Look', voice: 'Voice' };
 const QUIZ_LABELS = ['Quiz 1', 'Quiz 2', 'Quiz 3'];
 const POINTS = { min: 1, max: 4 };
-// A kept-back text shorter than this is too common to look for.
-const ECHO_MIN = 12;
 export const NO_CHARACTER = 'Add the character: Persona, Situation, Opening line, Reveals if asked and Hides unless probed';
 export const NO_POINTS = 'Add 1 to 4 learning points, each as “Learning point · N %”';
 export const NO_QUIZ = 'Add the three quiz questions: each with 2 to 4 options, the right one first';
@@ -61,12 +60,6 @@ export function avatarRows(rows: StudioItem[]): string[] {
   return out;
 }
 
-// Whether any ECHO_MIN characters of a kept-back text are inside a public one (case-insensitive; the twin of private.avatar_echo).
-const repeats = (hidden: string, shown: string) => {
-  const h = hidden.toLowerCase(), t = shown.toLowerCase();
-  for (let i = 0; i + ECHO_MIN <= h.length; i++) if (t.includes(h.slice(i, i + ECHO_MIN))) return true;
-  return false;
-};
 // The texts learners read: the character's persona, situation and opening line, each learning point, each quiz row (question and options) and
 // who the learner talks to.
 const publicTexts = (rows: StudioItem[], shape: Record<string, string>) => [shape[QUESTIONS.who] ?? '',
@@ -86,7 +79,7 @@ export function avatarProblems(items: readonly unknown[], shape: Record<string, 
   else if (looks && !lookOf(looks, look)?.active) out.push(BAD_LOOK);
   if (voice && voices && !voices.some((v) => v.id === voice && v.active)) out.push(BAD_VOICE);
   const shown = publicTexts(rows, shape);
-  if ([c.reveals, c.hides].some((h) => shown.some((t) => repeats(h, t)))) out.push(ECHOED);
+  if ([c.reveals, c.hides].some((h) => shown.some((t) => textEchoes(h, t, false)))) out.push(ECHOED);
   return out;
 }
 

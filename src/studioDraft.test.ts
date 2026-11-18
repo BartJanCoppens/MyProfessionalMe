@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as store from './lib/contributionStore';
 import { emptyParts } from './logic/contribution';
 import type { CreateData } from './logic/contribution';
+import { avatarProblems } from './logic/avatarContent';
+import type { StudioItem } from './logic/studios';
 import { itemsValid, rowsMax, studioById } from './logic/studios';
 import { parseStudioItems, scriptedItems, studioRequest } from './logic/studioItems';
 import { flush, harness, member, person, stubWindow } from './test/harness';
@@ -121,6 +123,15 @@ describe('scripted fallback per studio', () => {
     const rows = scriptedItems(def('avatar'), nw('Avatar'), PASSAGES.slice(0, 1))!;
     expect(itemsValid(def('avatar'), rows)).toEqual(['Add the three quiz questions: each with 2 to 4 options, the right one first']);
     expect(rows.some((r) => r[0].startsWith('Quiz'))).toBe(false);
+  });
+  it('avatar: the hidden rows come from other passages, so a scripted draft with the quiz added passes the check', () => {
+    const rows = scriptedItems(def('avatar'), nw('Avatar'), PASSAGES)!, quiz = [['Quiz 1', 'q1', 'a · b'], ['Quiz 2', 'q2', 'a · b'], ['Quiz 3', 'q3', 'a · b']] as StudioItem[];
+    expect(avatarProblems([...rows, ...quiz], { 'How long is a run?': '5 minutes', Language: 'English', Difficulty: 'Gentle', 'How is it scored?': 'Practice only', Look: 'l' }, null, null)).toEqual([]);
+  });
+  it('avatar: with few passages the hidden rows are marked for the creator to write, never a copy of a public row', () => {
+    const rows = scriptedItems(def('avatar'), nw('Avatar'), PASSAGES.slice(0, 1))!;
+    expect(rows.find((r) => r[0] === 'Reveals if asked')![1]).toMatch(/^To write:/);
+    expect(rows.find((r) => r[0] === 'Hides unless probed')![1]).toMatch(/^To write:/);
   });
 });
 

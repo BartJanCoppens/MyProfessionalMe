@@ -5,6 +5,7 @@
 // private.game_ok, private.game_content and the Game part of private.contribution_problems).
 import { roleOf, GAME_ROLES, ROLE_LABEL } from '../../supabase/functions/_shared/gameRules.ts';
 import type { GameContent, GameData, NewDraft } from '../types';
+import { textEchoes } from './textEcho';
 import { FILE_NAMES, GAME_FILE_MAX, scanGameFiles } from './gameScan';
 import { stepsOf } from './studioRows';
 import type { StudioEntry } from './studios';
@@ -23,8 +24,6 @@ export const ECHOED_TEXT = "The game's text repeats what the AI role hides";
 export const GAME_LAST = 'The built game must come after the rows · build the game again';
 export const NOT_PASSED = 'The house-rules check has not passed';
 export const RERUN = 'Run the house-rules check again';
-// A hidden text shorter than this is too common to look for in the code.
-const ECHO_MIN = 12;
 
 // The server's verdict as game_review_status gives it: current is true while it is for the files as they are now.
 export type GameReviewStatus = { passed: boolean; reasons: string[]; current: boolean };
@@ -64,8 +63,7 @@ export function gameContent(items: StudioEntry[], shape: Record<string, string>)
     leaderboard: LEADERBOARDS.includes(shape[LEADERBOARD_QUESTION] as GameContent['leaderboard']) ? shape[LEADERBOARD_QUESTION] as GameContent['leaderboard'] : LEADERBOARDS[0] };
 }
 
-// Case-insensitive containment. JavaScript's toLowerCase and Postgres' lower() can differ for a few Unicode letters (decisions.md).
-const hasIn = (text: string, part: string) => text.toLowerCase().includes(part.toLowerCase());
+const hasIn = (text: string, hidden: string) => textEchoes(hidden, text, true);
 
 /** The verdict as it stands for the draft on screen: still current only while nothing the review read has been edited since (undefined: not known). */
 export function shownReview(nw: Pick<NewDraft, 'title' | 'take' | 'shape' | 'items' | 'gameReview' | 'gameReviewFor'>): GameReviewStatus | null | undefined {
@@ -85,9 +83,9 @@ export function gameProblems(items: StudioEntry[], shape: Record<string, string>
   const roleRow = answer !== NO_ROLE && !role ? [ROLE_MISSING] : answer === NO_ROLE && role ? [ROLE_UNUSED] : [];
   if (!game) return [...roleRow, BUILD_FIRST];
   const misplaced = items.indexOf(game) < items.findLastIndex((i) => Array.isArray(i));
-  const echoed = !!role && role.knows.length >= ECHO_MIN && Object.values(game.files).some((text) => hasIn(text, role.knows));
+  const echoed = !!role && Object.values(game.files).some((text) => hasIn(text, role.knows));
   // The published texts (concept, win, rounds, who the AI plays) must not carry it either; the role's own text 2 is the one place it lives.
-  const leaked = !!role && role.knows.length >= ECHO_MIN && rowsOf(items).some((r) => hasIn(r.text, role.knows) || (r.label !== ROLE_LABEL && hasIn(r.text2, role.knows)));
+  const leaked = !!role && rowsOf(items).some((r) => hasIn(r.text, role.knows) || (r.label !== ROLE_LABEL && hasIn(r.text2, role.knows)));
   return [...(misplaced ? [GAME_LAST] : []), ...roleRow, ...scanGameFiles(game.files),
     ...(review === undefined ? [] : reviewProblem(review)),
     ...(game.for.role === answer ? [] : [ROLE_CHANGED]), ...(echoed ? [ECHOED] : []), ...(leaked ? [ECHOED_TEXT] : [])];

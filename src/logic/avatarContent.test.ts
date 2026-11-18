@@ -7,6 +7,7 @@ import { parseFormatContent } from '../lib/contentStore';
 import { migrationText } from '../test/migrations';
 import { studioById, itemsValid } from './studios';
 import type { StudioItem } from './studios';
+import { ECHO_MIN, ECHO_WINDOW } from './textEcho';
 import { BAD_LOOK, avatarChecks, avatarContent, avatarProblems, avatarRows, quizOf } from './avatarContent';
 import type { StockLook } from './stockLooks';
 import type { StockVoice } from './ai';
@@ -88,7 +89,11 @@ describe('the problems with an avatar', () => {
     expect(problems(swap('Learning point · 40 %', 'Do not mention that the vendor contract ends in 14 months'))).toEqual([ECHO]);
     expect(problems(swap('Quiz 1', 'Does the payroll vendor contract end soon?'))).toEqual([ECHO]);
     expect(problems(ROWS.map((r): StudioItem => (r[0] === 'Quiz 1' ? ['Quiz 1', 'q?', 'Say the vendor contract ends in 14 months · No'] : r)))).toEqual([ECHO]);
-    expect(problems(ROWS, { ...SHAPE, 'Who does the learner talk to?': 'Someone whose works-council members oppose' })).toEqual([ECHO]);
+    expect(problems(ROWS, { ...SHAPE, 'Who does the learner talk to?': 'Someone whose works-council members already oppose' })).toEqual([ECHO]);
+  });
+  it('lets 23 shared characters pass and fails 24, in any case (the window edge)', () => {
+    expect(problems(swap('Situation', 'She fears TWO WORKS-COUNCIL MEMBE.'))).toEqual([]);
+    expect(problems(swap('Situation', 'She fears TWO WORKS-COUNCIL MEMBER.'))).toEqual([ECHO]);
   });
   it('lets a short overlap pass and does not read the two hidden rows against themselves', () => {
     expect(problems(swap('Situation', 'She has ten minutes to hear the plan.'))).toEqual([]);
@@ -118,10 +123,15 @@ describe('the SQL that repeats these rules (20261118190000_avatar_format.sql)', 
       'Choose a look in Produce', BAD_LOOK, 'That voice is not on the stock list', "The scenario''s public text repeats what the character keeps back",
       'Add 1 to 4 learning points, each as “Learning point · N %”', ': use each character row once', 'use a character row, “Learning point · N %” or Quiz 1 to 3 as the label']) expect(sql).toContain(t);
   });
-  it('compares a window of 12 characters of what is kept back, as the check does', () => {
-    expect(sql).toContain('generate_series(1, char_length(');
-    expect(sql).toContain(', 12)');
-    expect(sql).toMatch(/lower\(/);
+  it('has the one echo helper with the same constants as textEcho.ts, and avatar_echo calls it', () => {
+    const fn = /create function private\.text_echoes\([\s\S]*?\n\$\$;/.exec(sql)![0];
+    expect(fn).toContain('>= ' + ECHO_MIN);
+    expect(fn).toContain('least(' + ECHO_WINDOW + ',');
+    expect(fn).toMatch(/lower\(/);
+    expect(/create function private\.avatar_echo\([\s\S]*?\n\$\$;/.exec(sql)![0]).toContain('private.text_echoes(');
+  });
+  it('has the Game calling the same helper in whole mode', () => {
+    expect(sql).toContain("private.text_echoes(v_knows, v_game -> 'files' ->> 'index.html', true)");
   });
   it('gives no table, policy or grant, and never selects what the character reveals or hides into the content', () => {
     expect(sql).not.toMatch(/create table|create policy|grant /i);

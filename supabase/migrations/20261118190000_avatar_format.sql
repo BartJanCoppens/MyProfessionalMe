@@ -15,9 +15,9 @@
 --           stock_voices, the run and who the learner talks to. It never selects Reveals or Hides.
 -- check     contribution_problems refuses an avatar whose rows are wrong (private.avatar_row_problems, in words), with a run, language, difficulty or
 --           scoring not chosen, without an active stock look (or with a voice that is not an active one), and whose public text repeats what the
---           character keeps back (private.avatar_echo: any 12 characters of Reveals or Hides, in lower case, inside Persona, Situation, Opening line,
---           a learning point, a quiz row or who the learner talks to; the Game's rule, applied to any part of the hidden text because here the hidden
---           text is a sentence a creator can paraphrase around).
+--           character keeps back (private.avatar_echo through private.text_echoes: any 24 characters of Reveals or Hides, or all of it when shorter, in lower
+--           case, inside Persona, Situation, Opening line, a learning point, a quiz row or who the learner talks to). The Game's check uses the same
+--           helper in whole mode (the hidden text as a whole), with the result it always had.
 -- completion unchanged: the quiz (never a run) completes the learning (private.is_self_complete, private.evidence_rule); hours stay the default 0.25 h.
 -- reel      private.reel_check is a row finder, so the check row rule is check_row_ok(r), a name for reel_options_ok(r ->> 2): the Reel keeps working as it is.
 
@@ -95,9 +95,22 @@ begin
 end;
 $$;
 
--- 4. Whether a text learners read repeats what the character keeps back: any 12 characters of Reveals or Hides (trimmed, lower case) inside the
--- persona, the situation, the opening line, a learning point, a quiz row (question and options) or who the learner talks to. JavaScript's
--- toLowerCase and Postgres' lower() can differ for a few Unicode letters (decisions.md).
+-- 4. Whether a text learners read repeats what an author keeps back: the one rule (textEchoes in src/logic/textEcho.ts), used by the Game (whole: the
+-- hidden text as a whole is inside the shown one, as before) and the Avatar (any 24 characters of it, or all of it when it is shorter). A hidden text under
+-- 12 characters is too common to look for. JavaScript's toLowerCase and Postgres' lower() can differ for a few Unicode letters (decisions.md).
+create function private.text_echoes(p_hidden text, p_shown text, p_whole boolean)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select char_length(coalesce(p_hidden, '')) >= 12 and exists (
+    select 1 from generate_series(1, char_length(p_hidden) - case when p_whole then char_length(p_hidden) else least(24, char_length(p_hidden)) end + 1) i
+    where position(substr(lower(p_hidden), i, case when p_whole then char_length(p_hidden) else least(24, char_length(p_hidden)) end) in lower(coalesce(p_shown, ''))) > 0);
+$$;
+
+-- Whether a public text of an avatar repeats what the character reveals or hides: the persona, the situation, the opening line, a learning point, a quiz
+-- row (question and options) or who the learner talks to, against the trimmed Reveals and Hides rows.
 create function private.avatar_echo(p_items jsonb, p_shape jsonb)
 returns boolean
 language sql
@@ -105,11 +118,11 @@ immutable
 set search_path = ''
 as $$
   with r as (select e from jsonb_array_elements(private.rows_of(p_items)) e),
-  hidden as (select lower(private.trimmed(e ->> 1)) as h from r where e ->> 0 in ('Reveals if asked', 'Hides unless probed')),
-  shown as (select lower(t) as t from r, unnest(case when e ->> 0 in ('Persona', 'Situation', 'Opening line') or e ->> 0 ~ '^Learning point · [0-9]+ %$' then array[e ->> 1]
-                                                     when e ->> 0 in ('Quiz 1', 'Quiz 2', 'Quiz 3') then array[e ->> 1, coalesce(e ->> 2, '')] else '{}'::text[] end) as t
-            union all select lower(coalesce(p_shape ->> 'Who does the learner talk to?', '')))
-  select exists (select 1 from hidden h cross join shown s cross join generate_series(1, char_length(h.h) - 11) i where position(substr(h.h, i, 12) in s.t) > 0);
+  hidden as (select private.trimmed(e ->> 1) as h from r where e ->> 0 in ('Reveals if asked', 'Hides unless probed')),
+  shown as (select t from r, unnest(case when e ->> 0 in ('Persona', 'Situation', 'Opening line') or e ->> 0 ~ '^Learning point · [0-9]+ %$' then array[e ->> 1]
+                                         when e ->> 0 in ('Quiz 1', 'Quiz 2', 'Quiz 3') then array[e ->> 1, coalesce(e ->> 2, '')] else '{}'::text[] end) as t
+            union all select coalesce(p_shape ->> 'Who does the learner talk to?', ''))
+  select exists (select 1 from hidden h cross join shown s where private.text_echoes(h.h, s.t, false));
 $$;
 
 -- 5. An avatar's content (avatarContent in src/logic/avatarContent.ts builds the same for the preview). Stable: the look and the voice are read when
@@ -295,13 +308,13 @@ begin
         p := array_append(p, 'You changed the AI role after the build · build the game again');
       end if;
       -- what the AI role knows (its text 2, 12 characters or more) must not be in the game's own code: learners read the code
-      v_knows := lower(private.trimmed(coalesce(v_row ->> 2, '')));
-      if char_length(v_knows) >= 12 and (position(v_knows in lower(v_game -> 'files' ->> 'index.html')) > 0 or position(v_knows in lower(v_game -> 'files' ->> 'game.js')) > 0) then
+      v_knows := private.trimmed(coalesce(v_row ->> 2, ''));
+      if private.text_echoes(v_knows, v_game -> 'files' ->> 'index.html', true) or private.text_echoes(v_knows, v_game -> 'files' ->> 'game.js', true) then
         p := array_append(p, 'The game''s code repeats what the AI role hides');
       end if;
       -- nor may the texts learners read: the concept, win, rounds and who the AI plays (everything but the role's own text 2)
-      if char_length(v_knows) >= 12 and exists (select 1 from jsonb_array_elements(private.rows_of(c.items)) r
-          where position(v_knows in lower(r ->> 1)) > 0 or (r ->> 0 <> 'AI role' and position(v_knows in lower(coalesce(r ->> 2, ''))) > 0)) then
+      if exists (select 1 from jsonb_array_elements(private.rows_of(c.items)) r
+          where private.text_echoes(v_knows, r ->> 1, true) or (r ->> 0 <> 'AI role' and private.text_echoes(v_knows, r ->> 2, true))) then
         p := array_append(p, 'The game''s text repeats what the AI role hides');
       end if;
     end if;
@@ -399,5 +412,5 @@ begin
 end;
 $$;
 
-revoke execute on function private.check_row_ok(jsonb), private.avatar_ok(jsonb), private.avatar_row_problems(jsonb), private.avatar_echo(jsonb, jsonb), private.avatar_content(jsonb, jsonb)
+revoke execute on function private.check_row_ok(jsonb), private.avatar_ok(jsonb), private.avatar_row_problems(jsonb), private.text_echoes(text, text, boolean), private.avatar_echo(jsonb, jsonb), private.avatar_content(jsonb, jsonb)
   from public, anon, authenticated;
