@@ -35,5 +35,7 @@ export async function playRole(d: RoleDeps, g: GameAsk): Promise<RoleResult> {
   const counted = await d.count(inputChars(ask));
   if (counted !== 'ok') return counted === 'limit' ? { status: 429, error: limitMessage(d.dailyLimit ?? null, !NO_SCRIPT.includes(GAME_ROLE_USE)) } : { status: 500, error: 'Could not count the call' };
   const out = await d.call(ask);
-  return out.ok ? { status: 200, body: { text: out.text, cut: out.cut } } : { status: 502, error: out.error };
+  if (!out.ok) return { status: 502, error: out.error };
+  // An answer cut at its limit is a fragment, never text for the game.
+  return out.cut ? { status: 502, error: 'AI did not return a usable reply · try again' } : { status: 200, body: { text: out.text, cut: false } };
 }

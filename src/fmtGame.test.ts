@@ -87,6 +87,13 @@ describe('the AI role in the game view', () => {
     await expect(v.ask('run-1')!(req)).rejects.toThrow('The AI role is not available right now');
     expect(ask).not.toHaveBeenCalled();
   });
+  it('in View as and in an unsaved preview, does not promise AI: the role answers only in a saved play-test or a real run', () => {
+    const live = { enabled: true, live: ['game_role'], ask };
+    const text = 'The AI role answers only in a saved play-test or a real run';
+    expect(gameView(withRole, { ...o, ro: true, ai: live }).roleNote).toBe(text);
+    expect(gameView(withRole, { ...o, learningId: null, ai: live }).roleNote).toBe(text);
+    expect(gameView(withRole, { ...o, learningId: null, contributionId: 'c-1', ai: live }).roleNote).toContain('counts toward your daily AI limit');
+  });
   it('has no run to ask on in View as or in an unsaved preview, and says so', async () => {
     const v = gameView(withRole, { ...o, learningId: null, ai: { enabled: true, live: ['game_role'], ask } });
     await expect(v.ask(null)!(req)).rejects.toThrow(/needs a saved run/);

@@ -55,7 +55,7 @@ function voiceChoice(L: Logic, nw: NewDraft, setNw: SetNw, key: string, options:
 // never hiding the answer already chosen.
 function offered(on: Record<'draft' | 'voice' | 'role', boolean>, q: string, options: string[], chosen: string | undefined) {
   const only = AI_ONLY[q], cut = !!only && !on[only.needs];
-  return { options: cut ? options.filter((o) => !only.options.includes(o) || o === chosen) : options, note: cut ? only.why : '' };
+  return { options: cut ? options.filter((o) => !only.options.includes(o) || o === chosen) : options, note: cut ? only.why : only?.hint ?? '' };
 }
 
 // The build steps as stored on the draft, fitted to the studio's own output when it has a runner that makes one.

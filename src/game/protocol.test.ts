@@ -1,3 +1,4 @@
+import { GAME_ASK } from '../../supabase/functions/_shared/gameRules.ts';
 import { describe, expect, it } from 'vitest';
 import { LIMITS, firstNameInitial, parseBridgeRequest } from './protocol';
 
@@ -13,6 +14,14 @@ describe('parseBridgeRequest', () => {
   ])('accepts %o', (o) => expect(parseBridgeRequest(msg(o))).toMatchObject({ id: 1, ...o }));
 
   it('keeps the limits in one place', () => expect(LIMITS).toEqual({ score: 1_000_000, messages: 20, messageChars: 1000, stateChars: 4000 }));
+  it('takes the ask limits from the one list the ai function reads, and refuses what the function refuses (before a client ask is spent)', () => {
+    expect(LIMITS).toMatchObject(GAME_ASK);
+    expect(ask([{ role: 'player', text: '' }])).toBeNull();
+    expect(ask([{ role: 'player', text: '   ' }])).toBeNull();
+    expect(ask([{ role: 'ai', text: 'hi' }, { role: 'player', text: 'x' }])).toBeNull();
+    expect(ask([{ role: 'player', text: 'hi' }, { role: 'ai', text: 'x' }])).toBeNull();
+    expect(ask([{ role: 'player', text: 'a' }, { role: 'ai', text: 'b' }, { role: 'player', text: 'c' }])).not.toBeNull();
+  });
   it('rejects a forged source', () => expect(parseBridgeRequest({ source: 'gamestudio', id: 1, type: 'ready' })).toBeNull());
   it('rejects a non-integer id', () => expect(parseBridgeRequest({ source: 'mpme-game', id: 1.5, type: 'ready' })).toBeNull());
   it.each(['navigate', 'contribute', 'makeMove', 'getGoal', 'getSources', 'getMatch'])('drops the type %s on purpose', (type) => expect(parseBridgeRequest(msg({ type }))).toBeNull());

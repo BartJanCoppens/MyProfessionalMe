@@ -60,6 +60,7 @@ describe('"Does the AI play a role?"', () => {
     const on = asked({ uses: ['studio_game', 'game_role'] });
     expect(on.chips.map((c) => c.label)).toEqual(['Game master', 'Opponent', 'Suspect to question', NO_ROLE]);
     expect(on.hint).not.toMatch(/not switched on/);
+    expect(on.hint).toMatch(/not a safe place for a real secret/);
   });
   it('keeps a role already chosen on screen, with the reason, even when it is no longer live', () => {
     const chosen = asked({ uses: ['studio_game'], shape: { [ROLE_QUESTION]: 'Opponent' } });

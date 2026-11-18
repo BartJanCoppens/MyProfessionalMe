@@ -9,3 +9,6 @@ export function roleOf(items: readonly unknown[]): { about: string; knows: strin
   const row = items.find((i) => Array.isArray(i) && i[0] === ROLE_LABEL) as unknown[] | undefined;
   return row ? { about: String(row[1] ?? '').trim(), knows: String(row[2] ?? '').trim() } : null;
 }
+
+/** What the bridge accepts of a game's askAI and the `ai` function accepts of the request: messages, characters in one, characters of state (one copy for both). */
+export const GAME_ASK = { messages: 20, messageChars: 1000, stateChars: 4000 };

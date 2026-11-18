@@ -32,7 +32,7 @@ export function gameView(c: GameContent, o: GameOpts) {
     note: o.ro ? 'Viewing someone else: playing saves nothing' : !learning ? 'A play-test never counts and never shows on a leaderboard.'
       : c.leaderboard === 'None' ? 'There is no leaderboard; only your reflection completes the learning.' : 'A finished run goes on the leaderboard; only your reflection completes the learning.',
     // The AI role: said where it is AI (a learner), that it is metered (a play-test) or that it is not there (not live): never silent.
-    roleNote: !c.role ? '' : !roleLive ? ROLE_UNAVAILABLE : learning ? 'The AI role is played by AI · Made with AI' : 'The AI role counts toward your daily AI limit · Made with AI',
+    roleNote: !c.role ? '' : !roleLive ? ROLE_UNAVAILABLE : o.ro || (!learning && !o.contributionId) ? 'The AI role answers only in a saved play-test or a real run' : learning ? 'The AI role is played by AI · Made with AI' : 'The AI role counts toward your daily AI limit · Made with AI',
     // What the game's askAI calls on this run: none without a role (the bridge says "This game has no AI role").
     ask: (runId: string | null) => (c.role ? roleAsker(runId, ai) : null),
     completion: completionText('Game', o.accepter, true),

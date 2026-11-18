@@ -71,9 +71,9 @@ export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Reco
 
 // Answers only Draft with AI (or, for the voice, the live AI voice, and for a game's roles the live AI role) can deliver (question to answers): offered only while it can run,
 // with the reason otherwise; an answer already chosen stays on screen, with the reason.
-export const AI_ONLY: Record<string, { options: string[]; why: string; needs: 'draft' | 'voice' | 'role' }> = {
+export const AI_ONLY: Record<string, { options: string[]; why: string; needs: 'draft' | 'voice' | 'role'; hint?: string }> = {
   [END_QUESTION]: { options: [END_CHECK], why: 'A three-question check is written by Draft with AI, which is not switched on', needs: 'draft' },
-  [ROLE_QUESTION]: { options: [...GAME_ROLES], why: 'The AI role is not switched on · only "No AI role" can be chosen until a System Admin gives it a connection', needs: 'role' },
+  [ROLE_QUESTION]: { options: [...GAME_ROLES], why: 'The AI role is not switched on · only "No AI role" can be chosen until a System Admin gives it a connection', needs: 'role', hint: 'What the AI knows is not a safe place for a real secret or personal data: a persistent player can get the AI to repeat it. Write fictional facts only.' },
   [PRESENTER]: { options: [AI_VOICE], why: 'The AI voice is not switched on · the browser voice can preview the talk-over in Produce, but nothing is stored', needs: 'voice' },
 };
 

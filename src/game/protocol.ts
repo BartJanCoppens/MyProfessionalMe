@@ -1,3 +1,4 @@
+import { GAME_ASK } from '../../supabase/functions/_shared/gameRules.ts';
 // The messages a game in the sealed-off frame may send the platform, and their limits.
 // Anything that doesn't parse is ignored: a game can ask, never instruct.
 // Ported from GameStudio's bridge/protocol.ts; the API text is BRIDGE_API (ported from its gameModel.ts).
@@ -18,7 +19,7 @@ export type BridgeResponse = { source: 'mpme-host' } & BridgeAnswer;
 export const GAME_SOURCE = 'mpme-game';
 export const HOST_SOURCE = 'mpme-host';
 
-export const LIMITS = { score: 1_000_000, messages: 20, messageChars: 1000, stateChars: 4000 };
+export const LIMITS = { score: 1_000_000, ...GAME_ASK };
 
 /** The API generated games are told about (the Game Studio's AI) and the platform implements. */
 export const BRIDGE_API = `window.GameStudio (always available; every method returns a Promise):
@@ -41,9 +42,11 @@ function parseAsk(id: number, m: Record<string, unknown>): BridgeRequest | null 
   const messages: AskRole['messages'] = [];
   for (const x of list) {
     const row = x as { role?: unknown; text?: unknown } | null;
-    if (!row || (row.role !== 'player' && row.role !== 'ai') || typeof row.text !== 'string' || row.text.length > LIMITS.messageChars) return null;
+    if (!row || (row.role !== 'player' && row.role !== 'ai') || typeof row.text !== 'string' || !row.text.trim() || row.text.length > LIMITS.messageChars) return null;
     messages.push({ role: row.role, text: row.text });
   }
+  // As the ai function: the player speaks first and last (it refuses anything else, which would spend a client ask).
+  if (messages[0].role !== 'player' || messages[messages.length - 1].role !== 'player') return null;
   if (jsonLength(m.state) > LIMITS.stateChars) return null;
   return { id, type: 'askAI', messages, state: m.state ?? null };
 }

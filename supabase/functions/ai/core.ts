@@ -7,6 +7,7 @@
 //                      Azure). Covers OpenAI, Azure OpenAI and EU-hosted OpenAI-compatible services such as Mistral.
 // The key is only ever put in a request header; errors are scrubbed of it before they leave the function.
 import { isLimitError, NO_SCRIPT, scrub, USE_LIMITS } from '../_shared/aiGuard.ts';
+import { GAME_ASK } from '../_shared/gameRules.ts';
 import { marked } from '../_shared/promptData.ts';
 import type { Provider } from '../_shared/aiGuard.ts';
 
@@ -60,7 +61,7 @@ export function readAsk(body: unknown): { ok: true; use: string; ask: Ask } | { 
 
 // A game's AI role (use game_role): { use, run_id, messages, state }. The game never sends a system text: the role is the game's, read by the
 // database for the run (public.game_role_context), not by the client. At most 20 messages of 1,000 characters and a state of 4,000.
-export const GAME_ASK = { messages: 20, messageChars: 1000, stateChars: 4000 };
+export { GAME_ASK };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type GameAsk = { ok: true; runId: string; messages: Msg[]; state: string };
 export function readGameAsk(body: unknown): GameAsk | { ok: false; error: string } {

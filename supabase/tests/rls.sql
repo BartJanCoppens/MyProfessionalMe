@@ -823,6 +823,7 @@ insert into results (check_name, expected, actual) select 'AI studio_game is liv
 update public.ai_uses set enabled = false where key = 'studio_game';
 insert into results (check_name, expected, actual) select 'AI studio_game is not live once switched off', 'false', ('studio_game' = any(public.ai_live_uses()))::text;
 insert into results (check_name, expected, actual) select 'AI game_role is seeded as a text use, off, 60 a day', 'text/false/60', kind||'/'||enabled||'/'||daily_limit from public.ai_uses where key = 'game_role';
+insert into results (check_name, expected, actual) select 'AI game_role has a character budget of 60,000 a person a day', '60000', daily_chars::text from public.ai_uses where key = 'game_role';
 insert into results (check_name, expected, actual) select 'AI game_role is not live without a connection', 'false', ('game_role' = any(public.ai_live_uses()))::text;
 with u as (update public.ai_uses set connection_id = current_setting('test.ai1')::uuid, enabled = true where key = 'game_role' returning 1) insert into results (check_name, expected, actual) select 'AI SA gives game_role the text connection', '1 rows', count(*)||' rows' from u;
 insert into results (check_name, expected, actual) select 'AI game_role is live with a text connection that has a key and a model', 'true', ('game_role' = any(public.ai_live_uses()))::text;
@@ -2326,7 +2327,7 @@ end $$;
 reset role;
 insert into results (check_name, expected, actual) select 'VO studio_voice is seeded: voice, off, 300 calls and 30000 characters a day', 'voice/false/300/30000',
   kind||'/'||enabled||'/'||daily_limit||'/'||daily_chars from public.ai_uses where key = 'studio_voice';
-insert into results (check_name, expected, actual) select 'VO text uses keep no character limit', '0', count(*)::text from public.ai_uses where kind = 'text' and daily_chars is not null;
+insert into results (check_name, expected, actual) select 'VO text uses keep no character limit, but the game''s AI role (a budget per person)', 'game_role', string_agg(key, ',') from public.ai_uses where kind = 'text' and daily_chars is not null;
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e8','t.voicega@test.local'), ('00000000-0000-0000-0000-0000000000e9','t.voicemember@test.local');
 insert into public.user_roles (user_id, role) values ('00000000-0000-0000-0000-0000000000e8','general_admin');
 set local role authenticated;

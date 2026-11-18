@@ -17,12 +17,15 @@ describe('game_role_context and the ai function', () => {
     expect(sql).toMatch(/security definer\s+set search_path = ''/);
   });
   it('wants the caller\'s own, unfinished run, and for a play-test a current author or reviewer', () => {
+    expect(sql).toContain('private.can_test_game_as(k.id, p_user)');
+    expect(sql).not.toContain('contribution_reviews');
+    expect(migrationText('20261118110000_game_runs.sql')).toContain('select private.can_test_game_as(p_id, (select auth.uid()));');
     expect(sql).toContain('r.user_id is distinct from p_user');
     expect(sql).toContain('r.finished_at is not null');
-    expect(sql).toMatch(/k\.author_id = p_user or exists \(select 1 from public\.contribution_reviews v where v\.contribution_id = k\.id and v\.reviewer_id = p_user\)/);
   });
   it('seeds the use the function counts under, at 60 a day', () => {
     expect(sql).toContain(`('${GAME_ROLE_USE}', 60, 'text'`);
-    expect(sql).toMatch(/, 60\);/);
+    expect(sql).toMatch(/, 60, 60000\);/);
+    expect(sql).toContain("play-tester''s own limit");
   });
 });

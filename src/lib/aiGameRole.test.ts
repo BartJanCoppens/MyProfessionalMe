@@ -49,7 +49,10 @@ describe('playRole', () => {
     expect(d.call).not.toHaveBeenCalled();
     expect(await playRole(deps({ count: vi.fn(async () => 'error' as const) }), asked)).toMatchObject({ status: 500 });
   });
-  it('reports a provider failure or a cut answer as a failure, never as a reply', async () => {
+  it('reports a cut answer as a failure, not as text for the game', async () => {
+    expect(await playRole(deps({ call: vi.fn(async () => ({ ok: true as const, text: '{"say": "I sig', cut: true })) }), asked)).toEqual({ status: 502, error: 'AI did not return a usable reply · try again' });
+  });
+  it('reports a provider failure as a failure, never as a reply', async () => {
     expect(await playRole(deps({ call: vi.fn(async () => ({ ok: false as const, error: 'The provider answered 500' })) }), asked)).toEqual({ status: 502, error: 'The provider answered 500' });
   });
 });

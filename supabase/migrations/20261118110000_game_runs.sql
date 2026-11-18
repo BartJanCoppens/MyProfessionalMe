@@ -43,7 +43,19 @@ as $$
   select exists (select 1 from public.learnings where id = p_id and status = 'published' and format = 'Game' and content ->> 'kind' = 'game');
 $$;
 
--- The author of a Game contribution or one of its assigned reviewers may play-test it.
+-- The author of a Game contribution or one of its assigned reviewers may play-test it: the one rule, for a given person (the `ai` function's
+-- game_role_context asks it for the run's owner) and for the signed-in one (the run policy).
+create function private.can_test_game_as(p_id uuid, p_user uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.contributions c where c.id = p_id and c.type = 'Game'
+    and (c.author_id = p_user or exists (select 1 from public.contribution_reviews v where v.contribution_id = c.id and v.reviewer_id = p_user)));
+$$;
+
 create function private.can_test_game(p_id uuid)
 returns boolean
 language sql
@@ -51,8 +63,7 @@ stable
 security definer
 set search_path = ''
 as $$
-  select exists (select 1 from public.contributions where id = p_id and type = 'Game')
-    and (private.is_contribution_author(p_id) or private.is_contribution_reviewer(p_id));
+  select private.can_test_game_as(p_id, (select auth.uid()));
 $$;
 
 create policy "game_runs: own read" on public.game_runs for select to authenticated
@@ -156,6 +167,6 @@ as $$
 $$;
 
 revoke execute on function private.js_space() from authenticated;
-revoke execute on function private.js_space(), private.is_game_learning(text), private.can_test_game(uuid), private.first_and_initial(text), private.team_ids(uuid),
+revoke execute on function private.js_space(), private.is_game_learning(text), private.can_test_game(uuid), private.can_test_game_as(uuid, uuid), private.first_and_initial(text), private.team_ids(uuid),
   public.finish_game_run(uuid, integer), public.game_leaderboard(text) from public, anon;
 grant execute on function private.is_game_learning(text), private.can_test_game(uuid), public.finish_game_run(uuid, integer), public.game_leaderboard(text) to authenticated;

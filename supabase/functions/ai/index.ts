@@ -49,6 +49,73 @@ async function openTarget(admin: Admin, key: string, roles: string[]): Promise<{
   return secret ? { use: opened.use, target: targetOf(opened.use, secret) } : fail(409, 'The connection has no key');
 }
 
+type Call = { admin: Admin; body: Record<string, unknown>; callerId: string; roles: string[]; started: number };
+
+// action 'test': one tiny call with a connection (System Admins).
+async function testConnection({ admin, body, roles, started }: Call): Promise<Response> {
+  if (!roles.includes('system_admin')) return fail(403, 'Only a System Admin can test a connection');
+  const { data: conn } = await admin.from('ai_connections').select('id, provider, base_url, default_model').eq('id', String(body.connection_id || '')).maybeSingle<Conn>();
+  if (!conn) return fail(404, 'Connection not found');
+  if (!TEXT_PROVIDERS.includes(conn.provider)) return Response.json({ ok: false, error: 'Only text connections (Anthropic, OpenAI-compatible) can be tested here; a voice connection is checked by hearing a stock voice' });
+  if (!conn.default_model) return Response.json({ ok: false, error: 'Set a default model first' });
+  const key = await connectionKey(admin, conn.id);
+  if (!key) return Response.json({ ok: false, error: 'No key stored yet' });
+  const out = await callProvider({ provider: conn.provider, baseUrl: conn.base_url, model: conn.default_model, key }, TEST_ASK);
+  console.log(JSON.stringify({ action: 'test', ok: out.ok, ms: Date.now() - started }));
+  return Response.json(out.ok ? { ok: true, model: conn.default_model } : { ok: false, error: out.error });
+}
+
+// action 'review_game': the house-rules review of the author's built game.
+async function review({ admin, body, callerId, roles, started }: Call): Promise<Response> {
+  const opened = await openTarget(admin, GAME_USE, roles);
+  if (opened instanceof Response) return opened;
+  const { use, target } = opened, contribution = String(body.contribution_id || '');
+  const out = await reviewGame({
+    preamble: use.preamble, dailyLimit: use.daily_limit,
+    load: async () => ((await admin.rpc('game_review_input', { p_user: callerId, p_contribution: contribution })).data as ReviewLoad | null) ?? null,
+    count: (chars) => countCall(admin, callerId, GAME_USE, chars),
+    call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_USE].timeoutMs),
+    record: async (hash, v) => (await admin.rpc('record_game_review', { p_contribution: contribution, p_review_hash: hash, p_passed: v.passed, p_reasons: v.reasons })).error?.message ?? null,
+  });
+  console.log(JSON.stringify({ action: 'review_game', status: out.status, ms: Date.now() - started }));
+  return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
+}
+
+// use 'game_role': a game's AI role for the caller's own run.
+async function gameRole({ admin, body, callerId, roles, started }: Call): Promise<Response> {
+  const g = readGameAsk(body);
+  if (!g.ok) return fail(400, g.error);
+  const opened = await openTarget(admin, GAME_ROLE_USE, roles);
+  if (opened instanceof Response) return opened;
+  const { use, target } = opened;
+  const out = await playRole({
+    preamble: use.preamble, dailyLimit: use.daily_limit,
+    context: async () => ((await admin.rpc('game_role_context', { p_user: callerId, p_run: g.runId })).data as RoleContext | null) ?? null,
+    count: (chars) => countCall(admin, callerId, GAME_ROLE_USE, chars),
+    call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_ROLE_USE]?.timeoutMs),
+  }, g);
+  console.log(JSON.stringify({ use: GAME_ROLE_USE, status: out.status, ms: Date.now() - started }));
+  return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
+}
+
+// Any other live text use: { use, system?, messages, max_tokens? }.
+async function answer({ admin, body, callerId, roles, started }: Call): Promise<Response> {
+  const r = readAsk(body);
+  if (!r.ok) return fail(400, r.error);
+  const opened = await openUse(admin, r.use, roles);
+  if (opened instanceof Response) return opened;
+  const { use } = opened;
+  const ask = withPreamble(r.ask, use.preamble);
+  // Counted before the call, atomically; beyond the limit nothing is counted and nothing is sent.
+  const counted = await countCall(admin, callerId, r.use, inputChars(ask));
+  if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit, !NO_SCRIPT.includes(r.use))) : fail(500, 'Could not count the call');
+  const key = await connectionKey(admin, use.connection!.id);
+  if (!key) return fail(409, 'The connection has no key');
+  const out = await callProvider(targetOf(use, key), ask, fetch, USE_LIMITS[r.use]?.timeoutMs);
+  console.log(JSON.stringify({ use: r.use, ok: out.ok, ms: Date.now() - started }));
+  return out.ok ? Response.json({ text: out.text, cut: out.cut }) : fail(502, out.error);
+}
+
 export default {
   fetch: withSupabase({ auth: 'user' }, async (req, ctx) => {
     if (req.method !== 'POST') return fail(405, 'Use POST');
@@ -57,69 +124,12 @@ export default {
     let body: Record<string, unknown>;
     try { body = JSON.parse(raw); } catch { return fail(400, 'Body must be JSON'); }
 
-    const callerId = ctx.userClaims!.id;
-    const admin = ctx.supabaseAdmin;
+    const callerId = ctx.userClaims!.id, admin = ctx.supabaseAdmin;
     const roles = await callerRoles(admin, callerId);
     if (!roles) return fail(500, 'Could not check your roles');
-    const started = Date.now();
-
-    if (body.action === 'test') {
-      if (!roles.includes('system_admin')) return fail(403, 'Only a System Admin can test a connection');
-      const { data: conn } = await admin.from('ai_connections').select('id, provider, base_url, default_model').eq('id', String(body.connection_id || '')).maybeSingle<Conn>();
-      if (!conn) return fail(404, 'Connection not found');
-      if (!TEXT_PROVIDERS.includes(conn.provider)) return Response.json({ ok: false, error: 'Only text connections (Anthropic, OpenAI-compatible) can be tested here; a voice connection is checked by hearing a stock voice' });
-      if (!conn.default_model) return Response.json({ ok: false, error: 'Set a default model first' });
-      const key = await connectionKey(admin, conn.id);
-      if (!key) return Response.json({ ok: false, error: 'No key stored yet' });
-      const out = await callProvider({ provider: conn.provider, baseUrl: conn.base_url, model: conn.default_model, key }, TEST_ASK);
-      console.log(JSON.stringify({ action: 'test', ok: out.ok, ms: Date.now() - started }));
-      return Response.json(out.ok ? { ok: true, model: conn.default_model } : { ok: false, error: out.error });
-    }
-
-    if (body.action === 'review_game') {
-      const opened = await openTarget(admin, GAME_USE, roles);
-      if (opened instanceof Response) return opened;
-      const { use, target } = opened, contribution = String(body.contribution_id || '');
-      const out = await reviewGame({
-        preamble: use.preamble, dailyLimit: use.daily_limit,
-        load: async () => ((await admin.rpc('game_review_input', { p_user: callerId, p_contribution: contribution })).data as ReviewLoad | null) ?? null,
-        count: (chars) => countCall(admin, callerId, GAME_USE, chars),
-        call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_USE].timeoutMs),
-        record: async (hash, v) => (await admin.rpc('record_game_review', { p_contribution: contribution, p_review_hash: hash, p_passed: v.passed, p_reasons: v.reasons })).error?.message ?? null,
-      });
-      console.log(JSON.stringify({ action: 'review_game', status: out.status, ms: Date.now() - started }));
-      return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
-    }
-
-    if (body.use === GAME_ROLE_USE) {
-      const g = readGameAsk(body);
-      if (!g.ok) return fail(400, g.error);
-      const opened = await openTarget(admin, GAME_ROLE_USE, roles);
-      if (opened instanceof Response) return opened;
-      const { use, target } = opened;
-      const out = await playRole({
-        preamble: use.preamble, dailyLimit: use.daily_limit,
-        context: async () => ((await admin.rpc('game_role_context', { p_user: callerId, p_run: g.runId })).data as RoleContext | null) ?? null,
-        count: (chars) => countCall(admin, callerId, GAME_ROLE_USE, chars),
-        call: (ask) => callProvider(target, ask, fetch, USE_LIMITS[GAME_ROLE_USE]?.timeoutMs),
-      }, g);
-      console.log(JSON.stringify({ use: GAME_ROLE_USE, status: out.status, ms: Date.now() - started }));
-      return 'error' in out ? fail(out.status, out.error) : Response.json(out.body);
-    }
-
-    const r = readAsk(body);
-    if (!r.ok) return fail(400, r.error);
-    const opened = await openUse(admin, r.use, roles);
-    if (opened instanceof Response) return opened;
-    const { use } = opened;
-    const ask = withPreamble(r.ask, use.preamble);
-    // Counted before the call, atomically; beyond the limit nothing is counted and nothing is sent.
-    const counted = await countCall(admin, callerId, r.use, inputChars(ask));
-    if (counted !== 'ok') return counted === 'limit' ? fail(429, limitMessage(use.daily_limit, !NO_SCRIPT.includes(r.use))) : fail(500, 'Could not count the call');
-    const key = await connectionKey(admin, use.connection!.id);
-    if (!key) return fail(409, 'The connection has no key');
-    const out = await callProvider(targetOf(use, key), ask, fetch, USE_LIMITS[r.use]?.timeoutMs);
-    console.log(JSON.stringify({ use: r.use, ok: out.ok, ms: Date.now() - started }));
-    return out.ok ? Response.json({ text: out.text, cut: out.cut }) : fail(502, out.error);
+    const call: Call = { admin, body, callerId, roles, started: Date.now() };
+    if (body.action === 'test') return testConnection(call);
+    if (body.action === 'review_game') return review(call);
+    return body.use === GAME_ROLE_USE ? gameRole(call) : answer(call);
   }),
 };
