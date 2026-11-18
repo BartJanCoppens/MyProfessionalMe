@@ -45,9 +45,12 @@ const pickOf = (st: TrjStep) => st.pick || 1;
 // enrolment began is optional for them (their progress is not set back); people who enrol later, or whose start time is unknown, have it as set.
 export function isRequired(st: TrjStep, e?: Enrolment | null): boolean {
   if (st.k === 'exam') return true;
-  if (!st.req || st.k === 'make') return false;
-  const linked = st.linked_at ? Date.parse(st.linked_at) : NaN, began = e?.created_at ? Date.parse(e.created_at) : NaN;
-  return !(linked > began);
+  return st.req && st.k !== 'make' && !optionalByLink(st, e);
+}
+// Set as required but linked (or added on a live trajectory) after this enrolment began: optional for it, and skipped by the lock.
+export function optionalByLink(st: TrjStep, e?: Enrolment | null): boolean {
+  if (st.k === 'exam' || st.k === 'make' || !st.req) return false;
+  return (st.linked_at ? Date.parse(st.linked_at) : NaN) > (e?.created_at ? Date.parse(e.created_at) : NaN);
 }
 
 // Study hours of a step: a learning's hours, an elect step's cheapest `pick` options, else the step's own hours.
@@ -106,12 +109,14 @@ function rawState(st: TrjStep, e: Enrolment | null, byId: Library): Raw {
 export function trajectoryProgress(t: Trajectory, e: Enrolment | null, byId: Library) {
   const raw = new Map(t.steps.map((st) => [st.id, rawState(st, e, byId)]));
   const steps: StepProgress[] = t.steps.map((st) => {
-    const r = raw.get(st.id)!, pre = st.pre ? raw.get(st.pre) : undefined;
-    // A prerequisite that is not required for this enrolment never locks what follows (so "x of y" and the lock agree), except a placeholder not
-    // marked optional: what follows it waits for its material.
-    const preStep = t.steps.find((x) => x.id === st.pre);
-    const preFree = !!preStep && !isRequired(preStep, e) && !(preStep.k === 'make' && preStep.req);
-    return { id: st.id, state: r.state, pct: r.pct, missing: r.missing, locked: r.state !== 'done' && !!pre && pre.state !== 'done' && !preFree };
+    const r = raw.get(st.id)!;
+    // The prerequisite, past any step that is optional for this enrolment only because it was linked after it began (the lock falls through to that
+    // step's own prerequisite; the length of the chain is bounded). A missing optional prerequisite blocks nothing, except a placeholder not marked optional.
+    let preStep = t.steps.find((x) => x.id === st.pre);
+    for (let n = 0; preStep && optionalByLink(preStep, e) && n < t.steps.length; n++) preStep = t.steps.find((x) => x.id === preStep!.pre);
+    const pre = preStep ? raw.get(preStep.id) : undefined;
+    const free = !!pre && pre.missing && !isRequired(preStep!, e) && !(preStep!.k === 'make' && preStep!.req);
+    return { id: st.id, state: r.state, pct: r.pct, missing: r.missing, locked: r.state !== 'done' && !!pre && pre.state !== 'done' && !free };
   });
   const required = t.steps.map((st, i) => (isRequired(st, e) ? i : -1)).filter((i) => i >= 0);
   const reqDone = required.filter((i) => steps[i].state === 'done').length;
