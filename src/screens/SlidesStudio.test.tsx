@@ -21,7 +21,7 @@ import CreateScreen from './Create';
 vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.fn(), removeDraft: vi.fn(), submitContribution: vi.fn(), decideReview: vi.fn(), savePolicy: vi.fn(), removePolicy: vi.fn(), checkContribution: vi.fn() }));
 vi.mock('../lib/voice', async (orig) => ({ ...(await orig<typeof import('../lib/voice')>()), speak: vi.fn(), speakInBrowser: vi.fn() }));
 vi.mock('../lib/mediaStore', () => ({ mediaUrl: vi.fn(async () => 'blob:x'), uploadMedia: vi.fn() }));
-vi.mock('../reel/compositor', () => ({ renderCut: vi.fn() }));
+vi.mock('../reel/compositor', () => ({ renderCut: vi.fn(), prepareAudio: vi.fn() }));
 
 const VOICES: StockVoice[] = [{ id: 'sv1', name: 'Warm · Flemish English', voice_id: 'EL1', language: 'English', accent: null, active: true }];
 const ROWS = [['Why it matters', 'Decisions · Not updates', 'A steering committee takes decisions.'], ['Before', 'Send the pack ahead', 'Send the pack three days ahead.'], ['After', 'Minutes · Log', 'Minutes go out within a day.']];
