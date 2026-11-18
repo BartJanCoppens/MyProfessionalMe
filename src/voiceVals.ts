@@ -10,15 +10,15 @@ import { blankLook, HEYGEN_LICENCE, liveVideoOf, stockLookProblem } from './logi
 import type { StockLookForm } from './logic/stockLooks';
 import { PORTRAIT_KEYS, portraitUrl } from './reel/portraits';
 import type { PortraitKey } from './reel/portraits';
-import { addStockLook, addStockVoice, setStockLookActive, setStockVoiceActive } from './lib/aiStore';
+import { addStockLook, addStockVoice, setStockLookActive, setStockVoiceActive, updateStockLook } from './lib/aiStore';
 import { hearStockVoice, voiceOn } from './lib/voice';
 
 type Write = (L: Logic, fn: () => Promise<unknown>, done: string) => Promise<boolean>;
 type Input = ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 type Option = { value: string; label: string };
 export type StockField = { label: string; hint?: string; placeholder?: string; value: string; set: (e: Input) => void; options?: Option[]; preview?: { src?: string; color?: string } };
-// A row of either list: a look has a thumb, a voice a sample to hear.
-export type StockRow = { id: string; name: string; meta: string; active: boolean; state: string; toggleLabel: string; toggle: () => Promise<boolean>; thumb?: { src: string; color: string }; hear?: { run: () => void; busy: boolean } };
+// A row of either list: a look has a thumb and its live video to edit, a voice a sample to hear.
+export type StockRow = { id: string; name: string; meta: string; active: boolean; state: string; toggleLabel: string; toggle: () => Promise<boolean>; thumb?: { src: string; color: string }; hear?: { run: () => void; busy: boolean }; edit?: () => void };
 const HEX = /^#[0-9a-fA-F]{6}$/;
 type Spec = Omit<StockField, 'value' | 'set'>;
 
@@ -75,30 +75,39 @@ export function stockVoicesVals(L: Logic, write: Write) {
   };
 }
 
-// The looks creators may choose for a Reel or an avatar: drawn portraits only; there is no upload.
+// The looks creators may choose for a Reel or an avatar: drawn portraits only; there is no upload. The one drawer adds a look and, from a row's "Edit live video",
+// edits only its HeyGen ids (the seeded looks get their avatar here).
 export function stockLooksVals(L: Logic, write: Write) {
-  const s = L.state, f = s.lookForm;
+  const s = L.state, f = s.lookForm, editing = !!f?.id;
   const save = () => {
     const row: StockLookForm | null = f && { name: f.name.trim(), portrait: f.portrait, color: f.color.trim().toLowerCase(), licence: f.licence.trim(), heygen_avatar_id: f.heygen_avatar_id.trim(), heygen_voice_id: f.heygen_voice_id.trim() };
-    return saveWith(L, write, row, stockLookProblem, addStockLook, 'Added ' + row?.name + ' to the stock looks', () => L.setState({ lookForm: null }));
+    const done = () => L.setState({ lookForm: null });
+    if (editing) return saveWith(L, write, row, stockLookProblem, (r) => updateStockLook(f!.id!, { heygen_avatar_id: r.heygen_avatar_id, heygen_voice_id: r.heygen_voice_id }), 'Saved the live video of ' + row?.name, done);
+    return saveWith(L, write, row, stockLookProblem, addStockLook, 'Added ' + row?.name + ' to the stock looks', done);
   };
   const update = (k: string, v: string) => L.setState((st) => ({ lookForm: st.lookForm && { ...st.lookForm, [k]: v } }));
+  const heygen: [keyof StockLookForm & string, Spec][] = [
+    ['heygen_avatar_id', { label: 'HeyGen avatar id (optional)', hint: 'A stock avatar from the LiveAvatar library gives the look live video; without it the look is portrait only.', placeholder: 'uuid' }],
+    ['heygen_voice_id', { label: 'HeyGen voice id (optional)', hint: 'The voice the live video speaks with. The portrait uses the stock ElevenLabs voice chosen for the scenario, so the two can differ.', placeholder: 'uuid' }],
+  ];
   return {
     loading: !s.stockLooks && !s.aiError, empty: !!s.stockLooks && !s.stockLooks.length, note: '',
     rows: (s.stockLooks || []).map((l): StockRow => ({
       ...toggleRow(L, write, { id: l.id, name: l.name, active: l.active, meta: liveVideoOf(l) + ' · ' + l.licence }, (a) => setStockLookActive(l.id, a)),
       thumb: { src: portraitUrl(l.portrait), color: l.color },
+      edit: () => L.setState({ lookForm: { id: l.id, name: l.name, portrait: l.portrait, color: l.color, licence: l.licence, heygen_avatar_id: l.heygen_avatar_id || '', heygen_voice_id: l.heygen_voice_id || '' } }),
     })),
     add: () => L.setState({ lookForm: blankLook() }),
     form: f ? {
-      title: 'Add a stock look', subtitle: 'Only portraits drawn in code: a colleague\'s face is never used, and there is no upload.', submit: 'Add look',
-      fields: fieldsOf(f, update, [
+      title: editing ? 'Live video for ' + f.name : 'Add a stock look',
+      subtitle: editing ? 'A HeyGen stock avatar from the LiveAvatar library: never a colleague\'s face. Note its licence as "' + HEYGEN_LICENCE + '" when you add the look.' : 'Only portraits drawn in code: a colleague\'s face is never used, and there is no upload.',
+      submit: editing ? 'Save' : 'Add look',
+      fields: fieldsOf(f, update, editing ? heygen : [
         ['name', { label: 'Name, as a role and an age', hint: 'A role and an age, never a person\'s name.', placeholder: 'e.g. HR director · 50s' }],
         ['portrait', { label: 'Portrait', options: PORTRAIT_KEYS.map((k: PortraitKey, i) => ({ value: k, label: 'Portrait ' + (i + 1) })), preview: { src: portraitUrl(f.portrait), color: HEX.test(f.color) ? f.color : undefined } }],
         ['color', { label: 'Colour', placeholder: '#2f7fc1', preview: HEX.test(f.color) ? { color: f.color } : undefined }],
         ['licence', { label: 'Licence', hint: 'Where the picture comes from. A HeyGen stock avatar: "' + HEYGEN_LICENCE + '".' }],
-        ['heygen_avatar_id', { label: 'HeyGen avatar id (optional)', hint: 'A stock avatar from the LiveAvatar library gives the look live video; without it the look is portrait only.', placeholder: 'uuid' }],
-        ['heygen_voice_id', { label: 'HeyGen voice id (optional)', hint: 'The voice the live video speaks with. The portrait uses the stock ElevenLabs voice chosen for the scenario, so the two can differ.', placeholder: 'uuid' }],
+        ...heygen,
       ]),
       save, cancel: () => L.setState({ lookForm: null }), busy: s.aiBusy,
     } : null,

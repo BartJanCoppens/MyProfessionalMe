@@ -165,6 +165,7 @@ function StockList({ title, addLabel, emptyText, v }: { title: string; addLabel:
           </div>
           <Tag tone={r.active ? 'green' : 'neutral'}>{r.state}</Tag>
           {r.hear && <Button size="sm" variant="secondary" onClick={r.hear.run} disabled={r.hear.busy}>{r.hear.busy ? 'Loading the sample' : 'Hear the voice'}</Button>}
+          {r.edit && <LinkButton onClick={r.edit}>Edit live video</LinkButton>}
           <LinkButton tone={r.active ? 'muted' : 'link'} onClick={r.toggle}>{r.toggleLabel}</LinkButton>
         </div>
       ))}

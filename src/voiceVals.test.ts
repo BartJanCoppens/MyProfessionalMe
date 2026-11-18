@@ -11,7 +11,7 @@ import type { StockLook } from './logic/stockLooks';
 
 vi.mock('./lib/aiStore', () => ({
   loadAiAdmin: vi.fn(), loadLiveUses: vi.fn(async () => []), saveConnection: vi.fn(), setKey: vi.fn(), deleteConnection: vi.fn(), updateUse: vi.fn(), testConnection: vi.fn(), askAi: vi.fn(),
-  loadStockVoices: vi.fn(), loadStockLooks: vi.fn(async () => []), addStockLook: vi.fn(async () => {}), setStockLookActive: vi.fn(async () => {}), addStockVoice: vi.fn(async () => {}), setStockVoiceActive: vi.fn(async () => {}),
+  loadStockVoices: vi.fn(), loadStockLooks: vi.fn(async () => []), addStockLook: vi.fn(async () => {}), setStockLookActive: vi.fn(async () => {}), updateStockLook: vi.fn(async () => {}), addStockVoice: vi.fn(async () => {}), setStockVoiceActive: vi.fn(async () => {}),
 }));
 vi.mock('./lib/voice', async (orig) => ({ ...(await orig<typeof import('./lib/voice')>()), hearStockVoice: vi.fn(async () => 'data:audio/mpeg;base64,AAA') }));
 

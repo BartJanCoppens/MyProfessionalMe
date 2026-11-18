@@ -18,7 +18,7 @@ vi.mock('../lib/aiStore', () => ({
   loadAiAdmin: vi.fn(), loadLiveUses: vi.fn(async () => []), saveConnection: vi.fn(async () => 'c9'), setKey: vi.fn(async () => {}),
   deleteConnection: vi.fn(async () => {}), updateUse: vi.fn(async () => {}), testConnection: vi.fn(async () => ({ ok: true, model: 'claude-opus-5-5' })), askAi: vi.fn(),
   loadStockVoices: vi.fn(async () => []), addStockVoice: vi.fn(async () => {}), setStockVoiceActive: vi.fn(async () => {}),
-  loadStockLooks: vi.fn(async () => []), addStockLook: vi.fn(async () => {}), setStockLookActive: vi.fn(async () => {}),
+  loadStockLooks: vi.fn(async () => []), addStockLook: vi.fn(async () => {}), setStockLookActive: vi.fn(async () => {}), updateStockLook: vi.fn(async () => {}),
 }));
 vi.mock('../lib/voice', async (orig) => ({ ...(await orig<typeof import('../lib/voice')>()), hearStockVoice: vi.fn(async () => 'data:audio/mpeg;base64,AAA') }));
 
@@ -216,5 +216,26 @@ describe('the stock voices', () => {
     await click('Add look');
     expect(store.addStockLook).not.toHaveBeenCalled();
     expect(screen.getByRole('status').textContent).toMatch(/HeyGen avatar id is a uuid/);
+  });
+  it('edits a look\'s HeyGen ids in the same drawer: only those two fields, saved as an update; empty clears live video', async () => {
+    render(<Live access={generalAdmin()} />);
+    await click('Edit live video');
+    expect(screen.queryByLabelText('Name, as a role and an age')).toBeNull();
+    fireEvent.change(screen.getByLabelText('HeyGen avatar id (optional)'), { target: { value: '11111111-2222-4333-8444-555555555555' } });
+    await click('Save');
+    expect(store.updateStockLook).toHaveBeenCalledWith('l1', { heygen_avatar_id: '11111111-2222-4333-8444-555555555555', heygen_voice_id: '' });
+    expect(store.addStockLook).not.toHaveBeenCalled();
+  });
+  it('a voice needs an avatar and ids are uuids, when editing too', async () => {
+    render(<Live access={generalAdmin()} />);
+    await click('Edit live video');
+    fireEvent.change(screen.getByLabelText('HeyGen voice id (optional)'), { target: { value: '66666666-7777-4888-8999-000000000000' } });
+    await click('Save');
+    expect(store.updateStockLook).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toMatch(/voice goes with a HeyGen avatar/);
+  });
+  it('the voices have no edit', () => {
+    render(<Live access={generalAdmin()} />);
+    expect(screen.getAllByRole('button', { name: 'Edit live video' })).toHaveLength(1);
   });
 });
