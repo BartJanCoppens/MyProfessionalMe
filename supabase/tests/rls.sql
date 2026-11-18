@@ -2797,5 +2797,100 @@ insert into results (check_name, expected, actual) select 'GM and the published 
 reset role;
 insert into results (check_name, expected, actual) select 'GM a Game stays a counsellor-accepted reflection: evidence rule unchanged, never self-completed', 'reflection/false',
   private.evidence_rule('Game')||'/'||private.is_self_complete((select learning_id from public.contributions where title = 'T gm ok'));
+-- ---------- Game runs and leaderboards (GR) ----------
+-- game_runs: a learner's run on a published Game learning, or an author's / assigned reviewer's play-test (test = true, on a contribution
+-- only). Own rows only, no update or delete, finish through finish_game_run (server clock, once, 0-1,000,000). game_leaderboard: finished
+-- non-test runs, each player's best, first name and initial, top 10, 'My team only' by counsellor.
+reset role;
+set local request.jwt.claims = '';
+insert into auth.users (id, email) values
+ ('00000000-0000-0000-0000-000000000a01','t.gr1@test.local'), ('00000000-0000-0000-0000-000000000a02','t.gr2@test.local'),
+ ('00000000-0000-0000-0000-000000000a03','t.gr3@test.local'), ('00000000-0000-0000-0000-000000000a08','t.gr8@test.local'),
+ ('00000000-0000-0000-0000-000000000a09','t.gr9@test.local'), ('00000000-0000-0000-0000-000000000a07','t.gr7@test.local');
+update public.profiles set full_name = 'Jan Peeters', counsellor_id = '00000000-0000-0000-0000-000000000a09' where id = '00000000-0000-0000-0000-000000000a01';
+update public.profiles set full_name = 'Els Maes', counsellor_id = '00000000-0000-0000-0000-000000000a09' where id = '00000000-0000-0000-0000-000000000a02';
+update public.profiles set full_name = 'els@firm.test', counsellor_id = '00000000-0000-0000-0000-000000000a08' where id = '00000000-0000-0000-0000-000000000a03';
+insert into public.learnings (id, title, domain, level, format, hours, status, content) values
+ ('LGR1','T gr firm','prof',2,'Game',0.25,'published','{"kind":"game","leaderboard":"Firm-wide"}'),
+ ('LGR2','T gr team','prof',2,'Game',0.25,'published','{"kind":"game","leaderboard":"My team only"}'),
+ ('LGR3','T gr none','prof',2,'Game',0.25,'published','{"kind":"game","leaderboard":"None"}'),
+ ('LGR4','T gr draft','prof',2,'Game',0.25,'draft','{"kind":"game","leaderboard":"Firm-wide"}'),
+ ('LGR5','T gr elearning','prof',2,'E-learning',1,'published','{"kind":"aid","items":["x"]}'),
+ ('LGR6','T gr twelve','prof',2,'Game',0.25,'published','{"kind":"game","leaderboard":"Firm-wide"}');
+insert into public.contribution_reviews (contribution_id, step, slot, reviewer_id, verdict) select id, 1, 1, '00000000-0000-0000-0000-000000000a07', 'pending' from public.contributions where title = 'T gm ok';
+-- a draft Game contribution of someone else, for the refused test play; both ids are kept for the later steps, where RLS hides them
+insert into public.contributions (business_line, type, title, domain, takeaway, studio, author_id) values ('Consulting','Game','T gr other draft','reg','x','game','00000000-0000-0000-0000-000000000a02');
+select set_config('test.gr_c_ok', (select id::text from public.contributions where title = 'T gm ok'), true), set_config('test.gr_c_other', (select id::text from public.contributions where title = 'T gr other draft'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a01","role":"authenticated"}';
+with i as (insert into public.game_runs (learning_id, test) values ('LGR1', false) returning id) select set_config('test.gr_run', (select id::text from i), true);
+insert into results (check_name, expected, actual) select 'GR a learner starts a run on a published Game, as themselves', '1/true', count(*)||'/'||bool_and(user_id = '00000000-0000-0000-0000-000000000a01' and test = false and finished_at is null) from public.game_runs where id = current_setting('test.gr_run')::uuid;
+create function pg_temp.gr_blocked(p_name text, p_sql text, p_expect text) returns void language plpgsql as $f$
+begin
+  begin execute p_sql; insert into results (check_name, expected, actual) values (p_name, p_expect, 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values (p_name, p_expect, 'blocked: '||case when p_expect like '%:%' and p_expect not like '%: _____' then sqlerrm else sqlstate end); end;
+end $f$;
+select pg_temp.gr_blocked('GR a learner''s test run on a learning is refused', $q$insert into public.game_runs (learning_id, test) values ('LGR1', true)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('GR a non-editor''s test run on someone''s contribution is refused', format($q$insert into public.game_runs (contribution_id, test) values (%L, true)$q$, current_setting('test.gr_c_ok')), 'blocked: 42501');
+select pg_temp.gr_blocked('GR a run on an unpublished Game is refused', $q$insert into public.game_runs (learning_id, test) values ('LGR4', false)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('GR a run on a non-Game learning is refused', $q$insert into public.game_runs (learning_id, test) values ('LGR5', false)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('GR a run for another person is refused', $q$insert into public.game_runs (user_id, learning_id, test) values ('00000000-0000-0000-0000-000000000a02', 'LGR1', false)$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('GR a run on both a learning and a contribution is refused', format($q$insert into public.game_runs (learning_id, contribution_id, test) values ('LGR1', %L, false)$q$, current_setting('test.gr_c_ok')), 'blocked: 23514');
+select pg_temp.gr_blocked('GR a direct update of a run is denied', $q$update public.game_runs set score = 999999, finished_at = now()$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('GR a direct delete of a run is denied', $q$delete from public.game_runs$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('GR a score of 1,000,001 is refused', format($q$select public.finish_game_run(%L, 1000001)$q$, current_setting('test.gr_run')), 'blocked: The score must be a whole number from 0 to 1000000');
+-- the author's and the assigned reviewer's play-tests
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
+with i as (insert into public.game_runs (contribution_id, test) values ((select id from public.contributions where title = 'T gm ok'), true) returning id) select set_config('test.gr_test_run', (select id::text from i), true);
+insert into results (check_name, expected, actual) select 'GR the author may play-test their Game (test = true)', '1', count(*)::text from public.game_runs where id = current_setting('test.gr_test_run')::uuid and test;
+select pg_temp.gr_blocked('GR a test run on someone else''s draft is refused', format($q$insert into public.game_runs (contribution_id, test) values (%L, true)$q$, current_setting('test.gr_c_other')), 'blocked: 42501');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a07","role":"authenticated"}';
+with i as (insert into public.game_runs (contribution_id, test) values ((select id from public.contributions where title = 'T gm ok'), true) returning id) insert into results (check_name, expected, actual) select 'GR an assigned reviewer may play-test it', '1', count(*)::text from i;
+-- someone else: sees none of another's runs and cannot finish one
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a02","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'GR another player''s runs select 0 rows', '0', count(*)::text from public.game_runs;
+select pg_temp.gr_blocked('GR finishing another''s run raises "That run is not yours"', format($q$select public.finish_game_run(%L, 10)$q$, current_setting('test.gr_run')), 'blocked: That run is not yours');
+-- the owner finishes: 90 s on the server clock, once
+reset role;
+update public.game_runs set started_at = now() - interval '90 seconds' where id = current_setting('test.gr_run')::uuid;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a01","role":"authenticated"}';
+select public.finish_game_run(current_setting('test.gr_run')::uuid, 70);
+insert into results (check_name, expected, actual) select 'GR finishing sets the server clock: started 90 s back gives 90 seconds and the score', '90/70/true', seconds||'/'||score||'/'||(finished_at is not null) from public.game_runs where id = current_setting('test.gr_run')::uuid;
+select pg_temp.gr_blocked('GR finishing twice raises "This run has finished"', format($q$select public.finish_game_run(%L, 80)$q$, current_setting('test.gr_run')), 'blocked: This run has finished');
+-- leaderboard data: a1 70 then 90, an unfinished run, a test; a2 tie 90 in 60 s ahead of a3's 90 in 75 s, a3 with an email as a name
+reset role;
+insert into public.game_runs (user_id, learning_id, test, started_at, finished_at, seconds, score) values
+ ('00000000-0000-0000-0000-000000000a01','LGR1',false, now(), now(), 80, 90),
+ ('00000000-0000-0000-0000-000000000a01','LGR1',false, now(), null, null, null),
+ ('00000000-0000-0000-0000-000000000a02','LGR1',false, now(), now(), 60, 90),
+ ('00000000-0000-0000-0000-000000000a03','LGR1',false, now(), now(), 75, 90),
+ ('00000000-0000-0000-0000-000000000a01','LGR2',false, now(), now(), 70, 50),
+ ('00000000-0000-0000-0000-000000000a03','LGR2',false, now(), now(), 70, 99),
+ ('00000000-0000-0000-0000-000000000a01','LGR3',false, now(), now(), 70, 50);
+insert into public.game_runs (user_id, contribution_id, test, started_at, finished_at, seconds, score) values
+ ('00000000-0000-0000-0000-0000000000aa',(select id from public.contributions where title = 'T gm ok'), true, now(), now(), 1, 1000000);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a01","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'GR leaderboard: the test and unfinished runs are absent; 70 and 90 give one row of 90; the tie at 90 ranks 60 s before 75 s before 80 s; names are first name and initial, an email gives Player',
+  '1:Els M.:90:60|2:Player:90:75|3:Jan P.:90:80', string_agg(rank||':'||name||':'||score||':'||seconds, '|' order by rank) from public.game_leaderboard('LGR1');
+insert into results (check_name, expected, actual) select 'GR leaderboard: "None" gives 0 rows', '0', count(*)::text from public.game_leaderboard('LGR3');
+insert into results (check_name, expected, actual) select 'GR leaderboard: a draft Game gives 0 rows', '0', count(*)::text from public.game_leaderboard('LGR4');
+insert into results (check_name, expected, actual) select 'GR leaderboard: a non-Game learning gives 0 rows', '0', count(*)::text from public.game_leaderboard('LGR5');
+insert into results (check_name, expected, actual) select 'GR leaderboard "My team only" excludes a player with another counsellor', '1:Jan P.', string_agg(rank||':'||name, '|') from public.game_leaderboard('LGR2');
+reset role;
+insert into auth.users (id, email) select format('00000000-0000-0000-0001-%s', lpad(i::text, 12, '0'))::uuid, 't.gr12.'||i||'@test.local' from generate_series(1, 12) i;
+insert into public.game_runs (user_id, learning_id, test, started_at, finished_at, seconds, score) select format('00000000-0000-0000-0001-%s', lpad(i::text, 12, '0'))::uuid, 'LGR6', false, now(), now(), 10, i from generate_series(1, 12) i;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000a01","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'GR leaderboard: 12 players give 10 rows, best first', '10/12', count(*)||'/'||max(score) from public.game_leaderboard('LGR6');
+set local role anon;
+select pg_temp.gr_blocked('GR anon cannot execute game_leaderboard', $q$select * from public.game_leaderboard('LGR1')$q$, 'blocked: 42501');
+select pg_temp.gr_blocked('GR anon cannot execute finish_game_run', $q$select public.finish_game_run(gen_random_uuid(), 1)$q$, 'blocked: 42501');
+reset role;
+select pg_temp.gr_blocked('GR the check keeps a test run off a learning, whoever inserts it', $q$insert into public.game_runs (user_id, learning_id, test) values ('00000000-0000-0000-0000-000000000a01', 'LGR1', true)$q$, 'blocked: 23514');
+select pg_temp.gr_blocked('GR the check refuses a score above 1,000,000 on a finished run', $q$insert into public.game_runs (user_id, learning_id, test, finished_at, score) values ('00000000-0000-0000-0000-000000000a01', 'LGR1', false, now(), 1000001)$q$, 'blocked: 23514');
+insert into results (check_name, expected, actual) select 'GR first_and_initial: Jan P., one name stays, blank and email are Player', 'Jan P./Cher/Player/Player/Player/ann V.',
+  private.first_and_initial('Jan Peeters')||'/'||private.first_and_initial('Cher')||'/'||private.first_and_initial('')||'/'||private.first_and_initial(null)||'/'||private.first_and_initial('a@b.test')||'/'||private.first_and_initial(' ann  de vries ');
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
