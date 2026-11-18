@@ -2,7 +2,8 @@
 // function's game review share.
 
 // A creator's, passage's or game's text inside a data block of an AI request; a marker inside it cannot close the block.
-export const marked = (t: string, max = 600) => '<<<' + t.replace(/[<>]{3,}/g, ' ').slice(0, max) + '>>>';
+export const MARKER_RUN = /[<>]{3,}/;
+export const marked = (t: string, max = 600) => '<<<' + t.replace(new RegExp(MARKER_RUN, 'g'), ' ').slice(0, max) + '>>>';
 
 // The JSON object in a model's reply (it may have words around it), or null when there is none or it is broken.
 export function jsonObject(raw: string): unknown | null {
