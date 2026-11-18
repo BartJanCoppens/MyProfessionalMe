@@ -10,8 +10,8 @@
 --               may withdraw it (withdraw_avatar_run) until it is confirmed. A client reads only its own runs (policy); a shared run is read through
 --               shared_avatar_runs (unconfirmed ones, newest first, at most 50, without the transcript and the injection flags) and shared_avatar_run_turns
 --               (the transcript on open, the text of a held line blanked: the counsellor sees that a line was held, never what it said).
--- who decides   private.is_run_decider: the learner's counsellor, or an admin who may accept when the learner has no counsellor (the clause of waiting_submissions,
---               20261102092834, which is inline there). One rule for reading a shared run and for confirming it.
+-- who decides   private.is_decider_for: the learner's counsellor, or an admin who may accept when the learner has no counsellor. ONE rule: waiting_submissions is
+--               redefined below to call it (same result for evidence submissions), and so do the shared list, the transcript and the confirmation.
 -- confirming    confirm_avatar_run: that person puts a note on a shared run, once. It is a note, never completion; a confirmed run leaves the queue.
 -- metering      a scoring call counts as one call under avatar_conversation (its limits, its connection); no new use.
 
@@ -171,7 +171,7 @@ declare
   v_note text := private.trimmed(coalesce(p_note, ''));
 begin
   select * into r from public.avatar_runs where id = p_run for update;
-  if not found or not private.is_run_decider(r.user_id) then raise exception 'Only their counsellor or an admin confirms a run'; end if;
+  if not found or not private.is_decider_for(r.user_id) then raise exception 'Only their counsellor or an admin confirms a run'; end if;
   if r.shared_at is null then raise exception 'That run is not shared'; end if;
   if r.confirmed_at is not null then raise exception 'This run is already confirmed'; end if;
   if char_length(v_note) > 600 then raise exception 'A note is at most 600 characters'; end if;
@@ -180,7 +180,7 @@ end;
 $$;
 
 -- 8. Who decides, and what a decider reads of a shared run.
-create function private.is_run_decider(p_user uuid)
+create function private.is_decider_for(p_user uuid)
 returns boolean
 language sql
 stable
@@ -191,17 +191,36 @@ as $$
     and (p.counsellor_id = (select auth.uid()) or (p.counsellor_id is null and private.can_accept(p_user))));
 $$;
 
--- The unconfirmed shared runs waiting for the caller: who, which learning and the AI's reading (without the injection flags, which are for the server).
+-- The one rule of who decides on a person's work, as waiting_submissions had it inline: their counsellor, or an admin who may accept when they have none.
+-- waiting_submissions (security invoker, so the helper is executable by authenticated) is redefined to use it; its result for submissions is unchanged.
+create or replace function public.waiting_submissions()
+returns table (user_id uuid, name text, business_line public.business_line, learning_id text, submitted_at timestamptz,
+               evidence_note text, evidence_link text, evidence_ref text, last_activity timestamptz)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select l.user_id, coalesce(p.full_name, p.email), p.business_line, l.learning_id, l.submitted_at,
+         l.evidence_note, l.evidence_link, l.evidence_ref,
+         (select max(x.updated_at) from public.learner_learnings x where x.user_id = l.user_id)
+  from public.learner_learnings l
+  join public.profiles p on p.id = l.user_id
+  where l.state = 'submitted' and (select private.is_decider_for(l.user_id))
+  order by l.submitted_at nulls first, l.user_id, l.learning_id;
+$$;
+
+-- The unconfirmed shared runs waiting for the caller (the oldest 50, with the true number waiting in `total`): who, which learning and the AI's reading (without the injection flags, which are for the server).
 create function public.shared_avatar_runs()
-returns table (run_id uuid, user_id uuid, name text, learning_id text, title text, score jsonb, shared_at timestamptz)
+returns table (run_id uuid, user_id uuid, name text, learning_id text, title text, score jsonb, shared_at timestamptz, total bigint)
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select r.id, r.user_id, coalesce(p.full_name, p.email), r.learning_id, coalesce(l.title, r.learning_id), r.score - 'flags', r.shared_at
+  select r.id, r.user_id, coalesce(p.full_name, p.email), r.learning_id, coalesce(l.title, r.learning_id), r.score - 'flags', r.shared_at, count(*) over ()
   from public.avatar_runs r join public.profiles p on p.id = r.user_id left join public.learnings l on l.id = r.learning_id
-  where r.shared_at is not null and not r.test and r.confirmed_at is null and private.is_run_decider(r.user_id)
+  where r.shared_at is not null and not r.test and r.confirmed_at is null and private.is_decider_for(r.user_id)
   order by r.shared_at, r.id limit 50;
 $$;
 
@@ -215,7 +234,7 @@ set search_path = ''
 as $$
   select coalesce(jsonb_agg(case when x.t ->> 'guard' is not null then jsonb_set(x.t, '{text}', '""') else x.t end order by x.n), '[]'::jsonb)
   from public.avatar_runs r, jsonb_array_elements(r.turns) with ordinality as x(t, n)
-  where r.id = p_run and r.shared_at is not null and not r.test and r.confirmed_at is null and private.is_run_decider(r.user_id);
+  where r.id = p_run and r.shared_at is not null and not r.test and r.confirmed_at is null and private.is_decider_for(r.user_id);
 $$;
 
 -- The learner takes a share back until it is confirmed; after that it stays (the counsellor's note is on it).
@@ -237,7 +256,8 @@ end;
 $$;
 
 -- 9. Who may execute what.
-revoke execute on function private.score_band(numeric), private.avatar_score_hash(uuid), private.avatar_score_ok(jsonb, jsonb, jsonb), private.is_run_decider(uuid) from public, anon, authenticated;
+revoke execute on function private.score_band(numeric), private.avatar_score_hash(uuid), private.avatar_score_ok(jsonb, jsonb, jsonb), private.is_decider_for(uuid) from public, anon, authenticated;
+grant execute on function private.is_decider_for(uuid) to authenticated;
 revoke execute on function public.avatar_score_input(uuid, uuid), public.record_avatar_score(uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function public.avatar_score_input(uuid, uuid), public.record_avatar_score(uuid, text, jsonb) to service_role;
 revoke execute on function public.share_avatar_run(uuid), public.withdraw_avatar_run(uuid), public.confirm_avatar_run(uuid, text), public.shared_avatar_runs(), public.shared_avatar_run_turns(uuid) from public, anon;

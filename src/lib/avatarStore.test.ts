@@ -89,8 +89,8 @@ describe('scoring, sharing and confirming', () => {
   });
   it('reads the runs shared with me through the database\'s rule, with names and titles, and no transcript', async () => {
     const { flags: _flags, ...shown } = score;
-    db.answer(() => ({ data: [{ run_id: 'r1', user_id: 'u1', name: 'Kim Learner', learning_id: 'L70', title: 'Selling an HR system', score: shown, shared_at: '2026-11-18T10:00:00Z' }] }));
-    expect(await sharedAvatarRuns()).toEqual([{ runId: 'r1', userId: 'u1', name: 'Kim Learner', learningId: 'L70', title: 'Selling an HR system', score: shown, sharedAt: '2026-11-18T10:00:00Z' }]);
+    db.answer(() => ({ data: [{ run_id: 'r1', user_id: 'u1', name: 'Kim Learner', learning_id: 'L70', title: 'Selling an HR system', score: shown, shared_at: '2026-11-18T10:00:00Z', total: 73 }] }));
+    expect(await sharedAvatarRuns()).toEqual({ total: 73, runs: [{ runId: 'r1', userId: 'u1', name: 'Kim Learner', learningId: 'L70', title: 'Selling an HR system', score: shown, sharedAt: '2026-11-18T10:00:00Z' }] });
     expect(db.calls[0].table).toBe('rpc:shared_avatar_runs');
   });
   it('reads one transcript when it is opened, and takes a share back', async () => {

@@ -75,7 +75,7 @@ export function initState(cfg: Config): AppState {
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwKbQ: '', nwAiBusy: false,
     studio: { view: 'hub', step: 0 },
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
-    evDraft: null, decideNote: {}, trjTalk: {}, queue: null, queueError: null, sharedRuns: null, sharedError: null, fbDraft: null, quiz: null, fmt: null, att: null,
+    evDraft: null, decideNote: {}, trjTalk: {}, queue: null, queueError: null, sharedRuns: null, sharedTotal: 0, sharedError: null, fbDraft: null, quiz: null, fmt: null, att: null,
     aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {}, stockVoices: null, voiceForm: null, voiceHearing: null, stockLooks: null, lookForm: null,
   };
 }

@@ -8,7 +8,7 @@ import { COMMENT_MAX, ITEM_MAX, LIST_MAX, NO_EVIDENCE_MAX, NOTE_MAX, ONE_LINE_MA
 import { migrationText } from '../test/migrations';
 
 const sql = migrationText('20261118210000_avatar_scores.sql');
-const fn = (name: string) => new RegExp('create function (?:private|public)\\.' + name + '\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$;').exec(sql)![0];
+const fn = (name: string) => new RegExp('create (?:or replace )?function (?:private|public)\\.' + name + '\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$;').exec(sql)![0];
 const sqlText = (error: string) => "'" + error.replace(/'/g, "''") + "'";
 
 describe('the score\'s rules in SQL', () => {
@@ -71,22 +71,25 @@ describe('who may execute what', () => {
     expect(sql).toContain('revoke execute on function public.avatar_score_input(uuid, uuid), public.record_avatar_score(uuid, text, jsonb) from public, anon, authenticated;');
     expect(sql).toContain('grant execute on function public.avatar_score_input(uuid, uuid), public.record_avatar_score(uuid, text, jsonb) to service_role;');
     expect(sql).toContain('grant execute on function public.share_avatar_run(uuid), public.withdraw_avatar_run(uuid), public.confirm_avatar_run(uuid, text), public.shared_avatar_runs(), public.shared_avatar_run_turns(uuid) to authenticated;');
-    for (const name of ['avatar_score_input', 'record_avatar_score', 'share_avatar_run', 'withdraw_avatar_run', 'confirm_avatar_run', 'avatar_score_hash', 'shared_avatar_runs', 'shared_avatar_run_turns', 'is_run_decider']) expect(fn(name), name).toMatch(/security definer\s+set search_path = ''/);
+    for (const name of ['avatar_score_input', 'record_avatar_score', 'share_avatar_run', 'withdraw_avatar_run', 'confirm_avatar_run', 'avatar_score_hash', 'shared_avatar_runs', 'shared_avatar_run_turns', 'is_decider_for']) expect(fn(name), name).toMatch(/security definer\s+set search_path = ''/);
     expect(sql).not.toMatch(/grant (update|insert)[^;]*avatar_runs/);
   });
   it('says the shared and confirmed refusals in the words the screens show', () => {
     for (const t of ['That run is not yours', 'A practice run in the studio is never shared', 'Score the run before sharing it']) expect(fn('share_avatar_run')).toContain(sqlText(t));
     for (const t of ['Only their counsellor or an admin confirms a run', 'That run is not shared']) expect(fn('confirm_avatar_run')).toContain(sqlText(t));
-    expect(fn('confirm_avatar_run')).toContain('private.is_run_decider(r.user_id)');
+    expect(fn('confirm_avatar_run')).toContain('private.is_decider_for(r.user_id)');
   });
 });
 
 describe('who reads a shared run', () => {
   it('is the waiting_submissions rule: the counsellor, an admin only when there is none, for the list, the transcript and the confirmation', () => {
-    const rule = fn('is_run_decider');
+    const rule = fn('is_decider_for');
     expect(rule).toContain('p.counsellor_id = (select auth.uid()) or (p.counsellor_id is null and private.can_accept(p_user))');
-    expect(migrationText('20261102092834_learning_record.sql')).toContain('p.counsellor_id = (select auth.uid()) or (p.counsellor_id is null and (select private.can_accept(l.user_id)))');
-    for (const name of ['shared_avatar_runs', 'shared_avatar_run_turns']) expect(fn(name), name).toContain('private.is_run_decider(r.user_id)');
+    // one rule, not two copies: waiting_submissions calls the helper (behaviour is the database cases AS waiting_submissions, with the earlier approvals cases)
+    expect(fn('waiting_submissions')).toContain('private.is_decider_for(l.user_id)');
+    expect(fn('waiting_submissions')).not.toContain('counsellor_id');
+    expect(fn('shared_avatar_runs')).toContain('count(*) over ()');
+    for (const name of ['shared_avatar_runs', 'shared_avatar_run_turns']) expect(fn(name), name).toContain('private.is_decider_for(r.user_id)');
     expect(fn('shared_avatar_runs')).toContain("r.score - 'flags'");
     expect(fn('shared_avatar_runs')).toContain('r.confirmed_at is null');
     expect(fn('shared_avatar_runs')).toContain('limit 50');

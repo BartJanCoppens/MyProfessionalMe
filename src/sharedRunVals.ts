@@ -7,9 +7,11 @@ import { NOTE_MAX } from '../supabase/functions/_shared/avatarScore.ts';
 import { fmtDate } from './logic/contribution';
 import { BUSY, commentBox, first, initialsOf } from './queueHelpers';
 
+/** public.confirm_avatar_run's words for a run that is no longer shared. */
+export const NOT_SHARED = 'That run is not shared';
 const noteKey = (runId: string) => 'run|' + runId;
 
-export const reloadShared = (L: Logic) => sharedAvatarRuns().then((sharedRuns) => L.setState({ sharedRuns, sharedError: null }), (err) => L.setState({ sharedError: (err as Error).message }));
+export const reloadShared = (L: Logic) => sharedAvatarRuns().then((r) => L.setState({ sharedRuns: r.runs, sharedTotal: r.total, sharedError: null }), (err) => L.setState({ sharedError: (err as Error).message }));
 
 async function confirm(L: Logic, r: SharedRun) {
   const key = noteKey(r.runId), note = (L.state.decideNote[key] || '').trim();
@@ -21,7 +23,10 @@ async function confirm(L: Logic, r: SharedRun) {
     L.setState((s) => { const { [key]: _sent, ...rest } = s.decideNote; return { decideNote: rest }; });
     L.say('Confirmed · ' + first(r.name) + ' sees your note');
     await reloadShared(L);
-  } catch (err) { L.say((err as Error).message); }
+  } catch (err) {
+    // the learner took the share back while this row was open: the list is stale
+    if ((err as Error).message === NOT_SHARED) { L.say('The learner withdrew this run'); await reloadShared(L); } else L.say((err as Error).message);
+  }
   finally { BUSY.delete(key); }
 }
 

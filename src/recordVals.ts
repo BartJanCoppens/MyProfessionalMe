@@ -152,7 +152,7 @@ function approvals(L: Logic) {
   return {
     lead: 'Submissions you decide on: your counsellees’ and, if you are an admin, those of people without a counsellor. Accept, or request changes with a comment the learner sees. Amber: waiting more than five working days.',
     loading: s.queue === null && !s.queueError, error: s.queueError, retry: () => { L.setState({ queue: null, queueError: null }); reloadQueue(L); },
-    empty: !!s.queue && s.queue.length === 0 && !(s.sharedRuns || []).length, rows, shared: sharedRunRows(L), sharedError: s.sharedError,
+    empty: !!s.queue && s.queue.length === 0 && !(s.sharedRuns || []).length, rows, shared: sharedRunRows(L), sharedMore: s.sharedTotal > (s.sharedRuns || []).length ? 'Showing the oldest ' + (s.sharedRuns || []).length + ' of ' + s.sharedTotal + ' shared practice runs' : '', sharedError: s.sharedError,
   };
 }
 
@@ -161,7 +161,7 @@ export function recordVals(L: Logic, it: Item) {
   return {
     rec: detailRecord(L, it),
     appr: s.screen === 'approvals' ? approvals(L) : null,
-    approvalsBadge: (s.queue || []).length + (s.sharedRuns || []).length,
+    approvalsBadge: (s.queue || []).length + s.sharedTotal,
     navApprovals: s.screen === 'approvals' || (s.screen === 'detail' && s.origin === 'approvals'),
     goApprovals: () => { L.go('approvals'); reloadQueue(L); },
   };

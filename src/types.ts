@@ -175,7 +175,7 @@ export type AppState = {
   // Approvals (F3): what waits for the signed-in person (not the viewed one), from waiting_submissions().
   queue: QueueRow[] | null; queueError: string | null;
   // Practice runs shared with the signed-in person (Task 6.4), the second kind of row of the queue.
-  sharedRuns: SharedRun[] | null; sharedError: string | null;
+  sharedRuns: SharedRun[] | null; sharedTotal: number; sharedError: string | null;
   // Completion per type (v0.7.2): the classroom feedback being written and the avatar quiz's picks, for one learning of
   // one person (key subject|learning), so View as never shows another person's draft.
   fbDraft: { key: string; rating: number | null; text: string } | null;

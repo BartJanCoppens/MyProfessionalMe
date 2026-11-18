@@ -3718,6 +3718,17 @@ insert into results (check_name, expected, actual) select 'AS with one creditabl
   (select private.avatar_score_ok(pg_temp.as_score(current_setting('test.as_held_run'), 70, '[3]'), i -> 'points', i -> 'turns')::text from (select public.avatar_score_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.as_held_run')::uuid) as i) q)||'/'||
   (select private.avatar_score_ok(pg_temp.as_score(current_setting('test.as_held_run'), 54, '[3]'), i -> 'points', i -> 'turns')::text from (select public.avatar_score_input('00000000-0000-0000-0000-0000000000ab', current_setting('test.as_held_run')::uuid) as i) q);
 insert into results (check_name, expected, actual) select 'AS confirming wrote no progress either: a score and a confirmation are never completion', 'true', ((select count(*) from public.learner_learnings)::text = current_setting('test.as_progress'))::text;
+-- one rule of who decides: waiting_submissions (evidence) follows private.is_decider_for like the shared runs: the counsellor sees their counsellee's submission, an admin only
+-- the one of a person without a counsellor, a colleague neither
+insert into public.learner_learnings (user_id, learning_id, state, pct) values ('00000000-0000-0000-0000-0000000000ab','L2','submitted',100), ('00000000-0000-0000-0000-0000000000db','L2','submitted',100);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ae","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'AS waiting_submissions: the counsellor sees their counsellee''s submission and not the other person''s', '1/0', (select count(*) from public.waiting_submissions() where user_id = '00000000-0000-0000-0000-0000000000ab')||'/'||(select count(*) from public.waiting_submissions() where user_id = '00000000-0000-0000-0000-0000000000db');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000da","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'AS waiting_submissions: a General Admin sees the submission of a person without a counsellor, not of one who has a counsellor', '0/1', (select count(*) from public.waiting_submissions() where user_id = '00000000-0000-0000-0000-0000000000ab')||'/'||(select count(*) from public.waiting_submissions() where user_id = '00000000-0000-0000-0000-0000000000db');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000af","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'AS waiting_submissions: a colleague sees neither', '0', count(*)::text from public.waiting_submissions() where user_id in ('00000000-0000-0000-0000-0000000000ab', '00000000-0000-0000-0000-0000000000db');
+reset role;
 -- a learning unpublished mid-run: the context stops
 update public.learnings set status = 'draft' where id = current_setting('test.ar_learning');
 set local role service_role;

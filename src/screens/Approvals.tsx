@@ -46,6 +46,7 @@ export default function ApprovalsScreen({ appr, onOpen }: { appr: Appr; onOpen: 
         </QueueRow>
       ))}
       <SharedRuns rows={appr.shared} />
+      {appr.sharedMore && <div style={note}>{appr.sharedMore}</div>}
     </>
   );
 }

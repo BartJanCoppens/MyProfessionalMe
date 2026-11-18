@@ -110,7 +110,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   useEffect(() => {
     let live = true;
     loadQueue().then((q) => { if (live) setRaw((s) => ({ ...s, queue: q, queueError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, queueError: (err as Error).message })); });
-    sharedAvatarRuns().then((r) => { if (live) setRaw((s) => ({ ...s, sharedRuns: r, sharedError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, sharedError: (err as Error).message })); });
+    sharedAvatarRuns().then((r) => { if (live) setRaw((s) => ({ ...s, sharedRuns: r.runs, sharedTotal: r.total, sharedError: null })); }, (err) => { if (live) setRaw((s) => ({ ...s, sharedError: (err as Error).message })); });
     return () => { live = false; };
   }, [me]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);

@@ -66,14 +66,16 @@ export async function confirmAvatarRun(runId: string, note: string): Promise<voi
 
 /** What the counsellor sees of a shared run: the AI's reading (without the server's injection flags), never the transcript until it is opened. */
 export type SharedRun = { runId: string; userId: string; name: string; learningId: string; title: string; score: Omit<AvatarScore, 'flags'>; sharedAt: string };
-type SharedRow = { run_id: string; user_id: string; name: string; learning_id: string; title: string; score: SharedRun['score']; shared_at: string };
+type SharedRow = { run_id: string; user_id: string; name: string; learning_id: string; title: string; score: SharedRun['score']; shared_at: string; total: number };
 
-// The unconfirmed runs shared with me as their counsellor (an admin only when the learner has none), oldest first, at most 50: the database's rule, the same as
+// The unconfirmed runs shared with me as their counsellor (an admin only when the learner has none), oldest first, the first 50 and the number waiting: the database's rule, the same as
 // the approvals queue's. My own runs are never in it.
-export async function sharedAvatarRuns(): Promise<SharedRun[]> {
+export async function sharedAvatarRuns(): Promise<{ runs: SharedRun[]; total: number }> {
   const { data, error } = await supabase.rpc('shared_avatar_runs');
   fail(error);
-  return ((data || []) as SharedRow[]).map((r) => ({ runId: r.run_id, userId: r.user_id, name: r.name, learningId: r.learning_id, title: r.title, score: r.score, sharedAt: r.shared_at }));
+  const rows = (data || []) as SharedRow[];
+  // `total` is the number waiting, more than the list when over 50 wait
+  return { runs: rows.map((r) => ({ runId: r.run_id, userId: r.user_id, name: r.name, learningId: r.learning_id, title: r.title, score: r.score, sharedAt: r.shared_at })), total: rows.length ? Number(rows[0].total) : 0 };
 }
 
 // One shared run's transcript, read when it is opened; the text of a line a guard held is blank (its guard code marks it).

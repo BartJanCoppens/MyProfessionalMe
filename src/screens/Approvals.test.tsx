@@ -11,7 +11,7 @@ import ApprovalsScreen from './Approvals';
 
 const turns = [{ who: 'learner', text: '', guard: 'meta_or_injection' }, { who: 'character', text: 'Let us stay on the topic.', guard: 'meta_or_injection' },
   { who: 'learner', text: 'What worries you most?', guard: null }, { who: 'character', text: 'The cost.', guard: null }];
-vi.mock('../lib/avatarStore', async (orig) => ({ ...(await orig<typeof import('../lib/avatarStore')>()), confirmAvatarRun: vi.fn(async () => {}), sharedAvatarRuns: vi.fn(async () => []), sharedRunTurns: vi.fn(async () => turns) }));
+vi.mock('../lib/avatarStore', async (orig) => ({ ...(await orig<typeof import('../lib/avatarStore')>()), confirmAvatarRun: vi.fn(async () => {}), sharedAvatarRuns: vi.fn(async () => ({ runs: [], total: 0 })), sharedRunTurns: vi.fn(async () => turns) }));
 vi.mock('../lib/recordStore', () => ({ loadQueue: vi.fn(async () => []), decideLearning: vi.fn(async () => 'accepted') }));
 
 const point = (id: string, text: string, score: number, band: Band, comment: string) => ({ id, text, weight: 50, score, band, comment, turns: [1] });
@@ -20,8 +20,8 @@ const run: SharedRun = {
   score: { overall: 50, band: 'Mediocre', version: '1.0.0', strengths: ['Asked first'], missed: ['No numbers'], summary: 'A fair start.',
     points: [point('lp-1', 'Asks about her concerns', 70, 'Very good', 'Asked what worries her in turn 1.'), point('lp-2', 'Names the cost of doing nothing', 30, 'Needs improvement', 'No quotable line on cost.')] }
 };
-const view = (runs: SharedRun[]) => {
-  const h = harness({ subject: person({ id: 'c1' }), access: member('c1'), state: { screen: 'approvals', queue: [], sharedRuns: runs } });
+const view = (runs: SharedRun[], total?: number) => {
+  const h = harness({ subject: person({ id: 'c1' }), access: member('c1'), state: { screen: 'approvals', queue: [], sharedRuns: runs, sharedTotal: total ?? runs.length } });
   const shown = () => <ApprovalsScreen appr={h.vm().appr!} onOpen={vi.fn()} />;
   const r = render(shown());
   // the Shell renders again after every state change
@@ -65,7 +65,7 @@ describe('a shared avatar practice on the approvals screen', () => {
   });
   it('counts every run waiting on the badge, and lists no confirmed run (the database leaves them out)', () => {
     expect(view([run]).vm.approvalsBadge).toBe(1);
-    expect(harness({ access: member('c1'), state: { queue: [], sharedRuns: [run, { ...run, runId: 'run-2' }] } }).vm().approvalsBadge).toBe(2);
+    expect(harness({ access: member('c1'), state: { queue: [], sharedRuns: [run, { ...run, runId: 'run-2' }], sharedTotal: 2 } }).vm().approvalsBadge).toBe(2);
     expect(screen.queryByText(/^Confirmed/)).toBeNull();
   });
   it('mentions no audio and no grade: it is the words and an advice score', () => {
@@ -76,5 +76,17 @@ describe('a shared avatar practice on the approvals screen', () => {
     const h = harness({ subject: person({ id: 'c1' }), access: member('c1'), state: { screen: 'approvals', queue: [], sharedRuns: null, sharedError: 'permission denied' } });
     render(<ApprovalsScreen appr={h.vm().appr!} onOpen={vi.fn()} />);
     expect(screen.getByText('The shared practice runs did not load')).toBeTruthy();
+  });
+  it('says when more runs wait than are listed, and the badge counts the true number', () => {
+    const { vm } = view([run], 73);
+    expect(screen.getByText('Showing the oldest 1 of 73 shared practice runs')).toBeTruthy();
+    expect(vm.approvalsBadge).toBe(73);
+  });
+  it('says the learner withdrew the run, and reloads the list, when the confirmation finds it no longer shared', async () => {
+    vi.mocked(store.confirmAvatarRun).mockRejectedValueOnce(new Error('That run is not shared'));
+    const { h } = view([run]);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    await vi.waitFor(() => expect(store.sharedAvatarRuns).toHaveBeenCalledTimes(1));
+    expect(h.lastToast()).toBe('The learner withdrew this run');
   });
 });
