@@ -4,7 +4,7 @@
 // learners will get. Pure.
 import type { FormatContent } from '../types';
 import { ALT_MAX, drawingOf } from './motionSvg';
-import { slidesContent, slidesProblems } from './slidesContent';
+import { AI_VOICE, PRESENTER, slidesContent, slidesProblems } from './slidesContent';
 import { itemsValid, labelledRows, questionsOf, stepsOf } from './studios';
 import type { StudioDef, StudioEntry, StudioItem } from './studios';
 
@@ -66,8 +66,9 @@ export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Reco
 
 // Answers only Draft with AI (or, for the voice, the live AI voice) can deliver (question to answers): offered only while it can run, with the reason otherwise;
 // an answer already chosen stays on screen, with the reason.
-export const AI_ONLY: Record<string, { options: string[]; why: string }> = {
-  [END_QUESTION]: { options: [END_CHECK], why: 'A three-question check is written by Draft with AI, which is not switched on' },
+export const AI_ONLY: Record<string, { options: string[]; why: string; needs: 'draft' | 'voice' }> = {
+  [END_QUESTION]: { options: [END_CHECK], why: 'A three-question check is written by Draft with AI, which is not switched on', needs: 'draft' },
+  [PRESENTER]: { options: [AI_VOICE], why: 'The AI voice is not switched on · the browser voice can preview the talk-over in Produce, but nothing is stored', needs: 'voice' },
 };
 
 const texts = (items: StudioItem[], label: string) => items.filter((i) => i[0] === label).map((i) => i[1].trim());
