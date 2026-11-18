@@ -5,18 +5,19 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDLE_STOP_MS, useLiveAvatar } from './useLiveAvatar';
 
-const invoke = vi.fn(), keepalive = vi.fn(), getUserMedia = vi.fn();
-vi.mock('../lib/aiStore', () => ({ invokeFunction: (...a: unknown[]) => invoke(...a), keepaliveFunction: (...a: unknown[]) => keepalive(...a) }));
+const invoke = vi.fn(), keepalive = vi.fn(), getUserMedia = vi.fn(), warm = vi.fn(async () => {});
+vi.mock('../lib/aiStore', () => ({ invokeFunction: (...a: unknown[]) => invoke(...a), keepaliveFunction: (...a: unknown[]) => keepalive(...a), warmKeepalive: () => warm() }));
 
 type Handler = (...a: unknown[]) => void;
 const sessions: FakeSession[] = [];
 let startError: Error | null = null;
+let startGate: Promise<void> | null = null;
 class FakeSession {
   handlers: Record<string, Handler> = {};
   voiceChat = { start: vi.fn(async () => { await getUserMedia({ audio: true }); }) };
   repeat = vi.fn(); attach = vi.fn(); stop = vi.fn(async () => {});
   // like the SDK's start(): it opens the microphone through voiceChat.start()
-  start = vi.fn(async () => { if (startError) throw startError; await this.voiceChat.start(); });
+  start = vi.fn(async () => { if (startGate) await startGate; if (startError) throw startError; await this.voiceChat.start(); });
   on(e: string, h: Handler) { this.handlers[e] = h; }
   token: string;
   constructor(token: string) { this.token = token; sessions.push(this); }
@@ -38,6 +39,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   sessions.length = 0;
   startError = null;
+  startGate = null;
   invoke.mockReset().mockResolvedValue({ token: 'tok', sessionId: SID, maxSeconds: 660 });
   keepalive.mockReset().mockResolvedValue(undefined);
   getUserMedia.mockReset();
@@ -114,5 +116,44 @@ describe('useLiveAvatar', () => {
     expect(session.stop).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe('idle');
     expect(onFallback).not.toHaveBeenCalled();
+  });
+  it('attaches the video when the stream is ready (the SDK ignores attach before its tracks arrive)', async () => {
+    const { result, session } = await live();
+    const el = document.createElement('video');
+    act(() => result.current.attach(el));
+    session.attach.mockClear();
+    act(() => session.handlers['session.stream_ready']());
+    expect(session.attach).toHaveBeenCalledTimes(1);
+    expect(session.attach).toHaveBeenCalledWith(el);
+  });
+  it('stops a session whose start finishes after it was released', async () => {
+    let open: () => void = () => {};
+    startGate = new Promise<void>((r) => { open = r; });
+    const { unmount } = renderHook(() => useLiveAvatar({ runId: 'run-1', enabled: true, onFallback: vi.fn() }));
+    await flush();
+    const session = sessions[sessions.length - 1];
+    unmount();
+    await flush();
+    session.stop.mockClear();
+    open();
+    await flush();
+    expect(session.stop).toHaveBeenCalledTimes(1);
+  });
+  it('speak says whether the avatar took the line: false while connecting or after it ended, so the panel uses the portrait', async () => {
+    let release: (v: unknown) => void = () => {};
+    invoke.mockReturnValueOnce(new Promise((r) => { release = r; }));
+    const hook = renderHook(() => useLiveAvatar({ runId: 'run-1', enabled: true, onFallback: vi.fn() }));
+    await flush();
+    expect(hook.result.current.status).toBe('connecting');
+    expect(hook.result.current.speak('Hello')).toBe(false);
+    release({ token: 'tok', sessionId: SID, maxSeconds: 660 });
+    await flush();
+    expect(hook.result.current.speak('Hello')).toBe(true);
+    await act(async () => { await hook.result.current.stop(); });
+    expect(hook.result.current.speak('Hello')).toBe(false);
+  });
+  it('caches the access token for the final keepalive report when it connects', async () => {
+    await live();
+    expect(warm).toHaveBeenCalled();
   });
 });

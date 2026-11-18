@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { classifyLiveError, createUsageMeter, openLiveVideo, reportLiveSeconds, USAGE_HEARTBEAT_MS } from './liveSession';
 
 const invoke = vi.fn(), keepalive = vi.fn();
-vi.mock('../lib/aiStore', () => ({ invokeFunction: (...a: unknown[]) => invoke(...a), keepaliveFunction: (...a: unknown[]) => keepalive(...a) }));
+vi.mock('../lib/aiStore', () => ({ invokeFunction: (...a: unknown[]) => invoke(...a), keepaliveFunction: (...a: unknown[]) => keepalive(...a), warmKeepalive: () => Promise.resolve() }));
 
 const SID = '3b241101-e2bb-4255-8caf-4136c566a962';
 

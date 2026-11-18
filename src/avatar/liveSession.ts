@@ -1,6 +1,6 @@
 // The live video session's plumbing (studios plan, Task 6.5): asking the `avatar` function for a short-lived token, reporting the seconds a session really ran,
 // and what a failure means. classifyLiveError and createUsageMeter are ported from Taxatar's heyGenSession.ts. The HeyGen key is never here: only the token.
-import { invokeFunction, keepaliveFunction } from '../lib/aiStore';
+import { invokeFunction, keepaliveFunction, warmKeepalive } from '../lib/aiStore';
 
 export type LiveSessionStart = { token: string; sessionId: string; maxSeconds: number };
 export type LiveErrorReason = 'no_credits' | 'token_rejected' | 'session' | 'unknown';
@@ -18,7 +18,10 @@ export async function openLiveVideo(runId: string): Promise<LiveSessionStart> {
 // a report that fails leaves the reservation, which ends by itself.
 export async function reportLiveSeconds(sessionId: string, seconds: number, final: boolean): Promise<void> {
   const body = { action: 'report', sessionId, seconds: Math.max(0, Math.round(seconds)), final };
-  try { await (final ? keepaliveFunction('avatar', body) : invokeFunction('avatar', body)); } catch { /* the reservation ends by itself */ }
+  try {
+    if (final) await keepaliveFunction('avatar', body);
+    else { await invokeFunction('avatar', body); void warmKeepalive(); } // a heartbeat also refreshes the token the last report will use
+  } catch { /* the reservation ends by itself */ }
 }
 
 /** Classifies a thrown value from the LiveAvatar SDK or the token call into a stable shape. */

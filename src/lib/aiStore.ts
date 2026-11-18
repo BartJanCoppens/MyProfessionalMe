@@ -19,10 +19,14 @@ export async function invokeFunction<T>(name: 'ai' | 'voice' | 'avatar', body: R
 }
 
 // A last report that must still leave when the page is closing (pagehide, unmount): a raw request with keepalive, which supabase.functions.invoke cannot do.
-// Never throws; an answer is not read.
+// It is issued in the same tick from the access token cached by warmKeepalive (reading the session can wait on a lock while the page freezes); without a cached
+// token it reads the session first. Never throws; an answer is not read.
+let cachedToken: string | null = null;
+export async function warmKeepalive(): Promise<void> {
+  try { cachedToken = (await supabase.auth.getSession()).data.session?.access_token ?? null; } catch { cachedToken = null; }
+}
 export async function keepaliveFunction(name: 'avatar', body: Record<string, unknown>): Promise<void> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = cachedToken ?? (await supabase.auth.getSession()).data.session?.access_token;
   if (!token) return;
   await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
     method: 'POST', keepalive: true,
@@ -92,11 +96,12 @@ async function addStock(table: StockTable, what: string, row: object, duplicate?
   fail(error);
   if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can add ' + what);
 }
-async function setStockActive(table: StockTable, what: string, id: string, active: boolean) {
-  const { data, error } = await supabase.from(table).update({ active }).eq('id', id).select('id');
+async function updateStock(table: StockTable, what: string, id: string, patch: object) {
+  const { data, error } = await supabase.from(table).update(patch).eq('id', id).select('id');
   fail(error);
   if (!(data as unknown[] | null)?.length) throw new Error('Only System and General Admins can change ' + what);
 }
+const setStockActive = (table: StockTable, what: string, id: string, active: boolean) => updateStock(table, what, id, { active });
 
 export const loadStockVoices = () => loadStock<StockVoice>('stock_voices', 'id, name, voice_id, language, accent, active', 'name');
 export const addStockVoice = (f: StockVoiceForm) => addStock('stock_voices', 'stock voices', { ...f, accent: f.accent || null }, [/duplicate key|stock_voices_voice_id_key/i, 'That ElevenLabs voice id is on the list already']);
@@ -104,6 +109,9 @@ export const setStockVoiceActive = (id: string, active: boolean) => setStockActi
 
 export const loadStockLooks = () => loadStock<StockLook>('stock_looks', 'id, name, portrait, color, licence, active, heygen_avatar_id, heygen_voice_id', 'created_at');
 export const addStockLook = (f: StockLookForm) => addStock('stock_looks', 'stock looks', { ...f, color: f.color.toLowerCase(), heygen_avatar_id: f.heygen_avatar_id || null, heygen_voice_id: f.heygen_voice_id || null }, [/duplicate key|stock_looks_name_key/i, 'A look with that name is on the list already']);
+// A look's HeyGen ids (empty clears them: the look is portrait only again).
+export const updateStockLook = (id: string, f: Pick<StockLookForm, 'heygen_avatar_id' | 'heygen_voice_id'>) =>
+  updateStock('stock_looks', 'stock looks', id, { heygen_avatar_id: f.heygen_avatar_id || null, heygen_voice_id: f.heygen_voice_id || null });
 export const setStockLookActive = (id: string, active: boolean) => setStockActive('stock_looks', 'stock looks', id, active);
 
 export const testConnection = (id: string) => invokeFunction<{ ok: boolean; model?: string; error?: string }>('ai', { action: 'test', connection_id: id });

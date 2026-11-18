@@ -5,6 +5,7 @@
 // a keepalive request, on stop, unmount, page hide, idle and run end, so no session is left running unreported.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LiveAvatarSession, SessionEvent } from '@heygen/liveavatar-web-sdk';
+import { warmKeepalive } from '../lib/aiStore';
 import { classifyLiveError, createUsageMeter, openLiveVideo } from './liveSession';
 import type { UsageMeter } from './liveSession';
 
@@ -18,12 +19,13 @@ type Options = { runId: string; enabled: boolean; onFallback: (message: string) 
 export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
   const [status, setStatus] = useState<LiveStatus>('idle');
   const session = useRef<LiveAvatarSession | null>(null), meter = useRef<UsageMeter | null>(null), video = useRef<HTMLVideoElement | null>(null);
-  const idle = useRef<ReturnType<typeof setTimeout> | null>(null), generation = useRef(0), fallback = useRef(onFallback);
+  const live = useRef(false), idle = useRef<ReturnType<typeof setTimeout> | null>(null), generation = useRef(0), fallback = useRef(onFallback);
   useEffect(() => { fallback.current = onFallback; });
 
   // Stops everything once: the meter's final report (which also returns the seconds of a session that never started) and the SDK session.
   const release = useCallback(async () => {
     generation.current += 1;
+    live.current = false;
     if (idle.current) clearTimeout(idle.current);
     const [s, m] = [session.current, meter.current];
     session.current = null; meter.current = null;
@@ -46,6 +48,7 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
   const connect = useCallback(async () => {
     const mine = ++generation.current;
     setStatus('connecting');
+    void warmKeepalive(); // the token the final report will use, read now: it must leave without waiting when the page closes
     let opened;
     try { opened = await openLiveVideo(runId); } catch (e) {
       if (mine === generation.current) { setStatus('failed'); fallback.current(classifyLiveError(e).message); }
@@ -55,15 +58,18 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
     if (mine !== generation.current) { void usage.stop(); return; } // stopped while the token was coming: give the seconds back
     const s = new LiveAvatarSession(opened.token);
     s.voiceChat.start = async () => {}; // the SDK would open the microphone here; the avatar only speaks the text it is given
+    // The SDK ignores attach() until the remote tracks have arrived: attach when it says the stream is ready.
+    s.on(SessionEvent.SESSION_STREAM_READY, () => { if (session.current === s && video.current) s.attach(video.current); });
     s.on(SessionEvent.SESSION_DISCONNECTED, () => { if (session.current === s) void end('ended', STOPPED_MESSAGE); });
     session.current = s; meter.current = usage;
     try { await s.start(); } catch (e) {
       if (mine === generation.current) await end('failed', classifyLiveError(e).message);
       return;
     }
-    if (mine !== generation.current) return;
+    if (mine !== generation.current) { void s.stop().catch((): void => undefined); return; } // released while it was starting: the SDK's stop did nothing then
     if (video.current) s.attach(video.current);
     usage.start();
+    live.current = true;
     armIdle();
     setStatus('live');
   }, [runId, end, armIdle]);
@@ -72,11 +78,13 @@ export function useLiveAvatar({ runId, enabled, onFallback }: Options) {
     video.current = el;
     if (el && session.current) session.current.attach(el);
   }, []);
-  // Speaks the character's reply (the portrait or the browser voice speaks when this is not live). A reply means the learner just wrote a line: the idle clock restarts.
-  const speak = useCallback((text: string) => {
-    if (!session.current) return;
-    session.current.repeat(text);
+  // Speaks the character's reply and says whether the avatar took it: false while connecting or when not live, so the panel lets the portrait (or the browser voice)
+  // speak. A reply means the learner just wrote a line: the idle clock restarts.
+  const speak = useCallback((text: string): boolean => {
+    if (!session.current || !live.current) return false;
+    try { session.current.repeat(text); } catch { return false; }
     armIdle();
+    return true;
   }, [armIdle]);
   const stop = useCallback(async () => { await release(); setStatus('idle'); }, [release]);
   const resume = useCallback(() => { if (!session.current) void connect(); }, [connect]);
