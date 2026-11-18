@@ -12,12 +12,12 @@ describe('studio definitions', () => {
     expect(STUDIOS.map((s) => s.id)).toEqual(['avatar', 'reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
     for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length > 0, s.id).toBe(!['explainer', 'slides', 'podcast'].includes(s.id)); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
     expect(def('avatar').qs).toHaveLength(4);
-    expect(def('reel').build).toEqual(['Writing the voice-over', 'Recording the avatar take', 'Adding visuals and captions', 'Final cut']);
+    expect(def('reel').build).toEqual(['Writing the voice-over · from your scenes · no AI', 'Voicing each scene', 'Adding visuals and captions', 'Final cut']);
   });
-  it('names a learning format per studio; Podcast, Game, Slides, Motion, Explainer, Job aid, Flash and Case are available', () => {
+  it('names a learning format per studio; Reel, Podcast, Game, Slides, Motion, Explainer, Job aid, Flash and Case are available', () => {
     expect(STUDIOS.map((s) => s.format)).toEqual(['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Flash cards', 'Case exercise']);
     expect(def('flash').alsoFormats).toEqual(['Practice exam']);
-    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
+    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
   });
   it('names no person: the examples and the seeded stock looks use roles', () => {
     expect(JSON.stringify(STUDIOS)).not.toMatch(/Marleen|Pieter|\bSara\b|Yves/);

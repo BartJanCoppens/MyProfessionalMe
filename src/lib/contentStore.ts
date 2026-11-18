@@ -3,7 +3,11 @@ import { LEADERBOARDS } from '../logic/gameContent';
 import { GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
 import { isHorizonItem } from '../logic/horizonItem';
 import { isQuestion } from '../logic/items';
+import { MEDIA_PATH } from '../logic/mediaFiles';
 import { PODCAST_MAX_SECONDS } from '../logic/podcastContent';
+import { REEL_SECONDS_MAX } from '../logic/reelContent';
+import { MIME_OF_EXT, MUSICS, SIZE_OF } from '../logic/videoItem';
+import { PORTRAIT_KEYS } from '../reel/portraits';
 import { SLIDES_MAX_SECONDS } from '../logic/slidesContent';
 import { isAudio } from '../logic/voiceItem';
 import { isCount, isText, isTexts } from '../logic/values';
@@ -45,9 +49,20 @@ export function parseFormatContent(raw: unknown): FormatContent | null {
       && c.made === 'ai' ? c as FormatContent : null;
     case 'game': return filled(c.concept) && isText(c.win) && listOf(c.rounds, (x) => isText(x.text) && isText(x.answer)) && LEADERBOARDS.includes(c.leaderboard) && c.made === 'ai'
       && (c.role === null || (!!c.role && (GAME_ROLES as readonly string[]).includes(c.role.kind) && isText(c.role.about))) && !!c.files && isText(c.files['index.html']) && isText(c.files['game.js']) ? c as FormatContent : null;
+    case 'reel': return reelOk(c) ? c as FormatContent : null;
     default: return null;
   }
 }
+// A published reel: the scenes on the reel's clock (word timings or null), the cut (a media path whose extension is its type) or none, the look, the
+// music and the check (2 to 4 options, the right one named by its place), within the 90 s cap.
+const num = (v: unknown, min: number): v is number => typeof v === 'number' && Number.isFinite(v) && v >= min;
+const sceneOk = (x: any) => filled(x.label) && filled(x.text) && filled(x.onScreen) && num(x.start, 0) && num(x.seconds, 0.001) && (x.words === null || (Array.isArray(x.words) && x.words.every((w: unknown) => num(w, 0))));
+const videoOk = (v: any) => v === null || (!!v && typeof v === 'object' && isText(v.path) && MEDIA_PATH.test(v.path) && MIME_OF_EXT[v.path.slice(v.path.lastIndexOf('.') + 1) as keyof typeof MIME_OF_EXT] === v.mime);
+const lookOk = (l: any) => l === null || (!!l && typeof l === 'object' && filled(l.id) && filled(l.name) && PORTRAIT_KEYS.includes(l.portrait) && /^#[0-9a-f]{6}$/.test(l.color));
+const checkOk = (k: any) => !!k && typeof k === 'object' && filled(k.q) && Array.isArray(k.opts) && k.opts.length >= 2 && k.opts.length <= 4 && k.opts.every(filled) && Number.isInteger(k.a) && k.a >= 0 && k.a < k.opts.length;
+const reelOk = (c: any) => (c.size === SIZE_OF['9:16 vertical'] || c.size === SIZE_OF['1:1 square']) && num(c.seconds, 0) && c.seconds <= REEL_SECONDS_MAX && listOf(c.scenes, sceneOk) && videoOk(c.video)
+  && typeof c.burned === 'boolean' && lookOk(c.look) && (MUSICS as readonly unknown[]).includes(c.music) && checkOk(c.check) && (c.made === 'ai' || c.made === 'scripted');
+
 // A published slide: a title, at least one bullet, the talk-over, an optional drawing and the stored audio of its voice.
 const slideOk = (x: any) => isText(x.title) && isTexts(x.bullets) && x.bullets.length > 0 && isText(x.narration) && (x.svg === undefined || isText(x.svg)) && (x.audio === undefined || isAudio(x.audio));
 // A published turn: a speaker, the words and the stored audio of its voice.

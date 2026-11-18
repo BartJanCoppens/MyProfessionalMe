@@ -11,6 +11,7 @@ import { ITEM_MAX, cardsFromPassages, countText, marked, hasItems, itemRows, ite
 import type { Item } from './logic/items';
 import { isHorizonItem } from './logic/horizonItem';
 import { caseHours, studioContent } from './logic/studioContent';
+import type { StockLook } from './logic/stockLooks';
 import { itemsValid, studioById } from './logic/studios';
 import type { StudioEntry } from './logic/studios';
 import { draftItems } from './studioDraft';
@@ -61,10 +62,10 @@ export function itemsPanel(L: Logic, nw: NewDraft, bundles: Bundle[], setNw: Set
 // What a saved contribution shows its author and its reviewers: how many items, each of them, a studio's "Shape it"
 // answers (question and answer) and, once its rows are complete (a Presentation: once its file is added), its content in
 // the learner's panel (still: motion off; ai: whether a game's AI role can answer).
-export function viewItems(c: Contribution, suffix: string, still: boolean, ai?: GameOpts['ai']) {
+export function viewItems(c: Contribution, suffix: string, still: boolean, ai?: GameOpts['ai'], looks?: StockLook[]) {
   const list = itemsFromSaved(c.type, c.items), answers = Object.entries(c.shape ?? {}), def = c.studio ? studioById(c.studio) : null;
   // A Presentation's item is its content (its file, played as learners will); a studio piece's rows make its content.
-  const content = list.find(isHorizonItem) ?? (def && !itemsValid(def, list as StudioEntry[]).length ? studioContent(c.type, list as StudioEntry[], c.shape ?? {}) : null);
+  const content = list.find(isHorizonItem) ?? (def && !itemsValid(def, list as StudioEntry[]).length ? studioContent(c.type, list as StudioEntry[], c.shape ?? {}, { looks }) : null);
   return { itemsHead: list.length ? countText(c.type, list.length) + suffix : '', itemRows: itemRows(c.type, list),
     answersHead: answers.length ? 'Studio answers' : '', answerRows: answers.map(([q, a]) => ({ front: q, back: a })),
     asLearner: content && { key: c.id, contributionId: c.id, content, hours: caseHours(c.shape ?? {}), still, ai } };

@@ -14,6 +14,9 @@ import { ALL_SPEAKERS, CHAPTER, isChapter } from './podcastContent';
 import { bulletsOf, hasWords } from './slidesContent';
 import { isVoiceItem } from './voiceItem';
 import type { VoiceItem } from './voiceItem';
+import { isVideoItem } from './videoItem';
+import type { VideoItem } from './videoItem';
+import { reelRows } from './reelContent';
 
 // steers: what the answer only steers, which the studio says under it (STEERS): the AI draft ('draft'), the next AI
 // draft (a Produce answer, after the Draft step: 'redraft') or the AI animation ('animation'). Without it the answer
@@ -26,12 +29,12 @@ export type BuildStep = string;
 export type { StudioItem };
 // What a studio's items hold: its rows and, after them, the Explainer's three exam questions of its check or the
 // Animated flow's one drawing.
-export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing | VoiceItem | GameItem;
+export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing | VoiceItem | GameItem | VideoItem;
 export const CHECK_SIZE = 3;
 export { stepsOf };
 // The rows as {label, text}, trimmed: an explainer's steps and an Animated flow's stages.
 export const labelledRows = (items: StudioEntry[]) => stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() }));
-export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i) && !isVoiceItem(i) && !isGameItem(i));
+export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i) && !isVoiceItem(i) && !isGameItem(i) && !isVideoItem(i));
 // What a studio's cast is: one stock look, two voices, one voice, or nothing to cast.
 export type StudioCast = 'look' | 'voices' | 'voice' | null;
 export type ItemSchema = (items: StudioItem[]) => string[];
@@ -65,7 +68,6 @@ function avatar(items: StudioItem[]): string[] {
   return [...['Persona', 'Situation', 'Opening line', 'Reveals if asked', 'Hides unless probed'].flatMap((l) => need(items, l)),
     ...(points.length ? [] : ['Add at least one Learning point']), ...(points.length && total !== 100 ? ['Learning point weights add up to ' + total + ' %, not 100 %'] : [])];
 }
-const onScreen = (items: StudioItem[]) => items.filter((i) => blank(i[2])).map((i) => i[0] + ': add on-screen text');
 // A slide has bullets and a talk-over; its voice-over takes the last place of the items, so the slides leave one free (private.slides_ok).
 const SLIDES_MAX = ITEM_MAX.Slides - 1;
 const slides = (items: StudioItem[]) => [...items.filter((i) => !bulletsOf(i[1]).length).map((i) => i[0] + ': add at least one bullet'), ...items.filter((i) => !hasWords(i[2])).map((i) => i[0] + ': add the talk-over (marks are not spoken words)'),
@@ -117,7 +119,7 @@ const STAGES_MAX = ITEM_MAX['Animated flow'] - 1;
 const motion = (items: StudioItem[]) => (items.length > STAGES_MAX ? ['Keep at most ' + STAGES_MAX + ' stages: the animation takes the last place'] : []);
 
 // One schema per studio on top of what every studio needs: a label and text on each row, and at least def.min rows.
-const SCHEMAS: Record<string, ItemSchema> = { avatar, reel: onScreen, slides, podcast, game, motion, explainer: () => [], aid: () => [], case: caseExercise };
+const SCHEMAS: Record<string, ItemSchema> = { avatar, reel: reelRows, slides, podcast, game, motion, explainer: () => [], aid: () => [], case: caseExercise };
 
 // The most rows a studio's items hold: its format's ITEM_MAX (one table for cards, questions and rows).
 export const rowsMax = (def: StudioDef) => ITEM_MAX[def.format];

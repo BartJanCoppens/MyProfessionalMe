@@ -8,7 +8,9 @@ import { GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
 import type { GameReviewStatus } from './gameContent';
 import { ALT_MAX, drawingOf } from './motionSvg';
 import { podcastContent, podcastProblems } from './podcastContent';
+import { CARDS_VOICE, PORTRAIT_VOICE, reelContent, reelProblems } from './reelContent';
 import { AI_VOICE, PRESENTER, slidesContent, slidesProblems } from './slidesContent';
+import type { StockLook } from './stockLooks';
 import { itemsValid, labelledRows, questionsOf, stepsOf } from './studios';
 import type { StudioDef, StudioEntry, StudioItem } from './studios';
 
@@ -65,21 +67,25 @@ export function motionProblems(items: StudioEntry[], shape: Record<string, strin
 }
 // What the Produce step still has to make before a studio piece can be sent: the Motion Studio's animation, the voice-over of the
 // Slides Studio and the Podcast Studio, the Game Studio's built game and its review (voiceOn: the AI voice can be used now, which words the reason) and a length within the limit.
-export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>, voiceOn = true, review?: GameReviewStatus | null) =>
+export const outputProblems = (def: StudioDef, items: StudioEntry[], shape: Record<string, string>, voiceOn = true, review?: GameReviewStatus | null, looks?: StockLook[] | null) =>
   (def.format === 'Animated flow' ? motionProblems(items, shape) : def.format === 'Slides' ? slidesProblems(items, shape, voiceOn)
-    : def.format === 'Podcast' ? podcastProblems(items, shape, voiceOn) : def.format === 'Game' ? gameProblems(items, shape, review) : []);
+    : def.format === 'Podcast' ? podcastProblems(items, shape, voiceOn) : def.format === 'Game' ? gameProblems(items, shape, review)
+      : def.format === 'Reel' ? reelProblems(items, shape, { voiceOn, looks: looks ?? null, cut: true }) : []);
 
 // Answers only Draft with AI (or, for the voice, the live AI voice, and for a game's roles the live AI role) can deliver (question to answers): offered only while it can run,
 // with the reason otherwise; an answer already chosen stays on screen, with the reason.
 export const AI_ONLY: Record<string, { options: string[]; why: string; needs: 'draft' | 'voice' | 'role'; hint?: string }> = {
   [END_QUESTION]: { options: [END_CHECK], why: 'A three-question check is written by Draft with AI, which is not switched on', needs: 'draft' },
   [ROLE_QUESTION]: { options: [...GAME_ROLES], why: 'The AI role is not switched on · only "No AI role" can be chosen until a System Admin gives it a connection', needs: 'role', hint: 'What the AI knows is not a safe place for a real secret or personal data: a persistent player can get the AI to repeat it. Write fictional facts only.' },
-  [PRESENTER]: { options: [AI_VOICE], why: 'The AI voice is not switched on · the browser voice can preview the talk-over in Produce, but nothing is stored', needs: 'voice' },
+  [PRESENTER]: { options: [AI_VOICE, PORTRAIT_VOICE, CARDS_VOICE], why: 'The AI voice is not switched on · only the option without a voice can be chosen until a System Admin gives it a connection (a deck\'s talk-over can still be heard in the browser voice in Produce, never stored)', needs: 'voice' },
 };
 
 const texts = (items: StudioItem[], label: string) => items.filter((i) => i[0] === label).map((i) => i[1].trim());
-const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, string>) => FormatContent | null> = {
+// What a builder may need besides the rows and answers: the stock looks (a reel joins its look) and, for a reel not cut yet, the Produce answers it previews from.
+export type ContentExtra = { looks?: StockLook[]; draft?: { produce?: Record<string, string>; cast?: Record<string, string> } };
+const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, string>, extra?: ContentExtra) => FormatContent | null> = {
   Slides: slidesContent,
+  Reel: (items, shape, x) => reelContent(items, shape, x?.looks ?? [], x?.draft),
   Podcast: (items) => podcastContent(items),
   Game: gameContent,
   'Job aid': (items) => ({ kind: 'aid', items: stepsOf(items).map((i) => i[0].trim() + ' · ' + i[1].trim()) }),
@@ -99,9 +105,9 @@ const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, stri
 
 // The content of a format's rows and "Shape it" answers; null for a format no built studio publishes rows for (or an
 // Animated flow not animated yet).
-export function studioContent(format: string, items: StudioEntry[], shape: Record<string, string>): FormatContent | null {
+export function studioContent(format: string, items: StudioEntry[], shape: Record<string, string>, extra?: ContentExtra): FormatContent | null {
   const build = BUILDERS[format];
-  return build ? build(items, shape) : null;
+  return build ? build(items, shape, extra) : null;
 }
 
 // Whether a learning's content is a case its creator said can count as trajectory evidence.

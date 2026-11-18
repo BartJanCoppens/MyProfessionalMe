@@ -180,7 +180,7 @@ function mineDetail(L: Logic, c: Contribution, revs: Review[], d: CreateData) {
   const base = {
     id: c.id, eyebrow: c.type + ' · ' + domainName(c.domain) + ' · L' + c.level + ' · ' + attrsLabel(attrsOf(c)), title: c.title || 'Untitled ' + c.type.toLowerCase(), date: dateLine(c) + ' · for ' + c.audience_stage,
     st: st[0], stLabel: st[1], stIcon: st[2], stages: stages.map((x) => x.name), stage: stageAt(stages, c.step), hasTake: !!c.takeaway, takeaway: c.takeaway,
-    outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft' : '', ...viewItems(c, '', stillMotion(L), L.aiOpts()),
+    outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft' : '', ...viewItems(c, '', stillMotion(L), L.aiOpts(), L.state.stockLooks ?? undefined),
     hasRevs: revs.length > 0,
     revs: revs.map((r) => {
       const v = RV[r.verdict];
@@ -215,7 +215,7 @@ function reviewDetail(L: Logic, c: Contribution, r: Review, d: CreateData, now: 
     key, ai: ini(c.author_name), eyebrow: c.type + ' · ' + domainName(c.domain) + ' · L' + c.level + ' · ' + role, title: c.title,
     meta: 'By ' + c.author_name + ' · for ' + c.audience_stage + ' · ' + (open ? daysWaiting(c.submitted_at, now) : 'submitted ' + fmtDate(c.submitted_at)),
     takeaway: c.takeaway, outline: c.outline ? c.outline.split('\n').filter(Boolean) : [], sources: c.sources || [], aiTag: c.ai_assisted ? 'AI-assisted draft · check the cited sources' : '',
-    ...viewItems(c, ' to check', stillMotion(L), L.aiOpts()),
+    ...viewItems(c, ' to check', stillMotion(L), L.aiOpts(), L.state.stockLooks ?? undefined),
     fileNote: c.type === 'Presentation' ? 'Play the presentation and check it against the takeaway.' : carriesItems(c.type, c.studio) ? 'Check each ' + noun(c.type, 1) + ' against the takeaway.'
       : 'The ' + (c.type === 'Podcast' ? 'audio' : c.type === 'Reel' ? 'video' : 'document') + ' is attached later; review the takeaway and outline for now.',
     checks: contentChecks({ title: c.title, takeaway: c.takeaway, outline: c.outline.split('\n'), sources: c.sources, items: itemsText(itemsFromSaved(c.type, c.items)) }).map(dot),

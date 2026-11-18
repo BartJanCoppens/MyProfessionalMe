@@ -52,9 +52,10 @@ describe('the request size', () => {
   it('asks for room per studio, within what the ai function allows, and for concision', () => {
     const max = (id: string) => studioRequest(def(id), nw(def(id).format), PASSAGES);
     ['slides', 'podcast', 'aid', 'avatar'].forEach((id) => expect(max(id).max_tokens).toBe(2000));
+    expect(max('reel').max_tokens).toBe(1500);
     expect(max('motion').max_tokens).toBe(1000);
     // An Animated flow's drawing takes one place of its items (tested under caps).
-    IDS.forEach((id) => { expect(max(id).max_tokens!).toBeLessThanOrEqual(2048); expect(max(id).messages[0].content).toContain('about one short sentence per row, and stay within ' + (rowsMax(def(id)) - (['motion', 'slides', 'podcast'].includes(id) ? 1 : 0)) + ' rows'); });
+    IDS.forEach((id) => { expect(max(id).max_tokens!).toBeLessThanOrEqual(2048); expect(max(id).messages[0].content).toContain('about one short sentence per row, and stay within ' + (rowsMax(def(id)) - (['motion', 'slides', 'podcast'].includes(id) ? 1 : id === 'reel' ? 2 : 0)) + ' rows'); });
   });
 });
 
@@ -76,7 +77,9 @@ describe('strict reading of the answer', () => {
   it('needs the third text where the studio has one', () => {
     const d = def('reel');
     expect(parseStudioItems(d, JSON.stringify({ items: [['Hook', 'a'], ['Scene 1', 'b'], ['Close', 'c']] }))).toBeNull();
-    expect(parseStudioItems(d, JSON.stringify({ items: [['Hook', 'a', 'On screen: a'], ['Scene 1', 'b', 'c'], ['Close', 'c', 'd']] }))).toHaveLength(3);
+    expect(parseStudioItems(d, JSON.stringify({ items: [['Hook', 'a', 'x'], ['Scene 1', 'b', 'c'], ['Close', 'c', 'd'], ['Check', 'Which?', 'This one · That one']] }))).toHaveLength(4);
+    // a reel without its check question is not usable: the request asks for it
+    expect(parseStudioItems(d, JSON.stringify({ items: [['Hook', 'a', 'x'], ['Scene 1', 'b', 'c'], ['Close', 'c', 'd']] }))).toBeNull();
   });
 });
 
@@ -100,7 +103,13 @@ describe('caps', () => {
 });
 
 describe('scripted fallback per studio', () => {
-  it.each(IDS.filter((id) => id !== 'game'))('%s: schema-valid rows from the passages, within the cap', (id) => {
+  it('reel: rows from the passages that are valid but for the check question, which the creator writes (none is invented)', () => {
+    const d = def('reel'), rows = scriptedItems(d, nw(d.format), PASSAGES)!;
+    expect(itemsValid(d, rows)).toEqual(['Add the check question: one question, the right answer first']);
+    expect(rows.length).toBeLessThanOrEqual(rowsMax(d));
+    expect(rows.flat().join(' ')).not.toContain('On screen:');
+  });
+  it.each(IDS.filter((id) => id !== 'game' && id !== 'reel'))('%s: schema-valid rows from the passages, within the cap', (id) => {
     const d = def(id), rows = scriptedItems(d, nw(d.format), PASSAGES)!;
     expect(itemsValid(d, rows)).toEqual([]);
     expect(rows.length).toBeLessThanOrEqual(rowsMax(def(id)));
