@@ -6,7 +6,7 @@ import type { Logic } from './model';
 import { blankVoice, stockVoiceProblem } from './logic/ai';
 import type { StockVoice, StockVoiceForm } from './logic/ai';
 import { addStockVoice, setStockVoiceActive } from './lib/aiStore';
-import { hearStockVoice, voiceLive } from './lib/voice';
+import { hearStockVoice, voiceOn } from './lib/voice';
 
 type Write = (L: Logic, fn: () => Promise<unknown>, done: string) => Promise<boolean>;
 type Field = ChangeEvent<HTMLInputElement>;
@@ -27,7 +27,7 @@ async function save(L: Logic, write: Write) {
 
 export function stockVoicesVals(L: Logic, write: Write) {
   // As every AI use: live in ai_live_uses() and not switched off for this session (?live=off).
-  const s = L.state, ai = L.aiOpts(), live = ai.enabled && voiceLive(ai.live), f = s.voiceForm;
+  const s = L.state, live = voiceOn(L.aiOpts()), f = s.voiceForm;
   const set = (k: keyof StockVoiceForm) => (e: Field) => { const v = e.target.value; L.setState((st) => ({ voiceForm: st.voiceForm && { ...st.voiceForm, [k]: v } })); };
   return {
     loading: !s.stockVoices && !s.aiError, empty: !!s.stockVoices && !s.stockVoices.length,

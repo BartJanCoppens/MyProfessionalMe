@@ -16,6 +16,11 @@ export async function refreshAiLive(L: Logic) {
   try { const live = await loadLiveUses(); L.setState({ aiLive: live }); } catch { L.setState({ aiLive: [] }); }
 }
 
+// The stock voices a creator may choose (RLS lets everyone read the active ones), for the Slides Studio's voice. A failure leaves none.
+export async function refreshStockVoices(L: Logic) {
+  try { L.setState({ stockVoices: await loadStockVoices() }); } catch { /* the studio then says it has no stock voices */ }
+}
+
 // The page's data: connections and uses for a System Admin (RLS returns nothing to anyone else), stock voices for System
 // and General Admins.
 export async function loadAiPage(L: Logic) {

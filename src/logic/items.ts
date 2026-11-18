@@ -4,7 +4,7 @@
 import type { ExamQuestion } from '../types';
 import type { Check } from './contribution';
 import { jsonObject } from './json';
-import { deckLine, isHorizonItem } from './horizonItem';
+import { deckLine, isHorizonItem, slideCount } from './horizonItem';
 import type { HorizonItem } from './horizonItem';
 import { isDrawing } from './motionSvg';
 import { isVoiceItem } from './voiceItem';
@@ -153,7 +153,7 @@ export const validItems = (type: string, list: Item[]): Item[] => list.filter(is
 export function itemRows(type: string, list: Item[]): { front: string; back: string }[] {
   return validItems(type, list).map((x) => (Array.isArray(x) ? { front: x[0], back: x.slice(1).filter(Boolean).join(' · ') }
     : isDrawing(x) ? { front: 'Animation · ' + madeLabel(x.made), back: x.alt } : isHorizonItem(x) ? { front: 'Horizon presentation · ' + deckLine(x), back: x.title }
-      : isVoiceItem(x) ? { front: 'Voice-over · AI voice', back: x.clips.length + (x.clips.length === 1 ? ' slide' : ' slides') + ' voiced · ' + Math.round(x.clips.reduce((t, c) => t + c.seconds, 0)) + ' s' }
+      : isVoiceItem(x) ? { front: 'Voice-over · AI voice', back: slideCount(x.clips.length) + ' voiced · ' + Math.round(x.clips.reduce((t, c) => t + c.seconds, 0)) + ' s' }
       : { front: x.q, back: 'Answer: ' + x.o[x.a] + ' · ' + x.why }));
 }
 // Saved as AI-assisted when the outline was drafted by AI or the items were, in any studio; scripted and manual items never are.

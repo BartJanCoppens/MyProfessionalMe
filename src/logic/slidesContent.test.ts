@@ -12,7 +12,7 @@ import { AI_VOICE, CAPTIONS, PRESENTER, SLIDES_MAX_SECONDS, bulletsOf, slidesLin
 import { studioContent } from './studioContent';
 import { itemsValid, questionsOf, stepsOf, studioById } from './studios';
 import type { StudioEntry, StudioItem } from './studios';
-import { CLIP_MARKS_MAX, CLIP_SECONDS_MAX, isVoiceItem } from './voiceItem';
+import { CLIPS_MAX, CLIP_MARKS_MAX, CLIP_SECONDS_MAX, isVoiceItem } from './voiceItem';
 import type { Clip, VoiceItem } from './voiceItem';
 
 const FOLDER = '0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7/';
@@ -39,6 +39,7 @@ describe('a voice-over item', () => {
     ['an extra key on a clip', { clips: [{ ...clip(0, 'a'), voice: 'x' }] }],
   ])('refuses %s', (_, patch) => { expect(isVoiceItem({ ...VOICE(), ...patch })).toBe(false); });
   it('repeats private.voice_ok\'s limits', () => {
+    expect(CLIPS_MAX).toBe(ITEM_MAX.Slides - 1);
     const body = latestMatch(/create (?:or replace )?function private\.voice_ok\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
     expect(body).toContain('<= ' + CLIP_SECONDS_MAX);
     expect(body).toContain('<= ' + CLIP_MARKS_MAX);

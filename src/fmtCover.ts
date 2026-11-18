@@ -4,7 +4,7 @@
 import { LEARN_META } from './data';
 import { detailOf, handedIn } from './fmtShared';
 import { countLabel, dueCards } from './logic/formats';
-import { deckLine } from './logic/horizonItem';
+import { deckLine, slideCount } from './logic/horizonItem';
 import { madeLabel } from './logic/provenance';
 import type { Item, Logic } from './model';
 
@@ -49,7 +49,7 @@ export function fmtCover(L: Logic, it: Item): Partial<Lines> {
     }
     case 'slides': {
       const last = done || !!detailOf<'slides'>(L, it.id).last;
-      return { cvMeta: c.slides.length + (c.slides.length === 1 ? ' slide' : ' slides'), cvMeta2: last ? 'Played to the end' : c.made === 'ai' ? 'AI voice' : 'Captions',
+      return { cvMeta: slideCount(c.slides.length), cvMeta2: last ? 'Played to the end' : c.made === 'ai' ? 'AI voice' : 'Captions',
         stepDots: c.slides.slice(0, 6).map((_, k) => ({ bg: last || k === 0 ? '#86BC25' : '#fff' })) };
     }
     default: return {};

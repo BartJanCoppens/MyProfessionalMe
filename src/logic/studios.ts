@@ -34,6 +34,7 @@ export type StudioDef = {
   id: string; name: string; out: string; glyph: string; tag: string; time: string; idea: string; title: string;
   dom: string; lvl: number; qs: StudioQuestion[]; items: StudioItem[]; cast: StudioCast; rows: ProduceRow[]; build: BuildStep[] | null;
   pv: string; min: number;
+  columns?: string[]; // what the Draft step's fields are called when label, text and text 2 mean more than that (a deck's title, bullets and talk-over)
   format: string; alsoFormats?: string[]; // the learning format(s) it produces, see contribution formats
   available: boolean; // false greys it out on the hub until its phase ships
   compact: boolean; // true: its questions and produce options change no request or output yet, so Shape and Produce are folded away (Flash, as in v4)

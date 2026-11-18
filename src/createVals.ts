@@ -15,7 +15,7 @@ import {
 import type { Check, Contribution, CreateData, Policy, Review, RuleParts } from './logic/contribution';
 import { removePolicy, savePolicy } from './lib/contributionStore';
 import {
-  attrsOfDraft, blankDraft, checkKey, decide, deleteDraft, draftOf, effective, first, myLine, revKey, runCheck, saveForm, submitSaved, submittedEdit, writePolicy,
+  attrsOfDraft, blankDraft, checkKey, decide, deleteDraft, draftOf, effective, first, myLine, revKey, runCheck, saveForm, saveWithFile, submitSaved, submittedEdit, writePolicy,
 } from './createSave';
 import { bundleFinder, draftAi, usableBundles } from './createGrounding';
 import { horizonCheck, horizonPanel } from './createHorizon';
@@ -166,7 +166,7 @@ function createScreen(L: Logic) {
   // The Studios hub arranges what the form already computed (studioVals.ts); an edit shows the form unless it opened in its studio.
   const chk = s.studio.check, checkReasons = chk && chk.key === checkKey(nw, s.nwKb, studioOf(s)) ? chk.reasons : null;
   const studio = studioVals(L, { nw, setNw, bundles: picked, rules: d.rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
-    routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, cancel: vm.nwCancel, checkReasons, runCheck: () => runCheck(L) });
+    routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, cancel: vm.nwCancel, checkReasons, runCheck: () => runCheck(L), withFile: (attach, done, how) => saveWithFile(L, attach, {}, done, how) });
   return { ...vm, studio, newView: s.editing && s.studio.view !== 'studio' ? 'form' as const : s.studio.view };
 }
 

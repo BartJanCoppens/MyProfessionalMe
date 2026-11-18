@@ -32,6 +32,8 @@ export const lengthWords = (seconds: number) => {
   const s = Math.round(seconds), m = Math.floor(s / 60);
   return m ? m + ' min' + (s % 60 ? ' ' + (s % 60) + ' s' : '') : s + ' s';
 };
+// "3 slides", "1 slide".
+export const slideCount = (n: number) => n + (n === 1 ? ' slide' : ' slides');
 // "3 slides · counts 0.25 h", "1 slide · narrated, 2 min 5 s · counts 0.05 h": what the deck holds and the hours it counts, for reviewers and the library.
 export const deckLine = (x: { slides: number; seconds: number }) =>
-  x.slides + (x.slides === 1 ? ' slide' : ' slides') + (x.seconds > 0 ? ' · narrated, ' + lengthWords(x.seconds) : '') + ' · counts ' + horizonHours(x.seconds) + ' h';
+  slideCount(x.slides) + (x.seconds > 0 ? ' · narrated, ' + lengthWords(x.seconds) : '') + ' · counts ' + horizonHours(x.seconds) + ' h';

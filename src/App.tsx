@@ -18,7 +18,7 @@ import TrajectoryScreen from './screens/Trajectory';
 import ApprovalsScreen from './screens/Approvals';
 import UsersScreen from './screens/Users';
 import AiConnectionsScreen from './screens/AiConnections';
-import { loadAiPage, refreshAiLive } from './aiVals';
+import { loadAiPage, refreshAiLive, refreshStockVoices } from './aiVals';
 import SubjectPicker from './screens/SubjectPicker';
 import { ChangePasswordScreen, SignInScreen } from './screens/SignIn';
 import { useAuth } from './lib/useAuth';
@@ -116,7 +116,7 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   const logicRef = useRef(logic);
   useEffect(() => { logicRef.current = logic; });
   // AI: which uses answer through a connection (everyone); the AI connections page loads its data when it opens.
-  useEffect(() => { refreshAiLive(logicRef.current); }, [me]);
+  useEffect(() => { refreshAiLive(logicRef.current); refreshStockVoices(logicRef.current); }, [me]);
   // Certification trajectories load once per session (what this person may read: live ones, plus drafts for the admins of their line).
   useEffect(() => {
     let live = true;

@@ -7,6 +7,8 @@ import type { AppState, Bundle, ExamQuestion, NewDraft, StudioState } from './ty
 import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { noItems, validItems } from './logic/items';
+import { voiceOn } from './lib/voice';
+import type { WithFile } from './studioDraft';
 import type { RuleParts } from './logic/contribution';
 import { itemsLabel } from './logic/provenance';
 import { outputProblems, studioContent } from './logic/studioContent';
@@ -34,6 +36,7 @@ export type StudioSrc = {
   checks: { text: string; dot: string; fg: string }[]; blocked: boolean; route: { n: string; name: string; role: string }[]; policyNote: string; routeWarn: string;
   submitLabel: string; submit: () => void; saveDraft: () => void; cancel: () => void; // cancel: leave an edit, back to My contributions
   checkReasons: string[] | null; runCheck: () => void; // the automatic check of the draft on screen: null when not run on it, [] when passed
+  withFile: WithFile; // the one save step that stores a file with the draft (a deck's voice-over)
 };
 
 export function studioVals(L: Logic, src: StudioSrc) {
@@ -65,7 +68,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
   // the studio's minimum, worded as in the design ("Draft at least 4 items in step 2").
   const problems = !flash ? parts.problems : tooFew(def, items.length) ? ['Draft at least ' + def.min + ' items in step ' + (steps.indexOf('Draft') + 1)] : [];
   // What the Produce step still has to make (the Motion Studio's animation and its text alternative): blocks the check, not the Draft step.
-  const unsent = [...problems, ...outputProblems(def, (nw.items?.list ?? []) as StudioEntry[], nw.shape ?? {})];
+  const unsent = [...problems, ...outputProblems(def, (nw.items?.list ?? []) as StudioEntry[], nw.shape ?? {}, voiceOn(L.aiOpts()))];
   // Server reasons the checks above already show (a client name) are not listed twice.
   const reasons = (src.checkReasons ?? []).filter((r) => !src.checks.some((c) => c.text === r));
   const next = () => {
@@ -86,7 +89,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     readOnly, studioName: def.name, flash, def, steps, step, stepName: name, stepTitle: name, stepHint: HINTS[name] ?? '',
     prev: () => set({ step: Math.max(0, step - 1) }), next, noPrev: step === 0, hasNext: step < steps.length - 1, nextLabel: 'Next: ' + (steps[step + 1] ?? ''),
     formats: formats.map((f) => ({ label: f, on: nw.type === f, pick: () => pick(f) })),
-    ...parts, buildRunner: BUILDS[def.id]?.runner({ L, nw, setNw }),
+    ...parts, buildRunner: BUILDS[def.id]?.runner({ L, nw, setNw, withFile: src.withFile }),
     // Only "Made with AI" when the items are AI's; a scripted deck says so.
     itemsLabel: itemsLabel(nw.items?.how),
     preview: exam ? { kind: 'questions' as const, cards: [], questions: items as ExamQuestion[] }

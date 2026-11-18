@@ -87,27 +87,29 @@ async function submitChecked(id: string, studio: string | null | undefined) {
 
 // The one save step of the upload form and the studios: refused in View as, while busy or outside the creation rules;
 // otherwise the draft on screen is saved (an edited or already checked draft is the same row, a new studio draft says
-// its studio) and next runs on it. keep(id) is the state to keep when anything fails after the save started; patch
-// changes the draft as it is saved.
+// its studio) and next runs on it; true when next completed, false when it was refused or failed (said in a toast). keep(id)
+// is the state to keep when anything fails after the save started; patch changes the draft as it is saved.
 type Saved = { s: AppState; nw: NewDraft; studio: string | null; id: string };
-async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>, patch: Partial<NewDraft> = {}) {
-  if (busy(L)) return;
+async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: string | null) => (st: AppState) => Partial<AppState>, patch: Partial<NewDraft> = {}): Promise<boolean> {
+  if (busy(L)) return false;
   const s = L.state, nw = { ...effective(s), ...patch }, rules = s.create?.rules || [], studio = draftStudio(s);
-  if (!rules.length) { L.say('Ask an admin for creation rights first'); return; }
-  if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return; }
+  if (!rules.length) { L.say('Ask an admin for creation rights first'); return false; }
+  if (!mayCreate(rules, attrsOfDraft(nw))) { L.say('Not allowed by your creation rules'); return false; }
   let id = s.editing ?? nw.savedId ?? null;
   L.setState({ createBusy: true });
   try {
     id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
     await next({ s, nw, studio, id });
-  } catch (err) { failed(L, err, keep(id)); }
+    return true;
+  } catch (err) { failed(L, err, keep(id)); return false; }
 }
 
-// A file the draft names (a Presentation's .horizon file): the draft is saved (the one save step, with `patch`), the file
-// stored in its folder through `attach` once it has an id, and the items `attach` returns saved with it.
-export async function saveWithFile(L: Logic, attach: (id: string) => Promise<Item[]>, patch: Partial<NewDraft>, done: string) {
-  await saveThen(L, async ({ s, nw, studio, id }) => {
-    const items: DraftItems = { ...noItems(), list: await attach(id), how: 'saved' };
+// A file the draft names (a Presentation's .horizon file, a deck's voice-over): the draft is saved (the one save step, with
+// `patch`), the file stored in its folder through `attach` once it has an id, and the items `attach` returns saved with
+// it, with their provenance (`how`: saved unless the caller says where the items came from). True when it all landed.
+export async function saveWithFile(L: Logic, attach: (id: string) => Promise<Item[]>, patch: Partial<NewDraft>, done: string, how: DraftItems['how'] = 'saved'): Promise<boolean> {
+  return saveThen(L, async ({ s, nw, studio, id }) => {
+    const items: DraftItems = { ...noItems(), list: await attach(id), how };
     await saveDraft(rowOf({ ...nw, items }, s.nwKb, studio, id), id);
     const d = await reloaded(L);
     L.setState((st) => ({ create: d, createError: null, createBusy: false, nw: { ...st.nw, ...patch, items, savedId: id } }));

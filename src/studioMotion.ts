@@ -8,7 +8,7 @@
 // creator may choose the scripted flow instead; it is never chosen for them.
 import type { Logic } from './model';
 import type { NewDraft } from './types';
-import type { SetNw } from './studioDraft';
+import type { BuildCtx, SetNw } from './studioDraft';
 import { noItems } from './logic/items';
 import type { Item } from './logic/items';
 import { motionRequest } from './logic/motionPrompt';
@@ -22,7 +22,7 @@ import type { StudioEntry } from './logic/studios';
 
 // The Motion Studio's AI use: its preamble asks for one SVG, where studio_draft's asks for JSON items.
 const MOTION_USE = 'studio_motion';
-export type BuildCtx = { L: Logic; nw: NewDraft; setNw: SetNw };
+export type { BuildCtx };
 export const NO_AI = 'AI is not switched on, so the build animates a scripted flow of boxes and arrows from your stages.';
 export const UNUSABLE = 'AI did not return a usable animation · retry this step';
 export const SCRIPTED_INSTEAD = 'Use the scripted flow instead';

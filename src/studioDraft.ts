@@ -14,6 +14,10 @@ import { canComplete } from './lib/ai';
 import type { AiRequest } from './lib/ai';
 
 export type SetNw = (p: Partial<NewDraft> | ((cur: NewDraft) => Partial<NewDraft>)) => void;
+// What a studio's build runner works with: the view-model, the draft on screen, how to change it, and the one save step that stores a
+// file with the draft (createSave.saveWithFile, handed in by createVals): true when the draft and its items landed.
+export type WithFile = (attach: (id: string) => Promise<Item[]>, done: string, how: DraftItems['how']) => Promise<boolean>;
+export type BuildCtx = { L: Logic; nw: NewDraft; setNw: SetNw; withFile: WithFile };
 
 // What differs per format: the AI use and request, how its answer is read, the scripted rows (null when there are none) and the words shown.
 export type DraftSpec = { use: AiUseKey; request: AiRequest; parse: (raw: string) => Item[] | null; scripted: Item[] | null;

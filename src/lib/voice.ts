@@ -16,6 +16,8 @@ export type SpeakRequest = { contributionId: string; voiceId: string; text: stri
 
 // Whether the AI voice answers now (the use is in ai_live_uses()).
 export const voiceLive = (live: readonly string[]) => live.includes(VOICE_USE);
+// ... and not switched off for this session (?live=off): what every studio and the AI connections page ask (Logic.aiOpts).
+export const voiceOn = (o: { enabled: boolean; live: readonly string[] }) => o.enabled && voiceLive(o.live);
 
 export async function speak(req: SpeakRequest): Promise<StoredVoice> {
   const data = await invokeFunction<Partial<StoredVoice>>('voice', { ...req });
