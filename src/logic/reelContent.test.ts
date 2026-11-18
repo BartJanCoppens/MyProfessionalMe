@@ -9,8 +9,8 @@ import { AI_ONLY, studioContent } from './studioContent';
 import { ITEM_MAX } from './items';
 import { itemsValid, studioById } from './studios';
 import type { StudioEntry, StudioItem } from './studios';
-import { CARDS_VOICE, CHECK_OPTIONS, NO_VOICE, PORTRAIT_VOICE, REEL_SECONDS_MAX, SCENE_GAP, TEXT_ONLY, VOICE_ALL, cutMade, reelContent, reelProblems, reelSeconds, reelTimeline, sceneRows, videoCurrent, wantsVoice } from './reelContent';
-import { FORMATS, CAPTION_MODES, MUSICS, SIZE_OF, isVideoItem } from './videoItem';
+import { CARDS_VOICE, CHANGED, CHECK_OPTIONS, NO_VOICE, PORTRAIT_VOICE, REEL_SECONDS_MAX, SCENE_GAP, TEXT_ONLY, VOICE_ALL, cutMade, reelContent, reelProblems, reelSeconds, reelTimeline, sceneRows, videoCurrent, wantsVoice } from './reelContent';
+import { FORMATS, CAPTION_MODES, MUSICS, SIZE_OF, VIDEO_CLIPS_MAX, VIDEO_ROWS_MAX, isVideoItem } from './videoItem';
 import type { VideoItem } from './videoItem';
 import { PRESENTER } from './slidesContent';
 import type { StockLook } from './stockLooks';
@@ -111,7 +111,18 @@ describe('what still blocks a reel', () => {
     expect(reelProblems(CUT({ seconds: 30 }), VOICE_SHAPE, cut)).toEqual(['The video\'s length does not match the voice-over · make the final cut again']);
     expect(reelProblems(CUT({}, { look: LOOK.id }), PORTRAIT_SHAPE, cut)).toEqual([]);
     expect(reelProblems(CUT({}, { look: LOOK.id }), PORTRAIT_SHAPE, { ...cut, looks: [{ ...LOOK, active: false }] })).toEqual(['That look is not on the stock list']);
-    expect(reelProblems(CUT(), PORTRAIT_SHAPE, cut)).toEqual(['That look is not on the stock list']);
+  });
+  it('counts a switched presenter after the cut as a change, not as a look that is off (M2)', () => {
+    const cut = { ...on, cut: true };
+    expect(reelProblems(CUT(), PORTRAIT_SHAPE, cut)).toEqual([CHANGED]); // cut with cards (no look), then switched to the portrait
+    expect(reelProblems(CUT({}, { look: LOOK.id }), VOICE_SHAPE, cut)).toEqual([CHANGED]); // cut with the portrait, then switched to cards
+    expect(videoCurrent(CUT(), PORTRAIT_SHAPE)).toBe(false);
+    expect(videoCurrent(CUT({}, { look: LOOK.id }), PORTRAIT_SHAPE)).toBe(true);
+  });
+  it('lists no 90 s line while the voice is wanted and missing, as the check in SQL does (M6)', () => {
+    const slow = SCENES.map((r) => [r[0], 'word '.repeat(60), r[2]]) as StudioItem[];
+    expect(reelProblems([...slow, CHECK], VOICE_SHAPE, on)).toEqual([VOICE_ALL]);
+    expect(reelProblems([...slow, CHECK], { [PRESENTER]: TEXT_ONLY }, on)[0]).toMatch(/^The reel runs \d+ s/);
   });
 });
 
@@ -244,6 +255,10 @@ describe('the SQL that repeats these rules (20261118180000_reel_studio.sql)', ()
   it('has the presenters, the stock look test and the texts the studio shows', () => {
     for (const t of [PORTRAIT_VOICE, CARDS_VOICE]) expect(sql).toContain("'" + t + "'");
     expect(sql).toContain('l.active and l.id::text');
+    expect(sql).toContain("(c.shape ->> 'Who presents?' = 'Stock presenter and AI voice') is distinct from (v_video -> 'made' ->> 'look' is not null)");
+    expect(sql).toContain('v_secs > 90 and not (private.reel_wants_voice(c.shape) and not v_voiced)');
+    expect(sql).toContain("jsonb_array_length(m -> 'clips') > " + VIDEO_CLIPS_MAX);
+    expect(sql).toContain("jsonb_array_length(m -> 'rows') not between 1 and " + VIDEO_ROWS_MAX);
     for (const t of [VOICE_ALL, 'Voice scene %s again · its word timing is missing', 'The reel runs %s s · at most 90 s', 'Make the final cut in Produce', 'You changed the reel after the final cut · make the final cut again',
       'That look is not on the stock list', 'The video file is not the type or size it claims', 'Add the check question: one question, the right answer first']) expect(sql).toContain(t);
     expect(sql).toContain("The video''s length does not match the voice-over · make the final cut again");

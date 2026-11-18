@@ -98,6 +98,7 @@ export function cutMade(items: readonly unknown[], shape: Record<string, string>
 export function videoCurrent(items: readonly unknown[], shape: Record<string, string>): boolean {
   const v = videoOf(items);
   if (!v || JSON.stringify(v.made.rows) !== JSON.stringify(stepsOf(items))) return false;
+  if (portrait(shape) !== (v.made.look !== null)) return false; // the presenter was switched after the cut: the portrait is in the picture or it is not
   const clips = clipsOf(items, shape);
   return wantsVoice(shape) ? !clips || JSON.stringify(v.made.clips) === JSON.stringify(clips.map((c) => c.path)) : v.made.clips.length === 0;
 }
@@ -117,7 +118,7 @@ export function reelProblems(items: readonly unknown[], shape: Record<string, st
   if (!v) return [...out, NEEDS_CUT];
   if (!videoCurrent(items, shape)) out.push(CHANGED);
   if ((clips || !wantsVoice(shape)) && seconds !== null && Math.abs(v.seconds - seconds) > 1.5) out.push(WRONG_LENGTH);
-  if (portrait(shape) && o.looks && !o.looks.some((l) => l.active && l.id === v.made.look)) out.push(BAD_LOOK);
+  if (portrait(shape) && v.made.look && o.looks && !o.looks.some((l) => l.active && l.id === v.made.look)) out.push(BAD_LOOK);
   return out;
 }
 

@@ -3188,8 +3188,11 @@ with i as (insert into public.contributions (business_line, type, title, domain,
  ('Consulting','Reel','T rl elsewhere','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
  ('Consulting','Reel','T rl webm','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
  ('Consulting','Reel','T rl big','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl cut as portrait','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl slow unvoiced','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
+ ('Consulting','Reel','T rl other author','prof','x','reel','{"Who presents?":"AI voice over text cards"}'),
  ('Consulting','Reel','T rl bad','prof','x','reel',null) returning 1)
-  insert into results (check_name, expected, actual) select 'RL a Reel is made in its studio', '19 rows', count(*)||' rows' from i;
+  insert into results (check_name, expected, actual) select 'RL a Reel is made in its studio', '22 rows', count(*)||' rows' from i;
 select pg_temp.rl_set('T rl ok', jsonb_build_object('look', current_setting('test.rl_look')));
 select pg_temp.rl_set('T rl cards');
 select pg_temp.rl_set('T rl text', '{"novoice":true,"vsecs":21.3,"made":{"music":"None","captions":"Separate file"}}');
@@ -3206,6 +3209,9 @@ select pg_temp.rl_set('T rl look off', jsonb_build_object('look', current_settin
 select pg_temp.rl_set('T rl look none');
 select pg_temp.rl_set('T rl voice file');
 select pg_temp.rl_set('T rl elsewhere', jsonb_build_object('vpath', '00000000-0000-0000-0000-0000000000aa/' || (select id from public.contributions where title = 'T rl ok') || '/reel-0123456789abcdef.mp4'));
+select pg_temp.rl_set('T rl cut as portrait', jsonb_build_object('look', current_setting('test.rl_look')));
+select pg_temp.rl_set('T rl slow unvoiced', jsonb_build_object('novoice', true, 'novideo', true, 'rows', replace(replace(current_setting('test.rl_rows'), 'Your project is drifting. Here are three signs.', repeat('word ', 110)), 'Can you just also turns up in every steering committee.', repeat('word ', 110))::jsonb));
+select pg_temp.rl_set('T rl other author', jsonb_build_object('vpath', '00000000-0000-0000-0000-0000000000ab/' || (select id from public.contributions where title = 'T rl other author') || '/reel-0123456789abcdef.mp4'));
 select pg_temp.rl_set('T rl webm');
 select pg_temp.rl_set('T rl big');
 -- Storage: the voice files and the cut, with the type and size Storage records (a stand-in row)
@@ -3227,9 +3233,12 @@ insert into results (check_name, expected, actual) select 'RL clips that are not
 insert into results (check_name, expected, actual) select 'RL a cut with the voice (made.clips) while the reel is now text only is refused', 'You changed the reel after the final cut · make the final cut again', pg_temp.rl_problems('T rl stale presenter');
 insert into results (check_name, expected, actual) select 'RL a cut that does not run as long as the voice-over is refused', 'The video''s length does not match the voice-over · make the final cut again', pg_temp.rl_problems('T rl mismatch');
 insert into results (check_name, expected, actual) select 'RL a look that was switched off after it was picked is refused', 'That look is not on the stock list', pg_temp.rl_problems('T rl look off');
-insert into results (check_name, expected, actual) select 'RL a stock presenter without a look is refused', 'That look is not on the stock list', pg_temp.rl_problems('T rl look none');
+insert into results (check_name, expected, actual) select 'RL a cards cut switched to the stock presenter is a change (no look in the cut), not a look that is off', 'You changed the reel after the final cut · make the final cut again', pg_temp.rl_problems('T rl look none');
+insert into results (check_name, expected, actual) select 'RL a portrait cut switched to cards is a change', 'You changed the reel after the final cut · make the final cut again', pg_temp.rl_problems('T rl cut as portrait');
+insert into results (check_name, expected, actual) select 'RL a voice that is wanted but missing lists no 90 s line (as the studio does)', 'Voice every scene in Produce, or choose Text and music only in Shape it|Make the final cut in Produce', pg_temp.rl_problems('T rl slow unvoiced');
 insert into results (check_name, expected, actual) select 'RL a voice file that is not in Storage is refused', 'A voice-over file is not there · voice the reel again', pg_temp.rl_problems('T rl voice file');
 insert into results (check_name, expected, actual) select 'RL a video in another contribution''s folder is refused', 'The video file is not there · make the final cut again', pg_temp.rl_problems('T rl elsewhere');
+insert into results (check_name, expected, actual) select 'RL a video in another author''s folder is refused', 'The video file is not there · make the final cut again', pg_temp.rl_problems('T rl other author');
 insert into results (check_name, expected, actual) select 'RL a video whose stored type is not the one it claims is refused', 'The video file is not the type or size it claims', pg_temp.rl_problems('T rl webm');
 insert into results (check_name, expected, actual) select 'RL a video over 50 MB in Storage is refused', 'The video file is not the type or size it claims', pg_temp.rl_problems('T rl big');
 do $$ declare r record; begin
@@ -3256,6 +3265,7 @@ do $$ declare r record; begin
     insert into results (check_name, expected, actual) values ('RL more than 10 items are refused', 'blocked: 23514', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('RL more than 10 items are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
 end $$;
+select set_config('test.rl_ok_id', (select id::text from public.contributions where title = 'T rl ok'), true);
 -- publishing: a learner reads nothing before it, the author can still upload, and afterwards the video is open to a learner and frozen for the author
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'RL a learner reads no file of an unpublished reel', '0', count(*)::text from storage.objects where name like '%/reel-0123456789abcdef.mp4' and bucket_id = 'media';
@@ -3280,7 +3290,10 @@ insert into results (check_name, expected, actual) select 'RL the author cannot 
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'RL a learner reads the published reel''s video, and no other file of it', '1', count(*)::text from storage.objects where bucket_id = 'media' and name like '%/reel-0123456789abcdef.mp4'
   and name in (select l.content -> 'video' ->> 'path' from public.learnings l where l.format = 'Reel' and l.title = 'T rl ok');
-insert into results (check_name, expected, actual) select 'RL the published reel''s voice clips are not open to a learner', '0', count(*)::text from storage.objects o join public.contributions c on o.name like '%/' || c.id || '/voice-%' where c.title = 'T rl ok';
+insert into results (check_name, expected, actual) select 'RL the published reel''s voice clips are not open to a learner', '0', count(*)::text from storage.objects o where o.bucket_id = 'media' and o.name = '00000000-0000-0000-0000-0000000000aa/' || current_setting('test.rl_ok_id') || '/voice-1.mp3';
+reset role;
+insert into results (check_name, expected, actual) select 'RL the voice clip is in Storage (so the learner case above is not vacuous)', '1', count(*)::text from storage.objects o where o.bucket_id = 'media' and o.name = '00000000-0000-0000-0000-0000000000aa/' || current_setting('test.rl_ok_id') || '/voice-1.mp3';
+set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'RL a text and music only reel is published as scripted, with no words and no look', 'published', public.submit_contribution((select id from public.contributions where title = 'T rl text'));
 insert into results (check_name, expected, actual) select 'RL a scripted reel is not AI made, has no look and no word timing', 'scripted/false/true/false/true', (l.content ->> 'made')||'/'||l.ai_made::text||'/'||(l.content -> 'look' = 'null'::jsonb)||'/'||(l.content ->> 'burned')||'/'||((l.content -> 'scenes' -> 0 -> 'words') = 'null'::jsonb)

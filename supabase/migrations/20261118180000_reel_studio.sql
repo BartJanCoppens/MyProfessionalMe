@@ -14,8 +14,9 @@
 --           not stored: the browser groups them from the words, so that grouping has no twin here.
 -- check     contribution_problems refuses a reel without its check question, not voiced as chosen, with a clip without word timing,
 --           over 90 s, without a cut, changed after it (rows or clips differ from `made`), whose cut does not run as long as the reel
---           (1.5 s), whose stock presenter has no active look, whose voice or video files are outside the folder or not in Storage,
---           or whose video is not the type or size it claims (Storage's own metadata, at most 50 MB).
+--           (1.5 s), whose presenter was switched after the cut (portrait or cards), whose stock look is switched off, whose voice or video files are outside the folder or not in Storage,
+--           or whose video is not the type or size it claims (Storage's metadata: the size is Storage's own measure, the type is the Blob's type as the browser sent it).
+--           The cut's `made`, `seconds` and type are client claims; peer review is the gate for what the video shows.
 -- uses      media_voice is deleted: reels are voiced through studio_voice, the one runner (src/studioVoicing.ts).
 
 -- 1. A reel is up to 8 rows, its voice-over and its video.
@@ -398,7 +399,7 @@ begin
         p := array_append(p, format('Voice scene %s again · its word timing is missing', v_scene));
       end if;
     end if;
-    if v_secs > 90 then
+    if v_secs > 90 and not (private.reel_wants_voice(c.shape) and not v_voiced) then
       p := array_append(p, format('The reel runs %s s · at most 90 s', ceil(v_secs)));
     end if;
     if v_video is null then
@@ -407,14 +408,15 @@ begin
       -- the cut is made from these rows and these clips (rows and clips are compared as the browser stored them)
       if v_video -> 'made' -> 'rows' is distinct from private.rows_of(c.items)
          or (v_voiced and v_video -> 'made' -> 'clips' is distinct from to_jsonb(v_paths))
-         or (not private.reel_wants_voice(c.shape) and v_video -> 'made' -> 'clips' <> '[]'::jsonb) then
+         or (not private.reel_wants_voice(c.shape) and v_video -> 'made' -> 'clips' <> '[]'::jsonb)
+         or (c.shape ->> 'Who presents?' = 'Stock presenter and AI voice') is distinct from (v_video -> 'made' ->> 'look' is not null) then
         p := array_append(p, 'You changed the reel after the final cut · make the final cut again');
       end if;
       if (v_voiced or not private.reel_wants_voice(c.shape)) and abs((v_video ->> 'seconds')::numeric - v_secs) > 1.5 then
         p := array_append(p, 'The video''s length does not match the voice-over · make the final cut again');
       end if;
       -- a stock presenter needs an active stock look (one can be switched off after it was picked)
-      if c.shape ->> 'Who presents?' = 'Stock presenter and AI voice'
+      if c.shape ->> 'Who presents?' = 'Stock presenter and AI voice' and v_video -> 'made' ->> 'look' is not null
          and not exists (select 1 from public.stock_looks l where l.active and l.id::text = v_video -> 'made' ->> 'look') then
         p := array_append(p, 'That look is not on the stock list');
       end if;
