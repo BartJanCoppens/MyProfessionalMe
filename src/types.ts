@@ -199,6 +199,7 @@ export type DetailOf = {
   aid: { ticks: number[] };                  // indexes of the ticked items
   explainer: { last: boolean; best?: number }; // the last step seen; the check's best score, in percent
   motion: { played?: boolean; read?: boolean }; // played to the end; the text version read
+  horizon: { last?: boolean };                 // the last slide of the route reached
 };
 export type LearningDetail = Partial<DetailOf[keyof DetailOf]>;
 

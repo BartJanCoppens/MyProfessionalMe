@@ -1,16 +1,16 @@
 // The library cover lines of the v4 formats (cvMeta, cvMeta2 and the little bars), from the catalogue content and what
-// this person has saved. The flags follow the format (COVER_KIND, the cover drawing's map), so a cover is drawn even
-// before its content has loaded.
+// this person has saved. Which drawing a cover gets is its kind (COVER_KIND in src/logic/covers.ts, the one map), so a
+// cover is drawn even before its content has loaded.
 import { LEARN_META } from './data';
 import { detailOf, handedIn } from './fmtShared';
-import { COVER_KIND } from './logic/covers';
 import { countLabel, dueCards } from './logic/formats';
+import { deckLine } from './logic/horizonItem';
 import { madeLabel } from './logic/provenance';
 import type { Item, Logic } from './model';
 
 type Lines = { cvMeta: string; cvMeta2: string; exBars: { w: string; c: string }[]; aidRows: { bg: string }[]; stepDots: { bg: string }[] };
 
-function lines(L: Logic, it: Item): Partial<Lines> {
+export function fmtCover(L: Logic, it: Item): Partial<Lines> {
   const c = LEARN_META[it.id]?.content, done = it.state === 'accepted';
   switch (c?.kind) {
     case 'flash': {
@@ -42,14 +42,11 @@ function lines(L: Logic, it: Item): Partial<Lines> {
       return { cvMeta: c.stages.length + ' stages · ' + c.seconds + ' s', cvMeta2: d.played ? 'Played to the end' : d.read ? 'Text version read' : madeLabel(c.made),
         stepDots: c.stages.slice(0, 6).map((_, k) => ({ bg: seen || k === 0 ? '#86BC25' : '#fff' })) };
     }
+    case 'horizon': {
+      const last = done || !!detailOf<'horizon'>(L, it.id).last;
+      return { cvMeta: deckLine(c).split(' · ')[0], cvMeta2: last ? 'Played to the end' : c.seconds > 0 ? 'Narrated' : 'At your own pace',
+        stepDots: Array.from({ length: Math.min(6, c.slides) }, (_, k) => ({ bg: last || k === 0 ? '#86BC25' : '#fff' })) };
+    }
     default: return {};
   }
-}
-
-export function fmtCover(L: Logic, it: Item) {
-  const kind = COVER_KIND[it.format];
-  return {
-    cvFlash: kind === 'flash', cvExam: kind === 'exam', cvCase: kind === 'case', cvTeach: kind === 'teach', cvStretch: kind === 'stretch', cvWebinar: kind === 'webinar', cvAid: kind === 'aid', cvExplainer: kind === 'explainer', cvFlow: kind === 'flow',
-    ...lines(L, it),
-  };
 }

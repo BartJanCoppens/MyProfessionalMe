@@ -338,13 +338,13 @@ describe('View as', () => {
 describe('covers', () => {
   const cover = (id: string, rows: Rows = {}, detail: Record<string, LearningDetail> = {}) => on(id, rows, detail).vm().libItems.find((i) => i.id === id)!;
   it('draws each of the seven covers with its meta lines', () => {
-    expect(cover('L60')).toMatchObject({ cvFlash: true, cvMeta: '3 cards', cvMeta2: '3 due today' });
-    expect(cover('L61')).toMatchObject({ cvExam: true, cvMeta: '40 Q', cvMeta2: 'Not taken yet' });
-    expect(cover('L64')).toMatchObject({ cvCase: true, cvMeta: '2 deliverables', cvMeta2: 'Reviewed by your counsellor' });
-    expect(cover('L65')).toMatchObject({ cvTeach: true, cvMeta: 'Explain it back', cvMeta2: 'Feedback on your answer' });
-    expect(cover('L66')).toMatchObject({ cvStretch: true, cvMeta: '0 of 3 checkpoints', cvMeta2: 'On the job' });
-    expect(cover('L67')).toMatchObject({ cvWebinar: true, cvMeta: '4 Dec · 12:30–13:30', cvMeta2: 'Live, then recorded' });
-    expect(cover('L68')).toMatchObject({ cvAid: true, cvMeta: '3-point checklist', cvMeta2: 'One page · PDF' });
+    expect(cover('L60')).toMatchObject({ kind: 'flash', cvMeta: '3 cards', cvMeta2: '3 due today' });
+    expect(cover('L61')).toMatchObject({ kind: 'exam', cvMeta: '40 Q', cvMeta2: 'Not taken yet' });
+    expect(cover('L64')).toMatchObject({ kind: 'case', cvMeta: '2 deliverables', cvMeta2: 'Reviewed by your counsellor' });
+    expect(cover('L65')).toMatchObject({ kind: 'teach', cvMeta: 'Explain it back', cvMeta2: 'Feedback on your answer' });
+    expect(cover('L66')).toMatchObject({ kind: 'stretch', cvMeta: '0 of 3 checkpoints', cvMeta2: 'On the job' });
+    expect(cover('L67')).toMatchObject({ kind: 'webinar', cvMeta: '4 Dec · 12:30–13:30', cvMeta2: 'Live, then recorded' });
+    expect(cover('L68')).toMatchObject({ kind: 'aid', cvMeta: '3-point checklist', cvMeta2: 'One page · PDF' });
   });
   it('reflects the learner\'s progress', () => {
     expect(cover('L61', {}, { L61: { best: 80 } })).toMatchObject({ cvMeta: '80%', cvMeta2: 'Best score' });

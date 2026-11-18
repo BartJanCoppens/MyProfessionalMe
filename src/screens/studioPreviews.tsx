@@ -1,7 +1,7 @@
 // The preview step's registry: one preview per studio kind (StudioDef.pv). Flash plays its cards or questions; a studio
 // whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow) shows that format's own
 // learner panel over studioContent. A preview is a play-test: never saved, never counted as progress. The same panels
-// show a saved studio contribution to its author and its reviewers (SavedContent).
+// show a saved studio contribution to its author and its reviewers (SavedContent), and a Presentation's file.
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { explainerView } from '../fmtExplainer';
@@ -11,9 +11,11 @@ import { NEW_ROUND } from '../fmtRound';
 import { aidView, casePreview } from '../fmtVals';
 import { caseHours } from '../logic/studioContent';
 import type { VM } from '../model';
-import type { AidContent, ExplainerContent, FormatContent, MotionContent } from '../types';
+import { horizonView } from '../fmtHorizon';
+import type { AidContent, ExplainerContent, FormatContent, HorizonContent, MotionContent } from '../types';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
 import ExplainerPanel from './ExplainerPanel';
+import PresentationPanel from './PresentationPanel';
 import { AidPanel, CasePanel } from './FormatWork';
 import { label } from './labelStyle';
 import StudioPlayTest from './StudioPlayTest';
@@ -35,6 +37,10 @@ function ExplainerTry({ content }: { content: ExplainerContent }) {
   return <ExplainerPanel ie={ie} />;
 }
 
+// A Presentation's file in its learner panel; playing it to the end completes nothing.
+const DeckTry = ({ content, still }: { content: HorizonContent; still: boolean }) =>
+  <PresentationPanel hz={horizonView(content, { ro: false, still, done: false, onLast: () => {} })} />;
+
 // The learner's Animated flow; playing it and reading its text version complete nothing.
 const FlowTry = ({ content, still }: { content: MotionContent; still: boolean }) =>
   <AnimatedFlowPanel fl={flowView(content, { ro: false, still, done: false, onEnd: () => {}, onRead: () => {} })} />;
@@ -51,6 +57,7 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
       {content.kind === 'case' && <CasePanel ce={casePreview(content, t.hours)} />}
       {content.kind === 'explainer' && <ExplainerTry content={content} />}
       {content.kind === 'motion' && <FlowTry content={content} still={t.still} />}
+      {content.kind === 'horizon' && <DeckTry content={content} still={t.still} />}
     </>
   );
 }

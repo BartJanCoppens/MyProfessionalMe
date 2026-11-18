@@ -134,7 +134,7 @@ describe('View as', () => {
 describe('the library card', () => {
   const cover = (id: string, detail?: LearningDetail) => on(id, detail).vm().libItems.find((i) => i.id === id)!;
   it('draws the explainer cover with its steps and how it ends, then that it was seen to the end', () => {
-    expect(cover('L990')).toMatchObject({ kind: 'explainer', cvExplainer: true, cvMeta: '3 steps', cvMeta2: 'Ends with a check' });
+    expect(cover('L990')).toMatchObject({ kind: 'explainer', cvMeta: '3 steps', cvMeta2: 'Ends with a check' });
     expect(cover('L991')).toMatchObject({ cvMeta: '3 steps', cvMeta2: 'Click through' });
     expect(cover('L991', { last: true })).toMatchObject({ cvMeta2: 'Seen to the end' });
     expect(cover('L990').stepDots).toHaveLength(3);
