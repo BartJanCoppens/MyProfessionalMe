@@ -7,19 +7,20 @@ import type { SetNw } from './createItems';
 import { blockView } from './fmtCourse';
 import { fieldsOf } from './courseFields';
 import { COURSE_CAPS, KIND_NAME, SCORED_KINDS, courseProblems, courseRowProblems, embedProblems, lessonsOf } from './logic/courseContent';
-import type { BlockKind, CourseBlock, EmbedFormat } from './logic/courseContent';
+import type { BlockKind, CourseBlock, EmbedFormat, HotspotBlock, ImageBlock } from './logic/courseContent';
 import { EMBED_SHELF, embedAvailable, embedGlyph, embedSources, studioOfFormat } from './courseEmbedEdit';
 import { openStudioFromCourse } from './createSave';
-import { addLesson, duplicateBlock, insertBlock, moveBlock, moveLesson, newBlock, newEmbed, patchBlock, removeBlock, removeLesson, renameLesson } from './logic/courseEdit';
+import { IMAGE_ACCEPT, IMAGE_HINT, dropImages, setCourseImage } from './courseImageEdit';
+import { addLesson, duplicateBlock, insertBlock, moveBlock, moveLesson, newBlock, newEmbed, orphanedImages, patchBlock, removeBlock, removeLesson, renameLesson } from './logic/courseEdit';
 import { SHORT_MAX, rowFieldMax } from './logic/items';
 import type { Item } from './logic/items';
 import type { StudioEntry } from './logic/studios';
 import { clearAsk } from './studioDraft';
 
-// The shelf: the blocks and the interactions, then the learnings of the studios (courseEmbedEdit.ts). (Images come in a later release.)
+// The shelf: the blocks and the interactions, then the learnings of the studios (courseEmbedEdit.ts).
 const SHELF: { group: string; kinds: [Exclude<BlockKind, 'embed'>, string][] }[] = [
-  { group: 'Blocks', kinds: [['text', '¶'], ['callout', '!'], ['accordion', '≡']] },
-  { group: 'Interactions', kinds: [['check', '?'], ['sort', '⇅'], ['branch', '⑂'], ['reflect', '✎'], ['exercise', '＝']] },
+  { group: 'Blocks', kinds: [['text', '¶'], ['callout', '!'], ['accordion', '≡'], ['image', '▣']] },
+  { group: 'Interactions', kinds: [['check', '?'], ['sort', '⇅'], ['hotspot', '◎'], ['branch', '⑂'], ['reflect', '✎'], ['exercise', '＝']] },
 ];
 const LESSON_TITLE_MAX = rowFieldMax(1); // a lesson row's second field (private.rows_ok)
 const plural = (n: number, one: string) => n + ' ' + one + (n === 1 ? '' : 's');
@@ -30,7 +31,8 @@ function context(L: Logic, nw: NewDraft, setNw: SetNw) {
   const lesson = Math.min(Math.max(ce.lesson, 0), Math.max(lessons.length - 1, 0)), blocks = lessons[lesson]?.blocks ?? [];
   const selected = blocks.find((b) => b.id === ce.block) ?? null;
   const show = (k: number, block: string | null) => L.setState({ courseEdit: { lesson: k, block } });
-  const edit = (f: (items: StudioEntry[]) => StudioEntry[]) => { if (!ro) setNw((cur) => (cur.items ? { items: { ...cur.items, list: f(cur.items.list as StudioEntry[]) as Item[], how: cur.items.how || 'manual', problems: [] } } : {})); };
+  // An edit that leaves an image file unnamed (a removed block or lesson) removes the file too.
+  const edit = (f: (items: StudioEntry[]) => StudioEntry[]) => { if (ro) return; dropImages(L, orphanedImages(list, f(list))); setNw((cur) => (cur.items ? { items: { ...cur.items, list: f(cur.items.list as StudioEntry[]) as Item[], how: cur.items.how || 'manual', problems: [] } } : {})); };
   return { L, nw, list, lessons, ro, ce, lesson, blocks, selected, show, edit };
 }
 
@@ -38,6 +40,9 @@ function context(L: Logic, nw: NewDraft, setNw: SetNw) {
 const embedExt = (c: Ctx, format: EmbedFormat, learning: string) => ({ sources: embedSources(format, learning), make: () => { void openStudioFromCourse(c.L, format); }, makeLabel: 'Make a new one in the ' + (studioOfFormat(format)?.name ?? format).replace(/ Studio$/, '') + ' Studio' });
 
 const full = (c: Ctx) => { const is = c.blocks.length >= COURSE_CAPS.blocksPerLesson; if (is) c.L.say('A lesson holds at most ' + COURSE_CAPS.blocksPerLesson + ' blocks'); return is; };
+
+// A picture's file picker: "Add an image", or "Replace the image" once it has one.
+const imageExt = (c: Ctx, b: ImageBlock | HotspotBlock) => ({ label: b.path ? 'Replace the image' : 'Add an image', hint: IMAGE_HINT, accept: IMAGE_ACCEPT, busy: c.L.state.createBusy, choose: (file: File) => { void setCourseImage(c.L, b.id, file); } });
 
 function blockOps(c: Ctx) {
   const { selected, blocks, edit, show, lesson } = c, at = selected ? blocks.indexOf(selected) : -1;
@@ -48,7 +53,8 @@ function blockOps(c: Ctx) {
     show(lesson, b.id);
   };
   const inspector = c.ro || !selected ? null : {
-    type: KIND_NAME[selected.block], id: selected.id, ...fieldsOf(selected, (p) => edit((it) => patchBlock(it, selected.id, p)), selected.block === 'embed' ? embedExt(c, selected.format, selected.learning) : undefined),
+    type: KIND_NAME[selected.block], id: selected.id, ...fieldsOf(selected, (p) => edit((it) => patchBlock(it, selected.id, p)), {
+      embed: selected.block === 'embed' ? embedExt(c, selected.format, selected.learning) : undefined, image: selected.block === 'image' || selected.block === 'hotspot' ? imageExt(c, selected) : undefined }),
     noUp: at === 0, noDown: at === blocks.length - 1, up: () => edit((it) => moveBlock(it, selected.id, -1)), down: () => edit((it) => moveBlock(it, selected.id, 1)),
     duplicate: () => { if (!full(c)) edit((it) => duplicateBlock(it, selected.id)); }, remove: () => { edit((it) => removeBlock(it, selected.id)); show(lesson, null); }, done: () => show(lesson, null),
   };

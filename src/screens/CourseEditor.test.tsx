@@ -2,7 +2,8 @@
 // The E-learning Studio's course editor (E-learning Studio plan, Task 1.3): the outline, the blocks, the inspector and the shelf, and View as.
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Live, ITEMS, click } from '../test/courseEditorLive';
+import { Live } from '../test/courseEditorLive';
+import { ITEMS, click } from '../test/courseEditorFixtures';
 
 vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.fn(), removeDraft: vi.fn(), submitContribution: vi.fn(), decideReview: vi.fn(), savePolicy: vi.fn(), removePolicy: vi.fn(), checkContribution: vi.fn() }));
 
@@ -40,9 +41,9 @@ describe('the outline and the canvas', () => {
 describe('the shelf and the inspector', () => {
   it('offers the blocks and interactions that work, and nothing "coming"', () => {
     render(<Live />);
-    expect(within(screen.getByRole('group', { name: 'Blocks' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['¶Text', '!Callout', '≡Accordion']);
-    expect(within(screen.getByRole('group', { name: 'Interactions' })).getAllByRole('button').map((b) => b.textContent?.slice(1))).toEqual(['Knowledge check', 'Sort into groups', 'Branching scenario', 'Reflection', 'Calculation exercise']);
-    ['AI tutor', 'Calculators and graphs', 'Image', 'coming'].forEach((w) => expect(screen.queryByText(new RegExp(w, 'i'))).toBeNull());
+    expect(within(screen.getByRole('group', { name: 'Blocks' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['¶Text', '!Callout', '≡Accordion', '▣Image']);
+    expect(within(screen.getByRole('group', { name: 'Interactions' })).getAllByRole('button').map((b) => b.textContent?.slice(1))).toEqual(['Knowledge check', 'Sort into groups', 'Hotspot image', 'Branching scenario', 'Reflection', 'Calculation exercise']);
+    ['AI tutor', 'Calculators and graphs', 'coming'].forEach((w) => expect(screen.queryByText(new RegExp(w, 'i'))).toBeNull());
   });
   it('"Knowledge check" adds a check after the selected block and opens it with what is missing', () => {
     render(<Live />);

@@ -41,6 +41,7 @@ export type Play =
   | { kind: 'sort'; prompt: string; bins: [string, string]; cards: { label: string; bin: 0 | 1 | null; place: (g: 0 | 1) => void }[]; verdict: Verdict | null }
   | { kind: 'branch'; q: string; choices: { label: string; on: boolean; pick: () => void }[]; outcome: Verdict | null; retry: () => void }
   | { kind: 'exercise'; q: string; unit: string; value: string; set: (v: string) => void; check: () => void; canCheck: boolean; checked: boolean; verdict: Verdict | null; retry: () => void }
+  | { kind: 'hotspot'; path: string; alt: string; cap: string; spots: { n: number; x: number; y: number; title: string; text: string; on: boolean; pick: () => void }[] }
   | { kind: 'reflect'; p: string; shown: boolean; readOnly: boolean; value: string; set: (text: string) => void; note: string };
 
 // The check as a one-question round: its answer is the pick once checked, and "Try again" starts the round over (the answer clears with it).
@@ -72,6 +73,13 @@ function exercisePlay(b: Extract<CourseBlock, { block: 'exercise' }>, run: Block
     retry: () => { if (!ro) patch({ answer: { v: t.v, checked: false } }); } };
 }
 
+// A hotspot's open point is its answer (a number, or none): one point is open at a time, and a second tap on it closes it. Nothing here scores or is saved but the run.
+function hotspotPlay(b: Extract<CourseBlock, { block: 'hotspot' }>, run: BlockRun, patch: (p: BlockPatch) => void): Play {
+  const open = typeof run.answer === 'number' ? run.answer : null;
+  return { kind: 'hotspot', path: b.path, alt: b.alt, cap: b.cap,
+    spots: b.spots.map(([x, y, title, text], i) => ({ n: i + 1, x, y, title, text, on: open === i, pick: () => patch({ answer: open === i ? null : i }) })) };
+}
+
 // A reflect block's text. `shown`: the field is there (not in View as, where the reflections are private); `readOnly`: it takes no typing (the preview).
 export type Reflection = { shown: boolean; readOnly: boolean; value: (blockId: string) => string; set: (blockId: string, text: string) => void; note: (blockId: string) => string };
 export const NO_REFLECTION: Reflection = { shown: false, readOnly: true, value: () => '', set: () => {}, note: () => '' };
@@ -85,6 +93,7 @@ export function playOf(b: CourseBlock, run: BlockRun, patch: (p: BlockPatch) => 
     case 'sort': return sortPlay(b, run, patch, ro);
     case 'branch': return branchPlay(b, run, patch, ro);
     case 'exercise': return exercisePlay(b, run, patch, ro);
+    case 'hotspot': return hotspotPlay(b, run, patch);
     case 'reflect': return { kind: 'reflect', p: b.p, shown: reflection.shown, readOnly: reflection.readOnly, value: reflection.value(b.id), set: (t) => reflection.set(b.id, t), note: reflection.note(b.id) };
     default: return null;
   }

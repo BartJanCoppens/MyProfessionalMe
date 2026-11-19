@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import { Button, FilterChip, Input, LinkButton, Textarea } from '../ds';
 import { REFLECTION_MAX } from '../lib/reflectionStore';
 import type { Play } from '../fmtCoursePlay';
+import CourseImage from './CourseImage';
 import Feedback from './Feedback';
 import QuestionRound from './QuestionRound';
 
@@ -38,6 +39,7 @@ export default function CoursePlay({ p }: { p: Play }) {
           </div>))}
         {p.verdict ? <Verdict v={p.verdict} /> : <div style={muted}>Put every item in a group.</div>}
       </div>);
+    case 'hotspot': return <CourseImage path={p.path} alt={p.alt} cap={p.cap} spots={p.spots} mode="play" />;
     case 'branch': return (
       <div style={col}>
         <div style={bold}>{p.q}</div>

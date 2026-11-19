@@ -2,22 +2,25 @@
 // inputs, and the buttons that add or remove a panel, an item or a choice. Plain data for the screen; a change is a patch of the block.
 import type { Opt } from './ds';
 import { COURSE_CAPS as C, decimalPoint } from './logic/courseContent';
-import type { CourseBlock } from './logic/courseContent';
+import type { CourseBlock, HotspotBlock, ImageBlock } from './logic/courseContent';
 import { LONG_MAX, SHORT_MAX } from './logic/items';
 
-export type FieldView = { label: string; kind: 'input' | 'area' | 'select'; value: string; options?: Opt[]; max?: number; numeric?: boolean; min?: number; set: (v: string) => void };
+// max: the most characters; numeric fields: min and top are the smallest and largest number taken.
+export type FieldView = { label: string; kind: 'input' | 'area' | 'select'; value: string; options?: Opt[]; max?: number; numeric?: boolean; min?: number; top?: number; set: (v: string) => void };
 export type MoreView = { label: string; run: () => void; off: boolean };
 type Patch = (p: Partial<CourseBlock>) => void;
-// note: a line under the fields. embed: what an embedded learning's inspector needs from the library (its sources and the studio that makes a new one).
-type Fields = { fields: FieldView[]; more: MoreView[]; note?: string };
+// note: a line under the fields. image: the picture's file picker. embed: what an embedded learning's inspector needs from the library (its sources and the studio that makes a new one).
+export type ImageSource = { label: string; hint: string; accept: string; choose: (file: File) => void; busy: boolean };
+type Fields = { fields: FieldView[]; more: MoreView[]; note?: string; image?: ImageSource };
 export type EmbedSources = { sources: Opt[]; make: () => void; makeLabel: string };
+export type Sources = { embed?: EmbedSources; image?: ImageSource };
 
 const input = (label: string, value: string, max: number, set: (v: string) => void): FieldView => ({ label, kind: 'input', value, max, set });
 const area = (label: string, value: string, max: number, set: (v: string) => void): FieldView => ({ label, kind: 'area', value, max, set });
 const select = (label: string, value: string, options: Opt[], set: (v: string) => void): FieldView => ({ label, kind: 'select', value, options, set });
 const replaceAt = <T,>(list: T[], i: number, v: T): T[] => list.map((x, k) => (k === i ? v : x));
 // A typed number, or null while the text is not one yet ("-", ""): the field keeps what was typed, the block only a finished number.
-const number = (v: string, min = -Infinity): number | null => { const n = Number(decimalPoint(v)); return v.trim() !== '' && Number.isFinite(n) && n >= min ? n : null; };
+const number = (v: string, min = -Infinity, max = Infinity): number | null => { const n = Number(decimalPoint(v)); return v.trim() !== '' && Number.isFinite(n) && n >= min && n <= max ? n : null; };
 const NUMBER_CHARS = 24; // the longest number a creator can type (text length, not a database cap)
 const LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -26,7 +29,18 @@ function listFields<T>(list: T[], range: readonly [number, number], noun: string
     { label: 'Remove the last ' + noun, run: () => set(list.slice(0, -1)), off: list.length <= range[0] }];
 }
 
-export function fieldsOf(b: CourseBlock, patch: Patch, embed?: EmbedSources): Fields {
+// A picture's alt text and caption, and the points of a hotspot (the position of each in percent of the picture).
+const pictureFields = (b: ImageBlock | HotspotBlock, patch: Patch): FieldView[] => [area('Alt text (read aloud by screen readers)', b.alt, C.alt, (alt) => patch({ alt })), input('Caption', b.cap, C.caption, (cap) => patch({ cap }))];
+const percent = (label: string, v: number, set: (n: number) => void): FieldView => ({ ...input(label, String(v), NUMBER_CHARS, (t) => { const n = number(t, 0, 100); if (n !== null) set(n); }), numeric: true, min: 0, top: 100 });
+function hotspotFields(b: HotspotBlock, patch: Patch): Fields {
+  const at = (i: number, k: 0 | 1 | 2 | 3) => (v: string | number) => patch({ spots: replaceAt(b.spots, i, b.spots[i].map((x, j) => (j === k ? v : x)) as HotspotBlock['spots'][number]) });
+  return { fields: [...pictureFields(b, patch), ...b.spots.flatMap(([x, y, title, text], i) => [percent('Point ' + (i + 1) + ' across (%)', x, at(i, 0)), percent('Point ' + (i + 1) + ' down (%)', y, at(i, 1)),
+    input('Point ' + (i + 1) + ' title', title, C.spotTitle, at(i, 2)), area('Point ' + (i + 1) + ' text', text, C.spotText, at(i, 3))])],
+    more: listFields<HotspotBlock['spots'][number]>(b.spots, C.spots, 'point', [50, 50, '', ''], (spots) => patch({ spots })) };
+}
+
+export function fieldsOf(b: CourseBlock, patch: Patch, ext: Sources = {}): Fields {
+  const { embed, image } = ext;
   switch (b.block) {
     case 'text': return { fields: [input('Heading', b.h, C.heading, (h) => patch({ h })), area('Text', b.t, C.text, (t) => patch({ t }))], more: [] };
     case 'callout': return { fields: [area('Callout', b.t, C.callout, (t) => patch({ t }))], more: [] };
@@ -55,6 +69,8 @@ export function fieldsOf(b: CourseBlock, patch: Patch, embed?: EmbedSources): Fi
     case 'reflect': return { fields: [area('Prompt', b.p, C.prompt, (p) => patch({ p }))], more: [] };
     case 'embed': return { fields: [select('Source', b.learning, embed?.sources ?? [], (learning) => patch({ learning }))], more: embed ? [{ label: embed.makeLabel, run: embed.make, off: false }] : [],
       note: 'Only published learnings can be added. A new one appears here once it is published.' };
+    case 'image': return { fields: pictureFields(b, patch), more: [], image };
+    case 'hotspot': return { ...hotspotFields(b, patch), image };
     case 'exercise': return { fields: [area('Question', b.q, C.prompt, (q) => patch({ q })),
       { ...input('Right number', String(b.a), NUMBER_CHARS, (v) => { const a = number(v); if (a !== null) patch({ a }); }), numeric: true },
       { ...input('Tolerance', String(b.tol), NUMBER_CHARS, (v) => { const tol = number(v, 0); if (tol !== null) patch({ tol }); }), numeric: true, min: 0 },

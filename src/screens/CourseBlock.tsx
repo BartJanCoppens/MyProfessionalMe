@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Button } from '../ds';
 import type { BlockMode, BlockView, EmbedView } from '../fmtCourse';
 import type { CourseBlock as Block } from '../logic/courseContent';
+import CourseImage from './CourseImage';
 import CoursePlay from './CoursePlay';
 
 const muted = { color: '#8a9086' };
@@ -25,6 +26,8 @@ function Body({ b, mode, title }: { b: Block; mode: BlockMode; title: string }) 
     case 'branch': return <><div style={bold}>{line(b.q, 'Write the question')}</div>{b.choices.map(([label, outcome, good], i) => <div key={i}>{good ? '✓ ' : '✗ '}{line(label, 'Choice')} <span style={{ color: '#5a6058' }}>· {line(outcome, 'Reply')}</span></div>)}</>;
     case 'reflect': return <div>{line(b.p, 'Write the prompt for the learner')}<div style={{ ...muted, fontSize: 12, marginTop: 4 }}>The learner's answer stays with the learner.</div></div>;
     case 'embed': return <><div style={bold}>{b.format}</div><div>{line(title, b.learning ? 'No longer in the library' : 'Pick the learning in the inspector')}</div></>;
+    case 'image': return <CourseImage path={b.path} alt={b.alt} cap={b.cap} mode={mode} />;
+    case 'hotspot': return <CourseImage path={b.path} alt={b.alt} cap={b.cap} mode={mode} spots={b.spots.map(([x, y, title, text], n) => ({ n: n + 1, x, y, title, text, on: false, pick: () => {} }))} />;
     case 'exercise': return <><div style={bold}>{line(b.q, 'Write the question')}</div><div style={{ fontSize: 12.5, color: '#5a6058' }}>Answer {b.a}{b.unit && ' ' + b.unit} (± {b.tol})</div></>;
   }
 }

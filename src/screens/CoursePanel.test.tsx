@@ -24,6 +24,7 @@ vi.mock('../lib/learnerStore', () => ({
 }));
 vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.fn(), removeDraft: vi.fn(), submitContribution: vi.fn(), decideReview: vi.fn(), savePolicy: vi.fn(), removePolicy: vi.fn(), checkContribution: vi.fn() }));
 vi.mock('../lib/reflectionStore', () => ({ REFLECTION_MAX: 2000, loadReflections: vi.fn(async () => ({})), saveReflectionSoon: vi.fn() }));
+vi.mock('../lib/mediaStore', async (original) => ({ ...(await original<typeof import('../lib/mediaStore')>()), mediaUrl: vi.fn(async (path: string) => 'https://signed.test/' + path) }));
 vi.mock('../lib/recordStore', () => ({ decideLearning: vi.fn(async () => 'accepted'), loadQueue: vi.fn(async () => []) }));
 
 const Q = { t: 'Place of supply', q: 'Where is the VAT due?', o: ['Belgium', 'Germany, reverse charge', 'Nowhere', 'Both'], a: 1, why: 'The customer accounts for it.' };
@@ -200,5 +201,63 @@ describe('the E-learning Studio preview', () => {
     expect(screen.getByText('Try it: nothing is saved or counted.')).toBeTruthy();
     expect(screen.getByText('Made with AI')).toBeTruthy();
     expect(screen.getByText('Lesson 1 of 3')).toBeTruthy();
+  });
+});
+
+// Pictures (Task 2.3): an image with its alt text and caption, and a hotspot whose points open their title and text.
+describe('an image and a hotspot in the learner\'s course', () => {
+  const FILE = '0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7/';
+  const PICTURES = { kind: 'course', rule: 'seen', lessons: [{ title: 'Read an invoice', blocks: [
+    { block: 'image', id: 'b0011', path: FILE + 'b0011.png', alt: 'An invoice with the VAT line', cap: 'A Belgian invoice' },
+    { block: 'hotspot', id: 'b0012', path: FILE + 'b0012.webp', alt: 'An invoice with two numbered points', cap: '', spots: [[30, 40, 'Supplier VAT number', 'It starts with BE.'], [65.5, 60, 'Reverse charge', 'The mention is required.']] }] },
+    { title: 'Done', blocks: [{ block: 'text', id: 'b0013', h: '', t: 'The end.' }] }] } as CourseContent;
+  const ROW3: Learn = ['L993', 'Read an invoice', 'reg', 2, 'E-learning', 'Peer contribution', 0.25, 0, '', ''];
+  beforeAll(() => { LEARN.push(ROW3); LEARN_BY.L993 = ROW3; LEARN_META.L993 = { line: null, status: 'published', content: PICTURES }; });
+  afterAll(() => { LEARN.splice(LEARN.indexOf(ROW3), 1); delete LEARN_BY.L993; delete LEARN_META.L993; });
+
+  it('shows the image through a signed link, with its alt text and caption', async () => {
+    render(<Live id="L993" />);
+    const img = await screen.findByRole('img', { name: 'An invoice with the VAT line' });
+    expect(img.getAttribute('src')).toBe('https://signed.test/' + FILE + 'b0011.png');
+    expect(screen.getByText('A Belgian invoice')).toBeTruthy();
+  });
+  it('a hotspot point opens its title and text, a second press closes it, and another point replaces it', async () => {
+    render(<Live id="L993" />);
+    await screen.findByRole('img', { name: 'An invoice with two numbered points' });
+    const point = (n: number, title: string) => screen.getByRole('button', { name: 'Point ' + n + ': ' + title });
+    expect(point(1, 'Supplier VAT number').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByText('Select a point to read about it.')).toBeTruthy();
+    fireEvent.click(point(1, 'Supplier VAT number'));
+    const shown = screen.getByRole('status', { name: '' });
+    expect(point(1, 'Supplier VAT number').getAttribute('aria-pressed')).toBe('true');
+    expect(shown.textContent).toBe('Supplier VAT numberIt starts with BE.');
+    fireEvent.click(point(2, 'Reverse charge'));
+    expect(screen.getAllByRole('status').some((e) => e.textContent === 'Reverse chargeThe mention is required.')).toBe(true);
+    expect(point(1, 'Supplier VAT number').getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(point(2, 'Reverse charge'));
+    expect(screen.getByText('Select a point to read about it.')).toBeTruthy();
+  });
+  it('places each point in percent of the picture and reaches it by keyboard (a button, in order)', async () => {
+    render(<Live id="L993" />);
+    await screen.findByRole('img', { name: 'An invoice with two numbered points' });
+    const one = screen.getByRole('button', { name: /^Point 1/ }), two = screen.getByRole('button', { name: /^Point 2/ });
+    expect([one.style.left, one.style.top, two.style.left, two.style.top]).toEqual(['30%', '40%', '65.5%', '60%']);
+    expect(one.tagName).toBe('BUTTON');
+    expect(one.compareDocumentPosition(two) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(one.getAttribute('tabindex')).toBeNull();
+  });
+  it('lists every point as text for those who do not use the picture', async () => {
+    render(<Live id="L993" />);
+    await screen.findByRole('img', { name: 'An invoice with two numbered points' });
+    const list = screen.getByText('All points as text').closest('details')!;
+    expect(Array.from(list.querySelectorAll('li')).map((li) => li.textContent)).toEqual(['Supplier VAT number · It starts with BE.', 'Reverse charge · The mention is required.']);
+  });
+  it('says so when the image cannot be opened, and blocks nothing', async () => {
+    const media = await import('../lib/mediaStore');
+    vi.mocked(media.mediaUrl).mockRejectedValue(new Error('This file is not there, or not open to you'));
+    render(<Live id="L993" />);
+    expect((await screen.findAllByRole('alert'))[0].textContent).toBe('The image could not be opened · This file is not there, or not open to you');
+    click('Next lesson ›');
+    expect(screen.getByText('The end.')).toBeTruthy();
   });
 });

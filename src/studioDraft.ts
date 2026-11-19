@@ -59,7 +59,7 @@ export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setN
   applyDraft(setNw, nw.type, out);
 }
 
-const currentList = (L: Logic) => (L.latest().state.nw.items?.list ?? []) as StudioEntry[];
+export const currentList = (L: Logic) => (L.latest().state.nw.items?.list ?? []) as StudioEntry[];
 // The drafted items onto the draft: a course keeps its blocks on the lessons that remain (by the items as they are now).
 export const applyDraft = (setNw: SetNw, type: string, out: DraftItems) =>
   setNw((cur) => (cur.type === type ? { items: type === 'E-learning' ? { ...out, list: keepBlocks((cur.items?.list ?? []) as StudioEntry[], out.list as StudioEntry[]) as Item[] } : out } : {}));

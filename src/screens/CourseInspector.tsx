@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Field, Input, LinkButton, Select, Textarea } from '../ds';
 import { decimalPoint } from '../logic/courseContent';
 import type { courseEditVals } from '../courseEditVals';
-import type { FieldView } from '../courseFields';
+import type { FieldView, ImageSource } from '../courseFields';
 import { label } from './labelStyle';
 import { MoveButtons } from './MoveButtons';
 
@@ -15,10 +15,12 @@ function TextField({ f, common }: { f: FieldView; common: { 'aria-label': string
   const [raw, setRaw] = useState(f.value);
   // A number below the field's minimum is not taken: the block keeps its last number, and the field says so.
   const below = f.numeric && f.min !== undefined && raw.trim() !== '' && Number(decimalPoint(raw)) < f.min;
+  const above = f.numeric && f.top !== undefined && raw.trim() !== '' && Number(decimalPoint(raw)) > f.top;
   return (
     <>
-      <Input {...common} size="lg" maxLength={f.max} inputMode={f.numeric ? 'decimal' : undefined} invalid={below} value={f.numeric ? raw : f.value} onChange={(e) => { setRaw(e.target.value); f.set(e.target.value); }} />
+      <Input {...common} size="lg" maxLength={f.max} inputMode={f.numeric ? 'decimal' : undefined} invalid={below || above} value={f.numeric ? raw : f.value} onChange={(e) => { setRaw(e.target.value); f.set(e.target.value); }} />
       {below && <div role="alert" style={{ fontSize: 12, color: '#7a5000' }}>A {f.label.toLowerCase()} cannot be negative: use {f.min} or more.</div>}
+      {above && <div role="alert" style={{ fontSize: 12, color: '#7a5000' }}>{f.label} is at most {f.top}: a larger number is not taken.</div>}
     </>
   );
 }
@@ -34,12 +36,23 @@ function FieldControl({ f }: { f: FieldView }) {
   );
 }
 
+// The picture's file: the field takes one file at a time; the draft is saved and the file stored before the block names it.
+function ImagePicker({ image }: { image: ImageSource }) {
+  return (
+    <Field label={image.label} hint={image.hint} size="sm">
+      <input type="file" accept={image.accept} aria-label={image.label} disabled={image.busy} style={{ fontSize: 12 }}
+        onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) image.choose(file); }} />
+    </Field>
+  );
+}
+
 export function BlockInspector({ i }: { i: Inspector }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
   return (
     <section ref={ref} tabIndex={-1} aria-label={'Edit ' + i.type.toLowerCase()} style={{ display: 'flex', flexDirection: 'column', gap: 10, outline: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ ...label, flex: 1 }}>{i.type}</span><MoveButtons what="block" noUp={i.noUp} noDown={i.noDown} up={i.up} down={i.down} /></div>
+      {i.image && <ImagePicker image={i.image} />}
       {i.fields.map((f) => <FieldControl key={f.label} f={f} />)}
       {i.note && <div style={{ fontSize: 12, color: '#5a6058' }}>{i.note}</div>}
       {i.more.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{i.more.map((m) => <Button key={m.label} size="sm" variant="secondary" onClick={m.run} disabled={m.off}>{m.label}</Button>)}</div>}
