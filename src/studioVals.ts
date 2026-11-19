@@ -31,7 +31,7 @@ const HINTS: Record<string, string> = {
   'Preview & test': 'Try it as a learner would. Nothing here is saved or counted.', 'Check & send': 'Automatic checks, then the review route, then it goes to your reviewers.',
 };
 // A studio's own lead for a step, over HINTS: the E-learning Studio builds its lessons from blocks in Produce.
-const STUDIO_HINTS: Record<string, Record<string, string>> = { elearn: { Produce: 'Build each lesson from blocks: text, questions and learnings from the other studios.' } };
+const STUDIO_HINTS: Record<string, Record<string, string>> = { elearn: { Produce: 'Build each lesson from blocks: text, questions and exercises.' } };
 const FLASH = 'flash';
 // The studio the draft is made in, also while a saved contribution is edited in its studio; null on the upload form.
 export const studioOf = (s: AppState) => (s.studio.view === 'studio' ? s.studio.id ?? FLASH : null);

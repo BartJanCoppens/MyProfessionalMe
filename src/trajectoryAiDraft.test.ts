@@ -140,6 +140,27 @@ describe('draftPlaceholders', () => {
   });
 });
 
+describe('E-learning placeholders', () => {
+  const el: Trajectory = { ...T, steps: [make('m4', 'E-learning', 'p:d')] };
+  const elRecord = { ...record, plan: { ...record.plan, modules: [mod('d', 'VAT course', 'E-learning')] } };
+  const lessons = { items: [['Lesson 1', 'Where is VAT due', 'Rules'], ['Lesson 2', 'The invoice', 'Wording']] };
+  it('"Draft all" saves a course of lessons without blocks as a draft in the E-learning Studio', async () => {
+    ask.mockImplementation(async () => ({ text: JSON.stringify(lessons), cut: false }));
+    const h = setup({ trjPlans: { T1: { record: elRecord, sources: [] } } }, el);
+    const r = await draftPlaceholders(h.L(), 'T1', ['m4']);
+    expect(r.drafted).toBe(1);
+    expect(save.mock.calls[0][0]).toMatchObject({ type: 'E-learning', studio: 'elearn', for_step: 'm4', title: 'VAT course', items: lessons.items });
+    expect(h.state.trjs[0].steps[0].cid).toBe('c1');
+  });
+  it('"Draft with AI" opens the E-learning Studio at its Draft step with the lessons', async () => {
+    ask.mockImplementation(async () => ({ text: JSON.stringify(lessons), cut: false }));
+    const h = setup({ trjPlans: { T1: { record: elRecord, sources: [] } } }, el);
+    await openStudioFor(h.L(), 'T1', 'm4');
+    expect([h.state.studio.id, h.state.studio.step]).toEqual(['elearn', visibleSteps(studioById('elearn')!).indexOf('Draft')]);
+    expect(h.state.nw.items?.how).toBe('ai');
+  });
+});
+
 describe('openStudioFor', () => {
   it('opens Create & share at the Flash studio\'s Draft step with the module\'s brief, its cited bundle and an AI draft', async () => {
     const h = setup();

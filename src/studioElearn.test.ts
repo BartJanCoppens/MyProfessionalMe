@@ -82,6 +82,10 @@ describe('from Draft to Produce', () => {
     expect(h.st().stepName).toBe('Produce');
     expect(h.st().stepHint).toMatch(/lesson/i);
   });
+  it('promises nothing the studio cannot do yet: no learnings from the other studios until the embed block exists', () => {
+    expect(at(3).st().stepHint).not.toMatch(/other studios/i);
+    expect(def.tag).not.toMatch(/other studios/i);
+  });
 });
 
 describe('Draft with AI for the lessons', () => {
