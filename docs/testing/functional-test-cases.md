@@ -588,6 +588,22 @@ Phase 1 of the studios (v0.10.0): the generic studio spine with one available st
 | TPL-26 | Admin | A PDF whose only text is page numbers and footers | Add it | Refused as a scan (fewer than 50 characters a page) | `trajectoryAiSources.test.ts`, `planSources.test.ts` |
 | TPL-27 | Admin | The PDF reader fails to load (offline, blocked worker) | Add a PDF | "The PDF reader could not load · reload the page", not "could not be read" | `pdfText.test.ts` |
 
+## 22. E-learning: the format and the database (ELS), Learner with creation rights, Database (E-learning Studio Task 1.1)
+
+The format and its rules only; the studio, editor and player are Tasks 1.2 to 1.4. Screens are not covered here.
+
+| ID | Role | Preconditions | Steps | Expected | Covered by |
+|---|---|---|---|---|---|
+| ELS-01 | Database | A creator with an E-learning rule | Save an `elearn` draft with two lessons and blocks, check it, send it | The check passes (`{}`), the contribution is published as format E-learning with content `kind: course`, hours from "Length?" (30 min = 0.5, 60 min = 1), `ai_made` from `ai_assisted`, CPD 0 | `supabase/tests/rls.sql` EL |
+| ELS-02 | Database | The same rows | Insert them as E-learning without a studio; use a Podcast-only rule | Refused (`contributions_upload_formats`; the creation rule) | `rls.sql` EL |
+| ELS-03 | Database | A course with a block of unknown kind, a block pointing to a lesson that does not exist, a duplicate id, 21 blocks in a lesson, a check with three options, a sort with an unsorted card, a branch with no good choice, an exercise with a negative tolerance, a stray item | Run the check | One sentence each, with the lesson and the block's name ("Lesson 1 · Knowledge check: give four options, the right answer and why"); nothing is sent | `courseContent.test.ts`, `rls.sql` EL |
+| ELS-04 | Database | A course with one lesson; a lesson with no blocks; the completion rule "Final check of 80 % or more" or "Both" with no final check; two final checks | Run the check | "Add at least 2 lessons"; "Lesson 2 “Reverse charge” has no blocks yet"; "Add a final check (...)"; "Keep one final check" | `courseContent.test.ts`, `rls.sql` EL |
+| ELS-05 | Database | A client name in a callout (or any block) | Run the check | "“Delcroix” looks like a client name · anonymise it" | `rls.sql` EL |
+| ELS-06 | Database | A course checked, then edited | Send it | Refused (the fingerprint is stale); check again first | `rls.sql` EL |
+| ELS-07 | Learner | A published course | Set it accepted with progress `{seen: [0, 1], best: 100}` | Accepted without a counsellor (self-complete, `mark`); the progress is saved | `rls.sql` EL |
+| ELS-08 | Database | More than 252 items; a signed-in user calls `course_ok` | Save; call | Refused (23514); no execute (42501) | `rls.sql` EL |
+| ELS-09 | Learner | A published course's content in the library data | Read it | `parseFormatContent` reads a course and refuses a block without an id or a wrong rule | `contentStore.test.ts` |
+
 ## Bugs found and fixed
 
 Each one first had an `it.fails` test, named in the case above. All seven were fixed on 1 Nov 2026 (branch `fix/functional-bugs`) and their tests are plain `it` now. EDGE-02 had a second occurrence in the road's cloud lanes, covered by `model.edge.test.ts › places a cloud lane item due outside the four road quarters`.
