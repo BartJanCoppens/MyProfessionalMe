@@ -147,6 +147,18 @@ describe('the E-learning Studio preview with an embed', () => {
     expect(learner.saveProgress).not.toHaveBeenCalled();
     delete LEARN_META.L60;
   });
+  it('says a catalogue podcast or reel (no stored content) plays on the learner\'s page, not that it has no preview', () => {
+    const reel: Learn = ['L993', 'A catalogue reel', 'reg', 2, 'Reel', 'Peer contribution', 0.25, 0, '', ''];
+    LEARN.push(reel); LEARN_BY.L993 = reel;
+    try {
+      const h = studioPreview(), c = h.vm().create!;
+      const content = { kind: 'course', rule: 'seen', lessons: [{ title: 'One', blocks: [{ block: 'embed', id: 'b0007', format: 'Reel', learning: 'L993' }] }] } as CourseContent;
+      render(<Preview kind="elearn" c={{ ...c, studio: { ...c.studio, content } }} />);
+      click('Open');
+      expect(screen.getByText(/Plays on the learner's page/)).toBeTruthy();
+      expect(screen.queryByText(/no preview here/)).toBeNull();
+    } finally { LEARN.splice(LEARN.indexOf(reel), 1); delete LEARN_BY.L993; }
+  });
 });
 
 // Embedded learnings (Task 2.2): the shelf groups, the Source picker over the library, "Make a new one in the … Studio", and View as.

@@ -132,10 +132,13 @@ export function LearnerPanel({ t }: { t: LearnerTry }) {
   );
 }
 
+const PLAYS_ON_PAGE = "Plays on the learner's page";
 function EmbedTry({ id, t }: { id: string; t: LearnerTry }) {
   const content = LEARN_META[id]?.content, row = LEARN_BY[id];
-  if (!content || !row) return <div style={note}>This learning has no preview here.</div>;
-  if (content.kind === 'flash' || content.kind === 'exam') return <div style={note}>Plays on the learner's page: flash cards and exams are not played in the studio preview.</div>;
+  if (!row) return <div style={note}>This learning has no preview here.</div>;
+  // A catalogue podcast or reel has no stored content: the learner's page builds it from the catalogue.
+  if (!content) return <div style={note}>{row[4] === 'Podcast' || row[4] === 'Reel' ? PLAYS_ON_PAGE + ': catalogue podcasts and reels are not played in the studio preview.' : 'This learning has no preview here.'}</div>;
+  if (content.kind === 'flash' || content.kind === 'exam') return <div style={note}>{PLAYS_ON_PAGE}: flash cards and exams are not played in the studio preview.</div>;
   return <LearnerPanel t={{ ...t, key: 'embed-' + id, content, hours: row[6], contributionId: undefined, drafted: false }} />;
 }
 
