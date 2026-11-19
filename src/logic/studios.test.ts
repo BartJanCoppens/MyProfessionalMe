@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STUDIOS, STUDIO_STEPS } from '../studioData';
 import { migrationText } from '../test/migrations';
-import { itemsValid, questionsOf, studioById, visibleSteps } from './studios';
+import { itemsValid, questionsOf, studioById, studioOfFormat, visibleSteps } from './studios';
 import type { StudioItem } from './studios';
 
 const def = (id: string) => studioById(id)!;
@@ -86,5 +86,14 @@ describe('an E-learning course in a studio\'s items', () => {
     const q = { t: 'T', q: 'Q?', o: ['a', 'b', 'c', 'd'], a: 0, why: 'W' };
     const items = [['Lesson 1', 'First', 'Summary'], ['Lesson 2', 'Second', 'Summary'], { block: 'check', id: 'b0001', lesson: 0, question: q }, { block: 'text', id: 'b0002', lesson: 1, h: '', t: 'Words.' }];
     expect(questionsOf(items as never)).toEqual([]);
+  });
+});
+
+describe('studioOfFormat', () => {
+  it('names the studio that makes a format, also through its alias formats, and none for a manual format', () => {
+    expect(studioOfFormat('Flash cards')?.id).toBe('flash');
+    expect(studioOfFormat('Practice exam')?.id).toBe('flash');
+    expect(studioOfFormat('Animated flow')?.id).toBe('motion');
+    expect(studioOfFormat('Book')).toBeUndefined();
   });
 });

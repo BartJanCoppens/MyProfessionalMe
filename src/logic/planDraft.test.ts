@@ -2,7 +2,7 @@
 // the creation grant a placeholder gives its trajectory's editors (mirrors private.plan_draft_matches).
 import { describe, expect, it } from 'vitest';
 import type { Bundle } from '../types';
-import { briefDraft, briefLines, placeholderRules, studioFor } from './planDraft';
+import { briefDraft, briefLines, placeholderRules } from './planDraft';
 import { mayCreate } from './contribution';
 import { emptyPlan } from './trajectoryPlan';
 import type { PlanModule, PlanSource, SourceRef } from './trajectoryPlan';
@@ -21,15 +21,6 @@ const mod = (over: Partial<PlanModule> = {}): PlanModule => ({ id: 'mx', title: 
 const step: TrjStep = { id: 'm1', k: 'make', title: 'VAT cards', fmt: 'Flash cards', hours: 2, win: 3, req: true, pre: null, from: 'p:mx' };
 const T: Trajectory = { ...blankTrajectory('Tax & Legal'), id: 'T1', steps: [step] };
 const args = (over = {}) => ({ t: T, step, module: mod(), plan: { ...emptyPlan(), modules: [mod()] }, line: 'Consulting', bundles: [bundle()], sources: [source], key: 'k1', ...over });
-
-describe('studioFor', () => {
-  it('names the studio that makes a format, and none for a manual format', () => {
-    expect(studioFor('Flash cards')).toBe('flash');
-    expect(studioFor('Practice exam')).toBe('flash');
-    expect(studioFor('Animated flow')).toBe('motion');
-    expect(studioFor('Book')).toBeNull();
-  });
-});
 
 describe('briefDraft', () => {
   it('fills the draft from the module: title, first goal as the takeaway, goals as the outline, depth as the level, the trajectory\'s line', () => {

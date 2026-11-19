@@ -4,15 +4,13 @@ import { LEARN, LEARN_BY } from './data';
 import type { Opt } from './ds';
 import { isPublished } from './fmtCourse';
 import type { EmbedFormat } from './logic/courseContent';
-import { STUDIOS } from './studioData';
-import { studioFormats } from './logic/studios';
+import { studioOfFormat } from './logic/studios';
 
 // The design's shelf (EL_SHELF), in the app's names: [format, label].
 export const EMBED_SHELF: { group: string; items: [EmbedFormat, string][] }[] = [
   { group: 'From the studios', items: [['Avatar', 'Avatar conversation'], ['Reel', 'Reel'], ['Podcast', 'Podcast'], ['Game', 'Game'], ['Slides', 'Slides'], ['Animated flow', 'Animated flow'], ['Interactive explainer', 'Explainer']] },
   { group: 'Practice and reference', items: [['Flash cards', 'Flash cards'], ['Practice exam', 'Practice exam'], ['Job aid', 'Job aid'], ['Case exercise', 'Case exercise']] },
 ];
-export const studioOfFormat = (format: string) => STUDIOS.find((d) => studioFormats(d).includes(format));
 export const embedGlyph = (format: string) => studioOfFormat(format)?.glyph ?? '';
 
 // A published learning of this format exists (what the course check asks, private.course_embed_problems).

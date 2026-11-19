@@ -2,7 +2,7 @@
 // from My contributions); for the plan, "Draft all N with AI" and its progress. View as and people who may not change the trajectory get nothing.
 import type { Logic } from './model';
 import { editDraft } from './createSave';
-import { studioFor } from './logic/planDraft';
+import { studioOfFormat } from './logic/studios';
 import { fromModule } from './logic/planApply';
 import type { Trajectory, TrjStep } from './logic/trajectory';
 import { draftPlaceholders, openStudioFor } from './trajectoryAiDraft';
@@ -17,7 +17,7 @@ const draftOf = (L: Logic, st: TrjStep) => { const c = ownDraft(L, st.cid); retu
 const NOT_YOURS = 'A draft is already linked to this placeholder · not one of yours';
 
 export function madeVals(L: Logic, t: Trajectory, st: TrjStep) {
-  const own = canDraft(L, t) ? draftOf(L, st) : undefined, studio = !!studioFor(st.fmt ?? '');
+  const own = canDraft(L, t) ? draftOf(L, st) : undefined, studio = !!studioOfFormat(st.fmt ?? '');
   return {
     status: own ? NOTE[own.status] : isTaken(st) && canDraft(L, t) && !ownDraft(L, st.cid) ? NOT_YOURS : '',
     openLabel: own ? 'Open the draft · ' + STATUS[own.status] : '', open: own ? () => editDraft(L, own) : null,
@@ -29,7 +29,7 @@ export const madeOfModule = (L: Logic, t: Trajectory, moduleId: string) =>
 
 // "Draft all N with AI": the placeholders no draft of the admin's is waiting on; while it runs, how far it is.
 export function draftAllVals(L: Logic, t: Trajectory) {
-  const todo = t.steps.filter((st) => st.k === 'make' && studioFor(st.fmt ?? '') && !isTaken(st)), on = L.state.trjAi.drafting;
+  const todo = t.steps.filter((st) => st.k === 'make' && studioOfFormat(st.fmt ?? '') && !isTaken(st)), on = L.state.trjAi.drafting;
   if (!canDraft(L, t) || (todo.length < 2 && !on)) return null;
   return { label: 'Draft all ' + todo.length + ' with AI', progress: on ? 'Drafting ' + Math.min(on.done + 1, on.total) + ' of ' + on.total : '',
     off: L.state.trjAi.busy ? 'Wait for the AI to finish' : null, run: () => { draftPlaceholders(L, t.id, todo.map((st) => st.id)); },

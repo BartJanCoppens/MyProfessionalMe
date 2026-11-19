@@ -2,19 +2,16 @@
 // lines the AI is told about goals and depth, and the creation grant a placeholder gives the editors of its trajectory (placeholderRules mirrors
 // private.plan_draft_matches, which private.may_create reads; planDraft.sync.test.ts compares them).
 import type { Bundle, DraftBrief, NewDraft } from '../types';
-import { STUDIOS } from '../studioData';
 import { noItems, marked } from './items';
 import type { RuleParts } from './contribution';
 import { citedPassage, liveIndex } from './planPool';
 import type { PlanModule, PlanSource, TrajectoryPlan } from './trajectoryPlan';
 import { DEPTH_LEVEL, domainCode, stageName } from './trajectoryPlan';
 import type { Trajectory, TrjStep } from './trajectory';
-import { studioFormats } from './studios';
 
 export const BRIEF_PASSAGES = 8;
 // The domain a placeholder's draft has: the step's own (Apply stores the plan brief's), else this (private.plan_draft_matches).
 export const PLACEHOLDER_DOMAIN = 'prof';
-export const studioFor = (format: string): string | null => STUDIOS.find((d) => studioFormats(d).includes(format))?.id ?? null;
 
 type Args = { t: Trajectory; step: TrjStep; module: PlanModule; plan: TrajectoryPlan; line: string; bundles: Bundle[]; sources: PlanSource[]; key: string };
 // The draft a placeholder opens its studio with. `line` is the admin's line, used when the trajectory is firm-wide; `bundles` are all known bundles and

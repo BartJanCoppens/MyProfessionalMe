@@ -15,8 +15,7 @@ import { EMBED_ON_PAGE, KIND_NAME, PASS_MARK, SCORED_KINDS } from './logic/cours
 import type { BlockKind, CourseBlock, CourseRule } from './logic/courseContent';
 import { missingOf } from './logic/courseEdit';
 import { lengthLabel } from './logic/covers';
-import { STUDIOS } from './studioData';
-import { studioFormats } from './logic/studios';
+import { studioOfFormat } from './logic/studios';
 import type { Item, Logic } from './model';
 import type { CourseContent, EmbedBlock } from './types';
 
@@ -38,7 +37,7 @@ export const embeddedRow = (learning: string, format?: string) => {
   return row && isPublished(learning) && row[4] !== 'E-learning' && (!format || row[4] === format) ? row : null;
 };
 export function embedView(b: EmbedBlock, run: CourseRun, patch: (p: Partial<CourseRun>) => void, onPage?: (learning: string) => void): EmbedView {
-  const row = embeddedRow(b.learning, b.format), glyph = STUDIOS.find((d) => studioFormats(d).includes(b.format))?.glyph ?? '';
+  const row = embeddedRow(b.learning, b.format), glyph = studioOfFormat(b.format)?.glyph ?? '';
   const onOwnPage = !!onPage && (EMBED_ON_PAGE as readonly string[]).includes(b.format);
   return { kind: 'embed', id: b.id, learning: b.learning, format: b.format, glyph, title: row?.[1] ?? '', meta: row ? b.format + ' · ' + lengthLabel(row) : '',
     openLabel: b.format === 'Game' ? 'Play' : b.format === 'Avatar' ? 'Start the conversation' : 'Open', isOpen: !!row && run.open === b.id,

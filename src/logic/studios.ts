@@ -58,6 +58,8 @@ export type StudioDef = {
 export const studioById = (id: string): StudioDef | undefined => STUDIOS.find((s) => s.id === id);
 // The learning format(s) a studio makes: its format, then alsoFormats.
 export const studioFormats = (def: StudioDef) => [def.format, ...(def.alsoFormats ?? [])];
+// The one place that says which studio makes a format.
+export const studioOfFormat = (format: string): StudioDef | undefined => STUDIOS.find((d) => studioFormats(d).includes(format));
 
 export function visibleSteps(def: StudioDef): string[] {
   const dropShape = def.compact || !def.qs.length, dropProduce = def.compact || (!def.rows.length && !def.cast && !def.produce);

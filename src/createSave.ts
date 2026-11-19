@@ -16,7 +16,7 @@ import { latestDraft, sameDraft } from './studioDraft';
 import { QUESTIONS } from './logic/avatarContent';
 import { studioById } from './logic/studios';
 import { changeFormat, freshPiece, reachable, studioView, uploadFormat } from './studioRules';
-import { studioOfFormat } from './courseEmbedEdit';
+import { studioOfFormat } from './logic/studios';
 import { dropUnnamed, savedItems } from './draftFiles';
 import type { StudioEntry } from './logic/studios';
 import { HUB, studioOf } from './studioVals';
