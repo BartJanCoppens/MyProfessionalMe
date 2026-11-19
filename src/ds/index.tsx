@@ -2,6 +2,7 @@
 // Inline-style React on the CSS tokens in src/styles/tokens; keep values in sync with the DS bundle.
 import { Fragment, useState } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import { FIELD_HINT_STYLE } from './fieldHint';
 
 export type Opt = { value: string; label: string; disabled?: boolean };
 export type Status = 'not-started' | 'in-progress' | 'submitted' | 'clarification' | 'accepted' | 'na';
@@ -139,7 +140,7 @@ export function Field({ label, hint, size = 'md', children, style }: { label: Re
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: sm ? 4 : 6, fontSize: sm ? 12.5 : 13, fontWeight: 500, minWidth: 0, ...style }}>
       {label}{children}
-      {hint ? <span style={{ fontSize: 12, color: 'var(--tc-ink-5)', fontWeight: 400 }}>{hint}</span> : null}
+      {hint ? <span style={FIELD_HINT_STYLE}>{hint}</span> : null}
     </label>
   );
 }
