@@ -4395,6 +4395,95 @@ end $$;
 reset role;
 insert into results (check_name, expected, actual) select 'EL the course cap is 252 items and the minimum 2 lessons', '252/2', private.item_max('E-learning')||'/'||private.studio_min_items('elearn', 'E-learning');
 insert into results (check_name, expected, actual) select 'EL items_ok reads the example as a course and rejects a block that is not an object', 'true/false', private.items_ok('E-learning', current_setting('test.el_items')::jsonb)||'/'||private.items_ok('E-learning', pg_temp.el_items(p_extra => '["stray"]'));
+-- CR: reflections in a course are read and written by the learner alone (no counsellor, admin or View as branch)
+select set_config('request.jwt.claims', '', true);
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000c0001','t.reflector@test.local'), ('00000000-0000-0000-0000-0000000c0002','t.reflcounsellor@test.local'), ('00000000-0000-0000-0000-0000000c0003','t.refldomain@test.local'), ('00000000-0000-0000-0000-0000000c0004','t.reflgeneral@test.local'), ('00000000-0000-0000-0000-0000000c0005','t.reflother@test.local');
+update public.profiles set business_line='Consulting', counsellor_id='00000000-0000-0000-0000-0000000c0002' where id='00000000-0000-0000-0000-0000000c0001';
+update public.profiles set business_line='Consulting' where id in ('00000000-0000-0000-0000-0000000c0002','00000000-0000-0000-0000-0000000c0003','00000000-0000-0000-0000-0000000c0005');
+insert into public.user_roles (user_id, role, business_line) values ('00000000-0000-0000-0000-0000000c0003','domain_admin','Consulting');
+insert into public.user_roles (user_id, role) values ('00000000-0000-0000-0000-0000000c0004','general_admin');
+insert into public.learnings (id, title, domain, level, format, hours, status, content) values
+ ('LCR1','T cr course','prof',2,'E-learning',1,'published','{"kind":"course","rule":"seen","lessons":[{"title":"One","blocks":[{"block":"reflect","id":"b0001","p":"Which client?"},{"block":"text","id":"b0002","h":"H","t":"T"}]}]}'),
+ ('LCR2','T cr draft','prof',2,'E-learning',1,'draft','{"kind":"course","rule":"seen","lessons":[{"title":"One","blocks":[{"block":"reflect","id":"b0001","p":"Which client?"}]}]}'),
+ ('LCR3','T cr podcast','prof',2,'Podcast',0.5,'published','{"kind":"course","rule":"seen","lessons":[{"title":"One","blocks":[{"block":"reflect","id":"b0001","p":"Which client?"}]}]}');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000c0001","role":"authenticated"}';
+with i as (insert into public.course_reflections (learning_id, block_id, text) values ('LCR1','b0001','My own thoughts.') returning user_id) insert into results (check_name, expected, actual) select 'CR a learner saves their reflection (user_id defaults to them)', '1/true', count(*)||'/'||bool_and(user_id = '00000000-0000-0000-0000-0000000c0001') from i;
+insert into results (check_name, expected, actual) select 'CR the learner reads it back', 'My own thoughts.', string_agg(text, '|') from public.course_reflections;
+insert into public.course_reflections (learning_id, block_id, text) values ('LCR1','b0001','Changed through an upsert.') on conflict (user_id, learning_id, block_id) do update set learning_id = excluded.learning_id, block_id = excluded.block_id, text = excluded.text;
+insert into results (check_name, expected, actual) select 'CR an upsert as the client sends it replaces the text', '1/Changed through an upsert.', count(*)||'/'||min(text) from public.course_reflections;
+with u as (update public.course_reflections set text = 'Updated.' where learning_id = 'LCR1' returning 1) insert into results (check_name, expected, actual) select 'CR the learner updates the text', '1 rows', count(*)||' rows' from u;
+do $$ begin
+  begin insert into public.course_reflections (user_id, learning_id, block_id, text) values ('00000000-0000-0000-0000-0000000c0005','LCR1','b0001','As someone else');
+    insert into results (check_name, expected, actual) values ('CR an insert with another person''s user_id is refused', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR an insert with another person''s user_id is refused', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into public.course_reflections (learning_id, block_id, text) values ('LCR1','b0002','On a text block');
+    insert into results (check_name, expected, actual) values ('CR a block that is not a reflect block is refused', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR a block that is not a reflect block is refused', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into public.course_reflections (learning_id, block_id, text) values ('LCR1','b0009','No such block');
+    insert into results (check_name, expected, actual) values ('CR a block id the course does not have is refused', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR a block id the course does not have is refused', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into public.course_reflections (learning_id, block_id, text) values ('LCR2','b0001','On a draft');
+    insert into results (check_name, expected, actual) values ('CR an unpublished course is refused', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR an unpublished course is refused', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin insert into public.course_reflections (learning_id, block_id, text) values ('LCR3','b0001','On a podcast');
+    insert into results (check_name, expected, actual) values ('CR a learning that is not an E-learning is refused', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR a learning that is not an E-learning is refused', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update public.course_reflections set user_id = '00000000-0000-0000-0000-0000000c0005' where learning_id = 'LCR1';
+    insert into results (check_name, expected, actual) values ('CR user_id cannot be updated (no column grant)', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR user_id cannot be updated (no column grant)', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update public.course_reflections set learning_id = 'LCR2' where learning_id = 'LCR1';
+    insert into results (check_name, expected, actual) values ('CR learning_id cannot be changed', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR learning_id cannot be changed', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update public.course_reflections set block_id = 'b0002' where learning_id = 'LCR1';
+    insert into results (check_name, expected, actual) values ('CR block_id cannot be changed', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR block_id cannot be changed', 'blocked: 42501', 'blocked: '||sqlstate); end;
+  begin update public.course_reflections set text = repeat('x', 2001) where learning_id = 'LCR1';
+    insert into results (check_name, expected, actual) values ('CR 2,001 characters are refused', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR 2,001 characters are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin update public.course_reflections set text = '   ' where learning_id = 'LCR1';
+    insert into results (check_name, expected, actual) values ('CR blank text is refused', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR blank text is refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin perform private.course_has_reflection('LCR1', 'b0001');
+    insert into results (check_name, expected, actual) values ('CR a signed-in user can call the course check', 'allowed', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR a signed-in user can call the course check', 'allowed', 'blocked: '||sqlstate); end;
+end $$;
+update public.course_reflections set text = repeat('x', 2000) where learning_id = 'LCR1';
+insert into results (check_name, expected, actual) select 'CR 2,000 characters are kept', '2000', char_length(text)::text from public.course_reflections;
+update public.course_reflections set text = 'Kept for the others to fail to read.' where learning_id = 'LCR1';
+-- nobody else reads or writes it: the counsellor, a Domain Admin of the line, a General Admin, a System Admin, another learner
+do $$
+declare who record; seen int; hit int;
+begin
+  for who in select * from (values ('counsellor','00000000-0000-0000-0000-0000000c0002'),('domain admin','00000000-0000-0000-0000-0000000c0003'),('general admin','00000000-0000-0000-0000-0000000c0004'),('system admin',current_setting('test.sa')),('another learner','00000000-0000-0000-0000-0000000c0005')) v(label, id) loop
+    perform set_config('request.jwt.claims', json_build_object('sub', who.id, 'role', 'authenticated')::text, true);
+    select count(*) into seen from public.course_reflections;
+    insert into results (check_name, expected, actual) values ('CR the '||who.label||' reads 0 reflections', '0', seen::text);
+    with u as (update public.course_reflections set text = 'Rewritten by '||who.label returning 1) select count(*) into hit from u;
+    insert into results (check_name, expected, actual) values ('CR the '||who.label||' updates 0 reflections', '0', hit::text);
+    with d as (delete from public.course_reflections returning 1) select count(*) into hit from d;
+    insert into results (check_name, expected, actual) values ('CR the '||who.label||' deletes 0 reflections', '0', hit::text);
+  end loop;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000c0001","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'CR nobody else touched it', 'Kept for the others to fail to read.', string_agg(text, '|') from public.course_reflections;
+set local role anon;
+do $$ begin
+  begin perform count(*) from public.course_reflections;
+    insert into results (check_name, expected, actual) values ('CR anon reads nothing', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR anon reads nothing', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000c0001","role":"authenticated"}';
+with d as (delete from public.course_reflections where learning_id = 'LCR1' returning 1) insert into results (check_name, expected, actual) select 'CR the learner deletes their reflection', '1 rows', count(*)||' rows' from d;
+insert into public.course_reflections (learning_id, block_id, text) values ('LCR1','b0001','Goes with the course.');
+reset role;
+delete from public.learnings where id = 'LCR1';
+insert into results (check_name, expected, actual) select 'CR deleting the learning removes its reflections', '0', count(*)::text from public.course_reflections;
+insert into public.course_reflections (user_id, learning_id, block_id, text) values ('00000000-0000-0000-0000-0000000c0001','LCR2','b0001','Goes with the person.');
+delete from auth.users where id = '00000000-0000-0000-0000-0000000c0001';
+insert into results (check_name, expected, actual) select 'CR deleting the account removes its reflections', '0', count(*)::text from public.course_reflections;
+insert into results (check_name, expected, actual) select 'CR the table carries four policies, one per action, all on the owner', '4/true', count(*)||'/'||bool_and(qual is null or qual like '%auth.uid%') from pg_policies where tablename = 'course_reflections';
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;
