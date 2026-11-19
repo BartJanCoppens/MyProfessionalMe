@@ -5,7 +5,7 @@ import { COURSE_CAPS as C } from './logic/courseContent';
 import type { CourseBlock } from './logic/courseContent';
 import { LONG_MAX, SHORT_MAX } from './logic/items';
 
-export type FieldView = { label: string; kind: 'input' | 'area' | 'select'; value: string; options?: Opt[]; max?: number; numeric?: boolean; set: (v: string) => void };
+export type FieldView = { label: string; kind: 'input' | 'area' | 'select'; value: string; options?: Opt[]; max?: number; numeric?: boolean; min?: number; set: (v: string) => void };
 export type MoreView = { label: string; run: () => void; off: boolean };
 type Patch = (p: Partial<CourseBlock>) => void;
 type Fields = { fields: FieldView[]; more: MoreView[] };
@@ -54,7 +54,7 @@ export function fieldsOf(b: CourseBlock, patch: Patch, setFinal: (fin: boolean) 
     case 'reflect': return { fields: [area('Prompt', b.p, C.prompt, (p) => patch({ p }))], more: [] };
     case 'exercise': return { fields: [area('Question', b.q, C.prompt, (q) => patch({ q })),
       { ...input('Right number', String(b.a), NUMBER_CHARS, (v) => { const a = number(v); if (a !== null) patch({ a }); }), numeric: true },
-      { ...input('Tolerance', String(b.tol), NUMBER_CHARS, (v) => { const tol = number(v, 0); if (tol !== null) patch({ tol }); }), numeric: true },
+      { ...input('Tolerance', String(b.tol), NUMBER_CHARS, (v) => { const tol = number(v, 0); if (tol !== null) patch({ tol }); }), numeric: true, min: 0 },
       input('Unit', b.unit, C.unit, (unit) => patch({ unit }))], more: [] };
   }
 }

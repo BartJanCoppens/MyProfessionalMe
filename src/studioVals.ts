@@ -51,7 +51,8 @@ export function studioVals(L: Logic, src: StudioSrc) {
   const steps = visibleSteps(def), name = steps[step] ?? steps[0];
   const formatsOf = (d: StudioDef) => studioFormats(d).filter((f) => reachable(src.rules, nw, f));
   const formats = formatsOf(def);
-  const set = (p: Partial<StudioState>) => L.setState((s) => ({ studio: { ...s.studio, ...p } }));
+  // A question waiting in the studio (remove a lesson, redraft) belongs to the step it was asked in: a new step drops it.
+  const set = (p: Partial<StudioState>) => L.setState((s) => ({ studio: { ...s.studio, ...(p.step !== undefined && p.step !== s.studio.step && { ask: undefined }), ...p } }));
   const items = validItems(nw.type, nw.items?.list ?? []);
   const parts = stepVals(L, def, nw, setNw, src.bundles);
   const pick = (f: string) => (L.state.nwAiBusy ? L.say('Wait for the draft to finish') : setNw((cur) => changeFormat(cur, f, src.rules)));

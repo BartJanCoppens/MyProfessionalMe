@@ -12,7 +12,14 @@ type Inspector = NonNullable<Course['inspector']>;
 // Numbers are typed as text: the field keeps what is typed ("2.", "-") while the block only takes a finished number.
 function TextField({ f, common }: { f: FieldView; common: { 'aria-label': string } }) {
   const [raw, setRaw] = useState(f.value);
-  return <Input {...common} size="lg" maxLength={f.max} inputMode={f.numeric ? 'decimal' : undefined} value={f.numeric ? raw : f.value} onChange={(e) => { setRaw(e.target.value); f.set(e.target.value); }} />;
+  // A number below the field's minimum is not taken: the block keeps its last number, and the field says so.
+  const below = f.numeric && f.min !== undefined && raw.trim() !== '' && Number(raw) < f.min;
+  return (
+    <>
+      <Input {...common} size="lg" maxLength={f.max} inputMode={f.numeric ? 'decimal' : undefined} invalid={below} value={f.numeric ? raw : f.value} onChange={(e) => { setRaw(e.target.value); f.set(e.target.value); }} />
+      {below && <div role="alert" style={{ fontSize: 12, color: '#7a5000' }}>A {f.label.toLowerCase()} cannot be negative: use {f.min} or more.</div>}
+    </>
+  );
 }
 
 function FieldControl({ f }: { f: FieldView }) {

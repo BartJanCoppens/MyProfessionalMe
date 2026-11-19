@@ -137,6 +137,18 @@ describe('a number is typed as text', () => {
     fireEvent.change(number(), { target: { value: '-3' } });
     expect(screen.getByText(/Answer -3/)).toBeTruthy();
   });
+  it('says why a negative tolerance is not taken, and takes 0 or more', () => {
+    render(<Live items={exercise} />);
+    fireEvent.click(screen.getByText(/The invoice/));
+    fireEvent.click(screen.getByRole('button', { name: 'Select calculation exercise' }));
+    const tol = screen.getByRole('textbox', { name: 'Tolerance' }) as HTMLInputElement;
+    fireEvent.change(tol, { target: { value: '-1' } });
+    expect(screen.getByRole('alert').textContent).toBe('A tolerance cannot be negative: use 0 or more.');
+    expect(screen.getByText(/\(± 0\)/)).toBeTruthy();
+    fireEvent.change(tol, { target: { value: '0.5' } });
+    expect(screen.queryByText(/cannot be negative/)).toBeNull();
+    expect(screen.getByText(/\(± 0.5\)/)).toBeTruthy();
+  });
 });
 
 describe('asking before blocks go', () => {
@@ -165,6 +177,16 @@ describe('asking before blocks go', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/This removes 1 block from lessons the new draft no longer has/);
     click('Cancel');
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('the studio step changes', () => {
+  it('drops a pending "remove lesson" question: it does not come back on the next visit', () => {
+    render(<Live studio={{ ask: { lesson: 0 } }} />);
+    expect(screen.getByRole('alert').textContent).toMatch(/This removes 3 blocks with lesson 1/);
+    click('Back');
+    click('Next: Produce');
+    expect(screen.queryByText(/This removes/)).toBeNull();
   });
 });
 
