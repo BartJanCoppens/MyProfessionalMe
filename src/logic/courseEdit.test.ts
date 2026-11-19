@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCK_ID, COURSE_CAPS, courseRowProblems, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
-import { blockId, dropLesson, keepBlocks, moveLesson, seedLessons } from './courseEdit';
+import { addLesson, blockId, dropLesson, duplicateBlock, insertBlock, keepBlocks, missingOf, moveBlock, moveLesson, newBlock, patchBlock, removeBlock, removeLesson, renameLesson, seedLessons, setFinal } from './courseEdit';
 import type { StudioEntry } from './studios';
 
 const Q = { t: 'Place', q: 'Where?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because.' };
@@ -88,5 +88,105 @@ describe('blockId', () => {
     const made = Array.from({ length: 50 }, blockId);
     made.forEach((id) => expect(id).toMatch(BLOCK_ID));
     expect(new Set(made).size).toBe(50);
+  });
+});
+
+describe('newBlock', () => {
+  it('starts every kind with empty fields, and a check with four empty options and the lesson title', () => {
+    expect(newBlock('check', 1, 'Two')).toMatchObject({ block: 'check', lesson: 1, fin: false, question: { t: 'Two', q: '', o: ['', '', '', ''], a: 0, why: '' } });
+    expect(newBlock('text', 0)).toMatchObject({ h: '', t: '' });
+    expect(newBlock('accordion', 0)).toMatchObject({ panels: [['', ''], ['', '']] });
+    expect(newBlock('sort', 0)).toMatchObject({ bins: ['', ''], cards: [['', 0], ['', 1]] });
+    expect(newBlock('branch', 0)).toMatchObject({ q: '', choices: [['', '', true], ['', '', false]] });
+    expect(newBlock('exercise', 0)).toMatchObject({ q: '', a: 0, tol: 0, unit: '' });
+    expect(newBlock('text', 0).id).toMatch(BLOCK_ID);
+  });
+  it('says what is missing, one thing at a time, in the creator\'s words', () => {
+    expect(missingOf(newBlock('check', 0))).toBe('Write the question');
+    expect(missingOf({ ...newBlock('check', 0), question: { ...Q, o: ['a', '', 'c', 'd'] } } as CourseBlock)).toBe('Write all four options');
+    expect(missingOf({ ...newBlock('check', 0), question: { ...Q, why: '' } } as CourseBlock)).toBe('Say why the answer is right');
+    expect(missingOf({ ...newBlock('check', 0), question: Q } as CourseBlock)).toBeNull();
+    expect(missingOf(newBlock('text', 0))).toBe('Write the text');
+  });
+});
+
+describe('insertBlock', () => {
+  const made = newBlock('callout', 0);
+  it('after the second block of lesson 1 lands third in lesson 1 and leaves lesson 2 alone', () => {
+    const out = insertBlock(course(), 0, 'b0002', made);
+    expect(ids(out, 0)).toEqual(['b0001', 'b0002', made.id, 'b0003', 'b0004']);
+    expect(ids(out, 1)).toEqual(['b0005']);
+  });
+  it('without a block to follow goes at the end of the lesson', () => {
+    expect(ids(insertBlock(course(), 0, null, made), 0)).toEqual(['b0001', 'b0002', 'b0003', 'b0004', made.id]);
+    expect(ids(insertBlock(course(), 1, null, { ...made, lesson: 1 }), 1)).toEqual(['b0005', made.id]);
+  });
+  it('fills a lesson that has no blocks yet', () => {
+    expect(ids(insertBlock(rows(), 2, null, { ...made, lesson: 2 }), 2)).toEqual([made.id]);
+  });
+});
+
+describe('moveBlock', () => {
+  it('moves a block within its lesson and never past it', () => {
+    expect(ids(moveBlock(course(), 'b0002', -1), 0)).toEqual(['b0002', 'b0001', 'b0003', 'b0004']);
+    expect(ids(moveBlock(course(), 'b0003', 1), 0)).toEqual(['b0001', 'b0002', 'b0004', 'b0003']);
+  });
+  it('up on a lesson\'s first block, and down on its last, change nothing', () => {
+    expect(moveBlock(course(), 'b0001', -1)).toEqual(course());
+    expect(moveBlock(course(), 'b0005', -1)).toEqual(course());
+    expect(moveBlock(course(), 'b0005', 1)).toEqual(course());
+  });
+});
+
+describe('duplicateBlock, removeBlock, patchBlock', () => {
+  it('a copy lands after its original with a new unique id', () => {
+    const out = duplicateBlock(course(), 'b0002');
+    const copy = ids(out, 0)[2];
+    expect(ids(out, 0).slice(0, 2)).toEqual(['b0001', 'b0002']);
+    expect(copy).not.toBe('b0002');
+    expect(copy).toMatch(BLOCK_ID);
+    expect(new Set(ids(out, 0)).size).toBe(5);
+    expect(courseRowProblems(out)).toEqual([]);
+  });
+  it('removes one block and patches one block', () => {
+    expect(ids(removeBlock(course(), 'b0002'), 0)).toEqual(['b0001', 'b0003', 'b0004']);
+    const out = patchBlock(course(), 'b0001', { h: 'New' } as Partial<CourseBlock>);
+    expect(lessonsOf(out)[0].blocks[0]).toMatchObject({ id: 'b0001', h: 'New', t: 'Words b0001' });
+  });
+  it('a patch of a check\'s option 3 keeps the others', () => {
+    const out = patchBlock(course(), 'b0004', { question: { ...Q, o: ['a', 'b', 'changed', 'd'] } } as Partial<CourseBlock>);
+    expect((lessonsOf(out)[0].blocks[3] as { question: typeof Q }).question).toEqual({ ...Q, o: ['a', 'b', 'changed', 'd'] });
+  });
+});
+
+describe('setFinal', () => {
+  const two = (): StudioEntry[] => [...rows(), { block: 'check', id: 'b0001', lesson: 0, question: Q, fin: true }, { block: 'check', id: 'b0002', lesson: 1, question: Q, fin: false }];
+  it('makes one check the final check and unmarks the other', () => {
+    const out = lessonsOf(setFinal(two(), 'b0002', true)).flatMap((l) => l.blocks.map((b) => (b as { fin: boolean }).fin));
+    expect(out).toEqual([false, true]);
+  });
+});
+
+describe('lessons', () => {
+  it('addLesson adds the default row, up to 12 lessons', () => {
+    expect(addLesson(rows()).filter(Array.isArray)[3]).toEqual(['Lesson 4', 'New lesson', '']);
+    const twelve = Array.from({ length: 12 }, (_, k) => ['Lesson ' + (k + 1), 'T', '']) as StudioEntry[];
+    expect(addLesson(twelve)).toEqual(twelve);
+  });
+  it('renameLesson changes the title and keeps the blocks', () => {
+    const out = renameLesson(course(), 1, 'Second');
+    expect(lessonsOf(out).map((l) => l.title)).toEqual(['One', 'Second', 'Three']);
+    expect(ids(out, 1)).toEqual(['b0005']);
+  });
+  it('removeLesson refuses to go below two lessons', () => {
+    const two = [...rows().slice(0, 2), text('b0001', 0)];
+    expect(removeLesson(two, 0)).toEqual(two);
+    expect(removeLesson(course(), 0).filter(Array.isArray)).toHaveLength(2);
+  });
+  it('renumbers default labels after a removal or a move, and leaves the creator\'s own labels', () => {
+    const own: StudioEntry[] = [['Lesson 1', 'One', ''], ['Week two', 'Two', ''], ['Lesson 3', 'Three', '']];
+    expect(removeLesson(own, 0).filter(Array.isArray).map((r) => r[0])).toEqual(['Week two', 'Lesson 2']);
+    expect(moveLesson(rows(), 0, 1).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3']);
+    expect(dropLesson(rows(), 0).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Lesson 1', 'Lesson 2']);
   });
 });
