@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COURSE_CAPS, COURSE_HOURS, WORDS, courseContent, courseHours, courseProblems, courseRowProblems, courseRule, decimalPoint, isCourseBlock, jsonbText, lessonsOf } from './courseContent';
+import { EMBED_FORMATS, COURSE_CAPS, embedProblems, publicBlock, COURSE_HOURS, WORDS, courseContent, courseHours, courseProblems, courseRowProblems, courseRule, decimalPoint, isCourseBlock, jsonbText, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
 import type { StudioEntry } from './studios';
 
@@ -157,3 +157,23 @@ describe('the size cap counts the database\'s jsonb spacing', () => {
     expect(jsonbText({ a: [1, 'x,y'], b: { c: true, d: null } })).toBe('{"a": [1, "x,y"], "b": {"c": true, "d": null}}');
   });
 });
+
+describe('embedded learnings', () => {
+  const embed = (learning: string, format = 'Reel', lesson = 1): CourseBlock => ({ block: 'embed', id: 'b0090', lesson, format: format as never, learning });
+  const base = (): StudioEntry[] => [lesson(1, 'One'), lesson(2, 'Two')];
+  it('accepts an embed with no learning yet, a learning id and every embed format, and refuses a format or id outside them', () => {
+    EMBED_FORMATS.forEach((f) => expect(courseRowProblems([...base(), embed('L12', f)])).toEqual([]));
+    expect(courseRowProblems([...base(), embed('')])).toEqual([]);
+    expect(courseRowProblems([...base(), embed('LEE1')])).toEqual(['Lesson 2 · Embedded learning: pick one of the formats and a learning from the library']);
+    expect(courseRowProblems([...base(), embed('L1', 'E-learning')])).toHaveLength(1);
+  });
+  it('asks to pick the learning when the source is empty, and says one that is not available without naming it', () => {
+    expect(embedProblems([...base(), embed('')], () => true)).toEqual(['Lesson 2 · Reel: pick the learning from the library']);
+    expect(embedProblems([...base(), embed('L7')], () => false)).toEqual(['Lesson 2 · Reel: the learning picked is not available: pick another']);
+    expect(embedProblems([...base(), embed('L7')], () => true)).toEqual([]);
+  });
+  it('publishes an embed as format and learning, without its lesson', () => {
+    expect(publicBlock(embed('L7') as CourseBlock)).toEqual({ block: 'embed', id: 'b0090', format: 'Reel', learning: 'L7' });
+  });
+});
+

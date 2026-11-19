@@ -14,8 +14,9 @@ import { checkContribution, decideReview, loadCreate, removeDraft, saveDraft, su
 import type { DraftFields } from './lib/contributionStore';
 import { latestDraft, sameDraft } from './studioDraft';
 import { QUESTIONS } from './logic/avatarContent';
-import { studioById } from './logic/studios';
-import { changeFormat, uploadFormat } from './studioRules';
+import { studioById, studioFormats } from './logic/studios';
+import { changeFormat, freshPiece, reachable, studioView, uploadFormat } from './studioRules';
+import { STUDIOS } from './studioData';
 import { HUB, studioOf } from './studioVals';
 import { grantRules, linkMadeStep } from './trajectoryMade';
 
@@ -154,19 +155,31 @@ export async function saveWithFile(L: Logic, attach: (id: string) => Promise<Ite
 }
 
 // Save the New form as a draft, or save and submit it. A draft that saved before a refused submit is edited next time, never duplicated.
-export async function saveForm(L: Logic, submit: boolean) {
-  if (busy(L)) return;
+export async function saveForm(L: Logic, submit: boolean): Promise<boolean> {
+  if (busy(L)) return false;
   const nw = effective(L.state);
-  if (submit && hasItems(nw.type) && !nw.items?.list.length) { L.say(addFirst(nw.type, 'generate them with AI or import a CSV')); return; }
-  if (submit && nw.type === 'Presentation' && !nw.items?.list.length) { L.say('Add the .horizon file first'); return; }
-  if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) }))) { L.say('Clear the open checks first'); return; }
-  await saveThen(L, async ({ s, studio, id }) => {
+  if (submit && hasItems(nw.type) && !nw.items?.list.length) { L.say(addFirst(nw.type, 'generate them with AI or import a CSV')); return false; }
+  if (submit && nw.type === 'Presentation' && !nw.items?.list.length) { L.say('Add the .horizon file first'); return false; }
+  if (submit && !checksPass(contentChecks({ title: nw.title, takeaway: nw.take, outline: nw.outline, sources: nw.sources, items: itemsText(nw.items?.list ?? []) }))) { L.say('Clear the open checks first'); return false; }
+  return saveThen(L, async ({ s, studio, id }) => {
     const ed = s.editing ? s.create?.contributions.find((c) => c.id === s.editing) : null;
     const status = submit ? await submitChecked(id, studio) : 'draft', d = await reloaded(L);
     L.setState((st) => ({ create: d, createError: null, createBusy: false, createTab: 'mine', contribSel: id, editing: null, nw: blankDraft(d.rules, myLine(L)), nwKb: [], nwKbQ: '', revChecks: st.revChecks, studio: HUB }));
     L.say(doneText(status, d, id, ed?.status === 'changes'));
     await afterPublish(L, status);
   }, (id) => () => ({ editing: id }));
+}
+
+// "Make a new one in the X Studio" from a course: the course draft is saved through the one save step, then that studio opens on a blank piece
+// with a banner saying where the course is. Refused in View as, for a submitted course and when no creation rule reaches the format.
+export async function openStudioFromCourse(L: Logic, format: string): Promise<void> {
+  const nw = effective(L.state), def = STUDIOS.find((d) => studioFormats(d).includes(format));
+  if (L.readOnly() || !def) return;
+  if (submittedEdit(L.state)) { L.say('A submitted course cannot be changed: make the new learning from the studios hub'); return; }
+  if (!reachable(L.state.create?.rules ?? [], nw, format)) { L.say('No creation rule for ' + format + ' in ' + (nw.line || 'your line')); return; }
+  const title = nw.title.trim() || 'untitled';
+  if (!(await saveForm(L, false))) return;
+  L.setState((st) => ({ createTab: 'new', nw: { ...st.nw, ...changeFormat(st.nw, format, st.create?.rules), ...freshPiece(def) }, studio: { ...studioView(def), from: 'Your course “' + title + '” is saved in My contributions · open it there to continue' } }));
 }
 
 export async function submitSaved(L: Logic, c: Contribution) {

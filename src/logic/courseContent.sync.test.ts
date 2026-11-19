@@ -2,10 +2,12 @@
 // migration and pins what both sides share: the caps, every sentence and the hours.
 import { describe, expect, it } from 'vitest';
 import { migrationText } from '../test/migrations';
-import { BLOCK_KINDS, BLOCK_ID, COURSE_CAPS, COURSE_HOURS, COURSE_LENGTH, COURSE_RULES, COMPLETION_QUESTION, KIND_NAME, SCORED_KINDS, SHAPE_RULE, WORDS } from './courseContent';
+import { BLOCK_KINDS, BLOCK_ID, EMBED_FORMATS, EMBED_LEARNING, embedProblems, COURSE_CAPS, COURSE_HOURS, COURSE_LENGTH, COURSE_RULES, COMPLETION_QUESTION, KIND_NAME, SCORED_KINDS, SHAPE_RULE, WORDS } from './courseContent';
 import { ITEM_MAX } from './items';
 
-const sql = migrationText('_elearning_studio.sql').replace(/\s+/g, ' ');
+// The embed block's migration redefines the block functions of the first; every sentence is pinned in the two together.
+const embedSql = migrationText('_course_embeds.sql').replace(/\s+/g, ' ');
+const sql = migrationText('_elearning_studio.sql').replace(/\s+/g, ' ') + ' ' + embedSql;
 const quoted = (s: string) => "'" + s.replace(/'/g, "''") + "'";
 
 describe('course rules: TypeScript and the database agree', () => {
@@ -58,6 +60,14 @@ describe('course rules: TypeScript and the database agree', () => {
     expect(sql).toContain("when p_type = 'E-learning' then private.course_ok(p_items)");
     expect(sql).toContain("if c.type = 'E-learning' and c.studio is not null");
     for (const f of ['Avatar', 'Reel', 'Interactive explainer', 'Animated flow', 'Case exercise']) expect(sql).toContain("'" + f + "'");
+  });
+  it('knows the embed formats, the learning id and the embed sentences as embedProblems says them', () => {
+    expect(embedSql).toContain('in (' + EMBED_FORMATS.map((f) => quoted(f)).join(', ') + ')');
+    expect(embedSql).toContain(quoted('^' + EMBED_LEARNING.source.slice(1)));
+    expect(embedSql).toContain(': pick the learning from the library');
+    expect(embedSql).toContain(': the learning picked is not available: pick another');
+    const items = [{ block: 'embed', id: 'b0001', lesson: 1, format: 'Reel', learning: '' }, { block: 'embed', id: 'b0002', lesson: 1, format: 'Reel', learning: 'L9' }];
+    expect(embedProblems(items, () => false)).toEqual(['Lesson 2 · Reel: pick the learning from the library', 'Lesson 2 · Reel: the learning picked is not available: pick another']);
   });
   it('locks down every new function', () => {
     const created = Array.from(sql.matchAll(/create function private\.(course_[a-z_]+)\(([^)]*)\)/g), (m) => m[1]);

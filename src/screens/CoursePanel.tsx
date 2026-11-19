@@ -3,6 +3,7 @@
 // completes. An embedded learning plays through `renderEmbed` (the format's own learner panel: the detail page's, or the Studio's play-test). It only reads the view-model (fmtCourse.ts). The preview's Desktop / Phone toggle and Start over are the preview's own (studioPreviews.tsx).
 import type { ReactNode } from 'react';
 import { Button, Card } from '../ds';
+import { isEmbedView } from '../fmtCourse';
 import type { CourseView } from '../fmtCourse';
 import AiMadeTag from './AiMadeTag';
 import CourseBlock, { EmbedCard } from './CourseBlock';
@@ -22,7 +23,7 @@ export default function CoursePanel({ co, renderEmbed }: { co: CourseView; rende
           </div>
           <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 600 }}>{co.title}</h3>
         </div>
-        {co.blocks.map((b) => b.kind === 'embed' ? <EmbedCard key={b.id} e={b} panel={renderEmbed(b.learning)} /> : <CourseBlock key={b.id} b={b} mode="play" />)}
+        {co.blocks.map((b) => isEmbedView(b) ? <EmbedCard key={b.id} e={b} panel={() => renderEmbed(b.learning)} /> : <CourseBlock key={b.id} b={b} mode="play" />)}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button size="sm" variant="secondary" onClick={co.prev} disabled={co.noPrev}>‹ Previous lesson</Button>
           <Button size="sm" onClick={co.next} disabled={co.noNext}>Next lesson ›</Button>

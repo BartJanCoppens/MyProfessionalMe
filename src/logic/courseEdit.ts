@@ -1,7 +1,7 @@
 // What editing a course's lessons does to its blocks (E-learning Studio, Task 1.2; 1.3 adds the block edits). A block names its lesson by index from 0,
 // so removing or moving a lesson row has to move its blocks too. Pure.
 import { COURSE_CAPS, isCourseBlock, shapeProblem } from './courseContent';
-import type { BlockKind, CourseBlock } from './courseContent';
+import type { BlockKind, CourseBlock, EmbedBlock, EmbedFormat } from './courseContent';
 import type { StudioEntry } from './studios';
 
 // A block id: "b" and ten lower-case letters or digits (BLOCK_ID).
@@ -47,7 +47,7 @@ export const droppedBlocks = (old: StudioEntry[], drafted: StudioEntry[]): numbe
 const blockAt = (items: StudioEntry[], id: string) => items.findIndex((x) => isCourseBlock(x) && x.id === id);
 
 // A block as the creator starts it: every field empty, so the check names what is missing (a check's topic is its lesson's title).
-export function newBlock(kind: BlockKind, lesson: number, title = ''): CourseBlock {
+export function newBlock(kind: Exclude<BlockKind, 'embed'>, lesson: number, title = ''): CourseBlock {
   const base = { id: blockId(), lesson };
   switch (kind) {
     case 'text': return { ...base, block: 'text', h: '', t: '' };
@@ -60,6 +60,9 @@ export function newBlock(kind: BlockKind, lesson: number, title = ''): CourseBlo
     case 'exercise': return { ...base, block: 'exercise', q: '', a: 0, tol: 0, unit: '' };
   }
 }
+
+// An embedded learning of `format`, not picked yet (the inspector's Source).
+export const newEmbed = (format: EmbedFormat, lesson: number): EmbedBlock => ({ block: 'embed', id: blockId(), lesson, format, learning: '' });
 
 // What a block still needs, in the words of the course check (shapeProblem, the same rule private.course_block_problem has), capitalised; null when it is complete.
 export const missingOf = (b: CourseBlock): string | null => {

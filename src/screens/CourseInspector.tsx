@@ -41,6 +41,7 @@ export function BlockInspector({ i }: { i: Inspector }) {
     <section ref={ref} tabIndex={-1} aria-label={'Edit ' + i.type.toLowerCase()} style={{ display: 'flex', flexDirection: 'column', gap: 10, outline: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ ...label, flex: 1 }}>{i.type}</span><MoveButtons what="block" noUp={i.noUp} noDown={i.noDown} up={i.up} down={i.down} /></div>
       {i.fields.map((f) => <FieldControl key={f.label} f={f} />)}
+      {i.note && <div style={{ fontSize: 12, color: '#5a6058' }}>{i.note}</div>}
       {i.more.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{i.more.map((m) => <Button key={m.label} size="sm" variant="secondary" onClick={m.run} disabled={m.off}>{m.label}</Button>)}</div>}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', borderTop: '1px solid #eef0ea', paddingTop: 8 }}>
         <Button size="sm" onClick={i.done}>Done</Button>

@@ -527,5 +527,13 @@ Plan: `docs/superpowers/plans/2026-11-17-studios.md`. The owner reversed D1 ("pa
 - **A gone embed is one state.** Missing, unpublished, a course, or a learning of another format than the picked one all read "This learning is no longer available" and block nothing; the course's completion never counts embeds.
 - **Avatar and Case exercise open their own page** (owner ruling): they finish through the quiz or evidence form outside their panel. `openDetail(id, origin, backTo)` keeps the course's origin and "← Back to the course" returns to it.
 - **Preview:** the embedded learning's content plays as a play-test with no `contributionId`, so a game or avatar run is never recorded against the course draft. A flash deck has no learner panel in the preview.
-- **Carried to 2.2:** `embed` is not in `BLOCK_KINDS`, SQL, the editor, `publicBlock` or `contentStore.courseOk` yet; the player and preview read it, but no course can contain one until 2.2.
+- **Carried to 2.2:** done in 2.2 (below).
 
+### E-learning Studio, embeds in the editor and the check (Task 2.2)
+- **What:** `embed` joins `BLOCK_KINDS`, `private.course_shape_ok`, `course_block_problem`, `course_block_public` and `publicBlock` (migration `20261119120000_course_embeds.sql`, create-or-replace copies of the live functions; same behaviour for every other kind). The shelf gains the design's two studio groups; the inspector's Source lists published learnings of the format, newest first (highest id).
+- **The check says no more than "not available".** `private.course_embed_problems` (and `embedProblems` in TS) report a missing, unpublished, wrong-format or course learning with one sentence and no title or field of the row (a security review found that echoing the title of a draft leaked it). It is not security definer: it runs inside the definer check and submit. Alternative: a title for retired learnings the author once picked; rejected for the leak. This replaces the brief's "is no longer published" wording.
+- **Nesting:** an embed of format E-learning is refused by the shape; a Reel embed naming a course is refused as not available.
+- **Submit re-runs the problems**, so a source retired after the check is refused there. Approval does not re-check: a source retired after submit shows "no longer available" to learners (2.1), and blocks nothing.
+- **"Make a new one"** (`createSave.openStudioFromCourse`) saves the course through `saveForm(L, false)` (now returns whether it saved), then opens that studio on a blank piece (`studioRules.freshPiece`/`studioView`, shared with the hub) with the banner in `StudioState.from`. The course is a saved draft in My contributions, not a held screen.
+- **Preview:** a flash deck or exam embed has no studio panel; Open shows "Plays on the learner's page". An embed's panel is built only while open (`EmbedCard` takes a function).
+- **Card and Produce hint promise the other studios again**, now that embeds exist.

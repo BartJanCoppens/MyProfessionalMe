@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CreateData } from '../logic/contribution';
 import type { CourseBlock } from '../logic/courseContent';
 import { initState, Logic } from '../model';
+import { LEARN, LEARN_BY, LEARN_META } from '../data';
+import * as store from '../lib/contributionStore';
 import { cfg, member, person } from '../test/harness';
+import type { Learn } from '../types';
 import type { AppState } from '../types';
 import CreateScreen from './Create';
 
@@ -16,12 +19,12 @@ const Q = { t: 'Place', q: 'Where is it taxed?', o: ['Here', 'There', 'Nowhere',
 const text = (id: string, lesson: number, h: string): CourseBlock => ({ block: 'text', id, lesson, h, t: 'Words of ' + h });
 const ITEMS = [['Lesson 1', 'Place of supply', 'Where'], ['Lesson 2', 'The invoice', 'What'], text('b0001', 0, 'Intro'), text('b0002', 0, 'Rules'), { block: 'check', id: 'b0003', lesson: 0, question: Q }, text('b0004', 1, 'Fields')];
 const rule = { id: 1, user_id: 'u1', lines: ['Consulting'], formats: [], domains: [], audiences: [] };
-const data = (): CreateData => ({ contributions: [], reviews: [], rules: [rule], policies: [], peers: 3 });
+const data = (formats: string[] = []): CreateData => ({ contributions: [], reviews: [], rules: [{ ...rule, formats }], policies: [], peers: 3 });
 const nw = { line: 'Consulting', aud: '', type: 'E-learning', title: 'VAT', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'Know where VAT is due.', outline: [], sources: [], ai: false, aiNote: '',
   items: { list: ITEMS as never, how: 'manual' as const, problems: [], note: '' } };
 
-function Live({ readOnly = false, shape, studio, items }: { readOnly?: boolean; shape?: Record<string, string>; studio?: Partial<AppState['studio']>; items?: unknown[] }) {
-  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'create', create: data(), createTab: 'new', nw: { ...nw, shape, items: { ...nw.items, list: (items ?? ITEMS) as never } }, studio: { view: 'studio', step: 3, id: 'elearn', ...studio } }));
+function Live({ readOnly = false, shape, studio, items, formats }: { formats?: string[]; readOnly?: boolean; shape?: Record<string, string>; studio?: Partial<AppState['studio']>; items?: unknown[] }) {
+  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'create', create: data(formats), createTab: 'new', nw: { ...nw, shape, items: { ...nw.items, list: (items ?? ITEMS) as never } }, studio: { view: 'studio', step: 3, id: 'elearn', ...studio } }));
   const toastTimer = useRef<number | undefined>(undefined), drag = useRef<string | null>(null), file = useRef<HTMLInputElement | null>(null), chat = useRef<HTMLDivElement | null>(null);
   const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, member('u1'), person({ readOnly }), async () => {}).renderVals();
   return <>{vm.create && <CreateScreen c={vm.create} />}{vm.toast && <div role="status">{vm.toast}</div>}</>;
@@ -63,7 +66,7 @@ describe('the shelf and the inspector', () => {
     render(<Live />);
     expect(within(screen.getByRole('group', { name: 'Blocks' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['¶Text', '!Callout', '≡Accordion']);
     expect(within(screen.getByRole('group', { name: 'Interactions' })).getAllByRole('button').map((b) => b.textContent?.slice(1))).toEqual(['Knowledge check', 'Sort into groups', 'Branching scenario', 'Reflection', 'Calculation exercise']);
-    ['AI tutor', 'Calculators and graphs', 'From the studios', 'Image', 'coming'].forEach((w) => expect(screen.queryByText(new RegExp(w, 'i'))).toBeNull());
+    ['AI tutor', 'Calculators and graphs', 'Image', 'coming'].forEach((w) => expect(screen.queryByText(new RegExp(w, 'i'))).toBeNull());
   });
   it('"Knowledge check" adds a check after the selected block and opens it with what is missing', () => {
     render(<Live />);
@@ -203,3 +206,66 @@ describe('focus', () => {
     expect(screen.getByRole('region', { name: 'Edit text' }).contains(document.activeElement)).toBe(true);
   });
 });
+
+// Embedded learnings (Task 2.2): the shelf groups, the Source picker over the library, "Make a new one in the … Studio", and View as.
+describe('an embedded learning in the editor', () => {
+  const row = (id: string, title: string, format: string): Learn => [id, title, 'reg', 2, format, 'Peer contribution', 0.25, 0, '', ''];
+  const rows = [row('L9101', 'Old reel', 'Reel'), row('L9103', 'New reel', 'Reel'), row('L9102', 'Draft reel', 'Reel'), row('L9104', 'A podcast', 'Podcast'), row('L9105', 'A course', 'E-learning')];
+  beforeEach(() => {
+    rows.forEach((r) => { LEARN.push(r); LEARN_BY[r[0]] = r; });
+    LEARN_META.L9102 = { line: null, status: 'draft' };
+  });
+  afterEach(() => { rows.forEach((r) => { LEARN.splice(LEARN.indexOf(r), 1); delete LEARN_BY[r[0]]; delete LEARN_META[r[0]]; }); });
+
+  it('groups the shelf as the design does', () => {
+    render(<Live />);
+    expect(within(screen.getByRole('group', { name: 'From the studios' })).getAllByRole('button').map((b) => b.textContent?.replace(/^\S+(?=[A-Z])/, ''))).toHaveLength(7);
+    expect(within(screen.getByRole('group', { name: 'Practice and reference' })).getAllByRole('button')).toHaveLength(4);
+    ['Avatar conversation', 'Reel', 'Explainer', 'Flash cards', 'Case exercise'].forEach((n) => expect(screen.getByRole('button', { name: new RegExp(n) })).toBeTruthy());
+  });
+  it('the Reel item adds an embed and opens its Source, listing only published reels, newest first', () => {
+    render(<Live />);
+    fireEvent.click(within(screen.getByRole('group', { name: 'From the studios' })).getByRole('button', { name: /Reel/ }));
+    const source = screen.getByRole('combobox', { name: 'Source' }) as HTMLSelectElement;
+    const names = Array.from(source.options).map((o) => o.textContent);
+    expect(names.slice(0, 3)).toEqual(['Pick from the library…', 'New reel', 'Old reel']);
+    ['Draft reel', 'A podcast', 'A course'].forEach((n) => expect(names).not.toContain(n));
+    expect(screen.getByText('Only published learnings can be added. A new one appears here once it is published.')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toBe('Lesson 1 · Reel: pick the learning from the library');
+    fireEvent.change(source, { target: { value: 'L9103' } });
+    expect(screen.getAllByText('New reel').length).toBeGreaterThan(1);
+    expect(screen.queryByText('Lesson 1 · Reel: pick the learning from the library')).toBeNull();
+  });
+  it('says so when the library has none of that format', () => {
+    const games = LEARN.filter((r) => r[4] === 'Game').map((r) => r[0]), kept = games.map((id) => LEARN_META[id]);
+    games.forEach((id) => { LEARN_META[id] = { line: null, status: 'draft' }; });
+    render(<Live />);
+    fireEvent.click(within(screen.getByRole('group', { name: 'From the studios' })).getByRole('button', { name: /Game/ }));
+    expect(Array.from((screen.getByRole('combobox', { name: 'Source' }) as HTMLSelectElement).options).map((o) => o.textContent)).toEqual(['Nothing in the library yet']);
+    games.forEach((id, i) => { if (kept[i]) LEARN_META[id] = kept[i]; else delete LEARN_META[id]; });
+  });
+  it('"Make a new one in the Reel Studio" saves the course, opens the Reel Studio and shows the banner', async () => {
+    vi.mocked(store.saveDraft).mockResolvedValue('c1'); vi.mocked(store.loadCreate).mockResolvedValue(data());
+    render(<Live />);
+    fireEvent.click(within(screen.getByRole('group', { name: 'From the studios' })).getByRole('button', { name: /Reel/ }));
+    click('Make a new one in the Reel Studio');
+    expect((await screen.findByRole('note')).textContent).toBe('Your course “VAT” is saved in My contributions · open it there to continue');
+    expect(store.saveDraft).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Reel Studio')).toBeTruthy();
+  });
+  it('without a Reel rule it refuses and saves nothing', () => {
+    vi.mocked(store.saveDraft).mockClear();
+    render(<Live formats={['E-learning']} />);
+    fireEvent.click(within(screen.getByRole('group', { name: 'From the studios' })).getByRole('button', { name: /Reel/ }));
+    click('Make a new one in the Reel Studio');
+    expect(screen.getByRole('status').textContent).toBe('No creation rule for Reel in Consulting');
+    expect(store.saveDraft).not.toHaveBeenCalled();
+  });
+  it('View as shows no shelf and no Source', () => {
+    render(<Live readOnly items={[...ITEMS, { block: 'embed', id: 'b0009', lesson: 0, format: 'Reel', learning: 'L9103' }]} />);
+    expect(screen.getByText('New reel')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'From the studios' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Source' })).toBeNull();
+  });
+});
+

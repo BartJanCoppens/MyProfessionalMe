@@ -1,5 +1,5 @@
 import type { CourseRun } from './fmtCourse';
-import type { CourseRule, EmbedFormat, PublicBlock } from './logic/courseContent';
+import type { CourseRule, PublicBlock } from './logic/courseContent';
 import type { GameReviewStatus } from './logic/gameContent';
 import type { DraftItems } from './logic/items';
 import type { BuildStepState } from './logic/studioBuild';
@@ -118,8 +118,8 @@ export type AvatarContent = { kind: 'avatar'; persona: string; situation: string
   counterpart: string; made: 'ai' | 'scripted' };
 // A published E-learning course (src/logic/courseContent.ts): lessons of blocks without their index, and how it completes.
 // An embedded learning (Phase 2): a published learning of another studio, played in the course; `learning` is '' until picked.
-export type EmbedBlock = { block: 'embed'; id: string; format: EmbedFormat; learning: string };
-export type CourseContent = { kind: 'course'; lessons: { title: string; blocks: (PublicBlock | EmbedBlock)[] }[]; rule: CourseRule };
+export type EmbedBlock = Extract<PublicBlock, { block: 'embed' }>;
+export type CourseContent = { kind: 'course'; lessons: { title: string; blocks: PublicBlock[] }[]; rule: CourseRule };
 export type FormatContent = CourseContent | AvatarContent | FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent | ReelContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
@@ -283,4 +283,5 @@ export type FmtDraft = {
 
 // `id` is the open studio (Flash card & Exam Studio when absent); `step` indexes visibleSteps of that studio.
 // check: what the automatic check ran on (key, see createVals) and the reasons it failed (none: passed).
-export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; check?: { key: string; reasons: string[] }; ask?: { draft: DraftItems } | { lesson: number } };
+// from: the banner of a studio opened from a course ("Your course … is saved in My contributions").
+export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; from?: string; check?: { key: string; reasons: string[] }; ask?: { draft: DraftItems } | { lesson: number } };

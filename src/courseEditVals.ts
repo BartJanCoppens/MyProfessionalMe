@@ -6,16 +6,18 @@ import type { NewDraft } from './types';
 import type { SetNw } from './createItems';
 import { blockView } from './fmtCourse';
 import { fieldsOf } from './courseFields';
-import { COURSE_CAPS, KIND_NAME, SCORED_KINDS, courseProblems, courseRowProblems, lessonsOf } from './logic/courseContent';
-import type { BlockKind } from './logic/courseContent';
-import { addLesson, duplicateBlock, insertBlock, moveBlock, moveLesson, newBlock, patchBlock, removeBlock, removeLesson, renameLesson } from './logic/courseEdit';
+import { COURSE_CAPS, KIND_NAME, SCORED_KINDS, courseProblems, courseRowProblems, embedProblems, lessonsOf } from './logic/courseContent';
+import type { BlockKind, CourseBlock, EmbedFormat } from './logic/courseContent';
+import { EMBED_SHELF, embedAvailable, embedGlyph, embedSources, studioOfFormat } from './courseEmbedEdit';
+import { openStudioFromCourse } from './createSave';
+import { addLesson, duplicateBlock, insertBlock, moveBlock, moveLesson, newBlock, newEmbed, patchBlock, removeBlock, removeLesson, renameLesson } from './logic/courseEdit';
 import { SHORT_MAX, rowFieldMax } from './logic/items';
 import type { Item } from './logic/items';
 import type { StudioEntry } from './logic/studios';
 import { clearAsk } from './studioDraft';
 
-// The shelf of Phase 1: the blocks and the interactions that work. (Embedded learnings and images come in a later release.)
-const SHELF: { group: string; kinds: [BlockKind, string][] }[] = [
+// The shelf: the blocks and the interactions, then the learnings of the studios (courseEmbedEdit.ts). (Images come in a later release.)
+const SHELF: { group: string; kinds: [Exclude<BlockKind, 'embed'>, string][] }[] = [
   { group: 'Blocks', kinds: [['text', '¶'], ['callout', '!'], ['accordion', '≡']] },
   { group: 'Interactions', kinds: [['check', '?'], ['sort', '⇅'], ['branch', '⑂'], ['reflect', '✎'], ['exercise', '＝']] },
 ];
@@ -32,24 +34,28 @@ function context(L: Logic, nw: NewDraft, setNw: SetNw) {
   return { L, nw, list, lessons, ro, ce, lesson, blocks, selected, show, edit };
 }
 
+// An embedded learning's Source and "Make a new one in the … Studio" (the course is saved first: createSave.openStudioFromCourse).
+const embedExt = (c: Ctx, format: EmbedFormat, learning: string) => ({ sources: embedSources(format, learning), make: () => { void openStudioFromCourse(c.L, format); }, makeLabel: 'Make a new one in the ' + (studioOfFormat(format)?.name ?? format).replace(/ Studio$/, '') + ' Studio' });
+
 const full = (c: Ctx) => { const is = c.blocks.length >= COURSE_CAPS.blocksPerLesson; if (is) c.L.say('A lesson holds at most ' + COURSE_CAPS.blocksPerLesson + ' blocks'); return is; };
 
 function blockOps(c: Ctx) {
   const { selected, blocks, edit, show, lesson } = c, at = selected ? blocks.indexOf(selected) : -1;
-  const add = (kind: BlockKind) => {
+  const add = (make: (title: string) => CourseBlock) => {
     if (c.ro || full(c)) return;
-    const b = newBlock(kind, lesson, (c.lessons[lesson]?.title ?? '').trim().slice(0, SHORT_MAX));
+    const b = make((c.lessons[lesson]?.title ?? '').trim().slice(0, SHORT_MAX));
     edit((it) => insertBlock(it, lesson, selected?.id ?? null, b));
     show(lesson, b.id);
   };
   const inspector = c.ro || !selected ? null : {
-    type: KIND_NAME[selected.block], id: selected.id, ...fieldsOf(selected, (p) => edit((it) => patchBlock(it, selected.id, p))),
+    type: KIND_NAME[selected.block], id: selected.id, ...fieldsOf(selected, (p) => edit((it) => patchBlock(it, selected.id, p)), selected.block === 'embed' ? embedExt(c, selected.format, selected.learning) : undefined),
     noUp: at === 0, noDown: at === blocks.length - 1, up: () => edit((it) => moveBlock(it, selected.id, -1)), down: () => edit((it) => moveBlock(it, selected.id, 1)),
     duplicate: () => { if (!full(c)) edit((it) => duplicateBlock(it, selected.id)); }, remove: () => { edit((it) => removeBlock(it, selected.id)); show(lesson, null); }, done: () => show(lesson, null),
   };
   return {
     blocks: blocks.map((b) => blockView(b, 'edit', undefined, () => {}, { ro: c.ro, on: b.id === selected?.id, pick: () => (c.ro ? undefined : show(lesson, b.id)) })), inspector,
-    shelf: c.ro ? [] : SHELF.map((g) => ({ group: g.group, items: g.kinds.map(([kind, glyph]) => ({ label: KIND_NAME[kind], glyph, add: () => add(kind) })) })),
+    shelf: c.ro ? [] : [...SHELF.map((g) => ({ group: g.group, items: g.kinds.map(([kind, glyph]) => ({ label: KIND_NAME[kind], glyph, add: () => add((title) => newBlock(kind, lesson, title)) })) })),
+      ...EMBED_SHELF.map((g) => ({ group: g.group, items: g.items.map(([format, label]) => ({ label, glyph: embedGlyph(format), add: () => add(() => newEmbed(format, lesson)) })) }))],
   };
 }
 
@@ -80,6 +86,6 @@ export function courseEditVals(L: Logic, nw: NewDraft, setNw: SetNw) {
   return {
     readOnly: c.ro, lessonTitle: c.lessons[c.lesson]?.title ?? '', titleMax: LESSON_TITLE_MAX, ...blockOps(c), ...lessonOps(c),
     count: plural(c.lessons.length, 'lesson') + ' · ' + plural(c.lessons.flatMap((l) => l.blocks).length, 'block') + ' · ' + scored + ' scored',
-    problems: [...courseRowProblems(c.list), ...courseProblems(c.list, nw.shape ?? {})],
+    problems: [...courseRowProblems(c.list), ...courseProblems(c.list, nw.shape ?? {}), ...embedProblems(c.list, embedAvailable)],
   };
 }

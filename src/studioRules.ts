@@ -1,6 +1,7 @@
 // Which of a studio's formats the person's creation rules reach, and what the draft must change to fit one.
 // Moved out of studioVals.ts (v4 Task 13) and applied to every studio's `format` and `alsoFormats`.
-import type { NewDraft } from './types';
+import type { NewDraft, StudioState } from './types';
+import type { StudioDef } from './logic/studios';
 import { CREATE_TYPES, mayCreate } from './logic/contribution';
 import { noItems } from './logic/items';
 import type { RuleParts } from './logic/contribution';
@@ -29,3 +30,6 @@ export function uploadFormat(rules: RuleParts[], nw: NewDraft): string {
   const forms = CREATE_TYPES.map((t) => t[0]);
   return forms.includes(nw.type) ? nw.type : forms.find((f) => reachable(rules, nw, f)) ?? forms[0];
 }
+// What opening a studio on a new piece changes in the draft (a compact studio keeps its items), and the studio state it opens on.
+export const freshPiece = (d: StudioDef): Partial<NewDraft> => (d.compact ? { shape: {} } : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() });
+export const studioView = (d: StudioDef): StudioState => ({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined, ask: undefined, from: undefined });

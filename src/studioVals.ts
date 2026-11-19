@@ -6,7 +6,7 @@ import type { Logic } from './model';
 import type { AppState, Bundle, ExamQuestion, NewDraft, StudioState } from './types';
 import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
-import { aiAssisted, noItems, validItems } from './logic/items';
+import { aiAssisted, validItems } from './logic/items';
 import type { Item } from './logic/items';
 import { seedLessons } from './logic/courseEdit';
 import { voiceOn } from './lib/voice';
@@ -18,7 +18,7 @@ import { shownReview } from './logic/gameContent';
 import { studioById, studioFormats, tooFew, visibleSteps } from './logic/studios';
 import type { StudioDef, StudioEntry } from './logic/studios';
 import { STUDIOS } from './studioData';
-import { changeFormat, reachable, uploadFormat } from './studioRules';
+import { changeFormat, freshPiece, reachable, studioView, uploadFormat } from './studioRules';
 import { BUILDS } from './studioRunners';
 import { reelProduce } from './studioReel';
 import { stepVals } from './studioStepVals';
@@ -31,7 +31,7 @@ const HINTS: Record<string, string> = {
   'Preview & test': 'Try it as a learner would. Nothing here is saved or counted.', 'Check & send': 'Automatic checks, then the review route, then it goes to your reviewers.',
 };
 // A studio's own lead for a step, over HINTS: the E-learning Studio builds its lessons from blocks in Produce.
-const STUDIO_HINTS: Record<string, Record<string, string>> = { elearn: { Produce: 'Build each lesson from blocks: text, questions and exercises.' } };
+const STUDIO_HINTS: Record<string, Record<string, string>> = { elearn: { Produce: 'Build each lesson from blocks: text, questions and learnings from the other studios.' } };
 const FLASH = 'flash';
 // The studio the draft is made in, also while a saved contribution is edited in its studio; null on the upload form.
 export const studioOf = (s: AppState) => (s.studio.view === 'studio' ? s.studio.id ?? FLASH : null);
@@ -67,9 +67,9 @@ export function studioVals(L: Logic, src: StudioSrc) {
     // Reopening the studio a saved draft was made in continues it; another studio starts a new piece in a new row.
     const savedIn = nw.savedId ? L.state.create?.contributions.find((c) => c.id === nw.savedId)?.studio : null;
     const keep = !!savedIn && savedIn === d.id, other = !!savedIn && savedIn !== d.id;
-    const fresh = keep ? {} : d.compact ? { shape: {} } : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() };
+    const fresh = keep ? {} : freshPiece(d);
     setNw((cur) => ({ ...changeFormat(cur, f, src.rules), ...fresh, ...(other && { savedId: undefined }) }));
-    set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined, ask: undefined });
+    set(studioView(d));
   };
   // What the Draft step still needs: a generic studio's item schema; Flash's cards or questions have their own shape, so only
   // the studio's minimum, worded as in the design ("Draft at least 4 items in step 2").

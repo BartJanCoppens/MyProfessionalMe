@@ -135,6 +135,7 @@ export function LearnerPanel({ t }: { t: LearnerTry }) {
 function EmbedTry({ id, t }: { id: string; t: LearnerTry }) {
   const content = LEARN_META[id]?.content, row = LEARN_BY[id];
   if (!content || !row) return <div style={note}>This learning has no preview here.</div>;
+  if (content.kind === 'flash' || content.kind === 'exam') return <div style={note}>Plays on the learner's page: flash cards and exams are not played in the studio preview.</div>;
   return <LearnerPanel t={{ ...t, key: 'embed-' + id, content, hours: row[6], contributionId: undefined, drafted: false }} />;
 }
 

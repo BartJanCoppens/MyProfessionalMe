@@ -10,7 +10,7 @@ const muted = { color: '#8a9086' };
 const line = (v: string, empty: string): ReactNode => (v.trim() ? v : <span style={muted}>{empty}</span>);
 const bold = { fontWeight: 600 } as const;
 
-function Body({ b, mode }: { b: Block; mode: BlockMode }) {
+function Body({ b, mode, title }: { b: Block; mode: BlockMode; title: string }) {
   switch (b.block) {
     case 'text': return <>{(b.h.trim() || mode === 'edit') && <div style={{ ...bold, fontSize: 16 }}>{line(b.h, 'No heading')}</div>}<div style={{ whiteSpace: 'pre-wrap' }}>{line(b.t, 'Write the text')}</div></>;
     case 'callout': return <div style={{ borderLeft: '3px solid #3f6a0a', paddingLeft: 10, whiteSpace: 'pre-wrap' }}>{line(b.t, 'Write the callout')}</div>;
@@ -24,12 +24,13 @@ function Body({ b, mode }: { b: Block; mode: BlockMode }) {
         <div style={{ display: 'flex', gap: 16 }}>{[0, 1].map((g) => <div key={g}><div style={{ fontSize: 12, ...bold }}>{line(b.bins[g], 'Group name')}</div>{b.cards.filter((c) => c[1] === g).map((c, i) => <div key={i}>{line(c[0], 'Item')}</div>)}</div>)}</div></>);
     case 'branch': return <><div style={bold}>{line(b.q, 'Write the question')}</div>{b.choices.map(([label, outcome, good], i) => <div key={i}>{good ? '✓ ' : '✗ '}{line(label, 'Choice')} <span style={{ color: '#5a6058' }}>· {line(outcome, 'Reply')}</span></div>)}</>;
     case 'reflect': return <div>{line(b.p, 'Write the prompt for the learner')}<div style={{ ...muted, fontSize: 12, marginTop: 4 }}>The learner's answer stays with the learner.</div></div>;
+    case 'embed': return <><div style={bold}>{b.format}</div><div>{line(title, b.learning ? 'No longer in the library' : 'Pick the learning in the inspector')}</div></>;
     case 'exercise': return <><div style={bold}>{line(b.q, 'Write the question')}</div><div style={{ fontSize: 12.5, color: '#5a6058' }}>Answer {b.a}{b.unit && ' ' + b.unit} (± {b.tol})</div></>;
   }
 }
 
 export default function CourseBlock({ b, mode }: { b: BlockView; mode: BlockMode }) {
-  const body = <>{mode === 'play' && b.play ? <CoursePlay p={b.play} /> : <Body b={b.block} mode={mode} />}{mode === 'edit' && b.missing && <div role="alert" style={{ fontSize: 12, color: '#7a5000', marginTop: 4 }}>{b.missing}</div>}</>;
+  const body = <>{mode === 'play' && b.play ? <CoursePlay p={b.play} /> : <Body b={b.block} mode={mode} title={b.title} />}{mode === 'edit' && b.missing && <div role="alert" style={{ fontSize: 12, color: '#7a5000', marginTop: 4 }}>{b.missing}</div>}</>;
   const box = { width: '100%', boxSizing: 'border-box' as const, textAlign: 'left' as const, font: 'inherit', fontSize: 13.5, color: '#1a1d18', background: '#fff', borderRadius: 6, padding: '10px 12px' };
   if (mode === 'play') return <div style={{ ...box, border: '1px solid #e1e5dc' }}>{body}</div>;
   return (
@@ -39,8 +40,8 @@ export default function CourseBlock({ b, mode }: { b: BlockView; mode: BlockMode
   );
 }
 
-// An embedded learning: its card, and, once opened, the learning's own learner panel under it (`panel`, rendered by whoever shows the course).
-export function EmbedCard({ e, panel }: { e: EmbedView; panel: ReactNode }) {
+// An embedded learning: its card, and, once opened, the learning's own learner panel under it (`panel`, built only while it is open, by whoever shows the course).
+export function EmbedCard({ e, panel }: { e: EmbedView; panel: () => ReactNode }) {
   return (
     <div style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e1e5dc', background: '#fff', borderRadius: 6, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -50,7 +51,7 @@ export function EmbedCard({ e, panel }: { e: EmbedView; panel: ReactNode }) {
         </div>
         {!e.gone && (e.isOpen ? <Button size="sm" variant="secondary" onClick={e.close}>Close</Button> : <Button size="sm" onClick={e.open}>{e.openLabel}</Button>)}
       </div>
-      {e.isOpen && panel}
+      {e.isOpen && panel()}
     </div>
   );
 }

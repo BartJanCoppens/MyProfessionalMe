@@ -94,21 +94,20 @@ $$;
 
 -- 2. The embed check.
 -- Whether each embed of a course (items_ok already holds) names a published learning of its format, in words and in the order of embedProblems in src/logic/courseContent.ts.
--- Definer: the author may not read every learning; the check only says whether it is published, and its title.
+-- Invoker, not definer: it runs inside the definer functions that check and submit, and says nothing of a row but that it is not available (no title).
 create function private.course_embed_problems(p_items jsonb)
 returns text[]
 language sql
 stable
-security definer
 set search_path = ''
 as $$
   select coalesce(array_agg(r.m order by r.n), '{}') from (
     select q.m, min(q.n) as n from (
       select x.n, case
-        when l.id is null or l.format <> (x.b ->> 'format') or l.format = 'E-learning' or (x.b ->> 'learning') = ''
+        when (x.b ->> 'learning') = ''
           then 'Lesson ' || ((x.b ->> 'lesson')::integer + 1) || ' · ' || (x.b ->> 'format') || ': pick the learning from the library'
-        when l.status <> 'published'
-          then 'Lesson ' || ((x.b ->> 'lesson')::integer + 1) || ' · “' || l.title || '” is no longer published: pick another'
+        when l.id is null or l.format <> (x.b ->> 'format') or l.format = 'E-learning' or l.status <> 'published'
+          then 'Lesson ' || ((x.b ->> 'lesson')::integer + 1) || ' · ' || (x.b ->> 'format') || ': the learning picked is not available: pick another'
       end as m
       from jsonb_array_elements(private.course_list(p_items)) with ordinality x(b, n)
       left join public.learnings l on l.id = x.b ->> 'learning'

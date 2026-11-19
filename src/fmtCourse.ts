@@ -21,7 +21,7 @@ import type { Item, Logic } from './model';
 import type { CourseContent, EmbedBlock } from './types';
 
 export type { BlockPatch, BlockRun, CourseAnswer, Play };
-export type BlockView = { id: string; kind: BlockKind; name: string; block: CourseBlock; missing: string | null; on: boolean; pick: () => void; play: Play | null };
+export type BlockView = { id: string; kind: BlockKind; name: string; title: string; block: CourseBlock; missing: string | null; on: boolean; pick: () => void; play: Play | null };
 export type BlockMode = 'edit' | 'play';
 
 // An embedded learning in the player: its card (the studio's glyph, the title, "Reel · 2 min"). Opening plays that format's own learner panel under the card
@@ -29,11 +29,13 @@ export type BlockMode = 'edit' | 'play';
 // not the format the creator picked, is `gone`: honest note, nothing blocked.
 export type EmbedView = { kind: 'embed'; id: string; learning: string; format: string; glyph: string; title: string; meta: string; openLabel: string; isOpen: boolean; open: () => void; close: () => void;
   gone: boolean; goneNote: string; name: string; play: null };
+export const isEmbedView = (b: BlockView | EmbedView): b is EmbedView => b.kind === 'embed' && 'gone' in b;
 export const GONE_NOTE = 'This learning is no longer available';
 // The learning behind an embed when learners can play it: published, of the picked format and not a course.
+export const isPublished = (learning: string) => (LEARN_META[learning]?.status ?? 'published') === 'published';
 export const embeddedRow = (learning: string, format?: string) => {
   const row = LEARN_BY[learning];
-  return row && (LEARN_META[learning]?.status ?? 'published') === 'published' && row[4] !== 'E-learning' && (!format || row[4] === format) ? row : null;
+  return row && isPublished(learning) && row[4] !== 'E-learning' && (!format || row[4] === format) ? row : null;
 };
 export function embedView(b: EmbedBlock, run: CourseRun, patch: (p: Partial<CourseRun>) => void, onPage?: (learning: string) => void): EmbedView {
   const row = embeddedRow(b.learning, b.format), glyph = STUDIOS.find((d) => studioFormats(d).includes(b.format))?.glyph ?? '';
@@ -45,7 +47,7 @@ export function embedView(b: EmbedBlock, run: CourseRun, patch: (p: Partial<Cour
 
 // `on`: the block is selected in the editor; `pick` selects it. `missing` is what the creator still has to write, in their words. `play`: what a learner does with it.
 export const blockView = (b: CourseBlock, mode: BlockMode, run: BlockRun | undefined, patch: (p: BlockPatch) => void, o: { ro: boolean; on?: boolean; pick?: () => void; reflection?: Reflection }): BlockView =>
-  ({ id: b.id, kind: b.block, name: KIND_NAME[b.block], block: b, missing: mode === 'edit' ? missingOf(b) : null, on: !!o.on, pick: o.pick ?? (() => {}),
+  ({ id: b.id, kind: b.block, name: KIND_NAME[b.block], title: b.block === 'embed' ? LEARN_BY[b.learning]?.[1] ?? '' : '', block: b, missing: mode === 'edit' ? missingOf(b) : null, on: !!o.on, pick: o.pick ?? (() => {}),
     play: mode === 'play' ? playOf(b, run ?? NEW_BLOCK, patch, o.ro, o.reflection) : null });
 
 // at: the lesson on show; open: the embed (its block id) open under its card; seen: the lessons opened this session (the saved ones come with the options); rounds: a check's round per block; best, completed and savedSeen:

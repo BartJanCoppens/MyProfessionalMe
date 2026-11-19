@@ -4428,10 +4428,10 @@ with i as (insert into public.contributions (business_line, type, title, domain,
   insert into results (check_name, expected, actual) select 'EE a creator saves courses with embeds', '9 rows', count(*)||' rows' from i;
 insert into results (check_name, expected, actual) select 'EE a course that embeds a published reel passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T ee ok'))::text;
 insert into results (check_name, expected, actual) select 'EE an embed with no learning is refused: pick it', 'Lesson 2 · Reel: pick the learning from the library', pg_temp.el_problems('T ee empty');
-insert into results (check_name, expected, actual) select 'EE an unpublished learning is refused by its title', 'Lesson 2 · “T ee draft reel” is no longer published: pick another', pg_temp.el_problems('T ee draft');
-insert into results (check_name, expected, actual) select 'EE a learning that does not exist is refused', 'Lesson 2 · Reel: pick the learning from the library', pg_temp.el_problems('T ee missing');
-insert into results (check_name, expected, actual) select 'EE a learning of another format is refused', 'Lesson 2 · Reel: pick the learning from the library', pg_temp.el_problems('T ee other');
-insert into results (check_name, expected, actual) select 'EE a course embedded in a Reel embed is refused (no nesting)', 'Lesson 2 · Reel: pick the learning from the library', pg_temp.el_problems('T ee nested');
+insert into results (check_name, expected, actual) select 'EE an unpublished learning is refused without revealing its title', 'Lesson 2 · Reel: the learning picked is not available: pick another', pg_temp.el_problems('T ee draft');
+insert into results (check_name, expected, actual) select 'EE a learning that does not exist is refused', 'Lesson 2 · Reel: the learning picked is not available: pick another', pg_temp.el_problems('T ee missing');
+insert into results (check_name, expected, actual) select 'EE a learning of another format is refused', 'Lesson 2 · Reel: the learning picked is not available: pick another', pg_temp.el_problems('T ee other');
+insert into results (check_name, expected, actual) select 'EE a course embedded in a Reel embed is refused (no nesting)', 'Lesson 2 · Reel: the learning picked is not available: pick another', pg_temp.el_problems('T ee nested');
 insert into results (check_name, expected, actual) select 'EE an embed of the format E-learning is refused as a block', 'Lesson 2 · Embedded learning: pick one of the formats and a learning from the library', pg_temp.el_problems('T ee kind');
 insert into results (check_name, expected, actual) select 'EE a learning id that is not L and digits is refused as a block', 'Lesson 2 · Embedded learning: pick one of the formats and a learning from the library', pg_temp.el_problems('T ee id');
 -- a source retired between the check and the submit
@@ -4445,7 +4445,7 @@ do $$ begin
     insert into results (check_name, expected, actual) values ('EE a reel retired between the check and the submit makes submit refuse', 'blocked: P0001', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('EE a reel retired between the check and the submit makes submit refuse', 'blocked: P0001', 'blocked: '||sqlstate); end;
 end $$;
-insert into results (check_name, expected, actual) select 'EE submit names the retired reel', 'Lesson 2 · “T ee retired reel” is no longer published: pick another', pg_temp.el_problems('T ee retired');
+insert into results (check_name, expected, actual) select 'EE submit says the retired reel is not available, without its title', 'Lesson 2 · Reel: the learning picked is not available: pick another', pg_temp.el_problems('T ee retired');
 insert into results (check_name, expected, actual) select 'EE the course with the published reel is submitted and published', 'published', public.submit_contribution((select id from public.contributions where title = 'T ee ok'));
 insert into results (check_name, expected, actual) select 'EE the published content keeps {block, id, format, learning}, without lesson', 'true/false', ((l.content #> '{lessons,1,blocks}') @> '[{"block":"embed","id":"b0020","format":"Reel","learning":"L900001"}]'::jsonb)::text||'/'||(l.content #>> '{lessons,1,blocks}' like '%"lesson"%')::text
   from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T ee ok';

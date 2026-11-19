@@ -6,7 +6,7 @@ import type { CourseContent, ExamQuestion } from '../types';
 import { ITEM_MAX, fieldOk, isQuestion, readQuestions } from './items';
 import { stepsOf } from './studioRows';
 
-export const BLOCK_KINDS = ['text', 'callout', 'accordion', 'check', 'sort', 'branch', 'reflect', 'exercise'] as const;
+export const BLOCK_KINDS = ['text', 'callout', 'accordion', 'check', 'sort', 'branch', 'reflect', 'exercise', 'embed'] as const;
 export type BlockKind = typeof BLOCK_KINDS[number];
 // The blocks that score a learner (a reflection and a branching scenario do not): the completion score and the score line count these.
 export const SCORED_KINDS: readonly BlockKind[] = ['check', 'sort', 'exercise'];
@@ -15,6 +15,7 @@ export const SCORED_KINDS: readonly BlockKind[] = ['check', 'sort', 'exercise'];
 export const EMBED_FORMATS = ['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Flash cards', 'Practice exam', 'Job aid', 'Case exercise'] as const;
 export type EmbedFormat = typeof EMBED_FORMATS[number];
 export const EMBED_ON_PAGE: readonly EmbedFormat[] = ['Avatar', 'Case exercise'];
+export const EMBED_LEARNING = /^(L[0-9]{1,6})?$/;
 export const BLOCK_ID = /^b[0-9a-z]{4,20}$/;
 export const COURSE_CAPS = { lessons: [2, 12], blocksPerLesson: 20, heading: 120, text: 4000, callout: 600, panels: [2, 8], panelTitle: 120, panelBody: 1200,
   cards: [2, 10], bin: 40, card: 160, choices: [2, 4], choice: 200, outcome: 400, prompt: 400, unit: 12, bytes: 250000, number: 1e15 } as const;
@@ -29,7 +30,9 @@ export type SortBlock = Base<'sort'> & { p: string; bins: [string, string]; card
 export type BranchBlock = Base<'branch'> & { q: string; choices: [label: string, outcome: string, good: boolean][] };
 export type ReflectBlock = Base<'reflect'> & { p: string };
 export type ExerciseBlock = Base<'exercise'> & { q: string; a: number; tol: number; unit: string };
-export type CourseBlock = TextBlock | CalloutBlock | AccordionBlock | CheckBlock | SortBlock | BranchBlock | ReflectBlock | ExerciseBlock;
+// An embedded learning (Phase 2): a published learning of another studio, played in the course; `learning` is '' until the creator picks it.
+export type EmbedBlock = Base<'embed'> & { format: EmbedFormat; learning: string };
+export type CourseBlock = TextBlock | CalloutBlock | AccordionBlock | CheckBlock | SortBlock | BranchBlock | ReflectBlock | ExerciseBlock | EmbedBlock;
 type WithoutLesson<T> = T extends unknown ? Omit<T, 'lesson'> : never;
 export type PublicBlock = WithoutLesson<CourseBlock>;
 
@@ -53,12 +56,13 @@ export const WORDS = {
   noScoredBlock: 'Add a block that scores (a knowledge check, a sort or a calculation), or choose “All lessons viewed” in Shape it',
 };
 export const KIND_NAME: Record<BlockKind, string> = { text: 'Text', callout: 'Callout', accordion: 'Accordion', check: 'Knowledge check', sort: 'Sort into groups',
-  branch: 'Branching scenario', reflect: 'Reflection', exercise: 'Calculation exercise' };
+  branch: 'Branching scenario', reflect: 'Reflection', exercise: 'Calculation exercise', embed: 'Embedded learning' };
 export const SHAPE_RULE: Record<BlockKind, string> = {
   text: 'keep the heading to 120 characters and write the text, up to 4000', callout: 'write the callout, up to 600 characters',
   accordion: 'give 2 to 8 panels, each with a title and a text', check: 'give four options, the right answer and why',
   sort: 'give a prompt, two group names and 2 to 10 items', branch: 'give a question and 2 to 4 choices, each with its reply and whether it is good',
   reflect: 'write the prompt for the learner, up to 400 characters', exercise: 'give a question, the right number, the tolerance (0 or more) and a unit of up to 12 characters',
+  embed: 'pick one of the formats and a learning from the library',
 };
 
 // A decimal comma read as a point when it is the only separator and 1 or 2 digits follow ("2,5" is 2.5; "2,519" stays a thousands comma).
@@ -80,6 +84,7 @@ const SHAPE_OK: Record<BlockKind, (b: Raw) => boolean> = {
   sort: sortShape, branch: branchShape,
   reflect: (b) => fieldOk(C.prompt)(b.p),
   exercise: (b) => fieldOk(C.prompt)(b.q) && num(b.a) && num(b.tol) && b.tol >= 0 && typeof b.unit === 'string' && b.unit.length <= C.unit,
+  embed: (b) => (EMBED_FORMATS as readonly unknown[]).includes(b.format) && typeof b.learning === 'string' && EMBED_LEARNING.test(b.learning),
 };
 // What is wrong with a block's own fields, or null: a sort wants every card in group 0 or 1, a branch at least one good choice.
 export function shapeProblem(b: Raw): string | null {
@@ -134,6 +139,18 @@ export function courseProblems(items: readonly unknown[], shape: Record<string, 
   return out;
 }
 
+// Whether a published learning of that format exists (never a title: the database says no more than this either).
+export type EmbedAvailable = (learning: string, format: string) => boolean;
+// What is still wrong with the embeds (private.course_embed_problems, same words and order): no learning picked, or one that is not available.
+export function embedProblems(items: readonly unknown[], available: EmbedAvailable): string[] {
+  const out = items.filter(isCourseBlock).flatMap((b) => {
+    if (b.block !== 'embed' || !EMBED_FORMATS.includes(b.format)) return [];
+    const at = 'Lesson ' + (b.lesson + 1) + ' · ' + b.format + ': ';
+    return !b.learning ? [at + 'pick the learning from the library'] : available(b.learning, b.format) ? [] : [at + 'the learning picked is not available: pick another'];
+  });
+  return [...new Set(out)];
+}
+
 // A block as learners get it: its known fields, trimmed, without the lesson index.
 export function publicBlock(b: CourseBlock): PublicBlock {
   const t = (s: string) => s.trim();
@@ -146,6 +163,7 @@ export function publicBlock(b: CourseBlock): PublicBlock {
     case 'branch': return { block: 'branch', id: b.id, q: t(b.q), choices: b.choices.map(([l, o, g]) => [t(l), t(o), g]) };
     case 'reflect': return { block: 'reflect', id: b.id, p: t(b.p) };
     case 'exercise': return { block: 'exercise', id: b.id, q: t(b.q), a: b.a, tol: b.tol, unit: b.unit.trim() };
+    case 'embed': return { block: 'embed', id: b.id, format: b.format, learning: b.learning };
   }
 }
 

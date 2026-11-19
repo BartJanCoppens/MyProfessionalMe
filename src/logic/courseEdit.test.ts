@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCK_ID, BLOCK_KINDS, COURSE_CAPS, courseRowProblems, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
-import { addLesson, blockId, dropLesson, duplicateBlock, insertBlock, keepBlocks, missingOf, moveBlock, moveLesson, newBlock, patchBlock, removeBlock, removeLesson, renameLesson, seedLessons } from './courseEdit';
+import { addLesson, blockId, dropLesson, duplicateBlock, insertBlock, keepBlocks, missingOf, moveBlock, moveLesson, newBlock, newEmbed, patchBlock, removeBlock, removeLesson, renameLesson, seedLessons } from './courseEdit';
 import type { StudioEntry } from './studios';
 
 const Q = { t: 'Place', q: 'Where?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because.' };
@@ -102,7 +102,7 @@ describe('newBlock', () => {
     expect(newBlock('text', 0).id).toMatch(BLOCK_ID);
   });
   it('says what is missing in the one wording of the course check, for every kind', () => {
-    BLOCK_KINDS.forEach((kind) => {
+    BLOCK_KINDS.filter((k): k is Exclude<typeof k, 'embed'> => k !== 'embed').forEach((kind) => {
       const b = newBlock(kind, 0, 'T'), msg = missingOf(b);
       if (msg) expect(courseRowProblems([...rows(), b]).some((p) => p.toLowerCase().endsWith(msg.toLowerCase()))).toBe(true);
       else expect(courseRowProblems([...rows(), b])).toEqual([]);
@@ -187,3 +187,11 @@ describe('lessons', () => {
     expect(dropLesson(rows(), 0).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Lesson 1', 'Lesson 2']);
   });
 });
+
+describe('newEmbed', () => {
+  it('is an embed of the format with no learning, in the lesson', () => {
+    expect(newEmbed('Reel', 2)).toMatchObject({ block: 'embed', lesson: 2, format: 'Reel', learning: '' });
+    expect(newEmbed('Reel', 0).id).toMatch(BLOCK_ID);
+  });
+});
+

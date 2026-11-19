@@ -173,7 +173,7 @@ function createScreen(L: Logic) {
   const chk = s.studio.check, checkReasons = chk && chk.key === checkKey(nw, s.nwKb, studioOf(s)) ? chk.reasons : null;
   const studio = studioVals(L, { nw, setNw, bundles: picked, rules, canCreate, busy: vm.busy, checks: vm.nwChecks, blocked: vm.nwBlocked, route: vm.nwRoute, policyNote: vm.nwPolicyNote,
     routeWarn: vm.nwRouteWarn, submitLabel: vm.nwSubmitLabel, submit: vm.nwSubmit, saveDraft: vm.nwDraft, cancel: vm.nwCancel, checkReasons, runCheck: () => runCheck(L), withFile: (attach, done, how) => saveWithFile(L, attach, {}, done, how) });
-  return { ...vm, studio: { ...studio, banner: planBanner(L, nw) }, newView: s.editing && s.studio.view !== 'studio' ? 'form' as const : s.studio.view };
+  return { ...vm, studio: { ...studio, banner: planBanner(L, nw) || s.studio.from || '' }, newView: s.editing && s.studio.view !== 'studio' ? 'form' as const : s.studio.view };
 }
 
 function dateLine(c: Contribution) {

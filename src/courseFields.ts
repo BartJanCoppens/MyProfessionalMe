@@ -8,7 +8,9 @@ import { LONG_MAX, SHORT_MAX } from './logic/items';
 export type FieldView = { label: string; kind: 'input' | 'area' | 'select'; value: string; options?: Opt[]; max?: number; numeric?: boolean; min?: number; set: (v: string) => void };
 export type MoreView = { label: string; run: () => void; off: boolean };
 type Patch = (p: Partial<CourseBlock>) => void;
-type Fields = { fields: FieldView[]; more: MoreView[] };
+// note: a line under the fields. embed: what an embedded learning's inspector needs from the library (its sources and the studio that makes a new one).
+type Fields = { fields: FieldView[]; more: MoreView[]; note?: string };
+export type EmbedSources = { sources: Opt[]; make: () => void; makeLabel: string };
 
 const input = (label: string, value: string, max: number, set: (v: string) => void): FieldView => ({ label, kind: 'input', value, max, set });
 const area = (label: string, value: string, max: number, set: (v: string) => void): FieldView => ({ label, kind: 'area', value, max, set });
@@ -24,7 +26,7 @@ function listFields<T>(list: T[], range: readonly [number, number], noun: string
     { label: 'Remove the last ' + noun, run: () => set(list.slice(0, -1)), off: list.length <= range[0] }];
 }
 
-export function fieldsOf(b: CourseBlock, patch: Patch): Fields {
+export function fieldsOf(b: CourseBlock, patch: Patch, embed?: EmbedSources): Fields {
   switch (b.block) {
     case 'text': return { fields: [input('Heading', b.h, C.heading, (h) => patch({ h })), area('Text', b.t, C.text, (t) => patch({ t }))], more: [] };
     case 'callout': return { fields: [area('Callout', b.t, C.callout, (t) => patch({ t }))], more: [] };
@@ -51,6 +53,8 @@ export function fieldsOf(b: CourseBlock, patch: Patch): Fields {
           select('Choice ' + (i + 1) + ' is', good ? 'good' : 'not', [{ value: 'good', label: 'A good choice' }, { value: 'not', label: 'Not a good choice' }], (v) => patch({ choices: replaceAt(b.choices, i, [label, outcome, v === 'good']) }))])],
       more: listFields<[string, string, boolean]>(b.choices, C.choices, 'choice', ['', '', false], (choices) => patch({ choices })) };
     case 'reflect': return { fields: [area('Prompt', b.p, C.prompt, (p) => patch({ p }))], more: [] };
+    case 'embed': return { fields: [select('Source', b.learning, embed?.sources ?? [], (learning) => patch({ learning }))], more: embed ? [{ label: embed.makeLabel, run: embed.make, off: false }] : [],
+      note: 'Only published learnings can be added. A new one appears here once it is published.' };
     case 'exercise': return { fields: [area('Question', b.q, C.prompt, (q) => patch({ q })),
       { ...input('Right number', String(b.a), NUMBER_CHARS, (v) => { const a = number(v); if (a !== null) patch({ a }); }), numeric: true },
       { ...input('Tolerance', String(b.tol), NUMBER_CHARS, (v) => { const tol = number(v, 0); if (tol !== null) patch({ tol }); }), numeric: true, min: 0 },
