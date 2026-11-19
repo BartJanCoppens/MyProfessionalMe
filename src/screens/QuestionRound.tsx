@@ -3,6 +3,7 @@
 // practice exam, the explainer's check and the Flash studio's play-test show it.
 import { Button, Tag } from '../ds';
 import type { Round } from '../fmtRound';
+import Feedback from './Feedback';
 
 export default function QuestionRound({ r }: { r: Round }) {
   return (
@@ -17,7 +18,7 @@ export default function QuestionRound({ r }: { r: Round }) {
           </button>
         ))}
       </div>
-      {r.hasFb && <div style={{ borderLeft: '3px solid ' + r.fbColor, padding: '6px 10px', fontSize: 12.5, color: '#3d423b', textWrap: 'pretty' }}><span style={{ fontWeight: 600, color: r.fbColor }}>{r.fbHead} </span>{r.why}</div>}
+      {r.hasFb && <Feedback color={r.fbColor} head={r.fbHead}>{r.why}</Feedback>}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Button size="sm" onClick={r.main} disabled={r.mainOff}>{r.mainLabel}</Button><span style={{ fontSize: 12, color: '#5a6058' }}>{r.hint}</span></div>
     </>
   );

@@ -4,12 +4,13 @@ import { useId } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, FilterChip, Input, LinkButton } from '../ds';
 import type { Play } from '../fmtCoursePlay';
+import Feedback from './Feedback';
 import QuestionRound from './QuestionRound';
 
 const bold: CSSProperties = { fontWeight: 600 };
 const col: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 };
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
-const Verdict = ({ v }: { v: { text: string; good: boolean } }) => <div role="status" style={{ borderLeft: '3px solid ' + (v.good ? '#3f6a0a' : '#9a2b22'), padding: '4px 10px', fontSize: 12.5, color: '#3d423b' }}>{v.text}</div>;
+const Verdict = ({ v }: { v: { text: string; good: boolean } }) => <Feedback role="status" color={v.good ? '#3f6a0a' : '#9a2b22'}>{v.text}</Feedback>;
 
 function Accordion({ panels }: { panels: Extract<Play, { kind: 'accordion' }>['panels'] }) {
   const id = useId();
