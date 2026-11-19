@@ -1,5 +1,6 @@
 import { AUDS, BLS } from '../data';
 import { DIFFICULTIES, LANGUAGES, RUN_MINUTES, SCORINGS } from '../../supabase/functions/_shared/avatarRules.ts';
+import { COURSE_RULES, blockProblem } from '../logic/courseContent';
 import { LEADERBOARDS } from '../logic/gameContent';
 import { GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
 import { isHorizonItem } from '../logic/horizonItem';
@@ -52,6 +53,7 @@ export function parseFormatContent(raw: unknown): FormatContent | null {
       && (c.role === null || (!!c.role && (GAME_ROLES as readonly string[]).includes(c.role.kind) && isText(c.role.about))) && !!c.files && isText(c.files['index.html']) && isText(c.files['game.js']) ? c as FormatContent : null;
     case 'reel': return reelOk(c) ? c as FormatContent : null;
     case 'avatar': return avatarOk(c) ? c as FormatContent : null;
+    case 'course': return courseOk(c) ? c as FormatContent : null;
     default: return null;
   }
 }
@@ -72,6 +74,10 @@ const avatarOk = (c: any) => [c.persona, c.situation, c.opening].every(filled) &
   && c.quiz.every((q: any) => !!q && filled(q.q) && q.a === 0 && checkOk(q)) && lookOk(c.look) && (c.voice === null || (!!c.voice && filled(c.voice.id) && filled(c.voice.name)))
   && Object.keys(LANGUAGES).includes(c.language) && (DIFFICULTIES as readonly unknown[]).includes(c.difficulty) && (RUN_MINUTES as readonly unknown[]).includes(c.minutes)
   && (SCORINGS as readonly unknown[]).includes(c.scoring) && isText(c.counterpart) && (c.made === 'ai' || c.made === 'scripted');
+
+// A published course: its lessons, each with a title and blocks, and the completion rule. A block is read by the rule the checks use (blockProblem), with a lesson of its own.
+const courseOk = (c: any) => listOf(c.lessons, (l) => filled(l.title) && Array.isArray(l.blocks) && l.blocks.every((b: any) => blockProblem({ ...b, lesson: 0 }, 1) === null))
+  && (Object.values(COURSE_RULES) as unknown[]).includes(c.rule);
 
 // A published slide: a title, at least one bullet, the talk-over, an optional drawing and the stored audio of its voice.
 const slideOk = (x: any) => isText(x.title) && isTexts(x.bullets) && x.bullets.length > 0 && isText(x.narration) && (x.svg === undefined || isText(x.svg)) && (x.audio === undefined || isAudio(x.audio));

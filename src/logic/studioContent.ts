@@ -4,6 +4,7 @@
 // learners will get. Pure.
 import type { FormatContent } from '../types';
 import { avatarContent } from './avatarContent';
+import { courseContent } from './courseContent';
 import type { StockVoice } from './ai';
 import { ROLE_QUESTION, gameContent, gameProblems } from './gameContent';
 import { GAME_ROLES } from '../../supabase/functions/_shared/gameRules.ts';
@@ -91,6 +92,7 @@ const BUILDERS: Record<string, (items: StudioEntry[], shape: Record<string, stri
   Slides: slidesContent,
   Reel: (items, shape, x) => reelContent(items, shape, x?.looks ?? [], x?.draft),
   Podcast: (items) => podcastContent(items),
+  'E-learning': courseContent,
   Game: gameContent,
   'Job aid': (items) => ({ kind: 'aid', items: stepsOf(items).map((i) => i[0].trim() + ' · ' + i[1].trim()) }),
   'Case exercise': (entries, shape) => { const items = stepsOf(entries);

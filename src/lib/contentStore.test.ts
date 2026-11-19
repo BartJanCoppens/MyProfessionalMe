@@ -87,6 +87,14 @@ describe('parseFormatContent', () => {
     const [, meta] = toLearn({ id: 'L68', title: 'T', domain: 'prof', level: 2, format: 'Job aid', source: 'S', hours: 1, cpd: 0, due: '', why: '', business_line: null, status: 'published', content });
     expect(meta.content).toEqual(content);
   });
+  it('reads a course and refuses a block without an id', () => {
+    const q = { t: 'T', q: 'Q?', o: ['a', 'b', 'c', 'd'], a: 0, why: 'W' };
+    const course = { kind: 'course', rule: 'both', lessons: [{ title: 'One', blocks: [{ block: 'text', id: 'b0001', h: '', t: 'Words.' }, { block: 'check', id: 'b0002', question: q, fin: true }] }, { title: 'Two', blocks: [{ block: 'callout', id: 'b0003', t: 'Note.' }] }] };
+    expect(parseFormatContent(course)).toEqual(course);
+    expect(parseFormatContent({ ...course, lessons: [{ title: 'One', blocks: [{ block: 'text', h: '', t: 'Words.' }] }, course.lessons[1]] })).toBeNull();
+    expect(parseFormatContent({ ...course, rule: 'sometimes' })).toBeNull();
+    expect(parseFormatContent({ ...course, lessons: [] })).toBeNull();
+  });
 });
 
 // Studios plan Phase 2 shapes (Tasks 2.2 and 2.3), read here so that a published explainer or animated flow reads back.

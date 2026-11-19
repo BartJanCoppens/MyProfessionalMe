@@ -180,7 +180,7 @@ describe('types', () => {
     expect(CREATE_TYPES.map((t) => t[0])).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam', 'Presentation']);
   });
   it('contribution formats, and so creation rules, add the formats the studios make', () => {
-    expect(TYPE_NAMES).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Avatar', 'Flash cards', 'Practice exam', 'Presentation', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise']);
+    expect(TYPE_NAMES).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Avatar', 'Flash cards', 'Practice exam', 'Presentation', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise', 'E-learning']);
   });
   it('creation rules offer only formats something can make today: the upload form and the studios that are available', () => {
     expect(PART_VALUES.formats).toEqual(['Reel', 'Podcast', 'Micro-guide', 'Case write-up', 'Flash cards', 'Practice exam', 'Presentation', 'Avatar', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise']);

@@ -17,6 +17,8 @@ import type { VoiceItem } from './voiceItem';
 import { isVideoItem } from './videoItem';
 import type { VideoItem } from './videoItem';
 import { avatarRows } from './avatarContent';
+import { courseRowProblems, isCourseBlock } from './courseContent';
+import type { CourseBlock } from './courseContent';
 import { reelRows } from './reelContent';
 
 // steers: what the answer only steers, which the studio says under it (STEERS): the AI draft ('draft'), the next AI
@@ -30,15 +32,16 @@ export type BuildStep = string;
 export type { StudioItem };
 // What a studio's items hold: its rows and, after them, the Explainer's three exam questions of its check or the
 // Animated flow's one drawing.
-export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing | VoiceItem | GameItem | VideoItem;
+export type StudioEntry = StudioItem | ExamQuestion | MotionDrawing | VoiceItem | GameItem | VideoItem | CourseBlock;
 export const CHECK_SIZE = 3;
 export { stepsOf };
 // The rows as {label, text}, trimmed: an explainer's steps and an Animated flow's stages.
 export const labelledRows = (items: StudioEntry[]) => stepsOf(items).map((i) => ({ label: i[0].trim(), text: i[1].trim() }));
-export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i) && !isVoiceItem(i) && !isGameItem(i) && !isVideoItem(i));
+export const questionsOf = (items: StudioEntry[]) => items.filter((i): i is ExamQuestion => !Array.isArray(i) && !isDrawing(i) && !isVoiceItem(i) && !isGameItem(i) && !isVideoItem(i) && !isCourseBlock(i));
 // What a studio's cast is: one stock look, two voices, one voice, or nothing to cast.
 export type StudioCast = 'look' | 'voices' | 'voice' | null;
-export type ItemSchema = (items: StudioItem[]) => string[];
+// A schema reads the rows and, for a studio whose items hold more than rows (a course's blocks), every item.
+export type ItemSchema = (rows: StudioItem[], items: StudioEntry[]) => string[];
 
 export type StudioDef = {
   id: string; name: string; out: string; glyph: string; tag: string; time: string; idea: string; title: string;
@@ -115,7 +118,7 @@ const STAGES_MAX = ITEM_MAX['Animated flow'] - 1;
 const motion = (items: StudioItem[]) => (items.length > STAGES_MAX ? ['Keep at most ' + STAGES_MAX + ' stages: the animation takes the last place'] : []);
 
 // One schema per studio on top of what every studio needs: a label and text on each row, and at least def.min rows.
-const SCHEMAS: Record<string, ItemSchema> = { avatar: avatarRows, reel: reelRows, slides, podcast, game, motion, explainer: () => [], aid: () => [], case: caseExercise };
+const SCHEMAS: Record<string, ItemSchema> = { avatar: avatarRows, reel: reelRows, slides, podcast, game, motion, explainer: () => [], aid: () => [], case: caseExercise, elearn: (_rows, items) => courseRowProblems(items) };
 
 // The most rows a studio's items hold: its format's ITEM_MAX (one table for cards, questions and rows).
 export const rowsMax = (def: StudioDef) => ITEM_MAX[def.format];
@@ -135,5 +138,5 @@ export function itemsValid(def: StudioDef, items: StudioEntry[]): string[] {
   const few = tooFew(def, rows.length) ? ['Add at least ' + def.min + ' items'] : [];
   const max = rowsMax(def), many = max && items.length > max ? ['Add at most ' + max + ' items'] : [];
   const check = questions.length && (questions.length !== CHECK_SIZE || !questions.every(isQuestion)) ? ['The check needs exactly ' + CHECK_SIZE + ' questions: draft it again or remove it'] : [];
-  return [...few, ...many, ...blanks, ...long, ...check, ...(SCHEMAS[def.id] ?? (() => []))(rows)];
+  return [...few, ...many, ...blanks, ...long, ...check, ...(SCHEMAS[def.id] ?? (() => []))(rows, items)];
 }

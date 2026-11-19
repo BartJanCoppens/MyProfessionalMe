@@ -4267,6 +4267,134 @@ set local request.jwt.claims = '';
 insert into public.trajectory_plan_sources (trajectory_id, name, pages, passages, chars, added_by) values ('TP2', 'gone.pdf', 1, '[[1,"x"]]', 1, '00000000-0000-0000-0000-0000000000a7');
 delete from public.trajectories where id in ('TP1', 'TP2');
 insert into results (check_name, expected, actual) select 'TP deleting the trajectories removes their plan and source rows', '0/0', (select count(*) from public.trajectory_plans where trajectory_id in ('TP1', 'TP2'))||'/'||(select count(*) from public.trajectory_plan_sources where trajectory_id in ('TP1', 'TP2'));
+-- ---------- E-learning Studio (EL) ----------
+-- A course is lesson rows [label, title, summary] then block objects (private.course_ok): every block shape and cap is enforced here. The check gate refuses
+-- wrong blocks in words (private.course_row_problems), an empty lesson and a completion rule without its final check; it publishes as course content,
+-- counts the creator's "Length?" and completes by the learner themselves (is_self_complete).
+reset role;
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000ea','t.elmaker@test.local'), ('00000000-0000-0000-0000-0000000000eb','t.elpodcast@test.local');
+update public.profiles set business_line='Consulting' where id in ('00000000-0000-0000-0000-0000000000ea', '00000000-0000-0000-0000-0000000000eb');
+insert into public.creator_rules (user_id, lines, formats) values ('00000000-0000-0000-0000-0000000000ea','{Consulting}','{E-learning}'), ('00000000-0000-0000-0000-0000000000eb','{Consulting}','{Podcast}');
+insert into public.review_policies (formats, peers, expert, quality) values ('{E-learning}', 0, false, false);
+select set_config('test.el_items', $j$[["Lesson 1","Where is a service taxed?","B2B and B2C"],["Lesson 2","Reverse charge","The invoice"],
+ {"block":"text","id":"b0001","lesson":0,"h":"Where?","t":" For services between businesses VAT is due where the customer is established. "},
+ {"block":"sort","id":"b0002","lesson":0,"p":"Sort each service.","bins":["General rule","Exception"],"cards":[["Strategy advice to a German company",0],["Tickets for a conference in Paris",1]]},
+ {"block":"check","id":"b0003","lesson":0,"fin":false,"question":{"t":"Place of supply","q":"Where is the VAT due?","o":["Belgium","Germany, reverse charge","Nowhere","Both"],"a":1,"why":"The customer accounts for it."}},
+ {"block":"callout","id":"b0004","lesson":1,"t":"The invoice must show it clearly."},
+ {"block":"branch","id":"b0005","lesson":1,"q":"A private person asks for no VAT.","choices":[["Agree","Wrong: B2C applies.",false],["Charge VAT","Right.",true]]},
+ {"block":"check","id":"b0006","lesson":1,"fin":true,"question":{"t":"Listing","q":"Which document lists reverse-charged services?","o":["The accounts","The intra-Community listing","The VAT return only","Nothing"],"a":1,"why":"The listing and the return must match."}}]$j$, true);
+select set_config('test.el_shape', '{"How is completion decided?":"Both","Length?":"30 min"}', true);
+-- the example course with block p_id replaced by p_block (or dropped when null), then p_extra
+create function pg_temp.el_items(p_id text default null, p_block jsonb default null, p_extra jsonb default '[]') returns jsonb language sql as $f$
+  select coalesce(jsonb_agg(case when e ->> 'id' = p_id then p_block else e end order by n) filter (where not (coalesce(e ->> 'id' = p_id, false) and p_block is null)), '[]'::jsonb) || p_extra
+  from jsonb_array_elements(current_setting('test.el_items')::jsonb) with ordinality as t(e, n) $f$;
+create function pg_temp.el_set(p_title text, p_items jsonb default pg_temp.el_items()) returns void language sql as $f$
+  update public.contributions set items = p_items where title = p_title $f$;
+create function pg_temp.el_problems(p_title text) returns text language sql security invoker as $f$
+  select array_to_string(public.check_contribution((select id from public.contributions where title = p_title)), '|') $f$;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, shape, ai_assisted) values
+ ('Consulting','E-learning','T el ok','prof','Know where a service is taxed.','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el ai','prof','x','elearn', '{"Length?":"60 min"}', true),
+ ('Consulting','E-learning','T el kind','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el lesson','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el three','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el nofinal','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el twofinal','prof','x','elearn', '{}', false),
+ ('Consulting','E-learning','T el empty','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el client','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el sort','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el branch','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el one','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el dup','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el many','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
+ ('Consulting','E-learning','T el stale','prof','x','elearn', current_setting('test.el_shape')::jsonb, false) returning 1)
+  insert into results (check_name, expected, actual) select 'EL a creator with an E-learning rule saves elearn drafts', '15 rows', count(*)||' rows' from i;
+select pg_temp.el_set('T el ok'); select pg_temp.el_set('T el ai'); select pg_temp.el_set('T el stale');
+select pg_temp.el_set('T el kind', pg_temp.el_items(p_extra => '[{"block":"script","id":"b0099","lesson":0}]'));
+select pg_temp.el_set('T el lesson', pg_temp.el_items('b0004', '{"block":"callout","id":"b0004","lesson":2,"t":"Points nowhere."}'));
+select pg_temp.el_set('T el three', pg_temp.el_items('b0003', '{"block":"check","id":"b0003","lesson":0,"fin":false,"question":{"t":"T","q":"Q?","o":["a","b","c"],"a":1,"why":"W"}}'));
+select pg_temp.el_set('T el nofinal', pg_temp.el_items('b0006', '{"block":"check","id":"b0006","lesson":1,"fin":false,"question":{"t":"Listing","q":"Which document?","o":["a","b","c","d"],"a":1,"why":"W"}}'));
+select pg_temp.el_set('T el twofinal', pg_temp.el_items('b0003', '{"block":"check","id":"b0003","lesson":0,"fin":true,"question":{"t":"T","q":"Q?","o":["a","b","c","d"],"a":1,"why":"W"}}'));
+select pg_temp.el_set('T el empty', (select jsonb_agg(e order by n) from jsonb_array_elements(current_setting('test.el_items')::jsonb) with ordinality t(e, n) where not (jsonb_typeof(e) = 'object' and e ->> 'lesson' = '1')));
+select pg_temp.el_set('T el client', pg_temp.el_items('b0004', '{"block":"callout","id":"b0004","lesson":1,"t":"Ask Delcroix first."}'));
+select pg_temp.el_set('T el sort', pg_temp.el_items('b0002', '{"block":"sort","id":"b0002","lesson":0,"p":"Sort.","bins":["A","B"],"cards":[["One",0],["Two"]]}'));
+select pg_temp.el_set('T el branch', pg_temp.el_items('b0005', '{"block":"branch","id":"b0005","lesson":1,"q":"Q?","choices":[["Agree","Wrong.",false],["Charge","Also wrong.",false]]}'));
+select pg_temp.el_set('T el one', '[["Lesson 1","Only one","x"],{"block":"callout","id":"b0001","lesson":0,"t":"Note."}]');
+select pg_temp.el_set('T el dup', pg_temp.el_items('b0004', '{"block":"callout","id":"b0001","lesson":1,"t":"Same id."}'));
+select pg_temp.el_set('T el many', pg_temp.el_items(p_extra => (select jsonb_agg(jsonb_build_object('block','callout','id','bm'||(1000+k),'lesson',0,'t','Note')) from generate_series(1, 20) k)));
+do $$ begin
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, items) values ('Consulting','E-learning','T el no studio','prof','x', current_setting('test.el_items')::jsonb);
+    insert into results (check_name, expected, actual) values ('EL the same rows without a studio are refused (contributions_upload_formats)', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EL the same rows without a studio are refused (contributions_upload_formats)', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'EL the example course passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T el ok'))::text;
+insert into results (check_name, expected, actual) select 'EL an unknown kind is refused in words', 'A block has a kind that is not known', pg_temp.el_problems('T el kind');
+insert into results (check_name, expected, actual) select 'EL a block that points to a lesson that does not exist is refused', 'A block points to a lesson that does not exist', pg_temp.el_problems('T el lesson');
+insert into results (check_name, expected, actual) select 'EL a knowledge check with three options is refused', 'Lesson 1 · Knowledge check: give four options, the right answer and why', pg_temp.el_problems('T el three');
+insert into results (check_name, expected, actual) select 'EL a sort with an unsorted card is refused', 'Lesson 1 · Drag and sort: give every item a group', pg_temp.el_problems('T el sort');
+insert into results (check_name, expected, actual) select 'EL a branch with no good choice is refused', 'Lesson 2 · Branching scenario: mark at least one good choice', pg_temp.el_problems('T el branch');
+insert into results (check_name, expected, actual) select 'EL a duplicate id is refused', 'Two blocks have the same id', pg_temp.el_problems('T el dup');
+insert into results (check_name, expected, actual) select 'EL 21 blocks in a lesson are refused', 'Lesson 1 has more than 20 blocks', pg_temp.el_problems('T el many');
+update public.contributions set items = pg_temp.el_items(p_extra => '["stray"]') where title = 'T el dup';
+insert into results (check_name, expected, actual) select 'EL a stray item that is not a block is refused', 'A block has a kind that is not known', pg_temp.el_problems('T el dup');
+update public.contributions set items = pg_temp.el_items(p_extra => '[["Lesson 3","Late","x"]]') where title = 'T el dup';
+insert into results (check_name, expected, actual) select 'EL a lesson after the blocks is refused', 'Put every lesson before the blocks', pg_temp.el_problems('T el dup');
+select pg_temp.el_set('T el dup', pg_temp.el_items('b0004', '{"block":"callout","id":"b0001","lesson":1,"t":"Same id."}'));
+insert into results (check_name, expected, actual) select 'EL one lesson is refused', 'Add at least 2 lessons', pg_temp.el_problems('T el one');
+insert into results (check_name, expected, actual) select 'EL a lesson without blocks is named', 'Lesson 2 “Reverse charge” has no blocks yet|Add a final check (a knowledge check marked “Final check”), or choose “All lessons viewed” in Shape it', pg_temp.el_problems('T el empty');
+insert into results (check_name, expected, actual) select 'EL the score rule without a final check is refused', 'Add a final check (a knowledge check marked “Final check”), or choose “All lessons viewed” in Shape it', pg_temp.el_problems('T el nofinal');
+insert into results (check_name, expected, actual) select 'EL two final checks are refused', 'Keep one final check', pg_temp.el_problems('T el twofinal');
+insert into results (check_name, expected, actual) select 'EL a client name in a callout is refused', '“Delcroix” looks like a client name · anonymise it', pg_temp.el_problems('T el client');
+-- an edit after the check: submit refuses (the fingerprint is stale)
+update public.contributions set items = pg_temp.el_items('b0004', '{"block":"callout","id":"b0004","lesson":1,"t":"Changed after the check."}') where title = 'T el stale';
+insert into results (check_name, expected, actual) select 'EL the stale course passes its first check', '{}', public.check_contribution((select id from public.contributions where title = 'T el stale'))::text;
+update public.contributions set items = pg_temp.el_items('b0004', '{"block":"callout","id":"b0004","lesson":1,"t":"Changed again."}') where title = 'T el stale';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T el stale'));
+    insert into results (check_name, expected, actual) values ('EL an edit after the check makes submit refuse', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EL an edit after the check makes submit refuse', 'blocked: P0001', 'blocked: '||sqlstate); end;
+  begin update public.contributions set items = pg_temp.el_items(p_extra => (select jsonb_agg(jsonb_build_object('block','callout','id','bn'||(1000+k),'lesson',0,'t','Note')) from generate_series(1, 247) k)) where title = 'T el many';
+    insert into results (check_name, expected, actual) values ('EL more than 252 items are refused', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EL more than 252 items are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+end $$;
+-- a Podcast-only rule cannot create E-learning
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000eb","role":"authenticated"}';
+do $$ begin
+  begin insert into public.contributions (business_line, type, title, domain, takeaway, studio) values ('Consulting','E-learning','T el podcast rule','prof','x','elearn');
+    insert into results (check_name, expected, actual) values ('EL a Podcast-only rule cannot create E-learning', 'blocked', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EL a Podcast-only rule cannot create E-learning', 'blocked', 'blocked: '||sqlstate); end;
+end $$;
+-- publishing: course content, the creator's length as hours, AI made from ai_assisted
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'EL the course is checked and published', '{}/published',
+  public.check_contribution((select id from public.contributions where title = 'T el ok'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T el ok'));
+update public.contributions set items = pg_temp.el_items('b0006', '{"block":"check","id":"b0006","lesson":1,"fin":false,"question":{"t":"Listing","q":"Which document?","o":["a","b","c","d"],"a":1,"why":"W"}}'), shape = '{"Length?":"60 min"}' where title = 'T el ai';
+insert into results (check_name, expected, actual) select 'EL a second course is checked and published', '{}/published',
+  public.check_contribution((select id from public.contributions where title = 'T el ai'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T el ai'));
+insert into results (check_name, expected, actual) select 'EL it becomes course content, 0.5 h for 30 min, not AI made', 'E-learning/course/0.50/false/both/2', l.format||'/'||(l.content ->> 'kind')||'/'||l.hours||'/'||l.ai_made||'/'||(l.content ->> 'rule')||'/'||jsonb_array_length(l.content -> 'lessons')
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T el ok';
+insert into results (check_name, expected, actual) select 'EL the content is the blocks rebuilt: trimmed, without lesson or summary', 'true/true/false/false',
+  ((l.content #> '{lessons,0,blocks,0}') = '{"block":"text","id":"b0001","h":"Where?","t":"For services between businesses VAT is due where the customer is established."}'::jsonb)::text||'/'||
+  ((l.content #>> '{lessons,1,title}') = 'Reverse charge')::text||'/'||(l.content::text like '%"lesson"%')::text||'/'||(l.content::text like '%The invoice"%' and l.content::text like '%B2B and B2C%')::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T el ok';
+insert into results (check_name, expected, actual) select 'EL 60 min counts 1 h and ai_assisted makes it AI made', '1.00/true', l.hours||'/'||l.ai_made
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T el ai';
+-- a learner completes the published course themselves (is_self_complete) through save_learning, with its progress detail
+select set_config('test.el_l', (select learning_id from public.contributions where title = 'T el ok'), true);
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+select public.save_learning(current_setting('test.el_l'), p_state => 'accepted', p_pct => 100::smallint, p_detail => '{"seen":[0,1],"best":100}');
+insert into results (check_name, expected, actual) select 'EL a learner sets the published course accepted through save_learning', 'accepted/[0, 1]', state||'/'||(detail -> 'seen')::text
+  from public.learner_learnings where user_id = '00000000-0000-0000-0000-0000000000ab' and learning_id = current_setting('test.el_l');
+do $$ begin
+  begin perform private.course_ok('[]'::jsonb);
+    insert into results (check_name, expected, actual) values ('EL a signed-in user cannot call course_ok', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EL a signed-in user cannot call course_ok', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
+insert into results (check_name, expected, actual) select 'EL the course cap is 252 items and the minimum 2 lessons', '252/2', private.item_max('E-learning')||'/'||private.studio_min_items('elearn', 'E-learning');
+insert into results (check_name, expected, actual) select 'EL items_ok reads the example as a course and rejects a block that is not an object', 'true/false', private.items_ok('E-learning', current_setting('test.el_items')::jsonb)||'/'||private.items_ok('E-learning', pg_temp.el_items(p_extra => '["stray"]'));
 reset role;
 select check_name, expected, actual, case when actual like expected||'%' or (expected='blocked' and actual like 'blocked%') then 'PASS' else 'FAIL' end as result from results order by n;
 rollback;

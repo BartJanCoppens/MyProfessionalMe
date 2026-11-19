@@ -1,3 +1,4 @@
+import type { CourseRule, PublicBlock } from './logic/courseContent';
 import type { GameReviewStatus } from './logic/gameContent';
 import type { DraftItems } from './logic/items';
 import type { BuildStepState } from './logic/studioBuild';
@@ -114,7 +115,9 @@ export type AvatarContent = { kind: 'avatar'; persona: string; situation: string
   quiz: { q: string; opts: string[]; a: 0 }[]; look: { id: string; name: string; portrait: PortraitKey; color: string } | null; voice: { id: string; name: string } | null;
   language: 'English' | 'Dutch' | 'French'; difficulty: 'Gentle' | 'Realistic' | 'Tough'; minutes: 5 | 10 | 15; scoring: 'AI scores, counsellor confirms' | 'Practice only';
   counterpart: string; made: 'ai' | 'scripted' };
-export type FormatContent = AvatarContent | FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent | ReelContent;
+// A published E-learning course (src/logic/courseContent.ts): lessons of blocks without their index, and how it completes.
+export type CourseContent = { kind: 'course'; lessons: { title: string; blocks: PublicBlock[] }[]; rule: CourseRule };
+export type FormatContent = CourseContent | AvatarContent | FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent | ReelContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
 export type View = 'constellation' | 'radar' | 'road';
@@ -251,6 +254,7 @@ export type DetailOf = {
   horizon: { last?: boolean };                 // the last slide of the route reached
   slides: { last?: boolean };                  // the last slide finished playing
   podcast: { last?: boolean };                 // the last chapter or turn finished playing
+  course: { seen: number[]; best?: number };   // the lessons seen (indexes from 0); the best score of the scored blocks, in percent
 };
 export type LearningDetail = Partial<DetailOf[keyof DetailOf]>;
 

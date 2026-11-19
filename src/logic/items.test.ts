@@ -1,10 +1,11 @@
 // Flash cards and practice exams made in Create & share: items from passages, CSV and AI, and the content they publish as.
 import { describe, expect, it } from 'vitest';
-import { CREATE_TYPES, TYPE_NAMES } from './contribution';
+import { CREATE_TYPES, PENDING_STUDIOS, TYPE_NAMES } from './contribution';
 import { studioFormats } from './studios';
 import { STUDIOS } from '../studioData';
 import { parseFormatContent } from '../lib/contentStore';
-import { cardsFromPassages, itemRows, itemsCheck, itemsFromSaved, noItems, aiAssisted, parseCsv, parseDraftItems } from './items';
+import type { Item } from './items';
+import { ITEM_MAX, cardsFromPassages, itemRows, itemsCheck, itemsFromSaved, noItems, aiAssisted, parseCsv, parseDraftItems } from './items';
 import type { ExamQuestion } from '../types';
 import { latestMatch } from '../test/migrations';
 
@@ -140,7 +141,7 @@ describe('hardening', () => {
 });
 
 const quoted = (list: string) => Array.from(list.matchAll(/'([^']*)'/g), (x) => x[1]);
-const NEW_FORMATS = ['Avatar', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise'];
+const NEW_FORMATS = ['Avatar', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Case exercise', 'E-learning'];
 
 describe('format lists', () => {
   it('the latest creation-rule, review-requirement and contribution checks in SQL list exactly the contribution formats', () => {
@@ -156,10 +157,17 @@ describe('format lists', () => {
     STUDIOS.forEach((d) => studioFormats(d).forEach((f) => expect(TYPE_NAMES).toContain(f)));
     expect(TYPE_NAMES).not.toContain('Avatar scenario');
   });
+  it('E-learning is made only in its studio: not an upload format, but a contribution format with 252 items', () => {
+    expect(TYPE_NAMES).toContain('E-learning');
+    expect(CREATE_TYPES.map((t) => t[0])).not.toContain('E-learning');
+    expect(ITEM_MAX['E-learning']).toBe(252);
+    expect(latestMatch(/\('E-learning', (\d+)\)/)[1]).toBe('252');
+  });
   it('private.studio_min_items lists what each studio makes and its minimum, as STUDIOS does', () => {
     const body = latestMatch(/create (?:or replace )?function private\.studio_min_items\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
     const rows = Array.from(body.matchAll(/\('([a-z]+)', '([^']+)', (\d+)\)/g), (m) => [m[1], m[2], +m[3]]);
-    expect(rows).toEqual(STUDIOS.flatMap((d) => studioFormats(d).map((f) => [d.id, f, d.min])));
+    const made = STUDIOS.flatMap((d) => studioFormats(d).map((f) => [d.id, f, d.min]));
+    expect(rows).toEqual([...made, ...PENDING_STUDIOS.filter((p) => !made.some((m) => m[0] === p[0]))]);
   });
 });
 
@@ -170,5 +178,18 @@ describe('the Interactive explainer\'s items', () => {
     expect(itemsFromSaved('Interactive explainer', [['Supplier', 'Creates it.'], { ...q, o: 'x' }])).toEqual([]);
     expect(itemsFromSaved('Job aid', [['Before', 'x'], q])).toEqual([]);
     expect(itemRows('Interactive explainer', [['Supplier', 'Creates it.'], q])).toEqual([{ front: 'Supplier', back: 'Creates it.' }, { front: 'Who checks the format?', back: 'Answer: b · The access point.' }]);
+  });
+});
+
+describe('an E-learning course\'s items', () => {
+  const rows: Item[] = [['Lesson 1', 'First', 'Summary'], ['Lesson 2', 'Second', 'Summary']];
+  const block: Item = { block: 'text', id: 'b0001', lesson: 0, h: '', t: 'Words.' };
+  it('holds lesson rows and, after them, block objects, read back strictly', () => {
+    expect(itemsFromSaved('E-learning', [...rows, block])).toEqual([...rows, block]);
+    expect(itemsFromSaved('E-learning', [...rows, { svg: 'x' }])).toEqual([]);
+    expect(itemsFromSaved('Job aid', [...rows, block])).toEqual([]);
+  });
+  it('shows a reviewer a row per lesson', () => {
+    expect(itemRows('E-learning', [...rows, block]).map((r) => r.front).slice(0, 2)).toEqual(['Lesson 1', 'Lesson 2']);
   });
 });
