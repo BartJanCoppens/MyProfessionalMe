@@ -1,6 +1,6 @@
 // What editing a course's lessons does to its blocks (E-learning Studio, Task 1.2; 1.3 adds the block edits). A block names its lesson by index from 0,
 // so removing or moving a lesson row has to move its blocks too. Pure.
-import { COURSE_CAPS, isCourseBlock, shapeProblem } from './courseContent';
+import { COURSE_CAPS, courseImagePaths, isCourseBlock, shapeProblem } from './courseContent';
 import type { BlockKind, CourseBlock, EmbedBlock, EmbedFormat } from './courseContent';
 import type { StudioEntry } from './studios';
 
@@ -58,6 +58,8 @@ export function newBlock(kind: Exclude<BlockKind, 'embed'>, lesson: number, titl
     case 'branch': return { ...base, block: 'branch', q: '', choices: [['', '', true], ['', '', false]] };
     case 'reflect': return { ...base, block: 'reflect', p: '' };
     case 'exercise': return { ...base, block: 'exercise', q: '', a: 0, tol: 0, unit: '' };
+    case 'image': return { ...base, block: 'image', path: '', alt: '', cap: '' };
+    case 'hotspot': return { ...base, block: 'hotspot', path: '', alt: '', cap: '', spots: [[25, 50, '', ''], [75, 50, '', '']] };
   }
 }
 
@@ -97,6 +99,13 @@ export function duplicateBlock(items: StudioEntry[], id: string): StudioEntry[] 
   copy.id = blockId();
   return [...items.slice(0, i + 1), copy, ...items.slice(i + 1)];
 }
+
+// The image files `before` names that `after` no longer does: the files to remove once an edit (a removed block or lesson, a replaced image) is made. A file
+// that another block still names (a duplicated image) stays.
+export const orphanedImages = (before: StudioEntry[], after: StudioEntry[]): string[] => {
+  const kept = new Set(courseImagePaths(after));
+  return [...new Set(courseImagePaths(before))].filter((p) => !kept.has(p));
+};
 
 export const removeBlock = (items: StudioEntry[], id: string): StudioEntry[] => items.filter((x) => !(isCourseBlock(x) && x.id === id));
 export const patchBlock = (items: StudioEntry[], id: string, patch: Partial<CourseBlock>): StudioEntry[] =>

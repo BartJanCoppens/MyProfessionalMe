@@ -4,9 +4,10 @@
 // (courseContent.sync.test.ts pins the caps and every sentence). A knowledge check is an exam question (isQuestion, private.question_ok).
 import type { CourseContent, ExamQuestion } from '../types';
 import { ITEM_MAX, fieldOk, isQuestion, readQuestions } from './items';
+import { MEDIA_PATH } from './mediaFiles';
 import { stepsOf } from './studioRows';
 
-export const BLOCK_KINDS = ['text', 'callout', 'accordion', 'check', 'sort', 'branch', 'reflect', 'exercise', 'embed'] as const;
+export const BLOCK_KINDS = ['text', 'callout', 'accordion', 'check', 'sort', 'branch', 'reflect', 'exercise', 'embed', 'image', 'hotspot'] as const;
 export type BlockKind = typeof BLOCK_KINDS[number];
 // The blocks that score a learner (a reflection and a branching scenario do not): the completion score and the score line count these.
 export const SCORED_KINDS: readonly BlockKind[] = ['check', 'sort', 'exercise'];
@@ -16,9 +17,12 @@ export const EMBED_FORMATS = ['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'An
 export type EmbedFormat = typeof EMBED_FORMATS[number];
 export const EMBED_ON_PAGE: readonly EmbedFormat[] = ['Avatar', 'Case exercise'];
 export const EMBED_LEARNING = /^(L[0-9]{1,6})?$/;
+// A course's picture: a path of the media bucket that ends in one of the image types ('' while none is added).
+export const IMAGE_PATH = new RegExp(MEDIA_PATH.source.slice(0, -1) + '\\.(png|jpg|jpeg|webp)$');
 export const BLOCK_ID = /^b[0-9a-z]{4,20}$/;
 export const COURSE_CAPS = { lessons: [2, 12], blocksPerLesson: 20, heading: 120, text: 4000, callout: 600, panels: [2, 8], panelTitle: 120, panelBody: 1200,
-  cards: [2, 10], bin: 40, card: 160, choices: [2, 4], choice: 200, outcome: 400, prompt: 400, unit: 12, bytes: 250000, number: 1e15 } as const;
+  cards: [2, 10], bin: 40, card: 160, choices: [2, 4], choice: 200, outcome: 400, prompt: 400, unit: 12, bytes: 250000, number: 1e15,
+  alt: 600, caption: 200, spots: [2, 8], spotTitle: 120, spotText: 600 } as const;
 const C = COURSE_CAPS;
 
 type Base<K extends BlockKind> = { block: K; id: string; lesson: number };
@@ -32,7 +36,12 @@ export type ReflectBlock = Base<'reflect'> & { p: string };
 export type ExerciseBlock = Base<'exercise'> & { q: string; a: number; tol: number; unit: string };
 // An embedded learning (Phase 2): a published learning of another studio, played in the course; `learning` is '' until the creator picks it.
 export type EmbedBlock = Base<'embed'> & { format: EmbedFormat; learning: string };
-export type CourseBlock = TextBlock | CalloutBlock | AccordionBlock | CheckBlock | SortBlock | BranchBlock | ReflectBlock | ExerciseBlock | EmbedBlock;
+// A picture (Phase 2): `path` is its file in the contribution's own folder of the media bucket, '' until the creator adds it; `alt` is read aloud by screen readers.
+// A hotspot is a picture with 2 to 8 points [x, y, title, text], x and y in percent of the picture (0 to 100).
+type PictureBlock<K extends BlockKind> = Base<K> & { path: string; alt: string; cap: string };
+export type ImageBlock = PictureBlock<'image'>;
+export type HotspotBlock = PictureBlock<'hotspot'> & { spots: [x: number, y: number, title: string, text: string][] };
+export type CourseBlock = TextBlock | CalloutBlock | AccordionBlock | CheckBlock | SortBlock | BranchBlock | ReflectBlock | ExerciseBlock | EmbedBlock | ImageBlock | HotspotBlock;
 type WithoutLesson<T> = T extends unknown ? Omit<T, 'lesson'> : never;
 export type PublicBlock = WithoutLesson<CourseBlock>;
 
@@ -54,15 +63,18 @@ export const WORDS = {
   noLesson: 'A block points to a lesson that does not exist', lessonsFirst: 'Put every lesson before the blocks', tooManyLessons: 'Keep at most ' + C.lessons[1] + ' lessons',
   tooBig: 'The course is too large: shorten some text', sortGroup: 'give every item a group', branchGood: 'mark at least one good choice',
   noScoredBlock: 'Add a block that scores (a knowledge check, a sort or a calculation), or choose “All lessons viewed” in Shape it',
+  addImage: 'add the image', writeAlt: 'write the alt text (read aloud by screen readers)',
 };
 export const KIND_NAME: Record<BlockKind, string> = { text: 'Text', callout: 'Callout', accordion: 'Accordion', check: 'Knowledge check', sort: 'Sort into groups',
-  branch: 'Branching scenario', reflect: 'Reflection', exercise: 'Calculation exercise', embed: 'Embedded learning' };
+  branch: 'Branching scenario', reflect: 'Reflection', exercise: 'Calculation exercise', embed: 'Embedded learning', image: 'Image', hotspot: 'Hotspot image' };
 export const SHAPE_RULE: Record<BlockKind, string> = {
   text: 'keep the heading to 120 characters and write the text, up to 4000', callout: 'write the callout, up to 600 characters',
   accordion: 'give 2 to 8 panels, each with a title and a text', check: 'give four options, the right answer and why',
   sort: 'give a prompt, two group names and 2 to 10 items', branch: 'give a question and 2 to 4 choices, each with its reply and whether it is good',
   reflect: 'write the prompt for the learner, up to 400 characters', exercise: 'give a question, the right number, the tolerance (0 or more) and a unit of up to 12 characters',
   embed: 'pick one of the formats and a learning from the library',
+  image: 'add a .png, .jpg, .jpeg or .webp image, alt text up to 600 characters and a caption up to 200',
+  hotspot: 'give 2 to 8 points, each placed on the image (0 to 100 %) with a title and a text',
 };
 
 // A decimal comma read as a point when it is the only separator and 1 or 2 digits follow ("2,5" is 2.5; "2,519" stays a thousands comma).
@@ -76,6 +88,9 @@ const sortShape = (b: Raw) => fieldOk(C.prompt)(b.p) && within(b.bins, [2, 2]) &
   && b.cards.every((c: unknown) => Array.isArray(c) && fieldOk(C.card)(c[0]));
 const branchShape = (b: Raw) => fieldOk(C.prompt)(b.q) && within(b.choices, C.choices) && b.choices.every((c: unknown) => Array.isArray(c) && c.length === 3
   && fieldOk(C.choice)(c[0]) && fieldOk(C.outcome)(c[1]) && typeof c[2] === 'boolean');
+const pct = (v: unknown): v is number => typeof v === 'number' && v >= 0 && v <= 100;
+// The picture's own fields: no file yet or a stored image, alt text and caption within their caps (a blank alt text is the check's to ask for).
+const pictureShape = (b: Raw) => typeof b.path === 'string' && (b.path === '' || IMAGE_PATH.test(b.path)) && typeof b.alt === 'string' && b.alt.length <= C.alt && typeof b.cap === 'string' && b.cap.length <= C.caption;
 const SHAPE_OK: Record<BlockKind, (b: Raw) => boolean> = {
   text: (b) => typeof b.h === 'string' && b.h.length <= C.heading && fieldOk(C.text)(b.t),
   callout: (b) => fieldOk(C.callout)(b.t),
@@ -85,6 +100,8 @@ const SHAPE_OK: Record<BlockKind, (b: Raw) => boolean> = {
   reflect: (b) => fieldOk(C.prompt)(b.p),
   exercise: (b) => fieldOk(C.prompt)(b.q) && num(b.a) && num(b.tol) && b.tol >= 0 && typeof b.unit === 'string' && b.unit.length <= C.unit,
   embed: (b) => (EMBED_FORMATS as readonly unknown[]).includes(b.format) && typeof b.learning === 'string' && EMBED_LEARNING.test(b.learning),
+  image: pictureShape,
+  hotspot: (b) => pictureShape(b) && within(b.spots, C.spots) && b.spots.every((s: unknown) => Array.isArray(s) && s.length === 4 && pct(s[0]) && pct(s[1]) && fieldOk(C.spotTitle)(s[2]) && fieldOk(C.spotText)(s[3])),
 };
 // What is wrong with a block's own fields, or null: a sort wants every card in group 0 or 1, a branch at least one good choice.
 export function shapeProblem(b: Raw): string | null {
@@ -136,8 +153,22 @@ export function courseProblems(items: readonly unknown[], shape: Record<string, 
   const out = lessonsOf(items).flatMap((l, k) => (l.blocks.length ? [] : ['Lesson ' + (k + 1) + ' “' + l.title.trim() + '” has no blocks yet']));
   const scored = items.filter((b) => isCourseBlock(b) && SCORED_KINDS.includes(b.block)).length;
   if (scored === 0 && courseRule(shape) !== 'seen') out.push(WORDS.noScoredBlock);
-  return out;
+  return [...out, ...imageProblems(items)];
 }
+
+const isPicture = (b: CourseBlock): b is ImageBlock | HotspotBlock => b.block === 'image' || b.block === 'hotspot';
+// The picture blocks of a course's items, in order.
+const picturesOf = (items: readonly unknown[]) => items.filter(isCourseBlock).filter(isPicture);
+// A block with no file yet, or with no alt text (the alt text is required before sending: private.contribution_problems says the same).
+function imageProblems(items: readonly unknown[]): string[] {
+  const out = picturesOf(items).flatMap((b) => {
+    const at = 'Lesson ' + (b.lesson + 1) + ' · ' + KIND_NAME[b.block] + ': ';
+    return [...(b.path === '' ? [at + WORDS.addImage] : []), ...(b.alt.trim() === '' ? [at + WORDS.writeAlt] : [])];
+  });
+  return [...new Set(out)];
+}
+// The image files a course names, in order (a block with no file yet names none): the files that must be in the contribution's folder and in Storage.
+export const courseImagePaths = (items: readonly unknown[]): string[] => picturesOf(items).map((b) => b.path).filter((p) => p !== '');
 
 // Whether a published learning of that format exists (never a title: the database says no more than this either).
 export type EmbedAvailable = (learning: string, format: string) => boolean;
@@ -164,6 +195,8 @@ export function publicBlock(b: CourseBlock): PublicBlock {
     case 'reflect': return { block: 'reflect', id: b.id, p: t(b.p) };
     case 'exercise': return { block: 'exercise', id: b.id, q: t(b.q), a: b.a, tol: b.tol, unit: b.unit.trim() };
     case 'embed': return { block: 'embed', id: b.id, format: b.format, learning: b.learning };
+    case 'image': return { block: 'image', id: b.id, path: b.path, alt: t(b.alt), cap: t(b.cap) };
+    case 'hotspot': return { block: 'hotspot', id: b.id, path: b.path, alt: t(b.alt), cap: t(b.cap), spots: b.spots.map(([x, y, title, text]) => [x, y, t(title), t(text)]) };
   }
 }
 
@@ -176,7 +209,7 @@ export function courseContent(items: readonly unknown[], shape: Record<string, s
 
 // Every text of a block, for the client-name check (the database scans the items as text).
 const stringsOf = (v: unknown): string[] => (typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(stringsOf) : v && typeof v === 'object' ? Object.values(v).flatMap(stringsOf) : []);
-export const blockTexts = (b: CourseBlock): string[] => stringsOf({ ...b, block: undefined, id: undefined });
+export const blockTexts = (b: CourseBlock): string[] => stringsOf({ ...b, block: undefined, id: undefined, path: undefined });
 // One line for a reviewer: where the block is and what it says first.
 export const courseBlockRow = (b: CourseBlock): { front: string; back: string } =>
   ({ front: 'Lesson ' + (b.lesson + 1) + ' · ' + KIND_NAME[b.block], back: (blockTexts(b)[0] ?? '').slice(0, 120) });

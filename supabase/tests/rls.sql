@@ -4455,6 +4455,123 @@ do $$ begin
   exception when others then insert into results (check_name, expected, actual) values ('EE a signed-in user cannot call course_embed_problems', 'blocked: 42501', 'blocked: '||sqlstate); end;
 end $$;
 reset role;
+-- ---------- Images and hotspots in a course (EI) ----------
+-- A course may hold {block:'image'|'hotspot', id, lesson, path, alt, cap[, spots]}. The file is a png, jpg, jpeg or webp of the contribution's own folder in the private
+-- `media` bucket (private.course_picture_ok), the check asks for the file and the alt text and refuses a file that is not in Storage
+-- (private.course_image_problems, private.media_files_missing); a learner reads it only once the published content names its path (private.can_read_media).
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, shape, items)
+ select 'Consulting','E-learning', t, 'prof', 'x', 'elearn', current_setting('test.el_shape')::jsonb, pg_temp.el_items()
+ from unnest(array['T ei ok','T ei other','T ei foreign','T ei gone','T ei blank','T ei svg','T ei hotspot','T ei review']) t returning 1)
+  insert into results (check_name, expected, actual) select 'EI a creator saves courses to hold pictures', '8 rows', count(*)||' rows' from i;
+reset role;
+select set_config('test.ei_ok', (select id::text from public.contributions where title = 'T ei ok'), true),
+       set_config('test.ei_other', (select id::text from public.contributions where title = 'T ei other'), true),
+       set_config('test.ei_gone', (select id::text from public.contributions where title = 'T ei gone'), true),
+       set_config('test.ei_hot', (select id::text from public.contributions where title = 'T ei hotspot'), true),
+       set_config('test.ei_rev', (select id::text from public.contributions where title = 'T ei review'), true);
+select set_config('test.ei_a', '00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_ok')||'/invoice.png', true),
+       set_config('test.ei_spare', '00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_ok')||'/spare.png', true),
+       set_config('test.ei_o', '00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_other')||'/invoice.png', true),
+       set_config('test.ei_g', '00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_gone')||'/invoice.png', true),
+       set_config('test.ei_h', '00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_hot')||'/map.webp', true),
+       set_config('test.ei_r', '00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_rev')||'/invoice.png', true);
+create function pg_temp.ei_image(p_path text, p_alt text default 'An invoice with the VAT line') returns jsonb language sql as $f$
+  select pg_temp.el_items(p_extra => jsonb_build_array(jsonb_build_object('block', 'image', 'id', 'b0030', 'lesson', 1, 'path', p_path, 'alt', p_alt, 'cap', 'A Belgian invoice'))) $f$;
+create function pg_temp.ei_hotspot(p_spots jsonb) returns jsonb language sql as $f$
+  select pg_temp.el_items(p_extra => jsonb_build_array(jsonb_build_object('block', 'hotspot', 'id', 'b0031', 'lesson', 1, 'path', current_setting('test.ei_h'), 'alt', 'An invoice', 'cap', '', 'spots', p_spots))) $f$;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+-- the author uploads the pictures of their own drafts, and reads them
+with i as (insert into storage.objects (bucket_id, name) values ('media', current_setting('test.ei_a')), ('media', current_setting('test.ei_spare')), ('media', current_setting('test.ei_o')),
+    ('media', current_setting('test.ei_g')), ('media', current_setting('test.ei_h')), ('media', current_setting('test.ei_r')) returning 1)
+  insert into results (check_name, expected, actual) select 'EI the author uploads pictures of their drafts under their own id', '6 rows', count(*)||' rows' from i;
+insert into results (check_name, expected, actual) select 'EI the author reads their picture', '1', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.ei_a');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000eb","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'EI another creator cannot read it while the course is a draft', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.ei_a');
+do $$ begin
+  begin insert into storage.objects (bucket_id, name) values ('media', '00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_ok')||'/intruder.png');
+    insert into results (check_name, expected, actual) values ('EI another creator cannot put a picture into the author''s folder', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EI another creator cannot put a picture into the author''s folder', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+-- the check
+select pg_temp.el_set('T ei ok', pg_temp.ei_image(current_setting('test.ei_a')));
+insert into results (check_name, expected, actual) select 'EI a course with a picture in its own folder passes the check', '', pg_temp.el_problems('T ei ok');
+select pg_temp.el_set('T ei other', pg_temp.ei_image(current_setting('test.ei_o')));
+select pg_temp.el_set('T ei foreign', pg_temp.ei_image(current_setting('test.ei_o')));
+insert into results (check_name, expected, actual) select 'EI a course naming a picture of another contribution is refused', 'An image is not there · add it again', pg_temp.el_problems('T ei foreign');
+select pg_temp.el_set('T ei foreign', pg_temp.ei_image('00000000-0000-0000-0000-0000000000eb/'||current_setting('test.ei_other')||'/invoice.png'));
+insert into results (check_name, expected, actual) select 'EI nor one in another author''s folder', 'An image is not there · add it again', pg_temp.el_problems('T ei foreign');
+select pg_temp.el_set('T ei foreign', pg_temp.ei_image('00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_other')||'/missing.png'));
+insert into results (check_name, expected, actual) select 'EI nor one that is not in Storage', 'An image is not there · add it again', pg_temp.el_problems('T ei foreign');
+select pg_temp.el_set('T ei blank', pg_temp.ei_image('', ' '));
+insert into results (check_name, expected, actual) select 'EI no file and no alt text are asked for, in that order', 'Lesson 2 · Image: add the image|Lesson 2 · Image: write the alt text (read aloud by screen readers)', pg_temp.el_problems('T ei blank');
+select pg_temp.el_set('T ei blank', pg_temp.ei_image(current_setting('test.ei_a'), '  '));
+insert into results (check_name, expected, actual) select 'EI a blank alt text is refused though the file is there', 'Lesson 2 · Image: write the alt text (read aloud by screen readers)', pg_temp.el_problems('T ei blank');
+select pg_temp.el_set('T ei svg', pg_temp.ei_image('00000000-0000-0000-0000-0000000000ea/'||current_setting('test.ei_ok')||'/logo.svg'));
+insert into results (check_name, expected, actual) select 'EI a path that is not a png, jpg, jpeg or webp is refused as a block', 'Lesson 2 · Image: add a .png, .jpg, .jpeg or .webp image, alt text up to 600 characters and a caption up to 200', pg_temp.el_problems('T ei svg');
+select pg_temp.el_set('T ei svg', pg_temp.ei_image('https://x.test/a.png'));
+insert into results (check_name, expected, actual) select 'EI a URL is not a picture', 'Lesson 2 · Image: add a .png, .jpg, .jpeg or .webp image, alt text up to 600 characters and a caption up to 200', pg_temp.el_problems('T ei svg');
+select pg_temp.el_set('T ei svg', pg_temp.ei_image(current_setting('test.ei_a'), repeat('x', 601)));
+insert into results (check_name, expected, actual) select 'EI alt text over 600 characters is refused', 'Lesson 2 · Image: add a .png, .jpg, .jpeg or .webp image, alt text up to 600 characters and a caption up to 200', pg_temp.el_problems('T ei svg');
+-- hotspots
+select pg_temp.el_set('T ei hotspot', pg_temp.ei_hotspot('[[30,40,"VAT number","The supplier"],[65.5,60,"Amount","Zero"]]'));
+insert into results (check_name, expected, actual) select 'EI a hotspot with two points inside the picture passes the check', '', pg_temp.el_problems('T ei hotspot');
+select pg_temp.el_set('T ei hotspot', pg_temp.ei_hotspot('[[120,40,"VAT number","The supplier"],[65,60,"Amount","Zero"]]'));
+insert into results (check_name, expected, actual) select 'EI a point at x 120 is refused', 'Lesson 2 · Hotspot image: give 2 to 8 points, each placed on the image (0 to 100 %) with a title and a text', pg_temp.el_problems('T ei hotspot');
+select pg_temp.el_set('T ei hotspot', pg_temp.ei_hotspot('[[30,-1,"VAT number","The supplier"],[65,60,"Amount","Zero"]]'));
+insert into results (check_name, expected, actual) select 'EI a negative point is refused', 'Lesson 2 · Hotspot image: give 2 to 8 points, each placed on the image (0 to 100 %) with a title and a text', pg_temp.el_problems('T ei hotspot');
+select pg_temp.el_set('T ei hotspot', pg_temp.ei_hotspot('[[30,40,"VAT number","The supplier"],["65",60,"Amount","Zero"]]'));
+insert into results (check_name, expected, actual) select 'EI a point that is not a number is refused', 'Lesson 2 · Hotspot image: give 2 to 8 points, each placed on the image (0 to 100 %) with a title and a text', pg_temp.el_problems('T ei hotspot');
+select pg_temp.el_set('T ei hotspot', pg_temp.ei_hotspot('[[30,40,"VAT number","The supplier"]]'));
+insert into results (check_name, expected, actual) select 'EI a hotspot with one point is refused', 'Lesson 2 · Hotspot image: give 2 to 8 points, each placed on the image (0 to 100 %) with a title and a text', pg_temp.el_problems('T ei hotspot');
+select pg_temp.el_set('T ei hotspot', pg_temp.ei_hotspot('[[1,1,"A","a"],[2,2,"B","b"],[3,3,"C","c"],[4,4,"D","d"],[5,5,"E","e"],[6,6,"F","f"],[7,7,"G","g"],[8,8,"H","h"],[9,9,"I","i"]]'));
+insert into results (check_name, expected, actual) select 'EI a hotspot with nine points is refused', 'Lesson 2 · Hotspot image: give 2 to 8 points, each placed on the image (0 to 100 %) with a title and a text', pg_temp.el_problems('T ei hotspot');
+select pg_temp.el_set('T ei hotspot', pg_temp.ei_hotspot('[[30,40,"VAT number","The supplier"],[65,60,"Amount",""]]'));
+insert into results (check_name, expected, actual) select 'EI a point without its text is refused', 'Lesson 2 · Hotspot image: give 2 to 8 points, each placed on the image (0 to 100 %) with a title and a text', pg_temp.el_problems('T ei hotspot');
+-- a picture deleted from Storage after the check is refused at submit
+select pg_temp.el_set('T ei gone', pg_temp.ei_image(current_setting('test.ei_g')));
+insert into results (check_name, expected, actual) select 'EI a course passes its check while its picture is in Storage', '{}', public.check_contribution((select id from public.contributions where title = 'T ei gone'))::text;
+set local storage.allow_delete_query = 'true';
+with d as (delete from storage.objects where bucket_id = 'media' and name = current_setting('test.ei_g') returning 1)
+  insert into results (check_name, expected, actual) select 'EI the author removes the picture of their draft', '1 rows', count(*)||' rows' from d;
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T ei gone'));
+    insert into results (check_name, expected, actual) values ('EI a picture removed between the check and the submit makes submit refuse', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EI a picture removed between the check and the submit makes submit refuse', 'blocked: P0001', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'EI submit says the picture is not there', 'An image is not there · add it again', pg_temp.el_problems('T ei gone');
+-- the bucket takes the three image types and not svg
+reset role;
+insert into results (check_name, expected, actual) select 'EI the media bucket takes png, jpeg and webp and not svg', 'true/false', (allowed_mime_types @> '{image/png,image/jpeg,image/webp}')::text||'/'||(allowed_mime_types @> '{image/svg+xml}')::text
+  from storage.buckets where id = 'media';
+-- published: a learner reads the picture the content names, and no other file of the folder
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'EI the course with the picture is submitted and published', 'published', public.submit_contribution((select id from public.contributions where title = 'T ei ok'));
+insert into results (check_name, expected, actual) select 'EI the published content keeps {block, id, path, alt, cap}, without lesson', 'true/false', ((l.content #> '{lessons,1,blocks}') @> jsonb_build_array(jsonb_build_object('block','image','id','b0030','path', current_setting('test.ei_a'),'alt','An invoice with the VAT line','cap','A Belgian invoice')))::text||'/'||(l.content #>> '{lessons,1,blocks}' like '%"lesson"%')::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T ei ok';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}';
+insert into results (check_name, expected, actual) select 'EI after publishing a learner reads the picture the content names', '1', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.ei_a');
+insert into results (check_name, expected, actual) select 'EI but not another file of the same folder', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.ei_spare');
+insert into results (check_name, expected, actual) select 'EI nor a picture of a draft', '0', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.ei_o');
+-- sent for review: the assigned peer reads the picture
+reset role;
+update public.review_policies set peers = 1 where formats = '{E-learning}';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+select pg_temp.el_set('T ei review', pg_temp.ei_image(current_setting('test.ei_r')));
+insert into results (check_name, expected, actual) select 'EI a course with a picture goes to one peer', '{}/review', public.check_contribution(current_setting('test.ei_rev')::uuid)::text||'/'||public.submit_contribution(current_setting('test.ei_rev')::uuid);
+reset role;
+select set_config('test.ei_peer', (select reviewer_id::text from public.contribution_reviews where contribution_id = current_setting('test.ei_rev')::uuid), true);
+update public.review_policies set peers = 0 where formats = '{E-learning}';
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('test.ei_peer'), 'role', 'authenticated')::text, true);
+insert into results (check_name, expected, actual) select 'EI the assigned reviewer reads the picture once the course is sent', '1', count(*)::text from storage.objects where bucket_id = 'media' and name = current_setting('test.ei_r');
+reset role;
 -- CR: reflections in a course are read and written by the learner alone (no counsellor, admin or View as branch)
 select set_config('request.jwt.claims', '', true);
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000c0001','t.reflector@test.local'), ('00000000-0000-0000-0000-0000000c0002','t.reflcounsellor@test.local'), ('00000000-0000-0000-0000-0000000c0003','t.refldomain@test.local'), ('00000000-0000-0000-0000-0000000c0004','t.reflgeneral@test.local'), ('00000000-0000-0000-0000-0000000c0005','t.reflother@test.local');

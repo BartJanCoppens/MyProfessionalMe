@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCK_ID, BLOCK_KINDS, COURSE_CAPS, courseRowProblems, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
-import { addLesson, blockId, dropLesson, duplicateBlock, insertBlock, keepBlocks, missingOf, moveBlock, moveLesson, newBlock, newEmbed, patchBlock, removeBlock, removeLesson, renameLesson, seedLessons } from './courseEdit';
+import { addLesson, blockId, dropLesson, duplicateBlock, insertBlock, keepBlocks, missingOf, moveBlock, moveLesson, newBlock, newEmbed, orphanedImages, patchBlock, removeBlock, removeLesson, renameLesson, seedLessons } from './courseEdit';
 import type { StudioEntry } from './studios';
 
 const Q = { t: 'Place', q: 'Where?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because.' };
@@ -185,6 +185,29 @@ describe('lessons', () => {
     expect(removeLesson(own, 0).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Week two', 'Lesson 2']);
     expect(moveLesson(rows(), 0, 1).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3']);
     expect(dropLesson(rows(), 0).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Lesson 1', 'Lesson 2']);
+  });
+});
+
+describe('images in a course', () => {
+  const P1 = '0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7/b0071.png', P2 = P1.replace('b0071', 'b0072');
+  const image = (id: string, lesson: number, path: string) => ({ block: 'image', id, lesson, path, alt: 'A', cap: '' }) as CourseBlock;
+  const list = (): StudioEntry[] => [['Lesson 1', 'One', ''], ['Lesson 2', 'Two', ''], ['Lesson 3', 'Three', ''], image('b0071', 0, P1), image('b0072', 1, P2), text('b0073', 1)];
+  it('starts an image with no file, no alt text and no caption, and a hotspot with two points to place', () => {
+    expect(newBlock('image', 1)).toMatchObject({ block: 'image', lesson: 1, path: '', alt: '', cap: '' });
+    expect(newBlock('hotspot', 0)).toMatchObject({ block: 'hotspot', path: '', alt: '', cap: '', spots: [[25, 50, '', ''], [75, 50, '', '']] });
+  });
+  it('names the files an edit leaves behind: a removed block, a removed lesson, a replaced file', () => {
+    expect(orphanedImages(list(), removeBlock(list(), 'b0071'))).toEqual([P1]);
+    expect(orphanedImages(list(), removeLesson(list(), 1))).toEqual([P2]);
+    expect(orphanedImages(list(), patchBlock(list(), 'b0071', { path: P2 } as Partial<CourseBlock>))).toEqual([P1]);
+    expect(orphanedImages(list(), patchBlock(list(), 'b0071', { alt: 'B' } as Partial<CourseBlock>))).toEqual([]);
+    expect(orphanedImages(list(), list())).toEqual([]);
+  });
+  it('keeps a file another block still uses (a duplicated image)', () => {
+    const twice = duplicateBlock(list(), 'b0071');
+    const copy = twice.find((x) => !Array.isArray(x) && (x as CourseBlock).id !== 'b0071' && (x as CourseBlock).block === 'image' && (x as { path: string }).path === P1) as CourseBlock;
+    expect(orphanedImages(twice, removeBlock(twice, 'b0071'))).toEqual([]);
+    expect(orphanedImages(twice, removeBlock(removeBlock(twice, 'b0071'), copy.id))).toEqual([P1]);
   });
 });
 

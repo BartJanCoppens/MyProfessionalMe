@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMBED_FORMATS, COURSE_CAPS, embedProblems, publicBlock, COURSE_HOURS, WORDS, courseContent, courseHours, courseProblems, courseRowProblems, courseRule, decimalPoint, isCourseBlock, jsonbText, lessonsOf } from './courseContent';
+import { EMBED_FORMATS, COURSE_CAPS, courseBlockRow, courseImagePaths, embedProblems, publicBlock, COURSE_HOURS, WORDS, courseContent, courseHours, courseProblems, courseRowProblems, courseRule, decimalPoint, isCourseBlock, jsonbText, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
 import type { StudioEntry } from './studios';
 
@@ -177,3 +177,54 @@ describe('embedded learnings', () => {
   });
 });
 
+
+describe('images and hotspots', () => {
+  const PATH = '0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7/b0001.png';
+  const image = (change: Record<string, unknown> = {}): CourseBlock => ({ block: 'image', id: 'b0080', lesson: 1, path: PATH, alt: 'An invoice with the VAT line', cap: 'A Belgian invoice', ...change } as CourseBlock);
+  const hotspot = (change: Record<string, unknown> = {}): CourseBlock => ({ block: 'hotspot', id: 'b0081', lesson: 1, path: PATH, alt: 'An invoice', cap: '', spots: [[30, 40, 'VAT number', 'The supplier'], [65, 60.5, 'Amount', 'Zero']], ...change } as CourseBlock);
+  const base = (): StudioEntry[] => [lesson(1, 'One'), lesson(2, 'Two'), { block: 'text', id: 'b0079', lesson: 0, h: '', t: 'First.' } as CourseBlock];
+  it('accepts an image with its stored file, alt text and caption, and one not added yet', () => {
+    expect(courseRowProblems([...base(), image(), hotspot()])).toEqual([]);
+    expect(courseRowProblems([...base(), image({ path: '', alt: '', cap: '' })])).toEqual([]);
+  });
+  it('refuses a path that is not a stored image (another folder shape, svg, a URL), and text over the caps', () => {
+    for (const path of ['b0001.png', PATH.replace('.png', '.svg'), PATH.replace('.png', '.PNG'), 'https://x.test/a.png', PATH + '/../x.png']) {
+      expect(courseRowProblems([...base(), image({ path })]), path).toEqual(['Lesson 2 · Image: add a .png, .jpg, .jpeg or .webp image, alt text up to 600 characters and a caption up to 200']);
+    }
+    for (const p of ['png', 'jpg', 'jpeg', 'webp']) expect(courseRowProblems([...base(), image({ path: PATH.replace('png', p) })]), p).toEqual([]);
+    expect(courseRowProblems([...base(), image({ alt: 'x'.repeat(601) })])).toHaveLength(1);
+    expect(courseRowProblems([...base(), image({ alt: 'x'.repeat(600), cap: 'y'.repeat(201) })])).toHaveLength(1);
+    expect(courseRowProblems([...base(), image({ alt: 'x'.repeat(600), cap: 'y'.repeat(200) })])).toEqual([]);
+  });
+  it('asks to add the image and to write the alt text, in the words of the database', () => {
+    expect(courseProblems([...base(), image({ path: '' })], {})).toEqual(['Lesson 2 · Image: add the image']);
+    expect(courseProblems([...base(), image({ alt: '  ' })], {})).toEqual(['Lesson 2 · Image: write the alt text (read aloud by screen readers)']);
+    expect(courseProblems([...base(), hotspot({ path: '', alt: '' })], {})).toEqual(['Lesson 2 · Hotspot image: add the image', 'Lesson 2 · Hotspot image: write the alt text (read aloud by screen readers)']);
+    expect(courseProblems([...base(), image(), hotspot()], {})).toEqual([]);
+  });
+  it('a hotspot needs 2 to 8 points, each inside the image (0 to 100 %) with a title and a text', () => {
+    const rule = 'Lesson 2 · Hotspot image: give 2 to 8 points, each placed on the image (0 to 100 %) with a title and a text';
+    expect(courseRowProblems([...base(), hotspot({ spots: [[10, 10, 'A', 'a']] })])).toEqual([rule]);
+    expect(courseRowProblems([...base(), hotspot({ spots: Array.from({ length: 9 }, (_, k) => [k, k, 'T' + k, 't'])})])).toEqual([rule]);
+    expect(courseRowProblems([...base(), hotspot({ spots: Array.from({ length: 8 }, (_, k) => [k * 10, 100, 'T' + k, 't'])})])).toEqual([]);
+    expect(courseRowProblems([...base(), hotspot({ spots: [[120, 10, 'A', 'a'], [10, 10, 'B', 'b']] })])).toEqual([rule]);
+    expect(courseRowProblems([...base(), hotspot({ spots: [[-1, 10, 'A', 'a'], [10, 10, 'B', 'b']] })])).toEqual([rule]);
+    expect(courseRowProblems([...base(), hotspot({ spots: [[10, 100.1, 'A', 'a'], [10, 10, 'B', 'b']] })])).toEqual([rule]);
+    expect(courseRowProblems([...base(), hotspot({ spots: [['10', 10, 'A', 'a'], [10, 10, 'B', 'b']] })])).toEqual([rule]);
+    expect(courseRowProblems([...base(), hotspot({ spots: [[NaN, 10, 'A', 'a'], [10, 10, 'B', 'b']] })])).toEqual([rule]);
+    expect(courseRowProblems([...base(), hotspot({ spots: [[0, 0, '', 'a'], [10, 10, 'B', 'b']] })])).toEqual([rule]);
+    expect(courseRowProblems([...base(), hotspot({ spots: [[0, 0, 'A', ' '], [10, 10, 'B', 'b']] })])).toEqual([rule]);
+  });
+  it('lists the image files a course names, in order, leaving out a block with no file yet', () => {
+    const other = PATH.replace('b0001', 'b0002');
+    expect(courseImagePaths([...base(), image(), image({ id: 'b0082', path: '' }), hotspot({ path: other })])).toEqual([PATH, other]);
+    expect(courseImagePaths(course())).toEqual([]);
+  });
+  it('publishes the file, trimmed alt text and caption, without the lesson; points keep their numbers', () => {
+    expect(publicBlock(image({ alt: ' Alt ', cap: ' Cap ' }) as CourseBlock)).toEqual({ block: 'image', id: 'b0080', path: PATH, alt: 'Alt', cap: 'Cap' });
+    expect(publicBlock(hotspot({ spots: [[30, 40.5, ' T ', ' x ']] }) as CourseBlock)).toEqual({ block: 'hotspot', id: 'b0081', path: PATH, alt: 'An invoice', cap: '', spots: [[30, 40.5, 'T', 'x']] });
+  });
+  it('shows a reviewer the alt text of an image first, never its file path', () => {
+    expect(courseBlockRow(image())).toEqual({ front: 'Lesson 2 · Image', back: 'An invoice with the VAT line' });
+  });
+});

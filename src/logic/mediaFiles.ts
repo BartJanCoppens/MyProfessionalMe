@@ -7,16 +7,22 @@ import { UUID, UUID_PART } from '../../supabase/functions/_shared/aiGuard.ts';
 export const MEDIA_BUCKET = 'media';
 const MB = 1024 * 1024;
 export const MEDIA_MAX_BYTES = 50 * MB; // the bucket's file size limit
+export const IMAGE_MAX_BYTES = 5 * MB; // a picture in a course: the bucket already lists image/png, image/jpeg and image/webp, never svg (it can carry script)
 
 export type MediaKind = { label: string; mime: string; maxBytes: number };
-// By file extension. A .horizon presentation is JSON; narration and podcasts are audio, a rendered reel is video (the Reel Studio's cut).
+// By file extension. A .horizon presentation is JSON; narration and podcasts are audio, a rendered reel is video (the Reel Studio's cut), a course shows images.
 export const MEDIA_KINDS: Record<string, MediaKind> = {
   horizon: { label: 'A Horizon presentation', mime: 'application/json', maxBytes: 50 * MB },
   mp3: { label: 'An audio file', mime: 'audio/mpeg', maxBytes: 25 * MB },
   m4a: { label: 'An audio file', mime: 'audio/mp4', maxBytes: 25 * MB },
   mp4: { label: 'A video', mime: 'video/mp4', maxBytes: 50 * MB },
   webm: { label: 'A video', mime: 'video/webm', maxBytes: 50 * MB },
+  png: { label: 'An image', mime: 'image/png', maxBytes: IMAGE_MAX_BYTES },
+  jpg: { label: 'An image', mime: 'image/jpeg', maxBytes: IMAGE_MAX_BYTES },
+  jpeg: { label: 'An image', mime: 'image/jpeg', maxBytes: IMAGE_MAX_BYTES },
+  webp: { label: 'An image', mime: 'image/webp', maxBytes: IMAGE_MAX_BYTES },
 };
+export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'] as const;
 
 // The documents an admin adds as sources of a trajectory plan (Phase 7). Not a contribution file: MEDIA_KINDS takes no PDF.
 export const SOURCE_KINDS: Record<string, MediaKind> = { pdf: { label: 'A PDF', mime: 'application/pdf', maxBytes: 20 * MB } };
@@ -48,6 +54,13 @@ export function mediaProblem(name: string, bytes: number): string | null {
   if (bytes <= 0) return 'The file is empty';
   if (bytes > kind.maxBytes) return kind.label + ' is at most ' + kind.maxBytes / MB + ' MB · this one is ' + (bytes / MB).toFixed(1) + ' MB';
   return null;
+}
+
+// Why a file cannot be added as an image, or null: the extension must be an image's, then the kind's size rules.
+export function imageProblem(name: string, bytes: number): string | null {
+  const dot = mediaFileName(name).lastIndexOf('.'), ext = dot > 0 ? mediaFileName(name).slice(dot + 1).toLowerCase() : '';
+  if (!(IMAGE_EXTENSIONS as readonly string[]).includes(ext)) return 'Only ' + IMAGE_EXTENSIONS.slice(0, -1).map((e) => '.' + e).join(', ') + ' and .' + IMAGE_EXTENSIONS[IMAGE_EXTENSIONS.length - 1] + ' images can be added';
+  return mediaProblem(name, bytes);
 }
 
 // Why a source document cannot be added, in words, or null.

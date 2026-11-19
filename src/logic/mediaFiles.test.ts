@@ -1,6 +1,6 @@
 // Media files (Studios Phase 3): accepted kinds, size per kind, the one path shape, and the bucket that mirrors them.
 import { describe, expect, it } from 'vitest';
-import { MEDIA_KINDS, MEDIA_MAX_BYTES, MEDIA_PATH, mediaFileName, mediaKind, mediaPath, mediaProblem, SOURCE_KINDS, sourceProblem } from './mediaFiles';
+import { IMAGE_MAX_BYTES, MEDIA_KINDS, MEDIA_MAX_BYTES, MEDIA_PATH, mediaFileName, mediaKind, mediaPath, imageProblem, mediaProblem, SOURCE_KINDS, sourceProblem } from './mediaFiles';
 import { latestMatch, migrationText } from '../test/migrations';
 
 const MB = 1024 * 1024;
@@ -42,8 +42,26 @@ describe('what may be uploaded', () => {
     expect(mediaProblem('reel.mp4', 51 * MB)).toBe('A video is at most 50 MB · this one is 51.0 MB');
     expect(mediaProblem('reel.mov', 10)).toMatch(/^Only /);
   });
+  it('allows an image (png, jpg, jpeg, webp) up to 5 MB and refuses an svg', () => {
+    expect(IMAGE_MAX_BYTES).toBe(5 * MB);
+    ['a.png', 'a.JPG', 'a.jpeg', 'a.webp'].forEach((n) => expect(mediaProblem(n, 5 * MB), n).toBeNull());
+    expect(mediaKind('diagram.png')?.mime).toBe('image/png');
+    expect(mediaKind('a.jpg')?.mime).toBe('image/jpeg');
+    expect(mediaKind('a.jpeg')?.mime).toBe('image/jpeg');
+    expect(mediaKind('a.webp')?.mime).toBe('image/webp');
+    expect(mediaProblem('diagram.png', 6 * MB)).toBe('An image is at most 5 MB · this one is 6.0 MB');
+    expect(mediaProblem('x.svg', 10)).toMatch(/^Only /);
+    expect(mediaProblem('x.gif', 10)).toMatch(/^Only /);
+  });
+  it('an image field takes images only: an audio file is a file the app knows, not an image', () => {
+    expect(imageProblem('a.png', 10)).toBeNull();
+    expect(imageProblem('a.mp3', 10)).toBe('Only .png, .jpg, .jpeg and .webp images can be added');
+    expect(imageProblem('x.svg', 10)).toBe('Only .png, .jpg, .jpeg and .webp images can be added');
+    expect(imageProblem('a.png', 6 * MB)).toBe('An image is at most 5 MB · this one is 6.0 MB');
+    expect(imageProblem('a.png', 0)).toBe('The file is empty');
+  });
   it('names the accepted kinds for any other file, and refuses an empty one', () => {
-    expect(mediaProblem('photo.gif', 10)).toBe('Only .horizon, .mp3, .m4a, .mp4 and .webm files can be added');
+    expect(mediaProblem('photo.gif', 10)).toBe('Only .horizon, .mp3, .m4a, .mp4, .webm, .png, .jpg, .jpeg and .webp files can be added');
     expect(mediaProblem('part.mp3', 0)).toBe('The file is empty');
   });
 });
@@ -58,6 +76,11 @@ describe('the bucket mirrors the rules', () => {
   it('accepts every kind the app uploads', () => {
     const types = Array.from(bucket[3].matchAll(/'([^']*)'/g), (x) => x[1]);
     for (const k of Object.values(MEDIA_KINDS)) expect(types).toContain(k.mime);
+  });
+  it('lists the three image types and not svg', () => {
+    const types = Array.from(bucket[3].matchAll(/'([^']*)'/g), (x) => x[1]);
+    expect(types).toEqual(expect.arrayContaining(['image/png', 'image/jpeg', 'image/webp']));
+    expect(types).not.toContain('image/svg+xml');
   });
   it('and the database checks the same path shape', () => {
     const sql = latestMatch(/create (?:or replace )?function private\.media_path_ok\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
