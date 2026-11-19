@@ -4441,6 +4441,12 @@ do $$ begin
   begin update public.course_reflections set text = repeat('x', 2001) where learning_id = 'LCR1';
     insert into results (check_name, expected, actual) values ('CR 2,001 characters are refused', 'blocked: 23514', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CR 2,001 characters are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin update public.course_reflections set text = repeat(' ', 1990) || 'a' || repeat(' ', 10) where learning_id = 'LCR1';
+    insert into results (check_name, expected, actual) values ('CR 2,001 characters, mostly spaces, are refused', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR 2,001 characters, mostly spaces, are refused', 'blocked: 23514', 'blocked: '||sqlstate); end;
+  begin update public.course_reflections set text = E'\u00a0 \u3000' where learning_id = 'LCR1';
+    insert into results (check_name, expected, actual) values ('CR text of only no-break and ideographic spaces is blank', 'blocked: 23514', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('CR text of only no-break and ideographic spaces is blank', 'blocked: 23514', 'blocked: '||sqlstate); end;
   begin update public.course_reflections set text = '   ' where learning_id = 'LCR1';
     insert into results (check_name, expected, actual) values ('CR blank text is refused', 'blocked: 23514', 'allowed');
   exception when others then insert into results (check_name, expected, actual) values ('CR blank text is refused', 'blocked: 23514', 'blocked: '||sqlstate); end;

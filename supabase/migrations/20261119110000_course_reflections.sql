@@ -1,11 +1,25 @@
 -- Reflections in an E-learning course (E-learning Studio, Task 1.5): what a learner writes at a reflect block. Owner decision (19 Nov 2026): nobody but the
 -- learner reads it, not the counsellor, not any admin role, not View as. So the table has four owner-only policies and no other path to it: no
 -- security-definer function and no admin or can_view branch ever selects from it (src/logic/reflections.sync.test.ts keeps it so).
+-- At most 2000 characters as written (spaces count), and something besides white space (private.trimmed, the one trim rule). A definer wrapper, because
+-- private.trimmed is not executable by the client roles and a check runs as the writer.
+create function private.reflection_ok(p_text text)
+returns boolean
+language sql
+immutable
+security definer
+set search_path = ''
+as $$
+  select char_length(p_text) <= 2000 and private.trimmed(p_text) <> ''
+$$;
+revoke execute on function private.reflection_ok(text) from public, anon;
+grant execute on function private.reflection_ok(text) to authenticated;
+
 create table public.course_reflections (
   user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
   learning_id text not null references public.learnings (id) on delete cascade,
   block_id text not null check (block_id ~ '^b[0-9a-z]{4,20}$'),
-  text text not null check (char_length(btrim(text)) between 1 and 2000),
+  text text not null check (private.reflection_ok(text)),
   updated_at timestamptz not null default now(),
   primary key (user_id, learning_id, block_id)
 );
