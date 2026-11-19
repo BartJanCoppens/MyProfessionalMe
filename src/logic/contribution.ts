@@ -38,11 +38,10 @@ export type CreateData = { contributions: Contribution[]; reviews: Review[]; rul
 // in its studio; every contribution format (creation rules, review requirements, the database's lists) adds what the
 // studios make (src/logic/items.test.ts checks the SQL lists).
 export const CREATE_TYPES = NEW_TYPES.filter((t) => t[0] !== 'Avatar');
-// Studios whose format and rules the database already has but whose studio definition (STUDIOS) arrives in a later task: the E-learning Studio (plan
-// 2026-11-19, Task 1.2) adds `elearn`, and this list loses its entry then. [studio, format, the fewest rows].
-export const PENDING_STUDIOS: [studio: string, format: string, min: number][] = [['elearn', 'E-learning', 2]];
-const pendingFormats = PENDING_STUDIOS.map((p) => p[1]);
-export const TYPE_NAMES = Array.from(new Set(NEW_TYPES.map((t) => t[0]).concat(STUDIOS.flatMap(studioFormats), pendingFormats)));
+// Studios whose format and rules the database already has but whose studio definition (STUDIOS) arrives in a later task: [studio, format, the fewest rows].
+// An entry leaves this list in the task that adds its studio (items.test.ts fails while both hold it). Empty now: `elearn` joined STUDIOS in Task 1.2.
+export const PENDING_STUDIOS: [studio: string, format: string, min: number][] = [];
+export const TYPE_NAMES = Array.from(new Set(NEW_TYPES.map((t) => t[0]).concat(STUDIOS.flatMap(studioFormats), PENDING_STUDIOS.map((p) => p[1]))));
 // The formats something can make today: the upload form's and those of the studios that are available. Creation rules, review
 // requirements and the new-content default offer only these; TYPE_NAMES stays the full list the database accepts.
 export const MAKEABLE_FORMATS = Array.from(new Set(CREATE_TYPES.map((t) => t[0]).concat(STUDIOS.filter((d) => d.available).flatMap(studioFormats))));

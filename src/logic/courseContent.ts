@@ -93,6 +93,11 @@ export function lessonsOf(items: readonly unknown[]): { title: string; summary: 
   return stepsOf(items).map((r, k) => ({ title: r[1], summary: r[2] ?? '', blocks: blocks.filter((b) => b.lesson === k) }));
 }
 
+// The items as the database counts them: jsonb::text puts a space after every ":" and "," outside strings, which JSON.stringify leaves out, so a course
+// that passes here never fails the cap at submit (private.course_ok measures octet_length(p_items::text)).
+export const jsonbText = (v: unknown): string => (Array.isArray(v) ? '[' + v.map(jsonbText).join(', ') + ']'
+  : v && typeof v === 'object' ? '{' + Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => JSON.stringify(k) + ': ' + jsonbText(x)).join(', ') + '}' : JSON.stringify(v));
+
 // The problems with a course's blocks and structure, in words (the E-learning item schema): the same reading as private.course_row_problems, in the same order.
 // The lessons' own rows (a blank title, a long summary) are the generic row rules of itemsValid; how many lessons there are is the studio's minimum.
 export function courseRowProblems(items: readonly unknown[]): string[] {
@@ -106,7 +111,7 @@ export function courseRowProblems(items: readonly unknown[]): string[] {
   for (let k = 0; k < lessons; k++) {
     if (blocks.filter((b) => (b as Raw)?.lesson === k).length > C.blocksPerLesson) out.push('Lesson ' + (k + 1) + ' has more than ' + C.blocksPerLesson + ' blocks');
   }
-  if (new TextEncoder().encode(JSON.stringify(items)).length > C.bytes) out.push(WORDS.tooBig);
+  if (new TextEncoder().encode(jsonbText(items)).length > C.bytes) out.push(WORDS.tooBig);
   return [...new Set(out)];
 }
 

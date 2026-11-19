@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COURSE_CAPS, COURSE_HOURS, courseContent, courseHours, courseProblems, courseRowProblems, courseRule, isCourseBlock, lessonsOf } from './courseContent';
+import { COURSE_CAPS, COURSE_HOURS, WORDS, courseContent, courseHours, courseProblems, courseRowProblems, courseRule, isCourseBlock, jsonbText, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
 import type { StudioEntry } from './studios';
 
@@ -119,5 +119,31 @@ describe('completion, hours and content', () => {
   it('is nothing while the rows have problems', () => {
     expect(courseContent(course([], patch('b0007', { tol: -1 })), {})).toBeNull();
     expect(courseContent([lesson(1, 'A')], {})).toBeNull();
+  });
+});
+
+describe('the size cap counts the database\'s jsonb spacing', () => {
+  // 12 lessons of 5 text blocks; the last block's text is padded to hit a total of `size` bytes as jsonb::text.
+  const big = (size: number): StudioEntry[] => {
+    const lessons = Array.from({ length: 12 }, (_, k) => lesson(k + 1, 'Lesson title ' + k));
+    const list: CourseBlock[] = Array.from({ length: 60 }, (_, i) => ({ block: 'text', id: 'b' + String(1000 + i), lesson: i % 12, h: 'H', t: 'x'.repeat(3500) }));
+    const items = [...lessons, ...list] as StudioEntry[];
+    const gap = size - new TextEncoder().encode(jsonbText(items)).length;
+    (list[59] as { t: string }).t += 'y'.repeat(gap);
+    return items;
+  };
+  it('accepts a course of exactly 250,000 bytes as jsonb text and reports one byte more', () => {
+    expect(new TextEncoder().encode(jsonbText(big(250000))).length).toBe(250000);
+    expect(courseRowProblems(big(250000))).not.toContain(WORDS.tooBig);
+    expect(courseRowProblems(big(250001))).toContain(WORDS.tooBig);
+  });
+  it('reports a course that JSON.stringify counts under the cap but jsonb counts over it', () => {
+    const items = big(250000);
+    const shorter = new TextEncoder().encode(JSON.stringify(items)).length;
+    expect(shorter).toBeLessThan(250000);
+    expect(courseRowProblems(big(250100))).toContain(WORDS.tooBig);
+  });
+  it('spaces objects and arrays as jsonb does', () => {
+    expect(jsonbText({ a: [1, 'x,y'], b: { c: true, d: null } })).toBe('{"a": [1, "x,y"], "b": {"c": true, "d": null}}');
   });
 });

@@ -167,7 +167,10 @@ describe('format lists', () => {
     const body = latestMatch(/create (?:or replace )?function private\.studio_min_items\([\s\S]*?\$\$([\s\S]*?)\$\$/)[1];
     const rows = Array.from(body.matchAll(/\('([a-z]+)', '([^']+)', (\d+)\)/g), (m) => [m[1], m[2], +m[3]]);
     const made = STUDIOS.flatMap((d) => studioFormats(d).map((f) => [d.id, f, d.min]));
-    expect(rows).toEqual([...made, ...PENDING_STUDIOS.filter((p) => !made.some((m) => m[0] === p[0]))]);
+    expect(rows).toEqual([...made, ...PENDING_STUDIOS]);
+  });
+  it('lists no pending studio that STUDIOS already holds (a pending entry leaves when its studio arrives)', () => {
+    PENDING_STUDIOS.forEach((p) => expect(STUDIOS.map((d) => d.id), p[0]).not.toContain(p[0]));
   });
 });
 
