@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { REFLECTION_MAX } from '../lib/reflectionStore';
 
 const migrations = import.meta.glob('../../supabase/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const functions = import.meta.glob('../../supabase/functions/**/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const OWN = '20261119110000_course_reflections.sql';
 const named = (f: string) => f.split('/').pop()!;
 const code = (name: string) => migrations[Object.keys(migrations).find((f) => named(f) === name)!].replace(/--.*$/gm, '');
@@ -12,6 +13,9 @@ describe('reflections: private to the learner', () => {
   it('course_reflections appears in no migration but its own', () => {
     const others = Object.keys(migrations).filter((f) => named(f) !== OWN && /course_reflections/.test(migrations[f])).map(named);
     expect(others).toEqual([]);
+  });
+  it('no edge function reads or writes course_reflections', () => {
+    expect(Object.keys(functions).filter((f) => /course_reflections/.test(functions[f]))).toEqual([]);
   });
   it('its own migration has four policies, each on the owner, and no admin, counsellor or can_view branch', () => {
     const sql = code(OWN);

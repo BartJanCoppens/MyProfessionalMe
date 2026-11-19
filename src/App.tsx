@@ -35,6 +35,7 @@ import { loadTrajectories, loadTrajectoriesInUse } from './lib/trajectoryStore';
 import { loadMine } from './trajectoryCtx';
 import { ensurePlan } from './trajectoryAiState';
 import { ensureReflections } from './fmtReflect';
+import { cancelReflections } from './lib/reflectionStore';
 import { certResetPatch } from './trajectoryMap';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
@@ -116,6 +117,8 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
     return () => { live = false; };
   }, [me]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+  // A reflection still waiting to save is dropped when the workspace closes (sign-out), never written for the next person.
+  useEffect(() => cancelReflections, []);
   // Work that outlives a render (saves, builds) reads the latest Logic.
   logic.latest = () => logicRef.current;
   const logicRef = useRef(logic);

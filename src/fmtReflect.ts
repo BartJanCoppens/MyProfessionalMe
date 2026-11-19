@@ -15,7 +15,7 @@ export function reflectionOf(L: Logic, it: Item): Reflection {
   const set = (id: string, text: string) => {
     const t = text.slice(0, REFLECTION_MAX);
     L.setState((s) => ({ reflections: { ...s.reflections, [key(id)]: t } }));
-    saveReflectionSoon(it.id, id, t, (m) => L.latest().say('Reflection not saved · ' + m), 800, () => L.latest().setState((s) => ({ reflectionsSaved: { ...s.reflectionsSaved, [key(id)]: t } })));
+    saveReflectionSoon(it.id, id, t, (m) => L.latest().say('Reflection not saved · ' + m), 800, () => L.latest().setState((s) => ({ reflectionsSaved: { ...s.reflectionsSaved, [key(id)]: t } })), L.subject.id);
   };
   return { shown: true, readOnly: false, value: (id) => texts[key(id)] ?? '', set, note: (id) => (texts[key(id)] ?? '') !== '' && saved[key(id)] === texts[key(id)] ? SAVED : MINE };
 }

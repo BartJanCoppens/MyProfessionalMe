@@ -2,7 +2,7 @@
 // Reflections against the in-memory Supabase fake (Task 1.5): loaded per course, saved in bursts through saveSoon, a blank text deletes the row.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../test/fakeSupabase';
-import { REFLECTION_MAX, loadReflections, saveReflectionSoon } from './reflectionStore';
+import { REFLECTION_MAX, cancelReflections, loadReflections, saveReflectionSoon } from './reflectionStore';
 
 vi.mock('./supabase', async () => ({ supabase: (await import('../test/fakeSupabase')).db.client }));
 
@@ -45,5 +45,26 @@ describe('reflections', () => {
     await vi.advanceTimersByTimeAsync(801);
     expect(onError).toHaveBeenCalledWith('row-level security');
     expect(onSaved).not.toHaveBeenCalled();
+  });
+  it('writes nothing when another person is signed in by the time it saves', async () => {
+    db.client.auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u2' } } } });
+    const onSaved = vi.fn();
+    saveReflectionSoon('L997', 'b0006', 'A\'s text', vi.fn(), 800, onSaved, 'u1');
+    await vi.advanceTimersByTimeAsync(801);
+    expect(db.calls).toHaveLength(0);
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+  it('writes when the same person is still signed in', async () => {
+    db.client.auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
+    saveReflectionSoon('L997', 'b0006', 'Mine', vi.fn(), 800, undefined, 'u1');
+    await vi.advanceTimersByTimeAsync(801);
+    expect(db.calls).toHaveLength(1);
+  });
+  it('cancelReflections drops every pending save (the shell unmounts on sign-out)', async () => {
+    saveReflectionSoon('L997', 'b0006', 'One', vi.fn());
+    saveReflectionSoon('L998', 'b0007', 'Two', vi.fn());
+    cancelReflections();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(db.calls).toHaveLength(0);
   });
 });

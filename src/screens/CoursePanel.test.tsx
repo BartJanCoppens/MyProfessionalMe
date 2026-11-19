@@ -123,7 +123,7 @@ describe('reflections in the learner\'s course', () => {
     atReflection();
     expect(screen.getByText('Only you can read this')).toBeTruthy();
     fireEvent.change(screen.getByRole('textbox', { name: 'Which client?' }), { target: { value: 'A note.' } });
-    expect(reflections.saveReflectionSoon).toHaveBeenCalledWith('L997', 'b0006', 'A note.', expect.any(Function), 800, expect.any(Function));
+    expect(reflections.saveReflectionSoon).toHaveBeenCalledWith('L997', 'b0006', 'A note.', expect.any(Function), 800, expect.any(Function), 'u1');
     expect(screen.getByText('Only you can read this')).toBeTruthy();
     expect((screen.getByRole('textbox', { name: 'Which client?' }) as HTMLTextAreaElement).value).toBe('A note.');
     act(() => (vi.mocked(reflections.saveReflectionSoon).mock.calls[0][5] as () => void)());
