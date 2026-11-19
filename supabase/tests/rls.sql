@@ -4409,6 +4409,52 @@ end $$;
 reset role;
 insert into results (check_name, expected, actual) select 'EL the course cap is 252 items and the minimum 2 lessons', '252/2', private.item_max('E-learning')||'/'||private.studio_min_items('elearn', 'E-learning');
 insert into results (check_name, expected, actual) select 'EL items_ok reads the example as a course and rejects a block that is not an object', 'true/false', private.items_ok('E-learning', current_setting('test.el_items')::jsonb)||'/'||private.items_ok('E-learning', pg_temp.el_items(p_extra => '["stray"]'));
+-- ---------- Embeds in a course (EE) ----------
+-- A course may embed a learning of another studio: {block:'embed', id, lesson, format, learning}. The learning must be published, of that format and not a course
+-- (private.course_embed_problems); the problems run again at submit, so a source retired after the check is refused there; it publishes as {block, id, format, learning}.
+reset role;
+insert into public.learnings (id, title, domain, level, format, hours, status) values
+ ('L900001','T ee reel','prof',2,'Reel',0.25,'published'), ('L900002','T ee draft reel','prof',2,'Reel',0.25,'draft'), ('L900003','T ee podcast','prof',2,'Podcast',0.5,'published'),
+ ('L900004','T ee course','prof',2,'E-learning',0.5,'published'), ('L900005','T ee retired reel','prof',2,'Reel',0.25,'published');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+create function pg_temp.ee_embed(p_format text, p_learning text) returns jsonb language sql as $f$
+  select pg_temp.el_items(p_extra => jsonb_build_array(jsonb_build_object('block', 'embed', 'id', 'b0020', 'lesson', 1, 'format', p_format, 'learning', p_learning))) $f$;
+with i as (insert into public.contributions (business_line, type, title, domain, takeaway, studio, shape, items)
+ select 'Consulting','E-learning', t.title, 'prof', 'x', 'elearn', current_setting('test.el_shape')::jsonb, t.items from (values
+  ('T ee ok', pg_temp.ee_embed('Reel', 'L900001')), ('T ee empty', pg_temp.ee_embed('Reel', '')), ('T ee draft', pg_temp.ee_embed('Reel', 'L900002')),
+  ('T ee missing', pg_temp.ee_embed('Reel', 'L999999')), ('T ee other', pg_temp.ee_embed('Reel', 'L900003')), ('T ee nested', pg_temp.ee_embed('Reel', 'L900004')),
+  ('T ee kind', pg_temp.ee_embed('E-learning', 'L900004')), ('T ee id', pg_temp.ee_embed('Reel', 'LEE1')), ('T ee retired', pg_temp.ee_embed('Reel', 'L900005'))) t(title, items) returning 1)
+  insert into results (check_name, expected, actual) select 'EE a creator saves courses with embeds', '9 rows', count(*)||' rows' from i;
+insert into results (check_name, expected, actual) select 'EE a course that embeds a published reel passes the check', '{}', public.check_contribution((select id from public.contributions where title = 'T ee ok'))::text;
+insert into results (check_name, expected, actual) select 'EE an embed with no learning is refused: pick it', 'Lesson 2 · Reel: pick the learning from the library', pg_temp.el_problems('T ee empty');
+insert into results (check_name, expected, actual) select 'EE an unpublished learning is refused by its title', 'Lesson 2 · “T ee draft reel” is no longer published: pick another', pg_temp.el_problems('T ee draft');
+insert into results (check_name, expected, actual) select 'EE a learning that does not exist is refused', 'Lesson 2 · Reel: pick the learning from the library', pg_temp.el_problems('T ee missing');
+insert into results (check_name, expected, actual) select 'EE a learning of another format is refused', 'Lesson 2 · Reel: pick the learning from the library', pg_temp.el_problems('T ee other');
+insert into results (check_name, expected, actual) select 'EE a course embedded in a Reel embed is refused (no nesting)', 'Lesson 2 · Reel: pick the learning from the library', pg_temp.el_problems('T ee nested');
+insert into results (check_name, expected, actual) select 'EE an embed of the format E-learning is refused as a block', 'Lesson 2 · Embedded learning: pick one of the formats and a learning from the library', pg_temp.el_problems('T ee kind');
+insert into results (check_name, expected, actual) select 'EE a learning id that is not L and digits is refused as a block', 'Lesson 2 · Embedded learning: pick one of the formats and a learning from the library', pg_temp.el_problems('T ee id');
+-- a source retired between the check and the submit
+insert into results (check_name, expected, actual) select 'EE the course passes its check while its reel is published', '{}', public.check_contribution((select id from public.contributions where title = 'T ee retired'))::text;
+reset role;
+update public.learnings set status = 'review' where id = 'L900005';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
+do $$ begin
+  begin perform public.submit_contribution((select id from public.contributions where title = 'T ee retired'));
+    insert into results (check_name, expected, actual) values ('EE a reel retired between the check and the submit makes submit refuse', 'blocked: P0001', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EE a reel retired between the check and the submit makes submit refuse', 'blocked: P0001', 'blocked: '||sqlstate); end;
+end $$;
+insert into results (check_name, expected, actual) select 'EE submit names the retired reel', 'Lesson 2 · “T ee retired reel” is no longer published: pick another', pg_temp.el_problems('T ee retired');
+insert into results (check_name, expected, actual) select 'EE the course with the published reel is submitted and published', 'published', public.submit_contribution((select id from public.contributions where title = 'T ee ok'));
+insert into results (check_name, expected, actual) select 'EE the published content keeps {block, id, format, learning}, without lesson', 'true/false', ((l.content #> '{lessons,1,blocks}') @> '[{"block":"embed","id":"b0020","format":"Reel","learning":"L900001"}]'::jsonb)::text||'/'||(l.content #>> '{lessons,1,blocks}' like '%"lesson"%')::text
+  from public.contributions c join public.learnings l on l.id = c.learning_id where c.title = 'T ee ok';
+do $$ begin
+  begin perform private.course_embed_problems('[]'::jsonb);
+    insert into results (check_name, expected, actual) values ('EE a signed-in user cannot call course_embed_problems', 'blocked: 42501', 'allowed');
+  exception when others then insert into results (check_name, expected, actual) values ('EE a signed-in user cannot call course_embed_problems', 'blocked: 42501', 'blocked: '||sqlstate); end;
+end $$;
+reset role;
 -- CR: reflections in a course are read and written by the learner alone (no counsellor, admin or View as branch)
 select set_config('request.jwt.claims', '', true);
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000c0001','t.reflector@test.local'), ('00000000-0000-0000-0000-0000000c0002','t.reflcounsellor@test.local'), ('00000000-0000-0000-0000-0000000c0003','t.refldomain@test.local'), ('00000000-0000-0000-0000-0000000c0004','t.reflgeneral@test.local'), ('00000000-0000-0000-0000-0000000c0005','t.reflother@test.local');
