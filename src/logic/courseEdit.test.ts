@@ -185,7 +185,7 @@ describe('lessons', () => {
   });
   it('renumbers default labels after a removal or a move, and leaves the creator\'s own labels', () => {
     const own: StudioEntry[] = [['Lesson 1', 'One', ''], ['Week two', 'Two', ''], ['Lesson 3', 'Three', '']];
-    expect(removeLesson(own, 0).filter(Array.isArray).map((r) => r[0])).toEqual(['Week two', 'Lesson 2']);
+    expect(removeLesson(own, 0).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Week two', 'Lesson 2']);
     expect(moveLesson(rows(), 0, 1).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3']);
     expect(dropLesson(rows(), 0).filter(Array.isArray).map((r) => (r as string[])[0])).toEqual(['Lesson 1', 'Lesson 2']);
   });
