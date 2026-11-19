@@ -1,10 +1,9 @@
 // Account operations that need the auth admin API: create, remove, reset a password, change your own.
 // Role grants and profile edits do not come through here; the app writes those directly under RLS.
 //
-// Who may act:
-//   System Admin  -> any user
-//   Domain Admin  -> users whose business line they administer, never a System Admin
+// Who may act: rules.ts (System Admin any user; Domain Admin their lines; General Admin password resets only).
 import { withSupabase } from '@supabase/server';
+import { refusal, type Action, type Caller } from './rules.ts';
 
 const LINES = ['Consulting', 'Audit', 'Tax & Legal'];
 // Mirrors supabase/config.toml: minimum_password_length = 12, lower_upper_letters_digits
@@ -39,10 +38,15 @@ export default {
 
     const { data: roles, error: rolesError } = await admin.from('user_roles').select('role, business_line').eq('user_id', callerId);
     if (rolesError) return fail(500, rolesError.message);
-    const isSystem = roles.some((r) => r.role === 'system_admin');
-    const domains = roles.filter((r) => r.role === 'domain_admin').map((r) => r.business_line as string);
-    const manages = (line: string | null) => isSystem || (!!line && domains.includes(line));
-    if (!isSystem && !domains.length) return fail(403, 'Only System Admins and Domain Admins can manage users');
+    const caller: Caller = {
+      isSystem: roles.some((r) => r.role === 'system_admin'),
+      isGeneral: roles.some((r) => r.role === 'general_admin'),
+      domains: roles.filter((r) => r.role === 'domain_admin').map((r) => r.business_line as string),
+    };
+    const action = body.action as Action;
+    const callerRefusal = refusal(action, caller, null);
+    if (callerRefusal) return fail(403, callerRefusal);
+    const manages = (line: string | null) => caller.isSystem || (!!line && caller.domains.includes(line));
 
     // Load a target user and check the caller may manage them.
     const target = async (userId: string) => {
@@ -50,14 +54,8 @@ export default {
       const { data: profile } = await admin.from('profiles').select('id, email, business_line').eq('id', userId).maybeSingle();
       if (!profile) return { error: fail(404, 'User not found') };
       const { data: targetRoles } = await admin.from('user_roles').select('role, business_line').eq('user_id', userId);
-      const targetIsSystem = (targetRoles || []).some((r) => r.role === 'system_admin');
-      if (targetIsSystem && !isSystem) return { error: fail(403, 'Only a System Admin can manage a System Admin') };
-      const targetIsGeneral = (targetRoles || []).some((r) => r.role === 'general_admin');
-      if (targetIsGeneral && !isSystem) return { error: fail(403, 'Only a System Admin can manage a General Admin') };
-      // Managing someone who administers another line would hand their admin rights to the caller.
-      const foreignAdmin = (targetRoles || []).some((r) => r.role === 'domain_admin' && !domains.includes(r.business_line as string));
-      if (foreignAdmin && !isSystem) return { error: fail(403, 'This user is Domain Admin for a line you do not administer') };
-      if (!manages(profile.business_line)) return { error: fail(403, 'This user is outside your business line') };
+      const why = refusal(action, caller, { line: profile.business_line, roles: targetRoles || [] });
+      if (why) return { error: fail(403, why) };
       return { profile };
     };
 

@@ -233,10 +233,19 @@ describe('a General Admin', () => {
     await mount(general);
     expect(screen.getByText('5 of 5 accounts')).toBeTruthy();
     expect(screen.queryByText('+ Add user')).toBeNull();
-    expect(within(row('c1')).queryByText('Reset password')).toBeNull();
     expect(within(row('c1')).queryByText('Remove')).toBeNull();
     expect(within(row('c1')).queryAllByRole('combobox')).toHaveLength(0);
     expect(within(row('c1')).getByText('Edit')).toBeTruthy();
+  });
+  it('resets anyone\'s password except a System Admin\'s, and hands it over once', async () => {
+    db.answer((c) => (c.table === 'rpc:manageable_user_ids' ? { data: [] } : op(c) === 'select' ? { data: users } : writes(c)));
+    await mount(general);
+    expect(within(row('a1')).getByText('Reset password')).toBeTruthy();
+    expect(within(row('me')).queryByText('Reset password')).toBeNull();
+    expect(within(row('s2')).queryByText('Reset password')).toBeNull();
+    await click(within(row('c1')).getByText('Reset password'));
+    expect(db.client.functions.invoke).toHaveBeenCalledWith('manage-users', { body: { action: 'reset_password', user_id: 'c1', password: expect.stringMatching(/^.{14}$/) } });
+    expect(screen.getByText('New temporary password for c1@example.com:')).toBeTruthy();
   });
 });
 

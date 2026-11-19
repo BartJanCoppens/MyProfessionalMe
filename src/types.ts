@@ -62,7 +62,7 @@ export type CloudMeta = {
 export type Screen = 'map' | 'library' | 'detail' | 'projects' | 'profile' | 'team' | 'approvals' | 'create' | 'adminLib' | 'adminMap' | 'adminKb' | 'users' | 'adminAi' | 'trajectory';
 
 // What the signed-in account may administer (from public.user_roles).
-// isGeneral: General Admin, edits all content (catalogue, every curriculum audience, all bundles) but no users.
+// isGeneral: General Admin, edits all content (catalogue, every curriculum audience, all bundles); of accounts, only resets passwords (not a System Admin's).
 export type Access = { isSystem: boolean; isGeneral?: boolean; domains: string[]; userId: string };
 // Catalogue entry metadata: owning business line (null = firm-wide) and publication status.
 // The admin library form; numbers stay text while typing. line '' = firm-wide.

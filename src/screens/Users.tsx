@@ -111,7 +111,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <PageTitle title="User management" lead={access.isSystem
           ? 'Create accounts, set business lines and appoint General and Domain Admins. A General Admin edits all learning content for the three business lines but manages no users. You are a System Admin: you can manage everyone and you are the only role that grants roles.'
-          : contentOnly ? 'Hand out Create & share creation rules. As General Admin you manage no accounts: lines, stages, counsellors and passwords stay with System and Domain Admins.'
+          : contentOnly ? 'Hand out Create & share creation rules and reset passwords (not a System Admin\'s). Lines, stages, counsellors and accounts stay with System and Domain Admins.'
           : 'Create and manage accounts in ' + managed.join(', ') + '. A System Admin appoints Domain Admins.'} />
         {!contentOnly && <Button onClick={() => setAdding(true)}>+ Add user</Button>}
       </div>
@@ -197,7 +197,7 @@ export default function UsersScreen({ access, meId, say }: { access: Access; meI
                   {u.must_change_password ? <Tag tone="amber">Temporary password</Tag> : <Tag tone="muted">Own password</Tag>}
                 </div>
                 <div style={{ padding: '10px 12px', display: 'flex', gap: 12, justifyContent: 'flex-end', alignItems: 'center' }}>
-                  {!me && canEditLine && <LinkButton onClick={() => resetPassword(u)}>Reset password</LinkButton>}
+                  {!me && (canEditLine || (access.isGeneral && !isSys)) && <LinkButton onClick={() => resetPassword(u)}>Reset password</LinkButton>}
                   {!me && canEditLine && (confirmRemove === u.id
                     ? <><LinkButton tone="muted" onClick={() => setConfirmRemove(null)}>Cancel</LinkButton><Button size="sm" variant="dark" onClick={() => { setConfirmRemove(null); remove(u); }}>Remove</Button></>
                     : <LinkButton tone="muted" onClick={() => setConfirmRemove(u.id)}>Remove</LinkButton>)}
