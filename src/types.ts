@@ -173,6 +173,8 @@ export type AppState = {
   revChecks: Record<string, boolean[]>; revComment: Record<string, string>; nw: NewDraft; editing: string | null; nwKb: string[]; nwKbQ: string; nwAiBusy: boolean;
   // Create & share > New: the Studios hub, the studio or the upload form, and the studio's step (the draft itself is `nw`).
   studio: StudioState;
+  // The E-learning Studio's editor: the lesson on show (index from 0) and the selected block's id.
+  courseEdit: { lesson: number; block: string | null };
   polForm: { lines: string[]; formats: string[]; domains: string[]; audiences: string[]; peers: string; expert: boolean; quality: boolean };
   // Learning record (F2): the learner's evidence being typed for one learning (key subject|learning), before it is saved.
   evDraft: { key: string; note: string; link: string; ref: string } | null;
@@ -271,4 +273,4 @@ export type FmtDraft = {
 
 // `id` is the open studio (Flash card & Exam Studio when absent); `step` indexes visibleSteps of that studio.
 // check: what the automatic check ran on (key, see createVals) and the reasons it failed (none: passed).
-export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; check?: { key: string; reasons: string[] } };
+export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; check?: { key: string; reasons: string[] }; redraft?: DraftItems };

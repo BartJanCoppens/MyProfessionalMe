@@ -8,7 +8,7 @@
 import type { Logic } from './model';
 import type { Bundle, ExamQuestion, NewDraft } from './types';
 import type { SetNw } from './createItems';
-import { draftItems, studioQuery, studioSpec } from './studioDraft';
+import { applyDraft, draftItems, redraftText, studioQuery, studioSpec } from './studioDraft';
 import { itemRows, noItems } from './logic/items';
 import type { Item } from './logic/items';
 import { fitBuilt, startBuild } from './logic/studioBuild';
@@ -19,6 +19,7 @@ import { isVoiceItem } from './logic/voiceItem';
 import { isGameItem } from './logic/gameContent';
 import { isCourseBlock } from './logic/courseContent';
 import { dropLesson } from './logic/courseEdit';
+import { courseEditVals } from './courseEditVals';
 import { voiceOn } from './lib/voice';
 import { STEERS, questionsOf, stepsOf } from './logic/studios';
 import type { Steers, StudioDef, StudioEntry, StudioItem } from './logic/studios';
@@ -35,6 +36,7 @@ import { deckVoiceName, dropOtherVoices, slidesProduce } from './studioSlides';
 import { NO_STOCK_VOICES, stockVoicesOf } from './studioVoicing';
 import { BUILDS } from './studioRunners';
 
+const dropRedraft = (L: Logic) => () => L.setState((s) => ({ studio: { ...s.studio, redraft: undefined } }));
 type Field = 'shape' | 'produce' | 'cast';
 
 // A group of chips for one question: choosing stores the answer under the question (or row label) on the draft. A
@@ -104,6 +106,8 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     check: check.length ? { head: 'Check · ' + check.length + ' questions · with the right answer', rows: itemRows('Practice exam', check), remove: () => change((rows) => rows) } : null,
     hasText2: text2, columns: def.columns ?? null, problems: studioProblems(def, list, nw.shape ?? {}, aiOn),
     add: () => change((rows, q) => [...rows, (text2 ? ['', '', ''] : ['', '']) as StudioItem, ...q]),
+    // A redraft that would remove blocks waits for the creator's answer.
+    redraft: L.state.studio.redraft ? { text: redraftText(list, L.state.studio.redraft), cancel: dropRedraft(L), proceed: () => { if (L.readOnly()) return; applyDraft(setNw, nw.type, L.state.studio.redraft!); dropRedraft(L)(); } } : null,
     // "Draft with AI" (the one pipeline in studioDraft.ts). Flash keeps its own draft button in the item panel and does not use this.
     aiDraft: { label: L.state.nwAiBusy ? 'Drafting' : 'Draft with AI', busy: L.state.nwAiBusy,
       run: () => draftItems(L, nw, bundles, setNw, studioQuery(nw), studioSpec(def, nw)) },
@@ -111,6 +115,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     motion: def.id === 'motion' ? motionProduce(L, nw, setNw) : null,
     slides: def.id === 'slides' ? slidesProduce({ L, nw }) : null,
     podcast: def.id === 'podcast' ? podcastProduce({ L, nw }) : null,
+    course: def.produce === 'course' ? courseEditVals(L, nw, setNw) : null,
     game: def.id === 'game' ? gameProduce(L, nw, setNw) : null,
   };
 }

@@ -120,13 +120,36 @@ describe('drafting again after blocks were built', () => {
     expect(h.state.nw.items!.how).toBe('ai');
     expect(lessonsOf(h.items()).map((l) => [l.title, l.blocks.map((b) => b.id)])).toEqual([['Place', ['b0001', 'b0002']], ['Invoice', ['b0003']], ['Report', ['b0004']]]);
   });
-  it('keeps them through the scripted draft too, and says when a lesson with blocks goes', async () => {
+  // 12 lessons with a block on each of the last two: the scripted draft (a bundle's passages, at most 8 rows) has fewer lessons than that.
+  const many = (): Item[] => [...Array.from({ length: 12 }, (_, k) => ['Lesson ' + (k + 1), 'T' + k, 's']), text('b0010', 10), text('b0011', 11), text('b0001', 0)] as Item[];
+  it('asks before it removes blocks, counting them in the items as they are now', async () => {
+    const h = at(2, many());
+    await h.st().aiDraft.run();
+    expect(h.state.nw.items!.how).toBe('manual');
+    expect(h.items()).toEqual(many());
+    expect(h.st().redraft!.text).toBe('This removes 2 blocks from lessons the new draft no longer has');
+    h.st().rows[11].remove();
+    expect(h.st().redraft!.text).toBe('This removes 1 block from lessons the new draft no longer has');
+  });
+  it('Continue applies the new draft and keeps the blocks of the lessons that remain; Cancel leaves the course as it is', async () => {
+    const h = at(2, many());
+    await h.st().aiDraft.run();
+    h.st().redraft!.cancel();
+    expect(h.st().redraft).toBeNull();
+    expect(h.items()).toEqual(many());
+    await h.st().aiDraft.run();
+    h.st().redraft!.proceed();
+    expect(h.st().redraft).toBeNull();
+    expect(h.state.nw.items!.how).toBe('scripted');
+    const blocks = h.items().filter((x) => !Array.isArray(x)) as CourseBlock[];
+    expect(blocks.map((b) => b.id)).toEqual(['b0001']);
+    expect(lessonsOf(h.items())[0].blocks.map((b) => b.id)).toEqual(['b0001']);
+  });
+  it('does not ask when no block would go', async () => {
     const h = at(2, list());
     await h.st().aiDraft.run();
+    expect(h.st().redraft).toBeNull();
     expect(h.state.nw.items!.how).toBe('scripted');
-    const kept = h.items().filter((x) => !Array.isArray(x)).length;
-    expect(kept).toBeGreaterThan(0);
-    const n = h.items().filter(Array.isArray).length;
-    if (n < 3) expect(h.lastToast()).toMatch(/blocks/);
+    expect(lessonsOf(h.items()).flatMap((l) => l.blocks).length).toBeGreaterThan(0);
   });
 });

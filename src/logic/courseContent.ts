@@ -8,6 +8,8 @@ import { stepsOf } from './studioRows';
 
 export const BLOCK_KINDS = ['text', 'callout', 'accordion', 'check', 'sort', 'branch', 'reflect', 'exercise'] as const;
 export type BlockKind = typeof BLOCK_KINDS[number];
+// The blocks that score a learner (a reflection does not): the final check and the score line count these.
+export const SCORED_KINDS: readonly BlockKind[] = ['check', 'sort', 'branch', 'exercise'];
 export const BLOCK_ID = /^b[0-9a-z]{4,20}$/;
 export const COURSE_CAPS = { lessons: [2, 12], blocksPerLesson: 20, heading: 120, text: 4000, callout: 600, panels: [2, 8], panelTitle: 120, panelBody: 1200,
   cards: [2, 10], bin: 40, card: 160, choices: [2, 4], choice: 200, outcome: 400, prompt: 400, unit: 12, bytes: 250000 } as const;

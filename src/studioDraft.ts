@@ -54,11 +54,20 @@ export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setN
   L.setState({ nwAiBusy: false });
   // The creator cannot change the format meanwhile; if it changed anyway, the answer is dropped.
   if (typeof out === 'string') { L.say(out); return; }
-  // A course drafted again keeps the blocks built so far on the lessons that remain, and says when a lesson with blocks goes.
-  const old = (nw.items?.list ?? []) as StudioEntry[], course = nw.type === 'E-learning', lost = course ? droppedBlocks(old, out.list as StudioEntry[]) : 0;
-  setNw((cur) => (cur.type === nw.type ? { items: course ? { ...out, list: keepBlocks((cur.items?.list ?? []) as StudioEntry[], out.list as StudioEntry[]) as Item[] } : out } : {}));
-  if (lost) L.say(lost + ' block' + (lost > 1 ? 's' : '') + ' of lessons the new draft no longer has were removed');
+  // A course drafted again keeps the blocks built so far on the lessons that remain; when that would remove blocks, the creator is asked first (it cannot be undone).
+  if (nw.type === 'E-learning' && droppedBlocks(currentList(L), out.list as StudioEntry[])) { L.setState((s) => ({ studio: { ...s.studio, redraft: out } })); return; }
+  applyDraft(setNw, nw.type, out);
 }
+
+const currentList = (L: Logic) => (L.latest().state.nw.items?.list ?? []) as StudioEntry[];
+// The drafted items onto the draft: a course keeps its blocks on the lessons that remain (by the items as they are now).
+export const applyDraft = (setNw: SetNw, type: string, out: DraftItems) =>
+  setNw((cur) => (cur.type === type ? { items: type === 'E-learning' ? { ...out, list: keepBlocks((cur.items?.list ?? []) as StudioEntry[], out.list as StudioEntry[]) as Item[] } : out } : {}));
+// The question under Draft while a redraft waits: how many blocks it would remove, counted on the course as it is now.
+export const redraftText = (current: StudioEntry[], out: DraftItems) => {
+  const lost = droppedBlocks(current, out.list as StudioEntry[]);
+  return lost ? 'This removes ' + lost + ' block' + (lost > 1 ? 's' : '') + ' from lessons the new draft no longer has' : 'Use the new draft of the lessons';
+};
 
 // One draft run on a spec: the AI's items, else the scripted rows when there are any (labelled as scripted, never AI), else the sentence that says why
 // there is nothing. `onLimit` hears a reached daily limit (a loop of drafts stops there). The one run behind a studio's button and "Draft with AI" on a placeholder.

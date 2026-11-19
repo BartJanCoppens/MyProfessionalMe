@@ -9,6 +9,7 @@ import { ItemRows, Problems } from './CreateShared';
 import BrowserVoice from './BrowserVoice';
 import ReelBuild from './ReelBuild';
 import StudioBuild from './StudioBuild';
+import CourseEditor from './CourseEditor';
 
 type ST = NonNullable<VM['create']>['studio'];
 type Group = ST['shape'][number];
@@ -22,6 +23,11 @@ export function DraftRows({ st }: { st: ST }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: '1px solid #e1e5dc', borderRadius: 6, background: '#fafbf8' }}>
       {!st.readOnly && <div><Button size="sm" variant="dark" onClick={st.aiDraft.run} disabled={st.aiDraft.busy}>{st.aiDraft.label}</Button></div>}
+      {st.redraft && !st.readOnly && (
+        <div role="alert" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, color: '#7a5000' }}>
+          <span>{st.redraft.text} ·</span><Button size="sm" onClick={st.redraft.proceed}>Continue</Button><Button size="sm" variant="secondary" onClick={st.redraft.cancel}>Cancel</Button>
+        </div>
+      )}
       <Problems list={st.problems} />
       <ItemRows head={'Items · ' + (st.columns ? st.columns.join(' · ') : 'label and text' + (st.hasText2 ? ' · text 2' : ''))} note={st.itemsLabel} gap={8}
         rows={st.rows.map((r, k) => (st.readOnly ? { cells: [<b key="l">{r.label}</b>, r.text, ...(st.hasText2 ? [r.text2] : [])] }
@@ -91,6 +97,7 @@ export function Produce({ st }: { st: ST }) {
       {st.motion && <MotionOutput m={st.motion} readOnly={st.readOnly} />}
       {st.slides && <VoiceOutput s={st.slides} readOnly={st.readOnly} />}
       {st.podcast && <VoiceOutput s={st.podcast} readOnly={st.readOnly} />}
+      {st.course && <CourseEditor c={st.course} readOnly={st.readOnly} />}
       {st.game && <GameOutput g={st.game} readOnly={st.readOnly} />}
     </>
   );

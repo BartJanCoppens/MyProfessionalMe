@@ -618,6 +618,20 @@ The studio on the hub, its Draft step and the move to Produce. The course editor
 | ELD-06 | Creator | A course near the 250,000-byte cap | Check it | The editor counts the database's jsonb spacing: exactly 250,000 passes, one byte more says "The course is too large", so what passes here never fails at submit | `logic/courseContent.test.ts` › the size cap |
 | ELD-07 | Creator | A course with blocks in Produce, and a lesson title of 500 characters | Draft with AI again (or scripted); move to Produce | The blocks stay on the lessons that remain (a toast says if a lesson with blocks went); a long title is clipped to 120 in its first block, so the course stays valid | `studioElearn.test.ts` › drafting again; `logic/courseEdit.test.ts` |
 
+## 24. E-learning Studio: the course editor (ELE), Learner with creation rights, Admin in View as (E-learning Studio Task 1.3)
+
+| ID | Role | Preconditions | Steps | Expected | Covered by |
+|---|---|---|---|---|---|
+| ELE-01 | Creator | A course of two lessons with blocks, in Produce | Look; pick lesson 2 | "2 lessons · 4 blocks · 1 scored"; the canvas shows only the lesson's blocks | `screens/CourseEditor.test.tsx` › the outline and the canvas |
+| ELE-02 | Creator | Lesson 1 shown | Move lesson 1 down; Add lesson; Remove lesson | Its blocks go with it and the lesson on show follows; a third lesson "New lesson" appears; with two lessons left removal says "A course needs at least two lessons"; default labels renumber, the creator's own labels stay | `CourseEditor.test.tsx`; `logic/courseEdit.test.ts` › lessons |
+| ELE-03 | Creator | A text block selected | Pick "Knowledge check" on the shelf | The check lands right after the selected block and opens in the inspector with empty fields and "Write the question"; the shelf stays | `CourseEditor.test.tsx` › the shelf and the inspector |
+| ELE-04 | Creator | A check selected | Open "Right answer" and "Final check" | Answer A to D; "Knowledge check" or "Final check"; marking one final unmarks another | `CourseEditor.test.tsx`; `logic/courseEdit.test.ts` › setFinal |
+| ELE-05 | Creator | Any block selected | Type; ↑ ↓; Duplicate; Remove block; Done | Fields are capped in length; a block moves only inside its lesson, the first cannot go up; a copy gets a new id; Remove and Done leave the shelf | `CourseEditor.test.tsx`; `logic/courseEdit.test.ts` |
+| ELE-06 | Creator | Completion "Final check of 80 % or more" without a final check | Look under the editor | "Add a final check ..." and the other problems of the course show | `CourseEditor.test.tsx` › problems |
+| ELE-07 | Creator | The shelf | Look | Text, Callout, Accordion; Knowledge check, Drag and sort, Branching scenario, Reflection, Calculation exercise; no image, tutor, calculator or "coming" entries | `CourseEditor.test.tsx` |
+| ELE-08 | Admin | View as a person's draft | Open Produce | The course shows; no shelf, inspector, lesson title input or lesson buttons; selecting changes nothing | `CourseEditor.test.tsx` › View as |
+| ELE-09 | Creator | A course with 12 lessons, blocks on the last two | Draft with AI again | Nothing changes until "This removes 2 blocks from lessons the new draft no longer has · Continue / Cancel"; the count follows edits made meanwhile; Cancel keeps the course; Continue keeps the blocks of lessons that remain | `studioElearn.test.ts` › drafting again |
+
 ## Bugs found and fixed
 
 Each one first had an `it.fails` test, named in the case above. All seven were fixed on 1 Nov 2026 (branch `fix/functional-bugs`) and their tests are plain `it` now. EDGE-02 had a second occurrence in the road's cloud lanes, covered by `model.edge.test.ts › places a cloud lane item due outside the four road quarters`.
