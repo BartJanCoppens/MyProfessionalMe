@@ -4,6 +4,7 @@
 // follow its rows in `nw.items`; they are shown as a block and removed as a whole. An Animated flow's drawing follows its
 // rows too; editing the rows drops it (it was built from them), and the build steps show how far it got (fitBuilt). A deck's or episode's
 // voice-over item follows its rows and stays through an edit (so does a built game: it reads the rows when played): a clip counts only while its slide's talk-over is what it was made from.
+// A course's blocks follow its lesson rows and stay through an edit; removing a lesson row removes its blocks too (dropLesson).
 import type { Logic } from './model';
 import type { Bundle, ExamQuestion, NewDraft } from './types';
 import type { SetNw } from './createItems';
@@ -16,6 +17,8 @@ import { speakersOf } from './logic/podcastContent';
 import { wantsVoice } from './logic/slidesContent';
 import { isVoiceItem } from './logic/voiceItem';
 import { isGameItem } from './logic/gameContent';
+import { isCourseBlock } from './logic/courseContent';
+import { dropLesson } from './logic/courseEdit';
 import { voiceOn } from './lib/voice';
 import { STEERS, questionsOf, stepsOf } from './logic/studios';
 import type { Steers, StudioDef, StudioEntry, StudioItem } from './logic/studios';
@@ -84,8 +87,12 @@ const NO_VOICE_STEP = 'No voice · text and music only';
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
   const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list), aiOn = L.aiCan('studio_draft'), on = { draft: aiOn, voice: voiceOn(L.aiOpts()), role: L.aiCan('game_role') };
   // Editing the rows keeps the items' provenance and any check after them; a hand-made list says 'manual'.
+  const set = (it: NonNullable<NewDraft['items']>, list: StudioEntry[]) => ({ items: { ...it, list: list as Item[], how: it.how || 'manual', problems: [] } });
   const change = (f: (rows: StudioItem[], check: ExamQuestion[]) => StudioEntry[]) => setNw((cur) => { const it = cur.items ?? noItems(), all = it.list as StudioEntry[];
-    return { items: { ...it, list: [...f(stepsOf(all), questionsOf(all)), ...all.filter((x) => isVoiceItem(x) || isGameItem(x))] as Item[], how: it.how || 'manual', problems: [] } }; });
+    return set(it, [...f(stepsOf(all), questionsOf(all)), ...all.filter((x) => isVoiceItem(x) || isGameItem(x) || isCourseBlock(x))]); });
+  // A lesson row goes with its blocks.
+  const removeRow = (k: number) => (def.produce === 'course' ? setNw((cur) => { const it = cur.items ?? noItems(); return set(it, dropLesson(it.list as StudioEntry[], k)); })
+    : change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]));
   return {
     shape: def.qs.map(([q, options, steers]) => { const o = offered(on, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers, PRODUCE_NOTES[def.id + ':' + row])),
@@ -93,7 +100,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
       : p.key === 'Voice' ? voiceChoice(L, nw, setNw, p.key, p.options, 'note' in p ? p.note : '', def.id === 'reel' ? reelVoiceName(L, nw) : deckVoiceName(L, nw), dropOtherVoices) : lookChoice(L, nw, setNw, p.key, p.options, p.note))),
     rows: stepsOf(list).map((r, k) => ({ label: r[0], text: r[1], text2: r[2] ?? '',
       edit: (f: 0 | 1 | 2, v: string) => change((rows, q) => [...rows.map((x, i) => (i === k ? (x.map((y, j) => (j === f ? v : y)) as StudioItem) : x)), ...q]),
-      remove: () => change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]) })),
+      remove: () => removeRow(k) })),
     check: check.length ? { head: 'Check · ' + check.length + ' questions · with the right answer', rows: itemRows('Practice exam', check), remove: () => change((rows) => rows) } : null,
     hasText2: text2, columns: def.columns ?? null, problems: studioProblems(def, list, nw.shape ?? {}, aiOn),
     add: () => change((rows, q) => [...rows, (text2 ? ['', '', ''] : ['', '']) as StudioItem, ...q]),

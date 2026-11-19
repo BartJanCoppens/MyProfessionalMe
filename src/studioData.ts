@@ -1,6 +1,7 @@
-// The ten studios of the design, as data (Task 1.1), moved out of data.ts for size. Types and rules: src/logic/studios.ts. Examples name roles, never people.
+// The eleven studios of the design, as data (Task 1.1), moved out of data.ts for size. Types and rules: src/logic/studios.ts. Examples name roles, never people.
 import { DIFFICULTIES, LANGUAGES, RUN_MINUTES, SCORINGS } from '../supabase/functions/_shared/avatarRules.ts';
 import type { StudioDef } from './logic/studios';
+import { COMPLETION_QUESTION, COURSE_LENGTH } from './logic/courseContent';
 
 export const STUDIO_STEPS = ['Idea & sources', 'Shape it', 'Draft', 'Produce', 'Preview & test', 'Check & send'];
 export const STUDIOS: StudioDef[] = [
@@ -70,4 +71,10 @@ export const STUDIOS: StudioDef[] = [
    qs: [['How long should it take?', ['2 hours', 'Half a day', 'A full day']], ['Can it count as trajectory evidence?', ['Yes', 'No']]],
    items: [['Brief', 'Two family-owned logistics companies merged on 1 October. The CFO wants one finance function by day 100: one chart of accounts, one close calendar and one payment run.'], ['Deliverable', 'A day-100 roadmap on one page'], ['Deliverable', 'The three decisions the CFO must take in the first month'], ['Deliverable', 'The risks to the first joint month-end close'], ['Criterion', 'Realistic sequencing'], ['Criterion', 'Decisions, not options'], ['Criterion', 'Client-ready writing']],
    rows: [['Names', ['Removed', 'Fully fictional'], 'redraft']], build: null },
+ { id: 'elearn', name: 'E-learning Studio', out: 'E-learning', format: 'E-learning', available: true, compact: false, glyph: '▦', time: 'about 45 min', dom: 'reg', lvl: 2, min: 2, cast: null, pv: 'elearn', produce: 'course',
+   tag: 'A course of scrolling lessons, with learnings from the other studios',
+   idea: 'Cross-border services: where VAT is due and how to invoice it', title: 'Cross-border services: where is the VAT due?',
+   qs: [['Who is it for?', ['Consultants who invoice clients', 'Finance and billing teams', 'Tax specialists'], 'draft'], [COMPLETION_QUESTION, ['All lessons viewed', 'Final check of 80 % or more', 'Both']], [COURSE_LENGTH, ['15 min', '30 min', '60 min']]],
+   items: [['Lesson 1', 'Where is a service taxed?', 'The general B2B and B2C rules, and the main exceptions'], ['Lesson 2', 'Reverse charge on the invoice', 'What the invoice must say and who pays the VAT'], ['Lesson 3', 'Reporting it', 'The intra-Community listing, and a final check']],
+   rows: [], build: null },
 ];

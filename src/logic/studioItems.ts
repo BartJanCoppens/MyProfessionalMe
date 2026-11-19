@@ -7,6 +7,7 @@ import { jsonObject } from './json';
 import { ITEM_MAX, LONG_MAX, SHORT_MAX, fieldOk, firstSentence, leadWords, marked, readQuestions, rowFieldMax } from './items';
 import { TO_WRITE } from '../../supabase/functions/_shared/avatarRules.ts';
 import { briefLines } from './planDraft';
+import { COURSE_CAPS } from './courseContent';
 import { wrongSpeaker } from './podcastContent';
 import { END_CHECK, explainerEnd } from './studioContent';
 import { CHECK_SIZE, itemsValid, rowsMax } from './studios';
@@ -22,10 +23,11 @@ const LAYOUT: Record<string, string> = {
   motion: 'one row per stage, in order: label is the stage name, text is what happens',
   explainer: 'one row per step: label is who or what acts, text is what happens',
   aid: 'one row per checklist line: label is the moment (such as Before, During or After), text is the line',
+  elearn: 'one row per lesson, in order: label is "Lesson 1", "Lesson 2" and so on, text the lesson title, text2 a one-sentence summary of what it teaches (no blocks, no questions: the creator builds the lessons later)',
   case: 'a Brief row, then Deliverable rows, then Criterion rows; text is one line each',
 };
 // The most tokens a studio's answer may need; the ai function clamps a request at LIMITS.maxTokens (2048).
-export const TOKENS: Record<string, number> = { avatar: 2000, reel: 1500, slides: 2000, podcast: 2000, aid: 2000, case: 1500, game: 1500, explainer: 1500 };
+export const TOKENS: Record<string, number> = { avatar: 2000, reel: 1500, slides: 2000, podcast: 2000, aid: 2000, case: 1500, game: 1500, explainer: 1500, elearn: 1500 };
 // A reel is told at about 150 words a minute: the words all its voice-over rows together should have for the length chosen (60 s when unanswered).
 export const REEL_WORDS_PER_MINUTE = 150;
 const reelBudget = (shape: Record<string, string> | undefined) => 'The voice-over of all the scenes together is about ' + Math.round(((parseInt(shape?.['Length?'] ?? '', 10) || 60) * REEL_WORDS_PER_MINUTE) / 60) + ' words (' + REEL_WORDS_PER_MINUTE + ' words a minute for the length chosen). ';
@@ -35,7 +37,7 @@ const rowWidths = (def: StudioDef) => new Set<number>(def.items.map((i) => i.len
 // The Explainer's three-question check is drafted with its steps when it ends with the check; the check shares the cap.
 const wantsCheck = (def: StudioDef, shape: Record<string, string> | undefined) => def.format === 'Interactive explainer' && explainerEnd(shape ?? {}) === END_CHECK;
 // How many rows the AI may write: the cap, less the Explainer's check or the place an Animated flow's drawing or a deck's or episode's voice-over takes (a reel's voice-over and final cut take two).
-const room = (def: StudioDef, shape: Record<string, string> | undefined) => rowsMax(def) - (wantsCheck(def, shape) ? CHECK_SIZE : 0) - (['Animated flow', 'Slides', 'Podcast'].includes(def.format) ? 1 : def.format === 'Reel' ? 2 : 0);
+const room = (def: StudioDef, shape: Record<string, string> | undefined) => (def.produce === 'course' ? COURSE_CAPS.lessons[1] : rowsMax(def)) - (wantsCheck(def, shape) ? CHECK_SIZE : 0) - (['Animated flow', 'Slides', 'Podcast'].includes(def.format) ? 1 : def.format === 'Reel' ? 2 : 0);
 const CHECK_ASK = ' Also write exactly ' + CHECK_SIZE + ' multiple-choice questions that check the steps, as "check":[{"t":short topic,"q":question,"o":[four options],"a":0-based index of the right option,"why":one sentence on why}].';
 
 export function studioRequest(def: StudioDef, nw: NewDraft, passages: string[]): AiRequest {
@@ -86,6 +88,7 @@ const SCRIPTS: Record<string, (s: string[], nw: NewDraft) => StudioItem[]> = {
   motion: (s) => numbered('Stage', s),
   explainer: (s) => numbered('Step', s),
   aid: (s) => s.map((x): StudioItem => ['Check', x]),
+  elearn: (s) => s.slice(0, COURSE_CAPS.lessons[1]).map((x, k): StudioItem => ['Lesson ' + (k + 1), leadWords(x, 6) || 'Lesson ' + (k + 1), x]),
   case: (s, nw) => [['Brief', 'About “' + nw.title + '”: ' + s[0]], ['Deliverable', 'A short written answer on ' + nw.title], ...(s.length > 1 ? s.slice(1, 4) : s).map((x): StudioItem => ['Criterion', x])],
 };
 

@@ -604,6 +604,19 @@ The format and its rules only; the studio, editor and player are Tasks 1.2 to 1.
 | ELS-08 | Database | More than 252 items; a signed-in user calls `course_ok` | Save; call | Refused (23514); no execute (42501) | `rls.sql` EL |
 | ELS-09 | Learner | A published course's content in the library data | Read it | `parseFormatContent` reads a course and refuses a block without an id or a wrong rule | `contentStore.test.ts` |
 
+## 23. E-learning Studio: the definition, Draft and the spine (ELD), Learner with creation rights (E-learning Studio Task 1.2)
+
+The studio on the hub, its Draft step and the move to Produce. The course editor, player and reflections are Tasks 1.3 to 1.5.
+
+| ID | Role | Preconditions | Steps | Expected | Covered by |
+|---|---|---|---|---|---|
+| ELD-01 | Creator | A rule that allows E-learning; one that allows only Podcast | Open the Studios hub | Eleven studios; "E-learning Studio" opens for the first and is greyed "Not in your creation rules" for the second; no "Where will it run?", no SCORM import, no build steps | `screens/StudioSpine.test.tsx` › the hub; `studioVals.test.ts` › the hub; `logic/studios.test.ts` |
+| ELD-02 | Creator | The studio is open | Step through | Six steps, Produce included; "Who is it for?" says "Steers the AI draft"; completion and length are published answers | `logic/studios.test.ts` › visibleSteps; `logic/studioContent.test.ts` |
+| ELD-03 | Creator | Draft with three lessons that have blocks | Edit a lesson title; remove lesson 2; add a lesson | The blocks stay attached to their own lesson; removing a lesson removes its blocks and the later blocks move up one lesson | `studioElearn.test.ts`; `logic/courseEdit.test.ts` (drop, move) |
+| ELD-04 | Creator | Lessons without blocks | Next: Produce | Each gets one text block with its title and summary; a lesson with blocks is unchanged; fewer than 2 lessons stays in Draft ("Add at least 2 lessons") | `studioElearn.test.ts` › from Draft to Produce |
+| ELD-05 | Creator | AI on; AI off or a malformed answer | Draft with AI | Lesson rows only (2 to 12, title and summary); without AI or on a bad answer the scripted rows, labelled "Scripted from the bundle", never AI | `studioElearn.test.ts` › Draft with AI; `studioDraft.test.ts` |
+| ELD-06 | Creator | A course near the 250,000-byte cap | Check it | The editor counts the database's jsonb spacing: exactly 250,000 passes, one byte more says "The course is too large", so what passes here never fails at submit | `logic/courseContent.test.ts` › the size cap |
+
 ## Bugs found and fixed
 
 Each one first had an `it.fails` test, named in the case above. All seven were fixed on 1 Nov 2026 (branch `fix/functional-bugs`) and their tests are plain `it` now. EDGE-02 had a second occurrence in the road's cloud lanes, covered by `model.edge.test.ts › places a cloud lane item due outside the four road quarters`.

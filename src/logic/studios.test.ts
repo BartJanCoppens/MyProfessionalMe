@@ -8,16 +8,16 @@ const def = (id: string) => studioById(id)!;
 const ITEMS = (id: string) => def(id).items as StudioItem[];
 
 describe('studio definitions', () => {
-  it('has the ten design studios, each with questions and, but for the Explainer (its options were not deliverable), produce rows', () => {
-    expect(STUDIOS.map((s) => s.id)).toEqual(['avatar', 'reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
-    for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length > 0, s.id).toBe(!['explainer', 'slides', 'podcast'].includes(s.id)); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
+  it('has the eleven design studios, each with questions and, but for the Explainer (its options were not deliverable), produce rows', () => {
+    expect(STUDIOS.map((s) => s.id)).toEqual(['avatar', 'reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case', 'elearn']);
+    for (const s of STUDIOS) { expect(s.qs.length).toBeGreaterThan(0); expect(s.rows.length > 0, s.id).toBe(!['explainer', 'slides', 'podcast', 'elearn'].includes(s.id)); expect(s.items.length).toBeGreaterThanOrEqual(s.min); }
     expect(def('avatar').qs).toHaveLength(4);
     expect(def('reel').build).toEqual(['Writing the voice-over · from your scenes · no AI', 'Voicing each scene', 'Adding visuals and captions', 'Final cut']);
   });
-  it('names a learning format per studio; Avatar, Reel, Podcast, Game, Slides, Motion, Explainer, Job aid, Flash and Case are available', () => {
-    expect(STUDIOS.map((s) => s.format)).toEqual(['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Flash cards', 'Case exercise']);
+  it('names a learning format per studio; Avatar, Reel, Podcast, Game, Slides, Motion, Explainer, Job aid, Flash, Case and E-learning are available', () => {
+    expect(STUDIOS.map((s) => s.format)).toEqual(['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Job aid', 'Flash cards', 'Case exercise', 'E-learning']);
     expect(def('flash').alsoFormats).toEqual(['Practice exam']);
-    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['avatar', 'reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case']);
+    expect(STUDIOS.filter((s) => s.available).map((s) => s.id)).toEqual(['avatar', 'reel', 'podcast', 'game', 'slides', 'motion', 'explainer', 'aid', 'flash', 'case', 'elearn']);
   });
   it('names no person: the examples and the seeded stock looks use roles', () => {
     expect(JSON.stringify(STUDIOS)).not.toMatch(/Marleen|Pieter|\bSara\b|Yves/);
@@ -34,6 +34,13 @@ describe('visibleSteps', () => {
     expect(visibleSteps(def('flash'))).toEqual(['Idea & sources', 'Draft', 'Preview & test', 'Check & send']);
     expect(visibleSteps(def('reel'))).toEqual(STUDIO_STEPS);
     expect(visibleSteps(def('explainer'))).toEqual(['Idea & sources', 'Shape it', 'Draft', 'Preview & test', 'Check & send']);
+  });
+  it('keeps Produce for the E-learning Studio, whose course editor has no produce rows or cast', () => {
+    expect(def('elearn').rows).toEqual([]);
+    expect(def('elearn').cast).toBeNull();
+    expect(visibleSteps(def('elearn'))).toEqual(STUDIO_STEPS);
+    expect(visibleSteps({ ...def('aid'), rows: [] })).not.toContain('Produce');
+    expect(visibleSteps({ ...def('elearn'), produce: undefined })).not.toContain('Produce');
   });
   it('drops Shape without questions and Produce without rows and cast', () => {
     const bare = { ...def('reel'), qs: [], rows: [], cast: null };
@@ -71,6 +78,10 @@ describe('itemsValid', () => {
 });
 
 describe('an E-learning course in a studio\'s items', () => {
+  it('words the lesson minimum as lessons, as the database does', () => {
+    expect(itemsValid(def('elearn'), ITEMS('elearn').slice(0, 1))).toContain('Add at least 2 lessons');
+    expect(itemsValid(def('aid'), ITEMS('aid').slice(0, 2))).toContain('Add at least 4 items');
+  });
   it('has no exam questions: its knowledge checks are course blocks', () => {
     const q = { t: 'T', q: 'Q?', o: ['a', 'b', 'c', 'd'], a: 0, why: 'W' };
     const items = [['Lesson 1', 'First', 'Summary'], ['Lesson 2', 'Second', 'Summary'], { block: 'check', id: 'b0001', lesson: 0, question: q, fin: false }, { block: 'text', id: 'b0002', lesson: 1, h: '', t: 'Words.' }];

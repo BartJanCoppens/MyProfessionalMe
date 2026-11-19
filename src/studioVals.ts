@@ -7,6 +7,8 @@ import type { AppState, Bundle, ExamQuestion, NewDraft, StudioState } from './ty
 import { addFirst } from './createItems';
 import type { SetNw } from './createItems';
 import { aiAssisted, noItems, validItems } from './logic/items';
+import type { Item } from './logic/items';
+import { seedLessons } from './logic/courseEdit';
 import { voiceOn } from './lib/voice';
 import type { WithFile } from './studioDraft';
 import type { RuleParts } from './logic/contribution';
@@ -28,6 +30,8 @@ const HINTS: Record<string, string> = {
   Draft: 'Draft it from the bundles, or import a CSV. Edit anything.', Produce: 'Choose how it is made and who presents it. Stock looks and voices only.',
   'Preview & test': 'Try it as a learner would. Nothing here is saved or counted.', 'Check & send': 'Automatic checks, then the review route, then it goes to your reviewers.',
 };
+// A studio's own lead for a step, over HINTS: the E-learning Studio builds its lessons from blocks in Produce.
+const STUDIO_HINTS: Record<string, Record<string, string>> = { elearn: { Produce: 'Build each lesson from blocks: text, questions and learnings from the other studios.' } };
 const FLASH = 'flash';
 // The studio the draft is made in, also while a saved contribution is edited in its studio; null on the upload form.
 export const studioOf = (s: AppState) => (s.studio.view === 'studio' ? s.studio.id ?? FLASH : null);
@@ -78,6 +82,8 @@ export function studioVals(L: Logic, src: StudioSrc) {
     if (name === 'Idea & sources' && (!nw.title.trim() || !nw.take.trim())) { L.say('Add a title and the one takeaway first'); return; }
     if (name === 'Draft' && flash && !items.length) { L.say(addFirst(nw.type, 'draft them or import a CSV')); return; }
     if (name === 'Draft' && problems.length) { L.say(problems[0]); return; }
+    // A course's lessons each get a first block when it moves on to Produce.
+    if (name === 'Draft' && def.produce === 'course') setNw((cur) => (cur.items ? { items: { ...cur.items, list: seedLessons(cur.items.list as StudioEntry[]) as Item[] } } : {}));
     set({ step: Math.min(steps.length - 1, step + 1) });
   };
   const exam = nw.type === 'Practice exam', passed = !!src.checkReasons && !src.checkReasons.length;
@@ -88,7 +94,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     openUpload: () => { setNw((cur) => { const f = uploadFormat(src.rules, cur); return f === cur.type ? {} : changeFormat(cur, f, src.rules); }); set({ view: 'form' }); },
     // An edit opened in its studio leaves the way the form's Cancel does.
     backLabel: L.state.editing ? '← My contributions' : '← All studios', toHub: () => (L.state.editing ? src.cancel() : set(HUB)),
-    readOnly, studioName: def.name, flash, def, steps, step, stepName: name, stepTitle: name, stepHint: HINTS[name] ?? '',
+    readOnly, studioName: def.name, flash, def, steps, step, stepName: name, stepTitle: name, stepHint: STUDIO_HINTS[def.id]?.[name] ?? HINTS[name] ?? '',
     prev: () => set({ step: Math.max(0, step - 1) }), next, noPrev: step === 0, hasNext: step < steps.length - 1, nextLabel: 'Next: ' + (steps[step + 1] ?? ''),
     formats: formats.map((f) => ({ label: f, on: nw.type === f, pick: () => pick(f) })),
     ...parts, buildRunner: BUILDS[def.id]?.runner({ L, nw, setNw, withFile: src.withFile }),

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The generic studio spine: the hub over all ten studios, the step bodies, build retry and View as (Task 1.2).
+// The generic studio spine: the hub over all eleven studios, the step bodies, build retry and View as (Task 1.2).
 // Reel is marked available here (by overriding the data in this file only) to reach the generic path: a studio with three-text rows,
 // produce rows, a stock look and no build runner yet.
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -46,9 +46,9 @@ beforeEach(() => { window.scrollTo = vi.fn() as unknown as typeof window.scrollT
 afterEach(cleanup);
 
 describe('the hub', () => {
-  it('lists all ten studios, every one of them built', () => {
+  it('lists all eleven studios, every one of them built', () => {
     render(<Live state={{ create: data(), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
-    ['Avatar Studio', 'Reel Studio', 'Podcast Studio', 'Game Studio', 'Slides Studio', 'Motion Studio', 'Explainer Studio', 'Job Aid Studio', 'Flash card & Exam Studio', 'Case Studio']
+    ['Avatar Studio', 'Reel Studio', 'Podcast Studio', 'Game Studio', 'Slides Studio', 'Motion Studio', 'Explainer Studio', 'Job Aid Studio', 'Flash card & Exam Studio', 'Case Studio', 'E-learning Studio']
       .forEach((n) => expect(screen.getByRole('button', { name: new RegExp(n) })).toBeTruthy());
     expect(card(/Avatar Studio/).disabled).toBe(false);
     expect(card(/Flash card & Exam Studio/).disabled).toBe(false);
@@ -59,6 +59,15 @@ describe('the hub', () => {
     expect(card(/Podcast Studio/).disabled).toBe(true);
     expect(card(/Podcast Studio/).textContent).toContain('Not in your creation rules');
     expect(card(/Flash card & Exam Studio/).disabled).toBe(false);
+  });
+  it('greys the E-learning Studio for a creator whose rules allow only Podcast, and opens it for one who may make E-learning', () => {
+    const { unmount } = render(<Live state={{ create: data(['Podcast']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
+    expect(card(/E-learning Studio/).disabled).toBe(true);
+    expect(card(/E-learning Studio/).textContent).toContain('Not in your creation rules');
+    unmount();
+    render(<Live state={{ create: data(['E-learning']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);
+    expect(card(/E-learning Studio/).disabled).toBe(false);
+    expect(card(/E-learning Studio/).textContent).toContain('A course of scrolling lessons');
   });
   it('offers the Reel Studio on the hub (it is built)', () => {
     render(<Live state={{ create: data(['Reel']), createTab: 'new', studio: { view: 'hub', step: 0 } }} />);

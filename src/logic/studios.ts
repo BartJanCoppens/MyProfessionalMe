@@ -1,4 +1,4 @@
-// The ten studios (design v4+, studios plan Task 1.1): types and pure rules. The data is STUDIOS in src/studioData.ts.
+// The eleven studios (design v4+, studios plan Task 1.1): types and pure rules. The data is STUDIOS in src/studioData.ts.
 // A studio's items are [label, text] or [label, text, text2] rows; what each row means depends on the studio (itemsValid).
 import { STUDIOS, STUDIO_STEPS } from '../studioData';
 import type { ExamQuestion } from '../types';
@@ -47,6 +47,7 @@ export type StudioDef = {
   id: string; name: string; out: string; glyph: string; tag: string; time: string; idea: string; title: string;
   dom: string; lvl: number; qs: StudioQuestion[]; items: StudioItem[]; cast: StudioCast; rows: ProduceRow[]; build: BuildStep[] | null;
   pv: string; min: number;
+  produce?: 'course'; // its Produce step has an editor of its own (the E-learning Studio's course), so the step stays without produce rows or a cast
   savesProduce?: boolean; // true: its Produce answers and cast are saved inside the draft's shape (the database reads them), not only on screen
   columns?: string[]; // what the Draft step's fields are called when label, text and text 2 mean more than that (a deck's title, bullets and talk-over)
   format: string; alsoFormats?: string[]; // the learning format(s) it produces, see contribution formats
@@ -59,7 +60,7 @@ export const studioById = (id: string): StudioDef | undefined => STUDIOS.find((s
 export const studioFormats = (def: StudioDef) => [def.format, ...(def.alsoFormats ?? [])];
 
 export function visibleSteps(def: StudioDef): string[] {
-  const dropShape = def.compact || !def.qs.length, dropProduce = def.compact || (!def.rows.length && !def.cast);
+  const dropShape = def.compact || !def.qs.length, dropProduce = def.compact || (!def.rows.length && !def.cast && !def.produce);
   return STUDIO_STEPS.filter((s) => !(s === 'Shape it' && dropShape) && !(s === 'Produce' && dropProduce));
 }
 
@@ -135,7 +136,7 @@ export function itemsValid(def: StudioDef, items: StudioEntry[]): string[] {
   // A field that has text but breaks the field rule is too long (blank ones are reported above).
   const long = rows.filter((i) => i.some((v, k) => !!v?.trim() && !fieldOk(rowFieldMax(k))(v)))
     .map((i) => i[0].slice(0, 40) + ': too long (labels up to ' + SHORT_MAX + ' characters, texts up to ' + LONG_MAX + ')');
-  const few = tooFew(def, rows.length) ? ['Add at least ' + def.min + ' items'] : [];
+  const few = tooFew(def, rows.length) ? ['Add at least ' + def.min + (def.produce === 'course' ? ' lessons' : ' items')] : [];
   const max = rowsMax(def), many = max && items.length > max ? ['Add at most ' + max + ' items'] : [];
   const check = questions.length && (questions.length !== CHECK_SIZE || !questions.every(isQuestion)) ? ['The check needs exactly ' + CHECK_SIZE + ' questions: draft it again or remove it'] : [];
   return [...few, ...many, ...blanks, ...long, ...check, ...(SCHEMAS[def.id] ?? (() => []))(rows, items)];

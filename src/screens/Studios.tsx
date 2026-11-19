@@ -1,5 +1,5 @@
 // Create & share > New content: the Studios hub and the one studio D1 keeps, Flash card & Exam Studio (design v4).
-// Hub of all ten studios, the step spine (visibleSteps of the studio, see studioVals.ts), preview and send. It only reads from the view-model.
+// Hub of all eleven studios, the step spine (visibleSteps of the studio, see studioVals.ts), preview and send. It only reads from the view-model.
 import { Banner, Button, Field, Input, LinkButton, Select, Stepper, Tag, Textarea } from '../ds';
 import type { VM } from '../model';
 import { BundlePicker, SubmitSide } from './CreateParts';
