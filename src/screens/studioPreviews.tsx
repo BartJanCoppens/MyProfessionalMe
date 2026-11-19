@@ -1,9 +1,11 @@
 // The preview step's registry: one preview per studio kind (StudioDef.pv). Flash plays its cards or questions; a studio
-// whose rows publish as a learner format (Job aid, Case, Interactive explainer, Animated flow, Slides, Podcast, Game) shows that format's own
+// whose rows publish as a learner format (Job aid, Case, E-learning course, Interactive explainer, Animated flow, Slides, Podcast, Game) shows that format's own
 // learner panel over studioContent. A preview is a play-test: never saved, never counted as progress. The same panels
 // show a saved studio contribution to its author and its reviewers (SavedContent), and a Presentation's file.
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { NEW_RUN, courseView } from '../fmtCourse';
+import type { CourseRun } from '../fmtCourse';
 import { explainerView } from '../fmtExplainer';
 import { gameView } from '../fmtGame';
 import type { GameOpts } from '../fmtGame';
@@ -19,7 +21,7 @@ import { podcastView } from '../fmtPodcast';
 import { reelView } from '../fmtReel';
 import { slidesView } from '../fmtSlides';
 import type { StockLook } from '../logic/stockLooks';
-import type { AidContent, AvatarContent, ExplainerContent, FormatContent, GameContent, HorizonContent, MotionContent, PodcastContent, ReelContent, SlidesContent } from '../types';
+import type { AidContent, AvatarContent, CourseContent, ExplainerContent, FormatContent, GameContent, HorizonContent, MotionContent, PodcastContent, ReelContent, SlidesContent } from '../types';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
 import AvatarPanel from './AvatarPanel';
 import GamePanel from './GamePanel';
@@ -31,7 +33,8 @@ import SlidesPanel from './SlidesPanel';
 import SlidesVideo from './SlidesVideo';
 import { AidPanel, CasePanel } from './FormatWork';
 import { label } from './labelStyle';
-import { Tag } from '../ds';
+import { LinkButton, SegmentedControl, Tag } from '../ds';
+import CoursePanel from './CoursePanel';
 import StudioPlayTest from './StudioPlayTest';
 
 type CS = NonNullable<VM['create']>;
@@ -49,6 +52,19 @@ function ExplainerTry({ content }: { content: ExplainerContent }) {
   const [s, setS] = useState<ExplainerState>({ ...NEW_ROUND, at: 0, seen: false });
   const ie = explainerView(content, s, (p) => setS((cur) => ({ ...cur, ...p })), { ro: false, note: '', lastSeen: false, locked: () => false, onLast: () => {}, onCheck: () => {} });
   return <ExplainerPanel ie={ie} />;
+}
+
+// The learner's course; the lesson, the answers and what was seen live in this preview only. Desktop / Phone shows the player at a phone's width.
+const DEVICES = [{ value: 'desktop', label: 'Desktop' }, { value: 'phone', label: 'Phone' }];
+function CourseTry({ content, drafted }: { content: CourseContent; drafted: boolean }) {
+  const [run, setRun] = useState<CourseRun>(NEW_RUN), [device, setDevice] = useState('desktop');
+  const co = courseView(content, run, (p) => setRun((cur) => ({ ...cur, ...p })), { ro: false, seen: [], done: false, onProgress: () => {}, preview: true, ai: drafted });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><SegmentedControl options={DEVICES} value={device} onChange={setDevice} size="base" /><LinkButton onClick={() => setRun(NEW_RUN)}>Start over</LinkButton></div>
+      <div role="group" aria-label="Course player" style={{ maxWidth: device === 'phone' ? 380 : undefined }}><CoursePanel co={co} /></div>
+    </div>
+  );
 }
 
 // A Presentation's file in its learner panel; playing it to the end completes nothing.
@@ -101,6 +117,7 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
     <>
       {content.kind === 'aid' && <AidTry content={content} />}
       {content.kind === 'case' && <CasePanel ce={casePreview(content, t.hours)} />}
+      {content.kind === 'course' && <CourseTry content={content} drafted={!!t.drafted} />}
       {content.kind === 'explainer' && <ExplainerTry content={content} />}
       {content.kind === 'motion' && <FlowTry content={content} still={t.still} />}
       {content.kind === 'horizon' && <DeckTry content={content} still={t.still} />}
@@ -144,6 +161,7 @@ const PREVIEWS: Record<string, (p: { c: CS }) => ReactNode> = {
   flash: ({ c }) => <StudioPlayTest preview={c.studio.preview} />,
   aid: ({ c }) => <Learner c={c} />,
   case: ({ c }) => <Learner c={c} />,
+  elearn: ({ c }) => <Learner c={c} />,
   explainer: ({ c }) => <Learner c={c} />,
   motion: ({ c }) => <Learner c={c} />,
   slides: ({ c }) => <Learner c={c} />,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LEARN } from '../data';
 import {
   NO_EVIDENCE, completionOf, completionText, completionTodo, decisionLine, decisionsFor, evidenceNeed, evidenceProblem, evidenceRule, feedbackProblem, fieldProblem, lastActivity,
-  lastActivityLabel, linkProblem, openChanges, ruleText, selfCompletes, waitingLabel, workingDaysSince,
+  lastActivityLabel, linkProblem, openChanges, panelOf, ruleText, selfCompletes, waitingLabel, workingDaysSince,
 } from './record';
 import type { Decision } from './record';
 
@@ -151,6 +151,16 @@ describe('completion per learning type (owner, 2 Nov 2026)', () => {
     expect(completionText('Flash cards', 'Sam Coach')).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
     expect(completionTodo('Job aid')).toBe('mark it as completed');
     expect(completionText('E-learning', 'Sam Coach', true)).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
+  });
+  it('says a course\'s own rule, as its creator chose it', () => {
+    const say = (rule: 'seen' | 'score' | 'both') => [completionText('E-learning', 'Sam Coach', rule), completionTodo('E-learning', rule)];
+    expect(say('seen')).toEqual(['It completes when you have seen every lesson. It counts right away; no acceptance needed.', 'see every lesson']);
+    expect(say('score')).toEqual(['It completes when you score 80 % or more on the scored items. It counts right away; no acceptance needed.', 'score 80 % or more on the scored items']);
+    expect(say('both')).toEqual(['It completes when you have seen every lesson and score 80 % or more on the scored items. It counts right away; no acceptance needed.', 'see every lesson and score 80 % or more on the scored items']);
+    expect(completionText('Flash cards', 'Sam Coach', 'seen')).toBe('Mark it as completed when you have finished the course. It counts right away; no acceptance needed.');
+  });
+  it('reads the panel a learning has: none, a format\'s, or a course with its rule', () => {
+    expect([panelOf(null), panelOf(undefined), panelOf({ kind: 'aid' }), panelOf({ kind: 'course', rule: 'score' })]).toEqual([false, false, true, 'score']);
   });
   it('labels attendance and a completion with feedback in the acceptance record', () => {
     const base: Decision = { learningId: 'L10', verdict: 'attended', comment: '', by: 'a1', byName: 'Pat Admin', at: '2026-11-02T10:00:00Z', evidence: NO_EVIDENCE };

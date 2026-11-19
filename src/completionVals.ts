@@ -8,7 +8,7 @@ import { AVATAR_QUIZ, LEARN_BY, LEARN_META } from './data';
 import type { Item, Logic } from './model';
 import { quizOf } from './logic/avatarContent';
 import { rotated } from './logic/checkRow';
-import { FEEDBACK_MIN, completionOf, completionText, feedbackProblem } from './logic/record';
+import { FEEDBACK_MIN, completionOf, completionText, feedbackProblem, panelOf } from './logic/record';
 import { saveProgress } from './lib/learnerStore';
 import { loadRoster, registerAttendance } from './lib/attendanceStore';
 
@@ -176,7 +176,7 @@ function attendanceVals(L: Logic, it: Item) {
 }
 
 export function completionVals(L: Logic, it: Item) {
-  const kind = completionOf(it.format), ro = L.subject.readOnly, panel = !!LEARN_META[it.id]?.content;
+  const kind = completionOf(it.format), ro = L.subject.readOnly, panel = panelOf(LEARN_META[it.id]?.content);
   return {
     done: {
       kind, note: completionText(it.format, L.counsellorFull(), panel),

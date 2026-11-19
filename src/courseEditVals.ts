@@ -48,7 +48,7 @@ function blockOps(c: Ctx) {
     duplicate: () => { if (!full(c)) edit((it) => duplicateBlock(it, selected.id)); }, remove: () => { edit((it) => removeBlock(it, selected.id)); show(lesson, null); }, done: () => show(lesson, null),
   };
   return {
-    blocks: blocks.map((b) => blockView(b, { on: b.id === selected?.id, pick: () => (c.ro ? undefined : show(lesson, b.id)) })), inspector,
+    blocks: blocks.map((b) => blockView(b, 'edit', undefined, () => {}, { ro: c.ro, on: b.id === selected?.id, pick: () => (c.ro ? undefined : show(lesson, b.id)) })), inspector,
     shelf: c.ro ? [] : SHELF.map((g) => ({ group: g.group, items: g.kinds.map(([kind, glyph]) => ({ label: KIND_NAME[kind], glyph, add: () => add(kind) })) })),
   };
 }

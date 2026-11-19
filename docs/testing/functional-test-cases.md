@@ -635,6 +635,26 @@ The studio on the hub, its Draft step and the move to Produce. The course editor
 | ELE-11 | Creator | A calculation exercise selected | Type 2.5, -3, clear the right number | The field shows what is typed; the block takes 2.5 and -3 | `CourseEditor.test.tsx` › a number is typed as text |
 | ELE-12 | Creator | Any new block | Look at what is missing | The sentence is the course check's rule for the block (same wording as the problems list); a branching scenario is not in "n scored" | `logic/courseEdit.test.ts` › newBlock |
 
+## 25. E-learning Studio: the course player, the preview and completion (ELP), Learner, Creator, Reviewer, Admin in View as (E-learning Studio Task 1.4)
+
+| ID | Role | Preconditions | Steps | Expected | Covered by |
+|---|---|---|---|---|---|
+| ELP-01 | Learner | A published course of three lessons | Open it; Next lesson; Previous lesson | "Lesson 1 of 3" with the lesson's blocks and a progress bar at 33 %; then "Lesson 2 of 3" at 67 %; no "Mark as completed", the sidebar says how it completes | `screens/CoursePanel.test.tsx`; `screens/screens.test.tsx` |
+| ELP-02 | Learner | A lesson with a knowledge check | Pick an option; Check answer; Try again | "Correct." or "Not quite." with the explanation; Try again starts the question over and clears the answer | `CoursePanel.test.tsx`; `fmtCourse.test.ts` |
+| ELP-03 | Learner | A branching scenario, a sort, a calculation, an accordion, a reflection | Work each | The choice shows its reply and "Try another choice"; every item placed shows "Correct." or "Not quite"; a calculation says the right answer when wrong; panels open; the reflection says writing it is not available yet | `CoursePanel.test.tsx`; `fmtCourse.test.ts` |
+| ELP-04 | Learner | The design's six scored items | Answer all right; one of six wrong | Score 100 %; 83 %; "Score 83 % · 5 of 6 scored items right · pass mark 80 %"; a branch and a reflection are not scored; unanswered items give no pass | `fmtCourse.test.ts` |
+| ELP-05 | Learner | An exercise of 2520 ± 1 | Answer "2,519", "2,518", nothing | Right, wrong, wrong | `fmtCourse.test.ts` |
+| ELP-06 | Learner | Rules seen, score, both | Open every lesson; score 75 %; both met | seen: complete on the last lesson; score: needs every scored block answered and 80 %; both: needs both; the toast says "Course finished" | `fmtCourse.test.ts`; `completionVals.test.ts` |
+| ELP-07 | Learner | A saved best of 83 % | Answer lower; open a new lesson | Nothing saved for the lower score; the lessons seen are saved with best 83 % | `fmtCourse.test.ts` |
+| ELP-08 | Admin | View as a learner | Move through the course; answer | Navigation works; answers do nothing; nothing is saved; the note says so | `fmtCourse.test.ts` |
+| ELP-09 | Learner | An accepted course | Play it again | Nothing is saved again | `fmtCourse.test.ts` |
+| ELP-10 | Creator | A valid course in Preview & test | Answer; Next lesson; Phone; Desktop; Start over | "A play-test, as learners will see it: nothing is saved or counted."; nothing is saved; Phone caps the player at 380 px; Start over clears answers and returns to lesson 1; the learner's page has neither toggle nor Start over | `CoursePanel.test.tsx` |
+| ELP-11 | Reviewer | A saved AI-drafted course | Open it in My contributions or Review for peers | The same panel under "As learners will see it"; "Made with AI" shows | `CoursePanel.test.tsx` |
+| ELP-12 | Learner | A catalogue E-learning without content | Open it | "Mark as completed" is still offered | `screens/screens.test.tsx` |
+| ELP-13 | Anyone | The three rules | Read the completion text and the to-do | "It completes when you have seen every lesson" / "… score 80 % or more on the scored items" / both | `logic/record.test.ts`; `completionVals.test.ts` |
+| ELP-14 | Creator | A pending "Remove lesson" question in Produce | Go back to Draft and forward to Produce | The question is gone | `screens/CourseEditor.test.tsx` › the studio step changes |
+| ELP-15 | Creator | A calculation exercise selected | Type -1 in Tolerance; then 0.5 | "A tolerance cannot be negative: use 0 or more." and the block keeps its tolerance; 0.5 is taken | `CourseEditor.test.tsx` › a number is typed as text |
+
 ## Bugs found and fixed
 
 Each one first had an `it.fails` test, named in the case above. All seven were fixed on 1 Nov 2026 (branch `fix/functional-bugs`) and their tests are plain `it` now. EDGE-02 had a second occurrence in the road's cloud lanes, covered by `model.edge.test.ts › places a cloud lane item due outside the four road quarters`.

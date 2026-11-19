@@ -3,8 +3,9 @@
 // database); the study formats live in fmtStudy.ts. In View as every action is a no-op and the panels show no buttons.
 // Case and Stretch go to the counsellor through the existing evidence flow (recordVals submit); Webinar completes through
 // the existing classroom feedback card; Job aid completes when every item is ticked. The interactive explainer is in
-// fmtExplainer.ts, the Animated flow in fmtMotion.ts, a Presentation in fmtHorizon.ts, a deck in fmtSlides.ts, a podcast (stored or v3) in fmtPodcast.ts, a reel (studio or v3) in fmtReel.ts, a game and its runs in fmtGame.ts.
+// fmtExplainer.ts, a course in fmtCourse.ts, the Animated flow in fmtMotion.ts, a Presentation in fmtHorizon.ts, a deck in fmtSlides.ts, a podcast (stored or v3) in fmtPodcast.ts, a reel (studio or v3) in fmtReel.ts, a game and its runs in fmtGame.ts.
 import { completedToast, contentOf, detailOf, downloadText, handedIn, saveDetail } from './fmtShared';
+import { courseVals } from './fmtCourse';
 import { explainerVals } from './fmtExplainer';
 import { avatarVals } from './fmtAvatar';
 import { gameVals } from './fmtGame';
@@ -83,7 +84,7 @@ function aidVals(L: Logic, it: Item, c: AidContent) {
 export function fmtVals(L: Logic, it: Item) {
   const flash = contentOf(it.id, 'flash'), exam = contentOf(it.id, 'exam'), kase = contentOf(it.id, 'case'), teach = contentOf(it.id, 'teach');
   const stretch = contentOf(it.id, 'stretch'), webinar = contentOf(it.id, 'webinar'), aid = contentOf(it.id, 'aid'), explainer = contentOf(it.id, 'explainer'), motion = contentOf(it.id, 'motion');
-  const horizon = contentOf(it.id, 'horizon'), slides = contentOf(it.id, 'slides'), game = contentOf(it.id, 'game');
+  const course = contentOf(it.id, 'course'), horizon = contentOf(it.id, 'horizon'), slides = contentOf(it.id, 'slides'), game = contentOf(it.id, 'game');
   // A v3 episode has no stored content: its chapters (MEDIA) play on the same player.
   const M = MEDIA[it.id], podcast = contentOf(it.id, 'podcast') ?? (M?.kind === 'pod' ? seededPodcast(M) : null);
   // A v3 reel is content too: captions as scenes, the takeaway from the catalogue. A studio reel has no takeaway of its own yet.
@@ -93,6 +94,6 @@ export function fmtVals(L: Logic, it: Item) {
     fl: flash && flashVals(L, it, flash), ex: exam && { ...examVals(L, it, exam), ...examTrajectory(L, it.id) }, ce: kase && caseVals(L, it, kase), tb: teach && teachVals(L, it, teach),
     sa: stretch && stretchVals(L, it, stretch), wb: webinar && webinarVals(L, it, webinar), ja: aid && aidVals(L, it, aid), ie: explainer && explainerVals(L, it, explainer),
     af: motion && flowVals(L, it, motion), hz: horizon && horizonVals(L, it, horizon), sl: slides && slidesVals(L, it, slides), pc: podcast && podcastVals(L, it, podcast, M?.kind === 'pod' ? M.by : undefined), gm: game && gameVals(L, it, game),
-    rl: reel && reelVals(L, it, reel, M?.kind === 'reel' ? M.take : null), av: avatarVals(L, it),
+    rl: reel && reelVals(L, it, reel, M?.kind === 'reel' ? M.take : null), av: avatarVals(L, it), co: course && courseVals(L, it, course),
   };
 }

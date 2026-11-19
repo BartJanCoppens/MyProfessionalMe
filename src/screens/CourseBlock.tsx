@@ -1,16 +1,17 @@
 // One course block on screen, for the editor and the player alike (E-learning Studio). Everything a creator wrote is shown as plain text. In the editor
-// the block is a button that selects it and a field still empty says what is missing; the learner's version of each kind arrives with the player (Task 1.4).
+// the block is a button that selects it and a field still empty says what is missing; in the player the kinds a learner works (CoursePlay.tsx) answer.
 import type { ReactNode } from 'react';
 import type { BlockMode, BlockView } from '../fmtCourse';
 import type { CourseBlock as Block } from '../logic/courseContent';
+import CoursePlay from './CoursePlay';
 
 const muted = { color: '#8a9086' };
 const line = (v: string, empty: string): ReactNode => (v.trim() ? v : <span style={muted}>{empty}</span>);
 const bold = { fontWeight: 600 } as const;
 
-function Body({ b }: { b: Block }) {
+function Body({ b, mode }: { b: Block; mode: BlockMode }) {
   switch (b.block) {
-    case 'text': return <><div style={{ ...bold, fontSize: 16 }}>{line(b.h, 'No heading')}</div><div style={{ whiteSpace: 'pre-wrap' }}>{line(b.t, 'Write the text')}</div></>;
+    case 'text': return <>{(b.h.trim() || mode === 'edit') && <div style={{ ...bold, fontSize: 16 }}>{line(b.h, 'No heading')}</div>}<div style={{ whiteSpace: 'pre-wrap' }}>{line(b.t, 'Write the text')}</div></>;
     case 'callout': return <div style={{ borderLeft: '3px solid #3f6a0a', paddingLeft: 10, whiteSpace: 'pre-wrap' }}>{line(b.t, 'Write the callout')}</div>;
     case 'accordion': return <>{b.panels.map(([title, body], i) => <div key={i} style={{ borderTop: i ? '1px solid #eef0ea' : 0, padding: '4px 0' }}><div style={bold}>▸ {line(title, 'Panel title')}</div><div>{line(body, 'Panel text')}</div></div>)}</>;
     case 'check': return (
@@ -27,7 +28,7 @@ function Body({ b }: { b: Block }) {
 }
 
 export default function CourseBlock({ b, mode }: { b: BlockView; mode: BlockMode }) {
-  const body = <><Body b={b.block} />{mode === 'edit' && b.missing && <div role="alert" style={{ fontSize: 12, color: '#7a5000', marginTop: 4 }}>{b.missing}</div>}</>;
+  const body = <>{mode === 'play' && b.play ? <CoursePlay p={b.play} /> : <Body b={b.block} mode={mode} />}{mode === 'edit' && b.missing && <div role="alert" style={{ fontSize: 12, color: '#7a5000', marginTop: 4 }}>{b.missing}</div>}</>;
   const box = { width: '100%', boxSizing: 'border-box' as const, textAlign: 'left' as const, font: 'inherit', fontSize: 13.5, color: '#1a1d18', background: '#fff', borderRadius: 6, padding: '10px 12px' };
   if (mode === 'play') return <div style={{ ...box, border: '1px solid #e1e5dc' }}>{body}</div>;
   return (

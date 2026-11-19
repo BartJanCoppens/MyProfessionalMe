@@ -1,3 +1,4 @@
+import type { CourseRun } from './fmtCourse';
 import type { CourseRule, PublicBlock } from './logic/courseContent';
 import type { GameReviewStatus } from './logic/gameContent';
 import type { DraftItems } from './logic/items';
@@ -192,6 +193,8 @@ export type AppState = {
   quiz: { key: string; picks: Record<number, number>; checked: boolean } | null;
   // v4 formats: what is being done on one learning of one person (key subject|learning): the flash deck, the exam round, the explanation.
   fmt: FmtDraft | null;
+  // The course player (E-learning): the lesson on show, what was seen and answered, for one learning of one person (key subject|learning).
+  course: (CourseRun & { key: string }) | null;
   // Classroom attendance (admins): the signed-in admin's roster for one learning, ticks not saved yet and the search.
   att: { learningId: string; rows: RosterRow[] | null; error: string | null; picks: Record<string, boolean>; q: string; busy: boolean } | null;
   // AI: the uses the app may call now (everyone), and per use whether the last attempt was answered by AI or fell back.

@@ -1,11 +1,12 @@
 // The detail page's panels for the study formats of design v4: flash cards, practice exam, teach-back, the interactive
-// explainer (ExplainerPanel.tsx), the Animated flow (AnimatedFlowPanel.tsx), each also its studio's preview, and a
+// explainer (ExplainerPanel.tsx), a course (CoursePanel.tsx), the Animated flow (AnimatedFlowPanel.tsx), each also its studio's preview, and a
 // Presentation (PresentationPanel.tsx) a deck of slides (SlidesPanel.tsx), an episode (PodcastPanel.tsx) and a game (GamePanel.tsx). The work formats
 // (case, stretch, webinar, job aid) are in FormatWork.tsx. They read from VM only (fmtVals.ts, fmtStudy.ts).
 import type { CSSProperties } from 'react';
 import { Button, Card, LinkButton, ProgressRing, Textarea } from '../ds';
 import type { VM } from '../model';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
+import CoursePanel from './CoursePanel';
 import ExplainerPanel from './ExplainerPanel';
 import GamePanel from './GamePanel';
 import PresentationPanel from './PresentationPanel';
@@ -121,6 +122,7 @@ export function FormatPanels({ vm }: { vm: VM }) {
       {det.fl && <FlashPanel fl={det.fl} />}
       {det.ex && <ExamPanel ex={det.ex} />}
       {det.tb && <TeachPanel tb={det.tb} />}
+      {det.co && <CoursePanel co={det.co} />}
       {det.ie && <ExplainerPanel ie={det.ie} />}
       {det.af && <AnimatedFlowPanel fl={det.af} />}
       {det.hz && <PresentationPanel hz={det.hz} />}

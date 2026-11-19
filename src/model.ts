@@ -27,7 +27,7 @@ import { blankDraft } from './createSave';
 import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
-import { completionOf, completionText, completionTodo, lastActivity, lastActivityLabel, openChanges } from './logic/record';
+import { completionOf, completionText, completionTodo, lastActivity, lastActivityLabel, openChanges, panelOf } from './logic/record';
 import { logHour, recordVals, submit } from './recordVals';
 import { fmtCover } from './fmtCover';
 import { fmtVals } from './fmtVals';
@@ -77,7 +77,7 @@ export function initState(cfg: Config): AppState {
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwKbQ: '', nwAiBusy: false,
     studio: { view: 'hub', step: 0 }, courseEdit: { lesson: 0, block: null },
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
-    evDraft: null, decideNote: {}, trjTalk: {}, queue: null, queueError: null, sharedRuns: null, sharedTotal: 0, sharedError: null, fbDraft: null, quiz: null, fmt: null, att: null,
+    evDraft: null, decideNote: {}, trjTalk: {}, queue: null, queueError: null, sharedRuns: null, sharedTotal: 0, sharedError: null, fbDraft: null, quiz: null, fmt: null, course: null, att: null,
     aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {}, stockVoices: null, voiceForm: null, voiceHearing: null, stockLooks: null, lookForm: null,
   };
 }
@@ -198,7 +198,7 @@ export class Logic {
       id, title, dom, di, domLabel: DOMAINS[di][1], lvl, lvlLabel: LEVELS[lvl - 1] + ' · L' + lvl, format, source, hours, hoursLabel,
       isMedia: !!MD, mediaLine: MD ? format + ' · ' + MD.len + ' · ' + MD.by : '', isPeer, peerLine: isPeer ? 'Made by a colleague · peer-reviewed' : '', aiMade: !!LEARN_META[id]?.aiMade,
       isAvatar: format === 'Avatar', avInit: AVATARS[id] ? AVATARS[id].initials : '', avWith: AVATARS[id] ? 'Practise with ' + AVATARS[id].persona + ' · ' + AVATARS[id].role : '', cpd, state, pct,
-      stateLabel: changes ? 'Changes requested' : state === 'in-progress' ? (pct >= 100 && completionOf(format) !== 'acceptance' ? 'All hours logged · ' + completionTodo(format, !!LEARN_META[id]?.content) : 'In progress · ' + pct + '%') : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
+      stateLabel: changes ? 'Changes requested' : state === 'in-progress' ? (pct >= 100 && completionOf(format) !== 'acceptance' ? 'All hours logged · ' + completionTodo(format, panelOf(LEARN_META[id]?.content)) : 'In progress · ' + pct + '%') : state === 'submitted' ? 'Awaiting ' + (this.subject.counsellor ? this.counsellorFirst() : 'counsellor') : STATE_LABEL[state], stateIcon: state === 'accepted' ? 'check' : 'dot',
       ob, obTone: OB_TONE[ob], obLabel: OB_LABEL[ob], isMandatory: ob === 'mandatory', due, hasDue,
       dueLabel: hasDue ? 'Due ' + due : (m && m.si <= this.myStage() + 1 ? 'By ' + m.stage + ' stage' : ''), dueColor: hasDue ? (dueSoon ? '#9a3d0c' : '#7a5000') : '#8b918a',
       meta: source + ' · ' + hoursLabel + ' · ' + LEVELS[lvl - 1] + ' · L' + lvl + (cpd ? ' · ' + cpd + ' CPD' : ''),
@@ -482,7 +482,7 @@ export class Logic {
       canAdd: d0.ob === 'open', canLog: d0.state === 'not-started' || (d0.state === 'in-progress' && d0.pct < 100),
       canAsk: d0.state === 'in-progress' && completionOf(d0.format) === 'acceptance',
       // What completes this learning: the format's own rule, or acceptance by the counsellor.
-      approvalNote: completionOf(d0.format) !== 'acceptance' ? completionText(d0.format, this.counsellorFull(), !!LEARN_META[d0.id]?.content) : d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
+      approvalNote: completionOf(d0.format) !== 'acceptance' ? completionText(d0.format, this.counsellorFull(), panelOf(LEARN_META[d0.id]?.content)) : d0.ob === 'mandatory' ? 'Mandatory items complete only after ' + this.counsellorFull() + ' accepts them.' : d0.ob === 'open' ? 'Open items count toward your hours and levels once ' + this.counsellorFull() + ' accepts them.' : 'Log your hours here; ' + this.counsellorFull() + ' accepts the result.',
       canAcceptIt: this.canAccept(d0.state), paths, sugg, hasSugg: sugg.length > 0, suggSub: 'Your evaluations, profiles and ambitions point here',
     };
     if (d0.ob === 'open' && det.hasSugg) det.why = det.sugg[0].text + ' Suggested by ' + det.sugg[0].src + '. Not on a ' + bl + ' path at your stage; it counts toward your hours and levels once added.';

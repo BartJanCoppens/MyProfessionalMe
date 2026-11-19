@@ -160,6 +160,20 @@ describe('the learning detail screen', () => {
     await act(async () => { click('Mark as completed'); });
     expect(learner.saveProgress).toHaveBeenCalledWith('u1', 'L17', { state: 'accepted', pct: 100 });
   });
+  it('hides "Mark as completed" for a published course and says its rule; a catalogue E-learning without content keeps the mark', () => {
+    const row: Learn = ['L998', 'Place of supply', 'reg', 2, 'E-learning', 'Peer contribution', 0.5, 0, '', ''];
+    LEARN.push(row); LEARN_BY.L998 = row;
+    LEARN_META.L998 = { line: null, status: 'published', content: { kind: 'course', rule: 'seen', lessons: [{ title: 'One', blocks: [{ block: 'text', id: 'b0001', h: '', t: 'Text' }] }, { title: 'Two', blocks: [{ block: 'text', id: 'b0002', h: '', t: 'More' }] }] } };
+    try {
+      detail('L998');
+      expect(screen.queryByRole('button', { name: 'Mark as completed' })).toBeNull();
+      expect(screen.getAllByText(/^It completes when you have seen every lesson/).length).toBeGreaterThan(0);
+      expect(screen.getByText('Lesson 1 of 2')).toBeTruthy();
+      cleanup();
+      detail('L17');
+      expect(screen.getByRole('button', { name: 'Mark as completed' })).toBeTruthy();
+    } finally { LEARN.splice(LEARN.indexOf(row), 1); delete LEARN_BY.L998; delete LEARN_META.L998; }
+  });
   it('completes a classroom with the feedback form', async () => {
     detail('L10');
     expect(screen.getByText(/^It completes when the faculty registers your attendance/)).toBeTruthy();

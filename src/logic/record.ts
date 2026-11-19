@@ -1,5 +1,7 @@
 // The learning record (F2) and the approvals queue (F3): evidence rules per format, decisions, waiting time and last
 // activity. Pure functions; the database enforces the same rules (private.evidence_rule, private.evidence_ok).
+import { PASS_MARK } from './courseContent';
+import type { CourseRule } from './courseContent';
 import { fmtDate } from './contribution';
 
 // What a format needs before it may be submitted. Mirrors private.evidence_rule(); change both together.
@@ -47,7 +49,14 @@ const PANEL_TODO: Record<string, string> = {
   'Interactive explainer': 'go through to the last step (and the check, if any)',
   'Animated flow': 'reach the end, or read the text version',
 };
-const panelTodo = (format: string, panel: boolean) => (panel ? PANEL_TODO[format] : undefined);
+// A course completes by its creator's rule (courseContent.ts): when it is met, and what the learner does for it.
+const SCORED = 'score ' + PASS_MARK + ' % or more on the scored items';
+export const COURSE_TODO: Record<CourseRule, string> = { seen: 'see every lesson', score: SCORED, both: 'see every lesson and ' + SCORED };
+const COURSE_WHEN: Record<CourseRule, string> = { seen: 'have seen every lesson', score: SCORED, both: 'have seen every lesson and ' + SCORED };
+// The learning has its format's content panel (true), or, for a course, the creator's rule.
+export type Panel = boolean | CourseRule;
+export const panelOf = (content: { kind: string; rule?: CourseRule } | null | undefined): Panel => (content?.kind === 'course' ? content.rule ?? true : !!content);
+const panelTodo = (format: string, panel: Panel) => (panel === true ? PANEL_TODO[format] : panel && format === 'E-learning' ? COURSE_TODO[panel] : undefined);
 // How a 'media' format completes, in a sentence and as a to-do; a reel's question is the rest.
 const MEDIA_DONE: Record<string, [string, string]> = {
   Podcast: ['Listening to all of it, every chapter to its end, completes it. It counts right away; no acceptance needed.', 'listen to all of it'],
@@ -57,8 +66,9 @@ const MEDIA_DONE: Record<string, [string, string]> = {
 
 // What completes this format, in the learner's words (detail sidebar and help). accepter: the counsellor's full name.
 // panel: the learning has its format's content panel.
-export function completionText(format: string, accepter: string, panel = false): string {
+export function completionText(format: string, accepter: string, panel: Panel = false): string {
   const f = format.toLowerCase(), todo = panelTodo(format, panel);
+  if (typeof panel === 'string' && format === 'E-learning') return 'It completes when you ' + COURSE_WHEN[panel] + '. It counts right away; no acceptance needed.';
   if (todo) return todo[0].toUpperCase() + todo.slice(1) + ' to complete it. It counts right away; no acceptance needed.';
   switch (completionOf(format)) {
     case 'media': return MEDIA_DONE[format]?.[0] ?? 'A right answer to the question completes it. It counts right away; no acceptance needed.';
@@ -69,7 +79,7 @@ export function completionText(format: string, accepter: string, panel = false):
   }
 }
 // What a self-completing format still needs once all hours are logged, for the toast and the state label.
-export function completionTodo(format: string, panel = false): string {
+export function completionTodo(format: string, panel: Panel = false): string {
   const todo = panelTodo(format, panel);
   if (todo) return todo;
   switch (completionOf(format)) {

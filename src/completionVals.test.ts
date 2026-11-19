@@ -57,6 +57,21 @@ describe('e-learning: mark as completed', () => {
   });
 });
 
+describe('e-learning: a published course', () => {
+  const row: Learn = ['L999', 'Place of supply', 'reg', 2, 'E-learning', 'Peer contribution', 0.5, 0, '', ''];
+  const block = (id: string) => ({ block: 'text' as const, id, h: '', t: 'Text' });
+  beforeAll(() => { LEARN.push(row); LEARN_BY.L999 = row; });
+  afterAll(() => { LEARN.splice(LEARN.indexOf(row), 1); delete LEARN_BY.L999; delete LEARN_META.L999; });
+  it.each([
+    ['seen', 'It completes when you have seen every lesson. It counts right away; no acceptance needed.'],
+    ['score', 'It completes when you score 80 % or more on the scored items. It counts right away; no acceptance needed.'],
+    ['both', 'It completes when you have seen every lesson and score 80 % or more on the scored items. It counts right away; no acceptance needed.'],
+  ] as const)('completes by the creator\'s rule "%s", with no mark button', (rule, note) => {
+    LEARN_META.L999 = { line: null, status: 'published', content: { kind: 'course', rule, lessons: [{ title: 'One', blocks: [block('b0001')] }, { title: 'Two', blocks: [block('b0002')] }] } };
+    expect(learnerOn('L999').vm().done).toMatchObject({ kind: 'mark', mark: null, note });
+  });
+});
+
 describe('the last hour per type', () => {
   it.each([
     ['L10', 'give your feedback'],

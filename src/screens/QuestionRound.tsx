@@ -1,13 +1,13 @@
 // The question on screen in a round of multiple-choice questions (fmtRound.ts): the position and topic, the options as
-// radio buttons, the explanation once checked, and the one main button. The practice exam, the explainer's check and the
-// Flash studio's play-test show it.
+// radio buttons, the explanation once checked, and the one main button (a course's knowledge check, one question without a position, shows it too). The
+// practice exam, the explainer's check and the Flash studio's play-test show it.
 import { Button, Tag } from '../ds';
 import type { Round } from '../fmtRound';
 
 export default function QuestionRound({ r }: { r: Round }) {
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 12, color: '#5a6058' }}><span>{r.pos}</span><Tag tone="muted">{r.topic}</Tag></div>
+      {(r.pos || r.topic) && <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 12, color: '#5a6058' }}><span>{r.pos}</span>{r.topic && <Tag tone="muted">{r.topic}</Tag>}</div>}
       <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.35, textWrap: 'pretty' }}>{r.q}</div>
       <div role="radiogroup" aria-label="Answer options" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {r.opts.map((o) => (
