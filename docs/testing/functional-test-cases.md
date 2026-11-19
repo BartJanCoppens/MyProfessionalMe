@@ -631,6 +631,9 @@ The studio on the hub, its Draft step and the move to Produce. The course editor
 | ELE-07 | Creator | The shelf | Look | Text, Callout, Accordion; Knowledge check, Drag and sort, Branching scenario, Reflection, Calculation exercise; no image, tutor, calculator or "coming" entries | `CourseEditor.test.tsx` |
 | ELE-08 | Admin | View as a person's draft | Open Produce | The course shows; no shelf, inspector, lesson title input or lesson buttons; selecting changes nothing | `CourseEditor.test.tsx` › View as |
 | ELE-09 | Creator | A course with 12 lessons, blocks on the last two | Draft with AI again | Nothing changes until "This removes 2 blocks from lessons the new draft no longer has · Continue / Cancel"; the count follows edits made meanwhile; Cancel keeps the course; Continue keeps the blocks of lessons that remain | `studioElearn.test.ts` › drafting again |
+| ELE-10 | Creator | A course of three lessons; lesson 1 has 3 blocks, lesson 3 none | Remove lesson 1; Cancel; again, Continue; remove the empty lesson | "This removes 3 blocks with lesson 1 · Continue / Cancel" with focus on it; Cancel keeps all; Continue removes lesson and blocks; the empty lesson goes at once | `CourseEditor.test.tsx` › asking before blocks go |
+| ELE-11 | Creator | A calculation exercise selected | Type 2.5, -3, clear the right number | The field shows what is typed; the block takes 2.5 and -3 | `CourseEditor.test.tsx` › a number is typed as text |
+| ELE-12 | Creator | Any new block | Look at what is missing | The sentence is the course check's rule for the block (same wording as the problems list); a branching scenario is not in "n scored" | `logic/courseEdit.test.ts` › newBlock |
 
 ## Bugs found and fixed
 

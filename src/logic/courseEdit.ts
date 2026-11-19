@@ -1,6 +1,6 @@
 // What editing a course's lessons does to its blocks (E-learning Studio, Task 1.2; 1.3 adds the block edits). A block names its lesson by index from 0,
 // so removing or moving a lesson row has to move its blocks too. Pure.
-import { COURSE_CAPS, isCourseBlock } from './courseContent';
+import { COURSE_CAPS, isCourseBlock, shapeProblem } from './courseContent';
 import type { BlockKind, CourseBlock } from './courseContent';
 import type { StudioEntry } from './studios';
 
@@ -61,20 +61,11 @@ export function newBlock(kind: BlockKind, lesson: number, title = ''): CourseBlo
   }
 }
 
-// What a block still needs, first thing first, in the creator's words (null when its fields are all filled). The check of the course says it again at submit.
-export function missingOf(b: CourseBlock): string | null {
-  const empty = (v: string) => !v.trim(), none = (vs: string[]) => vs.some(empty);
-  switch (b.block) {
-    case 'text': return empty(b.t) ? 'Write the text' : null;
-    case 'callout': return empty(b.t) ? 'Write the callout' : null;
-    case 'accordion': return none(b.panels.flat()) ? 'Give every panel a title and a text' : null;
-    case 'check': return empty(b.question.q) ? 'Write the question' : none(b.question.o) ? 'Write all four options' : empty(b.question.why) ? 'Say why the answer is right' : null;
-    case 'sort': return empty(b.p) ? 'Write the prompt' : none(b.bins) ? 'Name both groups' : none(b.cards.map((c) => c[0])) ? 'Give every item a label' : null;
-    case 'branch': return empty(b.q) ? 'Write the question' : none(b.choices.flatMap((c) => [c[0], c[1]])) ? 'Give every choice a label and a reply' : b.choices.some((c) => c[2]) ? null : 'Mark at least one good choice';
-    case 'reflect': return empty(b.p) ? 'Write the prompt for the learner' : null;
-    case 'exercise': return empty(b.q) ? 'Write the question' : null;
-  }
-}
+// What a block still needs, in the words of the course check (shapeProblem, the same rule private.course_block_problem has), capitalised; null when it is complete.
+export const missingOf = (b: CourseBlock): string | null => {
+  const rule = shapeProblem(b);
+  return rule ? rule[0].toUpperCase() + rule.slice(1) : null;
+};
 
 // `block` goes after block `after` of the lesson, else at the end of the lesson.
 export function insertBlock(items: StudioEntry[], lesson: number, after: string | null, block: CourseBlock): StudioEntry[] {

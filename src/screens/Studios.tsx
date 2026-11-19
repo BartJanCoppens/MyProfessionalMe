@@ -5,7 +5,7 @@ import type { VM } from '../model';
 import { BundlePicker, SubmitSide } from './CreateParts';
 import { ItemPanel } from './CreateItems';
 import ChipGroup from './ChipGroup';
-import { Problems } from './CreateShared';
+import { Confirm, Problems } from './CreateShared';
 import { DraftRows, Produce, Shape } from './StudioSteps';
 import { Preview } from './studioPreviews';
 
@@ -91,6 +91,7 @@ export function Studio({ c }: { c: CS }) {
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 560px', minWidth: 0, background: '#fff', border: '1px solid #e1e5dc', borderRadius: 6, padding: '18px 20px', ...col, gap: 16 }}>
           <div><div style={{ fontWeight: 600, fontSize: 15 }}>{st.stepTitle}</div><div style={{ fontSize: 12.5, color: '#5a6058' }}>{st.stepHint}</div></div>
+          {st.ask && !st.readOnly && <Confirm ask={st.ask} />}
           {st.stepName === 'Idea & sources' && <Idea c={c} />}
           {st.stepName === 'Shape it' && <Shape st={st} />}
           {st.stepName === 'Draft' && (st.flash ? c.itemsPanel && (

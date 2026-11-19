@@ -14,7 +14,9 @@ const input = (label: string, value: string, max: number, set: (v: string) => vo
 const area = (label: string, value: string, max: number, set: (v: string) => void): FieldView => ({ label, kind: 'area', value, max, set });
 const select = (label: string, value: string, options: Opt[], set: (v: string) => void): FieldView => ({ label, kind: 'select', value, options, set });
 const replaceAt = <T,>(list: T[], i: number, v: T): T[] => list.map((x, k) => (k === i ? v : x));
-const number = (v: string, min = -Infinity) => (v.trim() !== '' && Number.isFinite(Number(v)) ? Math.max(min, Number(v)) : 0);
+// A typed number, or null while the text is not one yet ("-", ""): the field keeps what was typed, the block only a finished number.
+const number = (v: string, min = -Infinity): number | null => (v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= min ? Number(v) : null);
+const NUMBER_CHARS = 24; // the longest number a creator can type (text length, not a database cap)
 const LETTERS = ['A', 'B', 'C', 'D'];
 
 function listFields<T>(list: T[], range: readonly [number, number], noun: string, add: T, set: (l: T[]) => void): MoreView[] {
@@ -51,7 +53,8 @@ export function fieldsOf(b: CourseBlock, patch: Patch, setFinal: (fin: boolean) 
       more: listFields<[string, string, boolean]>(b.choices, C.choices, 'choice', ['', '', false], (choices) => patch({ choices })) };
     case 'reflect': return { fields: [area('Prompt', b.p, C.prompt, (p) => patch({ p }))], more: [] };
     case 'exercise': return { fields: [area('Question', b.q, C.prompt, (q) => patch({ q })),
-      { ...input('Right number', String(b.a), 24, (v) => patch({ a: number(v) })), numeric: true }, { ...input('Tolerance', String(b.tol), 24, (v) => patch({ tol: number(v, 0) })), numeric: true },
+      { ...input('Right number', String(b.a), NUMBER_CHARS, (v) => { const a = number(v); if (a !== null) patch({ a }); }), numeric: true },
+      { ...input('Tolerance', String(b.tol), NUMBER_CHARS, (v) => { const tol = number(v, 0); if (tol !== null) patch({ tol }); }), numeric: true },
       input('Unit', b.unit, C.unit, (unit) => patch({ unit }))], more: [] };
   }
 }

@@ -8,8 +8,8 @@ import { stepsOf } from './studioRows';
 
 export const BLOCK_KINDS = ['text', 'callout', 'accordion', 'check', 'sort', 'branch', 'reflect', 'exercise'] as const;
 export type BlockKind = typeof BLOCK_KINDS[number];
-// The blocks that score a learner (a reflection does not): the final check and the score line count these.
-export const SCORED_KINDS: readonly BlockKind[] = ['check', 'sort', 'branch', 'exercise'];
+// The blocks that score a learner (a reflection and a branching scenario do not): the final check and the score line count these.
+export const SCORED_KINDS: readonly BlockKind[] = ['check', 'sort', 'exercise'];
 export const BLOCK_ID = /^b[0-9a-z]{4,20}$/;
 export const COURSE_CAPS = { lessons: [2, 12], blocksPerLesson: 20, heading: 120, text: 4000, callout: 600, panels: [2, 8], panelTitle: 120, panelBody: 1200,
   cards: [2, 10], bin: 40, card: 160, choices: [2, 4], choice: 200, outcome: 400, prompt: 400, unit: 12, bytes: 250000 } as const;
@@ -73,7 +73,7 @@ const SHAPE_OK: Record<BlockKind, (b: Raw) => boolean> = {
   exercise: (b) => fieldOk(C.prompt)(b.q) && num(b.a) && num(b.tol) && b.tol >= 0 && typeof b.unit === 'string' && b.unit.length <= C.unit,
 };
 // What is wrong with a block's own fields, or null: a sort wants every card in group 0 or 1, a branch at least one good choice.
-function shapeProblem(b: Raw): string | null {
+export function shapeProblem(b: Raw): string | null {
   const kind = b.block as BlockKind;
   if (!SHAPE_OK[kind](b)) return SHAPE_RULE[kind];
   if (kind === 'sort' && !b.cards.every((c: unknown[]) => c.length === 2 && (c[1] === 0 || c[1] === 1))) return WORDS.sortGroup;

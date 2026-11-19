@@ -127,19 +127,19 @@ describe('drafting again after blocks were built', () => {
     await h.st().aiDraft.run();
     expect(h.state.nw.items!.how).toBe('manual');
     expect(h.items()).toEqual(many());
-    expect(h.st().redraft!.text).toBe('This removes 2 blocks from lessons the new draft no longer has');
+    expect(h.st().ask!.text).toBe('This removes 2 blocks from lessons the new draft no longer has');
     h.st().rows[11].remove();
-    expect(h.st().redraft!.text).toBe('This removes 1 block from lessons the new draft no longer has');
+    expect(h.st().ask!.text).toBe('This removes 1 block from lessons the new draft no longer has');
   });
   it('Continue applies the new draft and keeps the blocks of the lessons that remain; Cancel leaves the course as it is', async () => {
     const h = at(2, many());
     await h.st().aiDraft.run();
-    h.st().redraft!.cancel();
-    expect(h.st().redraft).toBeNull();
+    h.st().ask!.cancel();
+    expect(h.st().ask).toBeNull();
     expect(h.items()).toEqual(many());
     await h.st().aiDraft.run();
-    h.st().redraft!.proceed();
-    expect(h.st().redraft).toBeNull();
+    h.st().ask!.proceed();
+    expect(h.st().ask).toBeNull();
     expect(h.state.nw.items!.how).toBe('scripted');
     const blocks = h.items().filter((x) => !Array.isArray(x)) as CourseBlock[];
     expect(blocks.map((b) => b.id)).toEqual(['b0001']);
@@ -148,7 +148,7 @@ describe('drafting again after blocks were built', () => {
   it('does not ask when no block would go', async () => {
     const h = at(2, list());
     await h.st().aiDraft.run();
-    expect(h.st().redraft).toBeNull();
+    expect(h.st().ask).toBeNull();
     expect(h.state.nw.items!.how).toBe('scripted');
     expect(lessonsOf(h.items()).flatMap((l) => l.blocks).length).toBeGreaterThan(0);
   });

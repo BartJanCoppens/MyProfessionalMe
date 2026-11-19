@@ -55,7 +55,7 @@ export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setN
   // The creator cannot change the format meanwhile; if it changed anyway, the answer is dropped.
   if (typeof out === 'string') { L.say(out); return; }
   // A course drafted again keeps the blocks built so far on the lessons that remain; when that would remove blocks, the creator is asked first (it cannot be undone).
-  if (nw.type === 'E-learning' && droppedBlocks(currentList(L), out.list as StudioEntry[])) { L.setState((s) => ({ studio: { ...s.studio, redraft: out } })); return; }
+  if (nw.type === 'E-learning' && droppedBlocks(currentList(L), out.list as StudioEntry[])) { L.setState((s) => ({ studio: { ...s.studio, ask: { draft: out } } })); return; }
   applyDraft(setNw, nw.type, out);
 }
 
@@ -63,6 +63,8 @@ const currentList = (L: Logic) => (L.latest().state.nw.items?.list ?? []) as Stu
 // The drafted items onto the draft: a course keeps its blocks on the lessons that remain (by the items as they are now).
 export const applyDraft = (setNw: SetNw, type: string, out: DraftItems) =>
   setNw((cur) => (cur.type === type ? { items: type === 'E-learning' ? { ...out, list: keepBlocks((cur.items?.list ?? []) as StudioEntry[], out.list as StudioEntry[]) as Item[] } : out } : {}));
+// Drops the question a screen is waiting on (a redraft that would remove blocks, a lesson to remove).
+export const clearAsk = (L: Logic) => () => L.setState((s) => ({ studio: { ...s.studio, ask: undefined } }));
 // The question under Draft while a redraft waits: how many blocks it would remove, counted on the course as it is now.
 export const redraftText = (current: StudioEntry[], out: DraftItems) => {
   const lost = droppedBlocks(current, out.list as StudioEntry[]);

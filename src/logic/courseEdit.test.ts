@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCK_ID, COURSE_CAPS, courseRowProblems, lessonsOf } from './courseContent';
+import { BLOCK_ID, BLOCK_KINDS, COURSE_CAPS, courseRowProblems, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
 import { addLesson, blockId, dropLesson, duplicateBlock, insertBlock, keepBlocks, missingOf, moveBlock, moveLesson, newBlock, patchBlock, removeBlock, removeLesson, renameLesson, seedLessons, setFinal } from './courseEdit';
 import type { StudioEntry } from './studios';
@@ -101,12 +101,17 @@ describe('newBlock', () => {
     expect(newBlock('exercise', 0)).toMatchObject({ q: '', a: 0, tol: 0, unit: '' });
     expect(newBlock('text', 0).id).toMatch(BLOCK_ID);
   });
-  it('says what is missing, one thing at a time, in the creator\'s words', () => {
-    expect(missingOf(newBlock('check', 0))).toBe('Write the question');
-    expect(missingOf({ ...newBlock('check', 0), question: { ...Q, o: ['a', '', 'c', 'd'] } } as CourseBlock)).toBe('Write all four options');
-    expect(missingOf({ ...newBlock('check', 0), question: { ...Q, why: '' } } as CourseBlock)).toBe('Say why the answer is right');
+  it('says what is missing in the one wording of the course check, for every kind', () => {
+    BLOCK_KINDS.forEach((kind) => {
+      const b = newBlock(kind, 0, 'T'), msg = missingOf(b);
+      if (msg) expect(courseRowProblems([...rows(), b]).some((p) => p.toLowerCase().endsWith(msg.toLowerCase()))).toBe(true);
+      else expect(courseRowProblems([...rows(), b])).toEqual([]);
+    });
+    expect(missingOf(newBlock('check', 0))).toMatch(/^Give four options/);
     expect(missingOf({ ...newBlock('check', 0), question: Q } as CourseBlock)).toBeNull();
-    expect(missingOf(newBlock('text', 0))).toBe('Write the text');
+    expect(missingOf({ ...newBlock('exercise', 0), q: 'How much?', unit: 'x'.repeat(13) } as CourseBlock)).toMatch(/unit of up to 12 characters/);
+    expect(missingOf({ ...newBlock('exercise', 0), q: 'How much?', tol: -1 } as CourseBlock)).toMatch(/tolerance/);
+    expect(missingOf({ ...newBlock('text', 0), t: 'Words', h: 'x'.repeat(121) } as CourseBlock)).toMatch(/heading/);
   });
 });
 

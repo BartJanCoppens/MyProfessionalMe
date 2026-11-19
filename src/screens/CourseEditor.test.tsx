@@ -20,8 +20,8 @@ const data = (): CreateData => ({ contributions: [], reviews: [], rules: [rule],
 const nw = { line: 'Consulting', aud: '', type: 'E-learning', title: 'VAT', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'Know where VAT is due.', outline: [], sources: [], ai: false, aiNote: '',
   items: { list: ITEMS as never, how: 'manual' as const, problems: [], note: '' } };
 
-function Live({ readOnly = false, shape }: { readOnly?: boolean; shape?: Record<string, string> }) {
-  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'create', create: data(), createTab: 'new', nw: { ...nw, shape }, studio: { view: 'studio', step: 3, id: 'elearn' } }));
+function Live({ readOnly = false, shape, studio, items }: { readOnly?: boolean; shape?: Record<string, string>; studio?: Partial<AppState['studio']>; items?: unknown[] }) {
+  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'create', create: data(), createTab: 'new', nw: { ...nw, shape, items: { ...nw.items, list: (items ?? ITEMS) as never } }, studio: { view: 'studio', step: 3, id: 'elearn', ...studio } }));
   const toastTimer = useRef<number | undefined>(undefined), drag = useRef<string | null>(null), file = useRef<HTMLInputElement | null>(null), chat = useRef<HTMLDivElement | null>(null);
   const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, member('u1'), person({ readOnly }), async () => {}).renderVals();
   return <>{vm.create && <CreateScreen c={vm.create} />}{vm.toast && <div role="status">{vm.toast}</div>}</>;
@@ -121,5 +121,57 @@ describe('View as', () => {
     ['Add lesson', 'Remove lesson', 'Move lesson 1 down', 'Move block up', 'Done'].forEach((n) => expect(screen.queryByRole('button', { name: n })).toBeNull());
     expect(screen.queryByRole('textbox', { name: 'Lesson title' })).toBeNull();
     expect(screen.queryByRole('textbox', { name: 'Heading' })).toBeNull();
+  });
+});
+
+describe('a number is typed as text', () => {
+  const exercise = [...ITEMS, { block: 'exercise', id: 'b0005', lesson: 1, q: 'Rate?', a: 1, tol: 0, unit: '%' }];
+  const number = () => screen.getByRole('textbox', { name: 'Right number' }) as HTMLInputElement;
+  it('keeps "2.5", "-3" and an empty field as typed', () => {
+    render(<Live items={exercise} />);
+    fireEvent.click(screen.getByText(/The invoice/));
+    fireEvent.click(screen.getByRole('button', { name: 'Select calculation exercise' }));
+    ['2.', '2.5', '-', '-3', ''].forEach((v) => { fireEvent.change(number(), { target: { value: v } }); expect(number().value).toBe(v); });
+    fireEvent.change(number(), { target: { value: '2.5' } });
+    expect(screen.getByText(/Answer 2.5/)).toBeTruthy();
+    fireEvent.change(number(), { target: { value: '-3' } });
+    expect(screen.getByText(/Answer -3/)).toBeTruthy();
+  });
+});
+
+describe('asking before blocks go', () => {
+  const ask = () => screen.getAllByRole('alert').find((a) => /^This removes/.test(a.textContent ?? ''))!;
+  const three = [ITEMS[0], ITEMS[1], ['Lesson 3', 'Empty', ''], ...ITEMS.slice(2)];
+  it('Remove lesson with blocks asks, Cancel keeps it and Continue removes it with its blocks', () => {
+    render(<Live items={three} />);
+    click('Remove lesson');
+    expect(ask().textContent).toMatch(/This removes 3 blocks with lesson 1/);
+    click('Cancel');
+    expect(screen.getByText('3 lessons · 4 blocks · 1 scored')).toBeTruthy();
+    click('Remove lesson');
+    expect(document.activeElement).toBe(ask());
+    click('Continue');
+    expect(screen.getByText('2 lessons · 1 block · 0 scored')).toBeTruthy();
+  });
+  it('a lesson without blocks goes at once', () => {
+    render(<Live items={three} />);
+    fireEvent.click(screen.getByText(/3\. Empty/));
+    click('Remove lesson');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+  it('a redraft that would remove blocks shows the same ask in Draft, with Continue and Cancel', () => {
+    const out = { list: [ITEMS[0]] as never, how: 'scripted' as const, problems: [], note: '' };
+    render(<Live studio={{ step: 2, ask: { draft: out } }} />);
+    expect(screen.getByRole('alert').textContent).toMatch(/This removes 1 block from lessons the new draft no longer has/);
+    click('Cancel');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('focus', () => {
+  it('moves to the inspector when a block is selected', () => {
+    render(<Live />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Select text' })[0]);
+    expect(screen.getByRole('region', { name: 'Edit text' }).contains(document.activeElement)).toBe(true);
   });
 });

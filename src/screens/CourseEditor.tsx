@@ -34,7 +34,7 @@ function Canvas({ c }: { c: Course }) {
     <div style={{ ...column, flex: '1 1 320px' }}>
       {c.readOnly ? <div style={{ fontWeight: 600, fontSize: 15 }}>{c.lessonTitle}</div> : (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <Input size="lg" aria-label="Lesson title" maxLength={600} value={c.lessonTitle} onChange={(e) => c.setLessonTitle(e.target.value)} style={{ flex: 1 }} />
+          <Input size="lg" aria-label="Lesson title" maxLength={c.titleMax} value={c.lessonTitle} onChange={(e) => c.setLessonTitle(e.target.value)} style={{ flex: 1 }} />
           <LinkButton tone="muted" onClick={c.removeLesson}>Remove lesson</LinkButton>
         </div>
       )}
@@ -51,7 +51,7 @@ export default function CourseEditor({ c, readOnly }: { c: Course; readOnly: boo
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <Outline c={c} />
         <Canvas c={c} />
-        {!readOnly && <div style={{ ...column, flex: '0 1 280px', minWidth: 240 }}>{c.inspector && <BlockInspector i={c.inspector} />}<Shelf shelf={c.shelf} /></div>}
+        {!readOnly && <div style={{ ...column, flex: '0 1 280px', minWidth: 240 }}>{c.inspector && <BlockInspector key={c.inspector.id} i={c.inspector} />}<Shelf shelf={c.shelf} /></div>}
       </div>
       <Problems list={c.problems} />
     </div>

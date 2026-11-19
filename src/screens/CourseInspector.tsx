@@ -1,4 +1,5 @@
 // The right column of the course editor: the selected block's fields and actions, or the shelf of blocks to add.
+import { useEffect, useRef, useState } from 'react';
 import { Button, Field, Input, LinkButton, Select, Textarea } from '../ds';
 import type { courseEditVals } from '../courseEditVals';
 import type { FieldView } from '../courseFields';
@@ -8,20 +9,28 @@ import { MoveButtons } from './MoveButtons';
 type Course = ReturnType<typeof courseEditVals>;
 type Inspector = NonNullable<Course['inspector']>;
 
+// Numbers are typed as text: the field keeps what is typed ("2.", "-") while the block only takes a finished number.
+function TextField({ f, common }: { f: FieldView; common: { 'aria-label': string } }) {
+  const [raw, setRaw] = useState(f.value);
+  return <Input {...common} size="lg" maxLength={f.max} inputMode={f.numeric ? 'decimal' : undefined} value={f.numeric ? raw : f.value} onChange={(e) => { setRaw(e.target.value); f.set(e.target.value); }} />;
+}
+
 function FieldControl({ f }: { f: FieldView }) {
   const common = { 'aria-label': f.label };
   return (
     <Field label={f.label} size="sm">
       {f.kind === 'select' ? <Select {...common} size="md" value={f.value} options={f.options} onChange={(e) => f.set(e.target.value)} />
         : f.kind === 'area' ? <Textarea {...common} minHeight={72} maxLength={f.max} value={f.value} onChange={(e) => f.set(e.target.value)} />
-          : <Input {...common} size="lg" maxLength={f.max} type={f.numeric ? 'number' : 'text'} value={f.value} onChange={(e) => f.set(e.target.value)} />}
+          : <TextField f={f} common={common} />}
     </Field>
   );
 }
 
 export function BlockInspector({ i }: { i: Inspector }) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section ref={ref} tabIndex={-1} aria-label={'Edit ' + i.type.toLowerCase()} style={{ display: 'flex', flexDirection: 'column', gap: 10, outline: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ ...label, flex: 1 }}>{i.type}</span><MoveButtons what="block" noUp={i.noUp} noDown={i.noDown} up={i.up} down={i.down} /></div>
       {i.fields.map((f) => <FieldControl key={f.label} f={f} />)}
       {i.more.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{i.more.map((m) => <Button key={m.label} size="sm" variant="secondary" onClick={m.run} disabled={m.off}>{m.label}</Button>)}</div>}
@@ -30,7 +39,7 @@ export function BlockInspector({ i }: { i: Inspector }) {
         <LinkButton tone="muted" onClick={i.duplicate}>Duplicate</LinkButton>
         <LinkButton tone="muted" onClick={i.remove}>Remove block</LinkButton>
       </div>
-    </div>
+    </section>
   );
 }
 

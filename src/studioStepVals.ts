@@ -8,7 +8,7 @@
 import type { Logic } from './model';
 import type { Bundle, ExamQuestion, NewDraft } from './types';
 import type { SetNw } from './createItems';
-import { applyDraft, draftItems, redraftText, studioQuery, studioSpec } from './studioDraft';
+import { applyDraft, clearAsk, draftItems, redraftText, studioQuery, studioSpec } from './studioDraft';
 import { itemRows, noItems } from './logic/items';
 import type { Item } from './logic/items';
 import { fitBuilt, startBuild } from './logic/studioBuild';
@@ -36,7 +36,6 @@ import { deckVoiceName, dropOtherVoices, slidesProduce } from './studioSlides';
 import { NO_STOCK_VOICES, stockVoicesOf } from './studioVoicing';
 import { BUILDS } from './studioRunners';
 
-const dropRedraft = (L: Logic) => () => L.setState((s) => ({ studio: { ...s.studio, redraft: undefined } }));
 type Field = 'shape' | 'produce' | 'cast';
 
 // A group of chips for one question: choosing stores the answer under the question (or row label) on the draft. A
@@ -86,6 +85,13 @@ function built(def: StudioDef, nw: NewDraft, list: StudioEntry[]) {
 }
 const NO_VOICE_STEP = 'No voice · text and music only';
 
+// A redraft that would remove blocks waits in the studio state; its text counts them on the course as it is now.
+function draftAsk(L: Logic, nw: NewDraft, setNw: SetNw, list: StudioEntry[]) {
+  const pending = L.state.studio.ask;
+  if (!pending || !('draft' in pending)) return null;
+  return { text: redraftText(list, pending.draft), cancel: clearAsk(L), proceed: () => { if (L.readOnly()) return; applyDraft(setNw, nw.type, pending.draft); clearAsk(L)(); } };
+}
+
 export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, bundles: Bundle[]) {
   const list = (nw.items?.list ?? []) as StudioEntry[], text2 = def.items.some((i) => i.length === 3), check = questionsOf(list), aiOn = L.aiCan('studio_draft'), on = { draft: aiOn, voice: voiceOn(L.aiOpts()), role: L.aiCan('game_role') };
   // Editing the rows keeps the items' provenance and any check after them; a hand-made list says 'manual'.
@@ -95,6 +101,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
   // A lesson row goes with its blocks.
   const removeRow = (k: number) => (def.produce === 'course' ? setNw((cur) => { const it = cur.items ?? noItems(); return set(it, dropLesson(it.list as StudioEntry[], k)); })
     : change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]));
+  const course = def.produce === 'course' ? courseEditVals(L, nw, setNw) : null;
   return {
     shape: def.qs.map(([q, options, steers]) => { const o = offered(on, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers, PRODUCE_NOTES[def.id + ':' + row])),
@@ -106,8 +113,8 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     check: check.length ? { head: 'Check · ' + check.length + ' questions · with the right answer', rows: itemRows('Practice exam', check), remove: () => change((rows) => rows) } : null,
     hasText2: text2, columns: def.columns ?? null, problems: studioProblems(def, list, nw.shape ?? {}, aiOn),
     add: () => change((rows, q) => [...rows, (text2 ? ['', '', ''] : ['', '']) as StudioItem, ...q]),
-    // A redraft that would remove blocks waits for the creator's answer.
-    redraft: L.state.studio.redraft ? { text: redraftText(list, L.state.studio.redraft), cancel: dropRedraft(L), proceed: () => { if (L.readOnly()) return; applyDraft(setNw, nw.type, L.state.studio.redraft!); dropRedraft(L)(); } } : null,
+    // What waits for the creator's answer (Continue / Cancel): a redraft that would remove blocks, or a lesson with blocks to remove.
+    ask: draftAsk(L, nw, setNw, list) ?? course?.ask ?? null,
     // "Draft with AI" (the one pipeline in studioDraft.ts). Flash keeps its own draft button in the item panel and does not use this.
     aiDraft: { label: L.state.nwAiBusy ? 'Drafting' : 'Draft with AI', busy: L.state.nwAiBusy,
       run: () => draftItems(L, nw, bundles, setNw, studioQuery(nw), studioSpec(def, nw)) },
@@ -115,7 +122,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
     motion: def.id === 'motion' ? motionProduce(L, nw, setNw) : null,
     slides: def.id === 'slides' ? slidesProduce({ L, nw }) : null,
     podcast: def.id === 'podcast' ? podcastProduce({ L, nw }) : null,
-    course: def.produce === 'course' ? courseEditVals(L, nw, setNw) : null,
+    course,
     game: def.id === 'game' ? gameProduce(L, nw, setNw) : null,
   };
 }

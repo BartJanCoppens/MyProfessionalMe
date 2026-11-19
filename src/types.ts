@@ -273,4 +273,4 @@ export type FmtDraft = {
 
 // `id` is the open studio (Flash card & Exam Studio when absent); `step` indexes visibleSteps of that studio.
 // check: what the automatic check ran on (key, see createVals) and the reasons it failed (none: passed).
-export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; check?: { key: string; reasons: string[] }; redraft?: DraftItems };
+export type StudioState = { view: 'hub' | 'studio' | 'form'; step: number; id?: string; check?: { key: string; reasons: string[] }; ask?: { draft: DraftItems } | { lesson: number } };

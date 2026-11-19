@@ -68,7 +68,7 @@ export function studioVals(L: Logic, src: StudioSrc) {
     const keep = !!savedIn && savedIn === d.id, other = !!savedIn && savedIn !== d.id;
     const fresh = keep ? {} : d.compact ? { shape: {} } : { shape: {}, produce: {}, cast: {}, build: undefined, items: noItems() };
     setNw((cur) => ({ ...changeFormat(cur, f, src.rules), ...fresh, ...(other && { savedId: undefined }) }));
-    set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined, redraft: undefined });
+    set({ view: 'studio', step: 0, id: d.compact ? undefined : d.id, check: undefined, ask: undefined });
   };
   // What the Draft step still needs: a generic studio's item schema; Flash's cards or questions have their own shape, so only
   // the studio's minimum, worded as in the design ("Draft at least 4 items in step 2").
