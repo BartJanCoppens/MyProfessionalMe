@@ -10,7 +10,7 @@ import { briefLines } from './planDraft';
 import { COURSE_CAPS } from './courseContent';
 import { wrongSpeaker } from './podcastContent';
 import { END_CHECK, explainerEnd } from './studioContent';
-import { CHECK_SIZE, itemsValid, rowsMax } from './studios';
+import { CHECK_SIZE, itemsValid, rowCap } from './studios';
 import type { StudioDef, StudioEntry, StudioItem } from './studios';
 
 // How each studio lays its rows out, in the words the request gives the model.
@@ -37,7 +37,7 @@ const rowWidths = (def: StudioDef) => new Set<number>(def.items.map((i) => i.len
 // The Explainer's three-question check is drafted with its steps when it ends with the check; the check shares the cap.
 const wantsCheck = (def: StudioDef, shape: Record<string, string> | undefined) => def.format === 'Interactive explainer' && explainerEnd(shape ?? {}) === END_CHECK;
 // How many rows the AI may write: the cap, less the Explainer's check or the place an Animated flow's drawing or a deck's or episode's voice-over takes (a reel's voice-over and final cut take two).
-const room = (def: StudioDef, shape: Record<string, string> | undefined) => (def.produce === 'course' ? COURSE_CAPS.lessons[1] : rowsMax(def)) - (wantsCheck(def, shape) ? CHECK_SIZE : 0) - (['Animated flow', 'Slides', 'Podcast'].includes(def.format) ? 1 : def.format === 'Reel' ? 2 : 0);
+const room = (def: StudioDef, shape: Record<string, string> | undefined) => rowCap(def) - (wantsCheck(def, shape) ? CHECK_SIZE : 0) - (['Animated flow', 'Slides', 'Podcast'].includes(def.format) ? 1 : def.format === 'Reel' ? 2 : 0);
 const CHECK_ASK = ' Also write exactly ' + CHECK_SIZE + ' multiple-choice questions that check the steps, as "check":[{"t":short topic,"q":question,"o":[four options],"a":0-based index of the right option,"why":one sentence on why}].';
 
 export function studioRequest(def: StudioDef, nw: NewDraft, passages: string[]): AiRequest {
@@ -94,5 +94,5 @@ const SCRIPTS: Record<string, (s: string[], nw: NewDraft) => StudioItem[]> = {
 
 export function scriptedItems(def: StudioDef, nw: NewDraft, passages: string[]): StudioItem[] | null {
   const script = SCRIPTS[def.id] as ((s: string[], nw: NewDraft) => StudioItem[]) | undefined, s = passages.map(sentenceOf).filter(Boolean);
-  return script && s.length ? script(s, nw).slice(0, rowsMax(def)) : null;
+  return script && s.length ? script(s, nw).slice(0, rowCap(def)) : null;
 }

@@ -1,6 +1,6 @@
 // What editing a course's lessons does to its blocks (E-learning Studio, Task 1.2; 1.3 adds the block edits). A block names its lesson by index from 0,
 // so removing or moving a lesson row has to move its blocks too. Pure.
-import { isCourseBlock } from './courseContent';
+import { COURSE_CAPS, isCourseBlock } from './courseContent';
 import type { CourseBlock } from './courseContent';
 import type { StudioEntry } from './studios';
 
@@ -31,6 +31,11 @@ export function moveLesson(items: StudioEntry[], k: number, by: -1 | 1): StudioE
 // Every lesson without blocks gets one text block of its own title and summary (the creator's words, no placeholder question).
 export function seedLessons(items: StudioEntry[]): StudioEntry[] {
   const blocks = blocksOf(items);
-  const seeds = rowsOf(items).flatMap((r, k): CourseBlock[] => (blocks.some((b) => b.lesson === k) ? [] : [{ block: 'text', id: blockId(), lesson: k, h: (r as string[])[1].trim(), t: ((r as string[])[2] ?? '').trim() }]));
+  const seeds = rowsOf(items).flatMap((r, k): CourseBlock[] => (blocks.some((b) => b.lesson === k) ? [] : [{ block: 'text', id: blockId(), lesson: k, h: (r as string[])[1].trim().slice(0, COURSE_CAPS.heading), t: ((r as string[])[2] ?? '').trim() }]));
   return seeds.length ? [...items, ...seeds] : items;
 }
+
+// A new draft of the lesson rows with the blocks the course already has: they stay attached, by index, to the lessons that still exist
+// (the blocks of a lesson the new draft no longer has go; `droppedBlocks` counts them so the screen can say so).
+export const keepBlocks = (old: StudioEntry[], drafted: StudioEntry[]): StudioEntry[] => [...drafted, ...blocksOf(old).filter((b) => b.lesson < rowsOf(drafted).length)];
+export const droppedBlocks = (old: StudioEntry[], drafted: StudioEntry[]): number => blocksOf(old).filter((b) => b.lesson >= rowsOf(drafted).length).length;

@@ -17,7 +17,7 @@ import type { VoiceItem } from './voiceItem';
 import { isVideoItem } from './videoItem';
 import type { VideoItem } from './videoItem';
 import { avatarRows } from './avatarContent';
-import { courseRowProblems, isCourseBlock } from './courseContent';
+import { COURSE_CAPS, courseRowProblems, isCourseBlock } from './courseContent';
 import type { CourseBlock } from './courseContent';
 import { reelRows } from './reelContent';
 
@@ -123,6 +123,8 @@ const SCHEMAS: Record<string, ItemSchema> = { avatar: avatarRows, reel: reelRows
 
 // The most rows a studio's items hold: its format's ITEM_MAX (one table for cards, questions and rows).
 export const rowsMax = (def: StudioDef) => ITEM_MAX[def.format];
+// The most rows (lessons, for a course) a draft of the studio may have: a course's 252 items are mostly blocks.
+export const rowCap = (def: StudioDef) => (def.produce === 'course' ? COURSE_CAPS.lessons[1] : rowsMax(def));
 
 // The one minimum: fewer rows than the studio needs. Flash card & Exam Studio's items have their own shape and only this rule.
 export const tooFew = (def: StudioDef, count: number) => count < def.min;

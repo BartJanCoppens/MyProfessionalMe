@@ -110,3 +110,23 @@ describe('Draft with AI for the lessons', () => {
     rows.forEach((r, k) => { expect(r).toHaveLength(3); expect(r[0]).toBe('Lesson ' + (k + 1)); });
   });
 });
+
+describe('drafting again after blocks were built', () => {
+  const rows = [['Lesson 1', 'Place', 'Where'], ['Lesson 2', 'Invoice', 'What'], ['Lesson 3', 'Report', 'When']];
+  it('keeps the blocks attached to the lessons that remain (AI)', async () => {
+    stubWindow({ claude: { complete: vi.fn(async () => JSON.stringify({ items: rows })) } });
+    const h = at(2, list(), true);
+    await h.st().aiDraft.run();
+    expect(h.state.nw.items!.how).toBe('ai');
+    expect(lessonsOf(h.items()).map((l) => [l.title, l.blocks.map((b) => b.id)])).toEqual([['Place', ['b0001', 'b0002']], ['Invoice', ['b0003']], ['Report', ['b0004']]]);
+  });
+  it('keeps them through the scripted draft too, and says when a lesson with blocks goes', async () => {
+    const h = at(2, list());
+    await h.st().aiDraft.run();
+    expect(h.state.nw.items!.how).toBe('scripted');
+    const kept = h.items().filter((x) => !Array.isArray(x)).length;
+    expect(kept).toBeGreaterThan(0);
+    const n = h.items().filter(Array.isArray).length;
+    if (n < 3) expect(h.lastToast()).toMatch(/blocks/);
+  });
+});

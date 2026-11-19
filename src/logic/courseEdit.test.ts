@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCK_ID, lessonsOf } from './courseContent';
+import { BLOCK_ID, COURSE_CAPS, courseRowProblems, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
-import { blockId, dropLesson, moveLesson, seedLessons } from './courseEdit';
+import { blockId, dropLesson, keepBlocks, moveLesson, seedLessons } from './courseEdit';
 import type { StudioEntry } from './studios';
 
 const Q = { t: 'Place', q: 'Where?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because.' };
@@ -58,6 +58,28 @@ describe('seedLessons', () => {
   it('returns the same items when every lesson has blocks', () => {
     const full = [...rows(), text('b0001', 0), text('b0002', 1), text('b0003', 2)];
     expect(seedLessons(full)).toEqual(full);
+  });
+});
+
+describe('seedLessons with a long title', () => {
+  it('clips the heading to the block cap so the seeded course stays valid', () => {
+    const long = 'T'.repeat(500), out = seedLessons([['Lesson 1', long, 'S'], ['Lesson 2', 'Two', 'S']]);
+    const h = (lessonsOf(out)[0].blocks[0] as { h: string }).h;
+    expect(h).toHaveLength(COURSE_CAPS.heading);
+    expect(courseRowProblems(out)).toEqual([]);
+  });
+});
+
+describe('keepBlocks', () => {
+  it('puts the blocks of the old course behind new lesson rows, for the lessons that still exist', () => {
+    const out = keepBlocks(course(), [['Lesson 1', 'A', 'a'], ['Lesson 2', 'B', 'b']]);
+    expect(lessonsOf(out).map((l) => [l.title, l.blocks.map((b) => b.id)])).toEqual([['A', ['b0001', 'b0002', 'b0003', 'b0004']], ['B', ['b0005']]]);
+  });
+  it('keeps every block when the new draft has at least as many lessons', () => {
+    expect(lessonsOf(keepBlocks(course(), [...rows(), ['Lesson 4', 'D', 'd']])).flatMap((l) => l.blocks).length).toBe(6);
+  });
+  it('is the new rows alone when there were no blocks', () => {
+    expect(keepBlocks(rows(), [['Lesson 1', 'A', 'a']])).toEqual([['Lesson 1', 'A', 'a']]);
   });
 });
 

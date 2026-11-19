@@ -8,7 +8,8 @@ import { retrieve, usablePassage } from './logic/okf';
 import type { Hit } from './logic/okf';
 import type { DraftItems, Item } from './logic/items';
 import { scriptedItems, parseStudioItems, studioRequest } from './logic/studioItems';
-import type { StudioDef } from './logic/studios';
+import type { StudioDef, StudioEntry } from './logic/studios';
+import { droppedBlocks, keepBlocks } from './logic/courseEdit';
 import type { AiUseKey } from './logic/ai';
 import { canComplete } from './lib/ai';
 import type { AiRequest } from './lib/ai';
@@ -53,7 +54,10 @@ export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setN
   L.setState({ nwAiBusy: false });
   // The creator cannot change the format meanwhile; if it changed anyway, the answer is dropped.
   if (typeof out === 'string') { L.say(out); return; }
-  setNw((cur) => (cur.type === nw.type ? { items: out } : {}));
+  // A course drafted again keeps the blocks built so far on the lessons that remain, and says when a lesson with blocks goes.
+  const old = (nw.items?.list ?? []) as StudioEntry[], course = nw.type === 'E-learning', lost = course ? droppedBlocks(old, out.list as StudioEntry[]) : 0;
+  setNw((cur) => (cur.type === nw.type ? { items: course ? { ...out, list: keepBlocks((cur.items?.list ?? []) as StudioEntry[], out.list as StudioEntry[]) as Item[] } : out } : {}));
+  if (lost) L.say(lost + ' block' + (lost > 1 ? 's' : '') + ' of lessons the new draft no longer has were removed');
 }
 
 // One draft run on a spec: the AI's items, else the scripted rows when there are any (labelled as scripted, never AI), else the sentence that says why

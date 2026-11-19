@@ -616,6 +616,7 @@ The studio on the hub, its Draft step and the move to Produce. The course editor
 | ELD-04 | Creator | Lessons without blocks | Next: Produce | Each gets one text block with its title and summary; a lesson with blocks is unchanged; fewer than 2 lessons stays in Draft ("Add at least 2 lessons") | `studioElearn.test.ts` › from Draft to Produce |
 | ELD-05 | Creator | AI on; AI off or a malformed answer | Draft with AI | Lesson rows only (2 to 12, title and summary); without AI or on a bad answer the scripted rows, labelled "Scripted from the bundle", never AI | `studioElearn.test.ts` › Draft with AI; `studioDraft.test.ts` |
 | ELD-06 | Creator | A course near the 250,000-byte cap | Check it | The editor counts the database's jsonb spacing: exactly 250,000 passes, one byte more says "The course is too large", so what passes here never fails at submit | `logic/courseContent.test.ts` › the size cap |
+| ELD-07 | Creator | A course with blocks in Produce, and a lesson title of 500 characters | Draft with AI again (or scripted); move to Produce | The blocks stay on the lessons that remain (a toast says if a lesson with blocks went); a long title is clipped to 120 in its first block, so the course stays valid | `studioElearn.test.ts` › drafting again; `logic/courseEdit.test.ts` |
 
 ## Bugs found and fixed
 
