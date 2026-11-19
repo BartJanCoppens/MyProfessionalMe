@@ -3,6 +3,7 @@
 // preview's own state); a block that scores (SCORED_KINDS) is right or not by `isRight`, which the score line and the completion rule count.
 import { NEW_ROUND, roundView } from './fmtRound';
 import type { Round, RoundState } from './fmtRound';
+import { decimalPoint } from './logic/courseContent';
 import type { CourseBlock } from './logic/courseContent';
 
 export type CourseAnswer = number | { [card: number]: 0 | 1 } | { v: string; checked: boolean } | { [panel: number]: boolean };
@@ -11,8 +12,8 @@ export const NEW_BLOCK: BlockRun = { round: NEW_ROUND };
 // What a block changes: its answer (null clears it) and, for a check, its round.
 export type BlockPatch = { answer?: CourseAnswer | null; round?: Partial<RoundState> };
 
-// A number as the design reads it (replace(/[^0-9.\-]/g, '')): its digits, a point and a minus ("2,519" is 2519); NaN when there is none.
-export const numberIn = (text: string) => { const d = text.replace(/[^0-9.-]/g, ''); return d === '' ? NaN : Number(d); };
+// A number as the design reads it (replace(/[^0-9.\-]/g, '')): its digits, a point and a minus ("2,519" is 2519), plus a decimal comma ("2,5" is 2.5, decimalPoint); NaN when there is none.
+export const numberIn = (text: string) => { const d = decimalPoint(text.replace(/[^0-9.,-]/g, '')).replace(/[^0-9.-]/g, ''); return d === '' ? NaN : Number(d); };
 const placed = (a: CourseAnswer | undefined) => (a && typeof a === 'object' ? a : {}) as Record<number, 0 | 1>;
 const typed = (a: CourseAnswer | undefined) => (a && typeof a === 'object' && 'v' in a ? a : { v: '', checked: false });
 

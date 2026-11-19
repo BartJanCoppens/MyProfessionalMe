@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COURSE_CAPS, COURSE_HOURS, WORDS, courseContent, courseHours, courseProblems, courseRowProblems, courseRule, isCourseBlock, jsonbText, lessonsOf } from './courseContent';
+import { COURSE_CAPS, COURSE_HOURS, WORDS, courseContent, courseHours, courseProblems, courseRowProblems, courseRule, decimalPoint, isCourseBlock, jsonbText, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
 import type { StudioEntry } from './studios';
 
@@ -10,14 +10,14 @@ const blocks = (): CourseBlock[] => [
   { block: 'text', id: 'b0001', lesson: 0, h: 'Where is a service taxed?', t: 'For services between businesses VAT is due where the customer is established.' },
   { block: 'accordion', id: 'b0002', lesson: 0, panels: [['The B2B rule', 'The customer’s country taxes it.'], ['The B2C rule', 'The supplier’s country taxes it.']] },
   { block: 'sort', id: 'b0003', lesson: 0, p: 'Sort each service.', bins: ['General rule', 'Exception'], cards: [['Strategy advice to a German company', 0], ['Tickets for a conference in Paris', 1]] },
-  { block: 'check', id: 'b0004', lesson: 0, question: Q, fin: false },
+  { block: 'check', id: 'b0004', lesson: 0, question: Q },
   { block: 'text', id: 'b0005', lesson: 1, h: '', t: 'With the reverse charge the supplier charges no VAT.' },
   { block: 'callout', id: 'b0006', lesson: 1, t: 'The invoice must show it clearly.' },
   { block: 'exercise', id: 'b0007', lesson: 1, q: 'VAT on 12,000 at 21 %?', a: 2520, tol: 1, unit: '€' },
   { block: 'text', id: 'b0008', lesson: 2, h: 'Reporting it', t: 'The return and the listing must match.' },
   { block: 'branch', id: 'b0009', lesson: 2, q: 'A private person asks for no VAT. What do you do?', choices: [['Agree', 'Wrong: B2C applies.', false], ['Charge VAT', 'Right.', true]] },
   { block: 'reflect', id: 'b0010', lesson: 2, p: 'Which of your clients would be reverse-charged?' },
-  { block: 'check', id: 'b0011', lesson: 2, question: Q, fin: true },
+  { block: 'check', id: 'b0011', lesson: 2, question: Q },
 ];
 const course = (extra: StudioEntry[] = [], list = blocks()): StudioEntry[] => [lesson(1, 'Where is a service taxed?'), lesson(2, 'Reverse charge'), lesson(3, 'Reporting it'), ...list, ...extra];
 const without = (id: string) => blocks().filter((b) => b.id !== id);
@@ -85,15 +85,25 @@ describe('what still blocks sending a course', () => {
   it('names a lesson that has no blocks', () => {
     expect(courseProblems(course([], without('b0005').filter((b) => b.lesson !== 1)), {})).toEqual(['Lesson 2 “Reverse charge” has no blocks yet']);
   });
-  it('asks for a final check when the rule is score or both, and for only one', () => {
-    const none = course([], patch('b0011', { fin: false }));
-    const wanted = 'Add a final check (a knowledge check marked “Final check”), or choose “All lessons viewed” in Shape it';
+  it('asks for a scored block (check, sort or calculation) when the rule is score or both; a branch and a reflection do not score', () => {
+    const none = course([], blocks().filter((b) => !['check', 'sort', 'exercise'].includes(b.block)).map((b, k) => ({ ...b, lesson: k % 3 }) as CourseBlock));
+    const wanted = 'Add a block that scores (a knowledge check, a sort or a calculation), or choose “All lessons viewed” in Shape it';
     expect(courseProblems(none, {})).toEqual([]);
-    expect(courseProblems(none, { 'How is completion decided?': 'Final check of 80 % or more' })).toEqual([wanted]);
+    expect(courseProblems(none, { 'How is completion decided?': 'Score of 80 % or more' })).toEqual([wanted]);
     expect(courseProblems(none, { 'How is completion decided?': 'Both' })).toEqual([wanted]);
-    const two = course([], patch('b0004', { fin: true }));
-    expect(courseProblems(two, {})).toEqual(['Keep one final check']);
-    expect(courseProblems(two, { 'How is completion decided?': 'Both' })).toEqual(['Keep one final check']);
+    for (const kind of ['check', 'sort', 'exercise']) {
+      const one = course([], [...none.filter((b) => !Array.isArray(b)) as CourseBlock[], blocks().find((b) => b.block === kind)!].map((b) => ({ ...b, lesson: 0 }) as CourseBlock));
+      expect(courseProblems(one, { 'How is completion decided?': 'Both' }), kind).toEqual(['Lesson 2 “Reverse charge” has no blocks yet', 'Lesson 3 “Reporting it” has no blocks yet']);
+    }
+  });
+  it('takes only exercise numbers the database takes: finite and below 1e15, as courseRowProblems', () => {
+    for (const bad of [Number("1e400"), Infinity, NaN, 1e15, -1e15]) expect(courseRowProblems(course([], patch('b0007', { a: bad }))), String(bad)).toHaveLength(1);
+    expect(courseRowProblems(course([], patch('b0007', { tol: 1e15 })))).toHaveLength(1);
+    expect(courseRowProblems(course([], patch('b0007', { a: 1e15 - 1, tol: 0 })))).toEqual([]);
+    expect(COURSE_CAPS.number).toBe(1e15);
+  });
+  it('reads a decimal comma as a point: "2,5" and "-0,25", not "2,519"', () => {
+    expect([decimalPoint('2,5'), decimalPoint(' -0,25 '), decimalPoint('2,519'), decimalPoint('1,2,3')]).toEqual(['2.5', '-0.25', '2,519', '1,2,3']);
   });
 });
 
@@ -101,7 +111,7 @@ describe('completion, hours and content', () => {
   it('reads the creator\'s choices, with defaults when unanswered', () => {
     expect(courseRule({})).toBe('seen');
     expect(courseRule({ 'How is completion decided?': 'All lessons viewed' })).toBe('seen');
-    expect(courseRule({ 'How is completion decided?': 'Final check of 80 % or more' })).toBe('score');
+    expect(courseRule({ 'How is completion decided?': 'Score of 80 % or more' })).toBe('score');
     expect(courseRule({ 'How is completion decided?': 'Both' })).toBe('both');
     expect(courseHours({ 'Length?': '60 min' })).toBe(1);
     expect(courseHours({})).toBe(0.5);

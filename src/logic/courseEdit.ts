@@ -53,7 +53,7 @@ export function newBlock(kind: BlockKind, lesson: number, title = ''): CourseBlo
     case 'text': return { ...base, block: 'text', h: '', t: '' };
     case 'callout': return { ...base, block: 'callout', t: '' };
     case 'accordion': return { ...base, block: 'accordion', panels: [['', ''], ['', '']] };
-    case 'check': return { ...base, block: 'check', question: { t: title, q: '', o: ['', '', '', ''], a: 0, why: '' }, fin: false };
+    case 'check': return { ...base, block: 'check', question: { t: title, q: '', o: ['', '', '', ''], a: 0, why: '' } };
     case 'sort': return { ...base, block: 'sort', p: '', bins: ['', ''], cards: [['', 0], ['', 1]] };
     case 'branch': return { ...base, block: 'branch', q: '', choices: [['', '', true], ['', '', false]] };
     case 'reflect': return { ...base, block: 'reflect', p: '' };
@@ -86,23 +86,18 @@ export function moveBlock(items: StudioEntry[], id: string, by: -1 | 1): StudioE
   return out;
 }
 
-// A copy right after its original, with an id of its own (the copy of a final check is not final: a course keeps one).
+// A copy right after its original, with an id of its own.
 export function duplicateBlock(items: StudioEntry[], id: string): StudioEntry[] {
   const i = blockAt(items, id);
   if (i < 0) return items;
   const copy = structuredClone(items[i]) as CourseBlock;
   copy.id = blockId();
-  if (copy.block === 'check') copy.fin = false;
   return [...items.slice(0, i + 1), copy, ...items.slice(i + 1)];
 }
 
 export const removeBlock = (items: StudioEntry[], id: string): StudioEntry[] => items.filter((x) => !(isCourseBlock(x) && x.id === id));
 export const patchBlock = (items: StudioEntry[], id: string, patch: Partial<CourseBlock>): StudioEntry[] =>
   items.map((x) => (isCourseBlock(x) && x.id === id ? ({ ...x, ...patch } as CourseBlock) : x));
-
-// One final check in a course: marking a check final unmarks the others.
-export const setFinal = (items: StudioEntry[], id: string, fin: boolean): StudioEntry[] =>
-  items.map((x) => (isCourseBlock(x) && x.block === 'check' ? { ...x, fin: x.id === id ? fin : fin ? false : x.fin } : x));
 
 // Lessons: a new one at the end (up to the cap), a new title (blocks stay), and removing one (never below two lessons).
 export const addLesson = (items: StudioEntry[]): StudioEntry[] => {

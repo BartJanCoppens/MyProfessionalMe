@@ -4269,7 +4269,7 @@ delete from public.trajectories where id in ('TP1', 'TP2');
 insert into results (check_name, expected, actual) select 'TP deleting the trajectories removes their plan and source rows', '0/0', (select count(*) from public.trajectory_plans where trajectory_id in ('TP1', 'TP2'))||'/'||(select count(*) from public.trajectory_plan_sources where trajectory_id in ('TP1', 'TP2'));
 -- ---------- E-learning Studio (EL) ----------
 -- A course is lesson rows [label, title, summary] then block objects (private.course_ok): every block shape and cap is enforced here. The check gate refuses
--- wrong blocks in words (private.course_row_problems), an empty lesson and a completion rule without its final check; it publishes as course content,
+-- wrong blocks in words (private.course_row_problems), an empty lesson and a completion rule that scores without a scored block; it publishes as course content,
 -- counts the creator's "Length?" and completes by the learner themselves (is_self_complete).
 reset role;
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000ea','t.elmaker@test.local'), ('00000000-0000-0000-0000-0000000000eb','t.elpodcast@test.local');
@@ -4279,10 +4279,10 @@ insert into public.review_policies (formats, peers, expert, quality) values ('{E
 select set_config('test.el_items', $j$[["Lesson 1","Where is a service taxed?","B2B and B2C"],["Lesson 2","Reverse charge","The invoice"],
  {"block":"text","id":"b0001","lesson":0,"h":"Where?","t":" For services between businesses VAT is due where the customer is established. "},
  {"block":"sort","id":"b0002","lesson":0,"p":"Sort each service.","bins":["General rule","Exception"],"cards":[["Strategy advice to a German company",0],["Tickets for a conference in Paris",1]]},
- {"block":"check","id":"b0003","lesson":0,"fin":false,"question":{"t":"Place of supply","q":"Where is the VAT due?","o":["Belgium","Germany, reverse charge","Nowhere","Both"],"a":1,"why":"The customer accounts for it."}},
+ {"block":"check","id":"b0003","lesson":0,"question":{"t":"Place of supply","q":"Where is the VAT due?","o":["Belgium","Germany, reverse charge","Nowhere","Both"],"a":1,"why":"The customer accounts for it."}},
  {"block":"callout","id":"b0004","lesson":1,"t":"The invoice must show it clearly."},
  {"block":"branch","id":"b0005","lesson":1,"q":"A private person asks for no VAT.","choices":[["Agree","Wrong: B2C applies.",false],["Charge VAT","Right.",true]]},
- {"block":"check","id":"b0006","lesson":1,"fin":true,"question":{"t":"Listing","q":"Which document lists reverse-charged services?","o":["The accounts","The intra-Community listing","The VAT return only","Nothing"],"a":1,"why":"The listing and the return must match."}}]$j$, true);
+ {"block":"check","id":"b0006","lesson":1,"question":{"t":"Listing","q":"Which document lists reverse-charged services?","o":["The accounts","The intra-Community listing","The VAT return only","Nothing"],"a":1,"why":"The listing and the return must match."}}]$j$, true);
 select set_config('test.el_shape', '{"How is completion decided?":"Both","Length?":"30 min"}', true);
 -- the example course with block p_id replaced by p_block (or dropped when null), then p_extra
 create function pg_temp.el_items(p_id text default null, p_block jsonb default null, p_extra jsonb default '[]') returns jsonb language sql as $f$
@@ -4301,7 +4301,11 @@ with i as (insert into public.contributions (business_line, type, title, domain,
  ('Consulting','E-learning','T el lesson','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
  ('Consulting','E-learning','T el three','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
  ('Consulting','E-learning','T el nofinal','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
- ('Consulting','E-learning','T el twofinal','prof','x','elearn', '{}', false),
+ ('Consulting','E-learning','T el tol','prof','x','elearn', '{}', false),
+ ('Consulting','E-learning','T el lessonstr','prof','x','elearn', '{}', false),
+ ('Consulting','E-learning','T el big','prof','x','elearn', '{}', false),
+ ('Consulting','E-learning','T el inf','prof','x','elearn', '{}', false),
+ ('Consulting','E-learning','T el tolhuge','prof','x','elearn', '{}', false),
  ('Consulting','E-learning','T el empty','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
  ('Consulting','E-learning','T el client','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
  ('Consulting','E-learning','T el sort','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
@@ -4310,13 +4314,19 @@ with i as (insert into public.contributions (business_line, type, title, domain,
  ('Consulting','E-learning','T el dup','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
  ('Consulting','E-learning','T el many','prof','x','elearn', current_setting('test.el_shape')::jsonb, false),
  ('Consulting','E-learning','T el stale','prof','x','elearn', current_setting('test.el_shape')::jsonb, false) returning 1)
-  insert into results (check_name, expected, actual) select 'EL a creator with an E-learning rule saves elearn drafts', '15 rows', count(*)||' rows' from i;
+  insert into results (check_name, expected, actual) select 'EL a creator with an E-learning rule saves elearn drafts', '19 rows', count(*)||' rows' from i;
 select pg_temp.el_set('T el ok'); select pg_temp.el_set('T el ai'); select pg_temp.el_set('T el stale');
 select pg_temp.el_set('T el kind', pg_temp.el_items(p_extra => '[{"block":"script","id":"b0099","lesson":0}]'));
 select pg_temp.el_set('T el lesson', pg_temp.el_items('b0004', '{"block":"callout","id":"b0004","lesson":2,"t":"Points nowhere."}'));
-select pg_temp.el_set('T el three', pg_temp.el_items('b0003', '{"block":"check","id":"b0003","lesson":0,"fin":false,"question":{"t":"T","q":"Q?","o":["a","b","c"],"a":1,"why":"W"}}'));
-select pg_temp.el_set('T el nofinal', pg_temp.el_items('b0006', '{"block":"check","id":"b0006","lesson":1,"fin":false,"question":{"t":"Listing","q":"Which document?","o":["a","b","c","d"],"a":1,"why":"W"}}'));
-select pg_temp.el_set('T el twofinal', pg_temp.el_items('b0003', '{"block":"check","id":"b0003","lesson":0,"fin":true,"question":{"t":"T","q":"Q?","o":["a","b","c","d"],"a":1,"why":"W"}}'));
+select pg_temp.el_set('T el three', pg_temp.el_items('b0003', '{"block":"check","id":"b0003","lesson":0,"question":{"t":"T","q":"Q?","o":["a","b","c"],"a":1,"why":"W"}}'));
+select pg_temp.el_set('T el nofinal', (select jsonb_agg(e order by n) from jsonb_array_elements(current_setting('test.el_items')::jsonb) with ordinality t(e, n) where jsonb_typeof(e) = 'array' or e ->> 'block' not in ('check', 'sort', 'exercise')));
+select pg_temp.el_set('T el tol', pg_temp.el_items('b0004', '{"block":"exercise","id":"b0007","lesson":1,"q":"Q?","a":1,"tol":-1,"unit":"EUR"}'));
+select pg_temp.el_set('T el lessonstr', pg_temp.el_items('b0004', '{"block":"callout","id":"b0004","lesson":"1","t":"A lesson that is text."}'));
+select pg_temp.el_set('T el inf', pg_temp.el_items('b0004', '{"block":"exercise","id":"b0007","lesson":1,"q":"Q?","a":1e400,"tol":0,"unit":"EUR"}'));
+select pg_temp.el_set('T el tolhuge', pg_temp.el_items('b0004', '{"block":"exercise","id":"b0007","lesson":1,"q":"Q?","a":1,"tol":1e15,"unit":"EUR"}'));
+-- 12 lessons of 6 blocks of 4000 characters: over the 250,000 byte cap
+select pg_temp.el_set('T el big', (select jsonb_agg(e) from (select jsonb_build_array('Lesson ' || k, 'T', 'x') e from generate_series(1, 12) k
+  union all select jsonb_build_object('block', 'text', 'id', 'b' || (1000 + k * 10 + j), 'lesson', k - 1, 'h', '', 't', repeat('x', 4000)) from generate_series(1, 12) k, generate_series(1, 6) j) z));
 select pg_temp.el_set('T el empty', (select jsonb_agg(e order by n) from jsonb_array_elements(current_setting('test.el_items')::jsonb) with ordinality t(e, n) where not (jsonb_typeof(e) = 'object' and e ->> 'lesson' = '1')));
 select pg_temp.el_set('T el client', pg_temp.el_items('b0004', '{"block":"callout","id":"b0004","lesson":1,"t":"Ask Delcroix first."}'));
 select pg_temp.el_set('T el sort', pg_temp.el_items('b0002', '{"block":"sort","id":"b0002","lesson":0,"p":"Sort.","bins":["A","B"],"cards":[["One",0],["Two"]]}'));
@@ -4343,9 +4353,13 @@ update public.contributions set items = pg_temp.el_items(p_extra => '[["Lesson 3
 insert into results (check_name, expected, actual) select 'EL a lesson after the blocks is refused', 'Put every lesson before the blocks', pg_temp.el_problems('T el dup');
 select pg_temp.el_set('T el dup', pg_temp.el_items('b0004', '{"block":"callout","id":"b0001","lesson":1,"t":"Same id."}'));
 insert into results (check_name, expected, actual) select 'EL one lesson is refused', 'Add at least 2 lessons', pg_temp.el_problems('T el one');
-insert into results (check_name, expected, actual) select 'EL a lesson without blocks is named', 'Lesson 2 “Reverse charge” has no blocks yet|Add a final check (a knowledge check marked “Final check”), or choose “All lessons viewed” in Shape it', pg_temp.el_problems('T el empty');
-insert into results (check_name, expected, actual) select 'EL the score rule without a final check is refused', 'Add a final check (a knowledge check marked “Final check”), or choose “All lessons viewed” in Shape it', pg_temp.el_problems('T el nofinal');
-insert into results (check_name, expected, actual) select 'EL two final checks are refused', 'Keep one final check', pg_temp.el_problems('T el twofinal');
+insert into results (check_name, expected, actual) select 'EL a lesson without blocks is named', 'Lesson 2 “Reverse charge” has no blocks yet', pg_temp.el_problems('T el empty');
+insert into results (check_name, expected, actual) select 'EL the score rule with no scored block (a branch and a callout do not score) is refused', 'Add a block that scores (a knowledge check, a sort or a calculation), or choose “All lessons viewed” in Shape it', pg_temp.el_problems('T el nofinal');
+insert into results (check_name, expected, actual) select 'EL a negative tolerance is refused', 'Lesson 2 · Calculation exercise: give a question, the right number, the tolerance (0 or more) and a unit of up to 12 characters', pg_temp.el_problems('T el tol');
+insert into results (check_name, expected, actual) select 'EL a lesson index that is text is refused', 'A block points to a lesson that does not exist', pg_temp.el_problems('T el lessonstr');
+insert into results (check_name, expected, actual) select 'EL an exercise number that reads as Infinity (1e400) is refused', 'Lesson 2 · Calculation exercise: give a question, the right number, the tolerance (0 or more) and a unit of up to 12 characters', pg_temp.el_problems('T el inf');
+insert into results (check_name, expected, actual) select 'EL a tolerance of 1e15 is refused', 'Lesson 2 · Calculation exercise: give a question, the right number, the tolerance (0 or more) and a unit of up to 12 characters', pg_temp.el_problems('T el tolhuge');
+insert into results (check_name, expected, actual) select 'EL a course over 250,000 bytes is refused', 'The course is too large: shorten some text', pg_temp.el_problems('T el big');
 insert into results (check_name, expected, actual) select 'EL a client name in a callout is refused', '“Delcroix” looks like a client name · anonymise it', pg_temp.el_problems('T el client');
 -- an edit after the check: submit refuses (the fingerprint is stale)
 update public.contributions set items = pg_temp.el_items('b0004', '{"block":"callout","id":"b0004","lesson":1,"t":"Changed after the check."}') where title = 'T el stale';
@@ -4370,7 +4384,7 @@ end $$;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000ea","role":"authenticated"}';
 insert into results (check_name, expected, actual) select 'EL the course is checked and published', '{}/published',
   public.check_contribution((select id from public.contributions where title = 'T el ok'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T el ok'));
-update public.contributions set items = pg_temp.el_items('b0006', '{"block":"check","id":"b0006","lesson":1,"fin":false,"question":{"t":"Listing","q":"Which document?","o":["a","b","c","d"],"a":1,"why":"W"}}'), shape = '{"Length?":"60 min"}' where title = 'T el ai';
+update public.contributions set items = pg_temp.el_items('b0006', '{"block":"check","id":"b0006","lesson":1,"question":{"t":"Listing","q":"Which document?","o":["a","b","c","d"],"a":1,"why":"W"}}'), shape = '{"Length?":"60 min"}' where title = 'T el ai';
 insert into results (check_name, expected, actual) select 'EL a second course is checked and published', '{}/published',
   public.check_contribution((select id from public.contributions where title = 'T el ai'))::text||'/'||public.submit_contribution((select id from public.contributions where title = 'T el ai'));
 insert into results (check_name, expected, actual) select 'EL it becomes course content, 0.5 h for 30 min, not AI made', 'E-learning/course/0.50/false/both/2', l.format||'/'||(l.content ->> 'kind')||'/'||l.hours||'/'||l.ai_made||'/'||(l.content ->> 'rule')||'/'||jsonb_array_length(l.content -> 'lessons')

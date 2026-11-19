@@ -4,14 +4,14 @@
 --
 -- items     A course is 2 to 12 lesson rows [label, title, summary] (rows_ok, width 3), then block objects {block, id, lesson, ...} and nothing else: 20 blocks
 --           per lesson at most, ids "b" + 4 to 20 lower-case letters or digits and unique, `lesson` the index (from 0) of a lesson row, the whole course up to
---           250,000 bytes and 252 items (private.item_max). Block kinds: text, callout, accordion, check (an exam question: private.question_ok, and `fin`),
+--           250,000 bytes and 252 items (private.item_max). Block kinds: text, callout, accordion, check (an exam question: private.question_ok),
 --           sort, branch (at least one good choice), reflect and exercise. Each field has its cap (private.course_shape_ok); every limit is checked here, not
 --           only in the editor, because items are untrusted content.
--- shape     'How is completion decided?' (All lessons viewed, Final check of 80 % or more, Both) and 'Length?' (15, 30 or 60 min): the hours.
+-- shape     'How is completion decided?' (All lessons viewed, Score of 80 % or more, Both) and 'Length?' (15, 30 or 60 min): the hours.
 -- content   private.course_content is courseContent in src/logic/courseContent.ts: the lessons' titles and their blocks rebuilt from the known keys, trimmed,
 --           without `lesson`, and the completion rule. Summaries are not published.
 -- check     contribution_problems refuses a course whose blocks are wrong (private.course_row_problems, in words), a lesson without blocks, a completion rule
---           that needs a final check when there is none, and two final checks. The client-name scan reads the items as text, so it covers every block.
+--           that scores (Score of 80 % or more, Both) when no block scores (a check, a sort or a calculation). The client-name scan reads the items as text, so it covers every block.
 -- hours     the creator's "Length?" (private.course_hours); CPD stays 0 like every peer contribution.
 -- the format is made only in its studio: contributions_upload_formats is unchanged.
 
@@ -115,7 +115,7 @@ as $$
     when 'accordion' then private.course_len(b -> 'panels') between 2 and 8
       and not exists (select 1 from jsonb_array_elements(private.course_list(b -> 'panels')) p
                       where not (private.course_len(p) = 2 and private.course_text_ok(p -> 0, 120) and private.course_text_ok(p -> 1, 1200)))
-    when 'check' then private.question_ok(b -> 'question') and jsonb_typeof(b -> 'fin') = 'boolean'
+    when 'check' then private.question_ok(b -> 'question')
     when 'sort' then private.course_text_ok(b -> 'p', 400) and private.course_len(b -> 'bins') = 2
       and not exists (select 1 from jsonb_array_elements(private.course_list(b -> 'bins')) x where not private.course_text_ok(x, 40))
       and private.course_len(b -> 'cards') between 2 and 10
@@ -124,8 +124,9 @@ as $$
       and not exists (select 1 from jsonb_array_elements(private.course_list(b -> 'choices')) c
                       where not (private.course_len(c) = 3 and private.course_text_ok(c -> 0, 200) and private.course_text_ok(c -> 1, 400) and jsonb_typeof(c -> 2) = 'boolean'))
     when 'reflect' then private.course_text_ok(b -> 'p', 400)
-    when 'exercise' then private.course_text_ok(b -> 'q', 400) and jsonb_typeof(b -> 'a') = 'number'
-      and case when jsonb_typeof(b -> 'tol') = 'number' then (b ->> 'tol')::numeric >= 0 else false end
+    when 'exercise' then private.course_text_ok(b -> 'q', 400)
+      and case when jsonb_typeof(b -> 'a') = 'number' then abs((b ->> 'a')::numeric) < 1e15 else false end
+      and case when jsonb_typeof(b -> 'tol') = 'number' then (b ->> 'tol')::numeric >= 0 and (b ->> 'tol')::numeric < 1e15 else false end
       and jsonb_typeof(b -> 'unit') = 'string' and char_length(b ->> 'unit') <= 12
   end, false);
 $$;
@@ -240,7 +241,7 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select case p_shape ->> 'How is completion decided?' when 'Final check of 80 % or more' then 'score' when 'Both' then 'both' else 'seen' end;
+  select case p_shape ->> 'How is completion decided?' when 'Score of 80 % or more' then 'score' when 'Both' then 'both' else 'seen' end;
 $$;
 
 create function private.course_hours(p_shape jsonb)
@@ -264,7 +265,7 @@ as $$
     when 'callout' then jsonb_build_object('block', 'callout', 'id', b -> 'id', 't', private.trimmed(b ->> 't'))
     when 'accordion' then jsonb_build_object('block', 'accordion', 'id', b -> 'id', 'panels',
       (select jsonb_agg(jsonb_build_array(private.trimmed(p ->> 0), private.trimmed(p ->> 1)) order by x.n) from jsonb_array_elements(b -> 'panels') with ordinality x(p, n)))
-    when 'check' then jsonb_build_object('block', 'check', 'id', b -> 'id', 'fin', b -> 'fin', 'question', jsonb_build_object(
+    when 'check' then jsonb_build_object('block', 'check', 'id', b -> 'id', 'question', jsonb_build_object(
       't', private.trimmed(b #>> '{question,t}'), 'q', private.trimmed(b #>> '{question,q}'), 'a', b #> '{question,a}', 'why', private.trimmed(b #>> '{question,why}'),
       'o', (select jsonb_agg(private.trimmed(o #>> '{}') order by x.n) from jsonb_array_elements(b #> '{question,o}') with ordinality x(o, n))))
     when 'sort' then jsonb_build_object('block', 'sort', 'id', b -> 'id', 'p', private.trimmed(b ->> 'p'),
@@ -366,7 +367,7 @@ declare
   v_paths text[];
   v_n integer;
   v_title text;
-  v_finals integer;
+  v_scored integer;
 begin
   if char_length(btrim(c.title)) not between 1 and 60 then
     p := array_append(p, 'The title needs 1 to 60 characters');
@@ -544,17 +545,14 @@ begin
     end if;
   end if;
   if c.type = 'E-learning' and c.studio is not null and private.items_ok(c.type, c.items) then
-    -- every lesson has a block; a completion rule that scores needs one final check, and a course never has two
+    -- every lesson has a block; a completion rule that scores needs at least one scored block
     for v_n, v_title in select l.n, private.trimmed(l.e ->> 1) from jsonb_array_elements(private.rows_of(c.items)) with ordinality l(e, n)
                         where not exists (select 1 from jsonb_array_elements(c.items) b where jsonb_typeof(b) = 'object' and b ->> 'lesson' = (l.n - 1)::text) order by l.n loop
       p := array_append(p, format('Lesson %s “%s” has no blocks yet', v_n, v_title));
     end loop;
-    v_finals := (select count(*) from jsonb_array_elements(c.items) e where jsonb_typeof(e) = 'object' and e ->> 'block' = 'check' and e -> 'fin' = 'true'::jsonb);
-    if v_finals = 0 and private.course_rule(c.shape) <> 'seen' then
-      p := array_append(p, 'Add a final check (a knowledge check marked “Final check”), or choose “All lessons viewed” in Shape it');
-    end if;
-    if v_finals > 1 then
-      p := array_append(p, 'Keep one final check');
+    v_scored := (select count(*) from jsonb_array_elements(c.items) e where jsonb_typeof(e) = 'object' and e ->> 'block' in ('check', 'sort', 'exercise'));
+    if v_scored = 0 and private.course_rule(c.shape) <> 'seen' then
+      p := array_append(p, 'Add a block that scores (a knowledge check, a sort or a calculation), or choose “All lessons viewed” in Shape it');
     end if;
   end if;
   if c.type = 'Interactive explainer' and c.studio is not null and jsonb_typeof(c.items) = 'array' then

@@ -1,6 +1,7 @@
 // The course player as view-model (E-learning Studio, Task 1.4): the score and the completion rules, the lesson on show, and the learner's saves.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LEARN, LEARN_BY, LEARN_META } from './data';
+import { isRight } from './fmtCoursePlay';
 import type { CourseAnswer } from './fmtCoursePlay';
 import { courseDone, courseScore, courseView, NEW_RUN } from './fmtCourse';
 import { parseFormatContent } from './lib/contentStore';
@@ -19,14 +20,14 @@ const lessons = [
   { title: 'Where is a service taxed?', blocks: [
     { block: 'text', id: 'b0001', h: 'Where?', t: 'Where the customer is.' },
     { block: 'sort', id: 'b0002', p: 'Sort each service.', bins: ['General rule', 'Exception'], cards: [['Advice to a German company', 0], ['Tickets for Paris', 1]] },
-    { block: 'check', id: 'b0003', question: Q, fin: false }] },
+    { block: 'check', id: 'b0003', question: Q }] },
   { title: 'Reverse charge', blocks: [
     { block: 'exercise', id: 'b0004', q: 'VAT on 12,000 at 21 %?', a: 2520, tol: 1, unit: '€' },
-    { block: 'check', id: 'b0005', question: Q, fin: false }] },
+    { block: 'check', id: 'b0005', question: Q }] },
   { title: 'Reporting it', blocks: [
     { block: 'branch', id: 'b0006', q: 'A private person asks for no VAT.', choices: [['Agree', 'Wrong: B2C applies.', false], ['Charge VAT', 'Right.', true]] },
     { block: 'exercise', id: 'b0007', q: 'Net of 121 at 21 %?', a: 100, tol: 0, unit: '€' },
-    { block: 'check', id: 'b0008', question: Q, fin: true }] },
+    { block: 'check', id: 'b0008', question: Q }] },
 ];
 const content = (rule: string, ls = lessons) => parseFormatContent({ kind: 'course', lessons: ls, rule }) as CourseContent;
 const ALL_RIGHT: Record<string, CourseAnswer> = { b0002: { 0: 0, 1: 1 }, b0003: 1, b0004: { v: '2520', checked: true }, b0005: 1, b0007: { v: '100', checked: true }, b0008: 1 };
@@ -46,6 +47,11 @@ describe('the score', () => {
     const at = (v: string) => courseScore(content('score'), { b0004: { v, checked: true } }).right;
     expect([at('2,519'), at('€ 2521'), at('2,518'), at(''), at('-')]).toEqual([1, 1, 0, 0, 0]);
     expect(courseScore(content('score'), { b0004: { v: '2520', checked: false } }).answered).toBe(0);
+  });
+  it('accepts a decimal comma: "2,5" is 2.5 (a Belgian learner\'s answer), while "2,519" stays 2519', () => {
+    const rate = { block: 'exercise', id: 'b0004', q: 'Rate?', a: 2.5, tol: 0, unit: '%' } as const;
+    const right = (v: string) => isRight({ ...rate, lesson: 0 }, { v, checked: true });
+    expect([right('2,5'), right('2.5'), right('2,50 %'), right('25'), right('2,519')]).toEqual([true, true, true, false, false]);
   });
   it('wants every card of a sort placed right', () => {
     expect(courseScore(content('score'), { b0002: { 0: 0, 1: 1 } })).toMatchObject({ answered: 1, right: 1 });

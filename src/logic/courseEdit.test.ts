@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCK_ID, BLOCK_KINDS, COURSE_CAPS, courseRowProblems, lessonsOf } from './courseContent';
 import type { CourseBlock } from './courseContent';
-import { addLesson, blockId, dropLesson, duplicateBlock, insertBlock, keepBlocks, missingOf, moveBlock, moveLesson, newBlock, patchBlock, removeBlock, removeLesson, renameLesson, seedLessons, setFinal } from './courseEdit';
+import { addLesson, blockId, dropLesson, duplicateBlock, insertBlock, keepBlocks, missingOf, moveBlock, moveLesson, newBlock, patchBlock, removeBlock, removeLesson, renameLesson, seedLessons } from './courseEdit';
 import type { StudioEntry } from './studios';
 
 const Q = { t: 'Place', q: 'Where?', o: ['a', 'b', 'c', 'd'], a: 1, why: 'Because.' };
 const text = (id: string, lesson: number): CourseBlock => ({ block: 'text', id, lesson, h: 'H ' + id, t: 'Words ' + id });
 const rows = (): StudioEntry[] => [['Lesson 1', 'One', 'First'], ['Lesson 2', 'Two', 'Second'], ['Lesson 3', 'Three', 'Third']];
-const course = (): StudioEntry[] => [...rows(), text('b0001', 0), text('b0002', 0), text('b0003', 0), { block: 'check', id: 'b0004', lesson: 0, question: Q, fin: false },
+const course = (): StudioEntry[] => [...rows(), text('b0001', 0), text('b0002', 0), text('b0003', 0), { block: 'check', id: 'b0004', lesson: 0, question: Q },
   text('b0005', 1), text('b0006', 2)];
 const ids = (items: StudioEntry[], lesson: number) => lessonsOf(items)[lesson].blocks.map((b) => b.id);
 
@@ -93,7 +93,7 @@ describe('blockId', () => {
 
 describe('newBlock', () => {
   it('starts every kind with empty fields, and a check with four empty options and the lesson title', () => {
-    expect(newBlock('check', 1, 'Two')).toMatchObject({ block: 'check', lesson: 1, fin: false, question: { t: 'Two', q: '', o: ['', '', '', ''], a: 0, why: '' } });
+    expect(newBlock('check', 1, 'Two')).toMatchObject({ block: 'check', lesson: 1, question: { t: 'Two', q: '', o: ['', '', '', ''], a: 0, why: '' } });
     expect(newBlock('text', 0)).toMatchObject({ h: '', t: '' });
     expect(newBlock('accordion', 0)).toMatchObject({ panels: [['', ''], ['', '']] });
     expect(newBlock('sort', 0)).toMatchObject({ bins: ['', ''], cards: [['', 0], ['', 1]] });
@@ -161,14 +161,6 @@ describe('duplicateBlock, removeBlock, patchBlock', () => {
   it('a patch of a check\'s option 3 keeps the others', () => {
     const out = patchBlock(course(), 'b0004', { question: { ...Q, o: ['a', 'b', 'changed', 'd'] } } as Partial<CourseBlock>);
     expect((lessonsOf(out)[0].blocks[3] as { question: typeof Q }).question).toEqual({ ...Q, o: ['a', 'b', 'changed', 'd'] });
-  });
-});
-
-describe('setFinal', () => {
-  const two = (): StudioEntry[] => [...rows(), { block: 'check', id: 'b0001', lesson: 0, question: Q, fin: true }, { block: 'check', id: 'b0002', lesson: 1, question: Q, fin: false }];
-  it('makes one check the final check and unmarks the other', () => {
-    const out = lessonsOf(setFinal(two(), 'b0002', true)).flatMap((l) => l.blocks.map((b) => (b as { fin: boolean }).fin));
-    expect(out).toEqual([false, true]);
   });
 });
 

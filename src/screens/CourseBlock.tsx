@@ -17,7 +17,7 @@ function Body({ b, mode }: { b: Block; mode: BlockMode }) {
     case 'check': return (
       <><div style={bold}>{line(b.question.q, 'Write the question')}</div>
         <ol type="A" style={{ margin: '4px 0', paddingLeft: 22 }}>{b.question.o.map((o, i) => <li key={i} style={i === b.question.a ? bold : undefined}>{line(o, 'Option')}</li>)}</ol>
-        <div style={{ fontSize: 12.5, color: '#5a6058' }}>{line(b.question.why, 'Say why the answer is right')}</div>{b.fin && <div style={{ fontSize: 12, ...bold, color: '#3f6a0a' }}>Final check</div>}</>);
+        <div style={{ fontSize: 12.5, color: '#5a6058' }}>{line(b.question.why, 'Say why the answer is right')}</div></>);
     case 'sort': return (
       <><div style={bold}>{line(b.p, 'Write the prompt')}</div>
         <div style={{ display: 'flex', gap: 16 }}>{[0, 1].map((g) => <div key={g}><div style={{ fontSize: 12, ...bold }}>{line(b.bins[g], 'Group name')}</div>{b.cards.filter((c) => c[1] === g).map((c, i) => <div key={i}>{line(c[0], 'Item')}</div>)}</div>)}</div></>);

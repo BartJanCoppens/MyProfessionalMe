@@ -196,7 +196,7 @@ describe('the database repeats these rules', () => {
 
 describe('an E-learning course through the studio content path', () => {
   const q = { t: 'T', q: 'Q?', o: ['a', 'b', 'c', 'd'], a: 0, why: 'W' };
-  const items = [['Lesson 1', 'One', 'x'], ['Lesson 2', 'Two', 'x'], { block: 'text', id: 'b0001', lesson: 0, h: '', t: 'Words.' }, { block: 'check', id: 'b0002', lesson: 1, question: q, fin: true }];
+  const items = [['Lesson 1', 'One', 'x'], ['Lesson 2', 'Two', 'x'], { block: 'text', id: 'b0001', lesson: 0, h: '', t: 'Words.' }, { block: 'check', id: 'b0002', lesson: 1, question: q }];
   it('publishes the lessons and the completion rule, and parses back', () => {
     const c = studioContent('E-learning', items as never, { 'How is completion decided?': 'Both' });
     expect(c).toMatchObject({ kind: 'course', rule: 'both' });

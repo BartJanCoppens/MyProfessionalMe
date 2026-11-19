@@ -14,7 +14,7 @@ vi.mock('../lib/contributionStore', () => ({ loadCreate: vi.fn(), saveDraft: vi.
 
 const Q = { t: 'Place', q: 'Where is it taxed?', o: ['Here', 'There', 'Nowhere', 'Both'], a: 1, why: 'Because.' };
 const text = (id: string, lesson: number, h: string): CourseBlock => ({ block: 'text', id, lesson, h, t: 'Words of ' + h });
-const ITEMS = [['Lesson 1', 'Place of supply', 'Where'], ['Lesson 2', 'The invoice', 'What'], text('b0001', 0, 'Intro'), text('b0002', 0, 'Rules'), { block: 'check', id: 'b0003', lesson: 0, question: Q, fin: false }, text('b0004', 1, 'Fields')];
+const ITEMS = [['Lesson 1', 'Place of supply', 'Where'], ['Lesson 2', 'The invoice', 'What'], text('b0001', 0, 'Intro'), text('b0002', 0, 'Rules'), { block: 'check', id: 'b0003', lesson: 0, question: Q }, text('b0004', 1, 'Fields')];
 const rule = { id: 1, user_id: 'u1', lines: ['Consulting'], formats: [], domains: [], audiences: [] };
 const data = (): CreateData => ({ contributions: [], reviews: [], rules: [rule], policies: [], peers: 3 });
 const nw = { line: 'Consulting', aud: '', type: 'E-learning', title: 'VAT', dom: 'reg', lvl: '2', stage: 'Analyst', take: 'Know where VAT is due.', outline: [], sources: [], ai: false, aiNote: '',
@@ -76,16 +76,13 @@ describe('the shelf and the inspector', () => {
     expect(screen.getByRole('textbox', { name: 'Answer D' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Blocks' })).toBeTruthy();
   });
-  it('the right answer offers Answer A to D, and the final check is a select', () => {
+  it('the right answer offers Answer A to D, and a check has no final-check switch', () => {
     render(<Live />);
     fireEvent.click(screen.getByRole('button', { name: 'Select knowledge check' }));
     const right = screen.getByRole('combobox', { name: 'Right answer' });
     expect(within(right).getAllByRole('option').map((o) => o.textContent)).toEqual(['Answer A', 'Answer B', 'Answer C', 'Answer D']);
     expect(right).toHaveProperty('value', '1');
-    const fin = screen.getByRole('combobox', { name: 'Final check' });
-    expect(within(fin).getAllByRole('option').map((o) => o.textContent)).toEqual(['Knowledge check', 'Final check']);
-    fireEvent.change(fin, { target: { value: 'final' } });
-    expect(screen.getAllByText('Final check').length).toBeGreaterThan(1);
+    expect(screen.queryByRole('combobox', { name: 'Final check' })).toBeNull();
   });
   it('typing in a field changes the block and caps its length', () => {
     render(<Live />);
@@ -107,8 +104,8 @@ describe('the shelf and the inspector', () => {
     expect(screen.getByRole('group', { name: 'Blocks' })).toBeTruthy();
   });
   it('shows the problems of the course under the editor', () => {
-    render(<Live shape={{ 'How is completion decided?': 'Final check of 80 % or more' }} />);
-    expect(screen.getByText(/Add a final check/)).toBeTruthy();
+    render(<Live shape={{ 'How is completion decided?': 'Score of 80 % or more' }} items={ITEMS.filter((i) => Array.isArray(i) || (i as { block: string }).block === 'text')} />);
+    expect(screen.getByText(/Add a block that scores/)).toBeTruthy();
   });
 });
 
@@ -136,6 +133,15 @@ describe('a number is typed as text', () => {
     expect(screen.getByText(/Answer 2.5/)).toBeTruthy();
     fireEvent.change(number(), { target: { value: '-3' } });
     expect(screen.getByText(/Answer -3/)).toBeTruthy();
+  });
+  it('takes a decimal comma: "2,5" is the answer 2.5, "0,5" a tolerance of 0.5', () => {
+    render(<Live items={exercise} />);
+    fireEvent.click(screen.getByText(/The invoice/));
+    fireEvent.click(screen.getByRole('button', { name: 'Select calculation exercise' }));
+    fireEvent.change(number(), { target: { value: '2,5' } });
+    expect(screen.getByText(/Answer 2.5/)).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tolerance' }), { target: { value: '0,5' } });
+    expect(screen.getByText(/\(± 0.5\)/)).toBeTruthy();
   });
   it('says why a negative tolerance is not taken, and takes 0 or more', () => {
     render(<Live items={exercise} />);

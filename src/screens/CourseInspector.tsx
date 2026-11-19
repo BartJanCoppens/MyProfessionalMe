@@ -1,6 +1,7 @@
 // The right column of the course editor: the selected block's fields and actions, or the shelf of blocks to add.
 import { useEffect, useRef, useState } from 'react';
 import { Button, Field, Input, LinkButton, Select, Textarea } from '../ds';
+import { decimalPoint } from '../logic/courseContent';
 import type { courseEditVals } from '../courseEditVals';
 import type { FieldView } from '../courseFields';
 import { label } from './labelStyle';
@@ -13,7 +14,7 @@ type Inspector = NonNullable<Course['inspector']>;
 function TextField({ f, common }: { f: FieldView; common: { 'aria-label': string } }) {
   const [raw, setRaw] = useState(f.value);
   // A number below the field's minimum is not taken: the block keeps its last number, and the field says so.
-  const below = f.numeric && f.min !== undefined && raw.trim() !== '' && Number(raw) < f.min;
+  const below = f.numeric && f.min !== undefined && raw.trim() !== '' && Number(decimalPoint(raw)) < f.min;
   return (
     <>
       <Input {...common} size="lg" maxLength={f.max} inputMode={f.numeric ? 'decimal' : undefined} invalid={below} value={f.numeric ? raw : f.value} onChange={(e) => { setRaw(e.target.value); f.set(e.target.value); }} />

@@ -8,7 +8,7 @@ import { blockView } from './fmtCourse';
 import { fieldsOf } from './courseFields';
 import { COURSE_CAPS, KIND_NAME, SCORED_KINDS, courseProblems, courseRowProblems, lessonsOf } from './logic/courseContent';
 import type { BlockKind } from './logic/courseContent';
-import { addLesson, duplicateBlock, insertBlock, moveBlock, moveLesson, newBlock, patchBlock, removeBlock, removeLesson, renameLesson, setFinal } from './logic/courseEdit';
+import { addLesson, duplicateBlock, insertBlock, moveBlock, moveLesson, newBlock, patchBlock, removeBlock, removeLesson, renameLesson } from './logic/courseEdit';
 import { SHORT_MAX, rowFieldMax } from './logic/items';
 import type { Item } from './logic/items';
 import type { StudioEntry } from './logic/studios';
@@ -43,7 +43,7 @@ function blockOps(c: Ctx) {
     show(lesson, b.id);
   };
   const inspector = c.ro || !selected ? null : {
-    type: KIND_NAME[selected.block], id: selected.id, ...fieldsOf(selected, (p) => edit((it) => patchBlock(it, selected.id, p)), (fin) => edit((it) => setFinal(it, selected.id, fin))),
+    type: KIND_NAME[selected.block], id: selected.id, ...fieldsOf(selected, (p) => edit((it) => patchBlock(it, selected.id, p))),
     noUp: at === 0, noDown: at === blocks.length - 1, up: () => edit((it) => moveBlock(it, selected.id, -1)), down: () => edit((it) => moveBlock(it, selected.id, 1)),
     duplicate: () => { if (!full(c)) edit((it) => duplicateBlock(it, selected.id)); }, remove: () => { edit((it) => removeBlock(it, selected.id)); show(lesson, null); }, done: () => show(lesson, null),
   };

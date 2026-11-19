@@ -28,7 +28,7 @@ vi.mock('../lib/recordStore', () => ({ decideLearning: vi.fn(async () => 'accept
 
 const Q = { t: 'Place of supply', q: 'Where is the VAT due?', o: ['Belgium', 'Germany, reverse charge', 'Nowhere', 'Both'], a: 1, why: 'The customer accounts for it.' };
 const lessons = [
-  { title: 'Where is a service taxed?', blocks: [{ block: 'text', id: 'b0001', h: 'Where?', t: 'Where the customer is.' }, { block: 'check', id: 'b0002', question: Q, fin: false }] },
+  { title: 'Where is a service taxed?', blocks: [{ block: 'text', id: 'b0001', h: 'Where?', t: 'Where the customer is.' }, { block: 'check', id: 'b0002', question: Q }] },
   { title: 'Reverse charge', blocks: [{ block: 'branch', id: 'b0003', q: 'A private person asks for no VAT.', choices: [['Agree', 'Wrong: B2C applies.', false], ['Charge VAT', 'Right.', true]] },
     { block: 'exercise', id: 'b0004', q: 'VAT on 12,000 at 21 %?', a: 2520, tol: 1, unit: '€' }] },
   { title: 'Reporting it', blocks: [{ block: 'accordion', id: 'b0005', panels: [['The B2B rule', 'The customer taxes it.'], ['The B2C rule', 'The supplier taxes it.']] }, { block: 'reflect', id: 'b0006', p: 'Which client?' }] },

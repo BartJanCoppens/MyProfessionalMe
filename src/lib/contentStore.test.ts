@@ -89,7 +89,7 @@ describe('parseFormatContent', () => {
   });
   it('reads a course and refuses a block without an id', () => {
     const q = { t: 'T', q: 'Q?', o: ['a', 'b', 'c', 'd'], a: 0, why: 'W' };
-    const course = { kind: 'course', rule: 'both', lessons: [{ title: 'One', blocks: [{ block: 'text', id: 'b0001', h: '', t: 'Words.' }, { block: 'check', id: 'b0002', question: q, fin: true }] }, { title: 'Two', blocks: [{ block: 'callout', id: 'b0003', t: 'Note.' }] }] };
+    const course = { kind: 'course', rule: 'both', lessons: [{ title: 'One', blocks: [{ block: 'text', id: 'b0001', h: '', t: 'Words.' }, { block: 'check', id: 'b0002', question: q }] }, { title: 'Two', blocks: [{ block: 'callout', id: 'b0003', t: 'Note.' }] }] };
     expect(parseFormatContent(course)).toEqual(course);
     expect(parseFormatContent({ ...course, lessons: [{ title: 'One', blocks: [{ block: 'text', h: '', t: 'Words.' }] }, course.lessons[1]] })).toBeNull();
     expect(parseFormatContent({ ...course, rule: 'sometimes' })).toBeNull();

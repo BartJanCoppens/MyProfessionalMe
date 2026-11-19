@@ -1,7 +1,7 @@
 // The inspector's fields of one course block (E-learning Studio, Task 1.3): what a creator types for each kind, with the caps of COURSE_CAPS on the
 // inputs, and the buttons that add or remove a panel, an item or a choice. Plain data for the screen; a change is a patch of the block.
 import type { Opt } from './ds';
-import { COURSE_CAPS as C } from './logic/courseContent';
+import { COURSE_CAPS as C, decimalPoint } from './logic/courseContent';
 import type { CourseBlock } from './logic/courseContent';
 import { LONG_MAX, SHORT_MAX } from './logic/items';
 
@@ -15,7 +15,7 @@ const area = (label: string, value: string, max: number, set: (v: string) => voi
 const select = (label: string, value: string, options: Opt[], set: (v: string) => void): FieldView => ({ label, kind: 'select', value, options, set });
 const replaceAt = <T,>(list: T[], i: number, v: T): T[] => list.map((x, k) => (k === i ? v : x));
 // A typed number, or null while the text is not one yet ("-", ""): the field keeps what was typed, the block only a finished number.
-const number = (v: string, min = -Infinity): number | null => (v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= min ? Number(v) : null);
+const number = (v: string, min = -Infinity): number | null => { const n = Number(decimalPoint(v)); return v.trim() !== '' && Number.isFinite(n) && n >= min ? n : null; };
 const NUMBER_CHARS = 24; // the longest number a creator can type (text length, not a database cap)
 const LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -24,7 +24,7 @@ function listFields<T>(list: T[], range: readonly [number, number], noun: string
     { label: 'Remove the last ' + noun, run: () => set(list.slice(0, -1)), off: list.length <= range[0] }];
 }
 
-export function fieldsOf(b: CourseBlock, patch: Patch, setFinal: (fin: boolean) => void): Fields {
+export function fieldsOf(b: CourseBlock, patch: Patch): Fields {
   switch (b.block) {
     case 'text': return { fields: [input('Heading', b.h, C.heading, (h) => patch({ h })), area('Text', b.t, C.text, (t) => patch({ t }))], more: [] };
     case 'callout': return { fields: [area('Callout', b.t, C.callout, (t) => patch({ t }))], more: [] };
@@ -37,8 +37,7 @@ export function fieldsOf(b: CourseBlock, patch: Patch, setFinal: (fin: boolean) 
       return { fields: [area('Question', q.q, SHORT_MAX, (v) => ask({ q: v })),
         ...q.o.map((o, i) => input('Answer ' + LETTERS[i], o, SHORT_MAX, (v) => ask({ o: replaceAt(q.o, i, v) }))),
         select('Right answer', String(q.a), LETTERS.map((l, i) => ({ value: String(i), label: 'Answer ' + l })), (v) => ask({ a: Number(v) })),
-        area('Why', q.why, LONG_MAX, (v) => ask({ why: v })),
-        select('Final check', b.fin ? 'final' : 'check', [{ value: 'check', label: 'Knowledge check' }, { value: 'final', label: 'Final check' }], (v) => setFinal(v === 'final'))], more: [] };
+        area('Why', q.why, LONG_MAX, (v) => ask({ why: v }))], more: [] };
     }
     case 'sort': return {
       fields: [input('Prompt', b.p, C.prompt, (p) => patch({ p })), input('Group A', b.bins[0], C.bin, (v) => patch({ bins: [v, b.bins[1]] })), input('Group B', b.bins[1], C.bin, (v) => patch({ bins: [b.bins[0], v] })),

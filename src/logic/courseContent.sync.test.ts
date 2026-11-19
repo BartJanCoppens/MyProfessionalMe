@@ -2,7 +2,7 @@
 // migration and pins what both sides share: the caps, every sentence and the hours.
 import { describe, expect, it } from 'vitest';
 import { migrationText } from '../test/migrations';
-import { BLOCK_KINDS, BLOCK_ID, COURSE_CAPS, COURSE_HOURS, COURSE_LENGTH, COURSE_RULES, COMPLETION_QUESTION, KIND_NAME, SHAPE_RULE, WORDS } from './courseContent';
+import { BLOCK_KINDS, BLOCK_ID, COURSE_CAPS, COURSE_HOURS, COURSE_LENGTH, COURSE_RULES, COMPLETION_QUESTION, KIND_NAME, SCORED_KINDS, SHAPE_RULE, WORDS } from './courseContent';
 import { ITEM_MAX } from './items';
 
 const sql = migrationText('_elearning_studio.sql').replace(/\s+/g, ' ');
@@ -15,6 +15,8 @@ describe('course rules: TypeScript and the database agree', () => {
     expect(sql).toContain("('elearn', 'E-learning', 2)");
     expect(sql).toContain('between ' + COURSE_CAPS.lessons[0] + ' and ' + COURSE_CAPS.lessons[1]);
     expect(sql).toContain('> ' + COURSE_CAPS.blocksPerLesson);
+    expect(sql).toContain("in (" + SCORED_KINDS.map((k) => quoted(k)).join(', ') + ")");
+    expect(sql).toContain('< ' + COURSE_CAPS.number.toExponential().replace('e+', 'e'));
     expect(sql).toContain('octet_length(p_items::text) <= ' + COURSE_CAPS.bytes);
     expect(sql).toContain("^" + BLOCK_ID.source.slice(1));
     for (const n of [COURSE_CAPS.heading, COURSE_CAPS.text, COURSE_CAPS.callout, COURSE_CAPS.panelBody, COURSE_CAPS.panelTitle, COURSE_CAPS.bin, COURSE_CAPS.card, COURSE_CAPS.choice, COURSE_CAPS.outcome, COURSE_CAPS.prompt, COURSE_CAPS.unit]) {
@@ -30,7 +32,7 @@ describe('course rules: TypeScript and the database agree', () => {
     }
   });
   it('says every other problem in the same words', () => {
-    for (const w of [WORDS.unknownKind, WORDS.badId, WORDS.sameId, WORDS.noLesson, WORDS.lessonsFirst, WORDS.tooManyLessons, WORDS.tooBig, WORDS.noFinalCheck, WORDS.twoFinalChecks]) {
+    for (const w of [WORDS.unknownKind, WORDS.badId, WORDS.sameId, WORDS.noLesson, WORDS.lessonsFirst, WORDS.tooManyLessons, WORDS.tooBig, WORDS.noScoredBlock]) {
       expect(sql, w).toContain(quoted(w));
     }
     for (const w of [WORDS.sortGroup, WORDS.branchGood]) expect(sql, w).toContain(': ' + w + "'"); // after 'Lesson N · name'

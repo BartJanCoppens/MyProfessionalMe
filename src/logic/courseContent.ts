@@ -8,18 +8,18 @@ import { stepsOf } from './studioRows';
 
 export const BLOCK_KINDS = ['text', 'callout', 'accordion', 'check', 'sort', 'branch', 'reflect', 'exercise'] as const;
 export type BlockKind = typeof BLOCK_KINDS[number];
-// The blocks that score a learner (a reflection and a branching scenario do not): the final check and the score line count these.
+// The blocks that score a learner (a reflection and a branching scenario do not): the completion score and the score line count these.
 export const SCORED_KINDS: readonly BlockKind[] = ['check', 'sort', 'exercise'];
 export const BLOCK_ID = /^b[0-9a-z]{4,20}$/;
 export const COURSE_CAPS = { lessons: [2, 12], blocksPerLesson: 20, heading: 120, text: 4000, callout: 600, panels: [2, 8], panelTitle: 120, panelBody: 1200,
-  cards: [2, 10], bin: 40, card: 160, choices: [2, 4], choice: 200, outcome: 400, prompt: 400, unit: 12, bytes: 250000 } as const;
+  cards: [2, 10], bin: 40, card: 160, choices: [2, 4], choice: 200, outcome: 400, prompt: 400, unit: 12, bytes: 250000, number: 1e15 } as const;
 const C = COURSE_CAPS;
 
 type Base<K extends BlockKind> = { block: K; id: string; lesson: number };
 export type TextBlock = Base<'text'> & { h: string; t: string };
 export type CalloutBlock = Base<'callout'> & { t: string };
 export type AccordionBlock = Base<'accordion'> & { panels: [title: string, body: string][] };
-export type CheckBlock = Base<'check'> & { question: ExamQuestion; fin: boolean };
+export type CheckBlock = Base<'check'> & { question: ExamQuestion };
 export type SortBlock = Base<'sort'> & { p: string; bins: [string, string]; cards: [label: string, bin: 0 | 1][] };
 export type BranchBlock = Base<'branch'> & { q: string; choices: [label: string, outcome: string, good: boolean][] };
 export type ReflectBlock = Base<'reflect'> & { p: string };
@@ -32,7 +32,7 @@ export const isCourseBlock = (x: unknown): x is CourseBlock => !!x && typeof x =
 
 // What a creator chooses in Shape it: how the course completes (the pass mark is fixed) and how long it takes (its hours).
 export const COMPLETION_QUESTION = 'How is completion decided?';
-export const COURSE_RULES = { 'All lessons viewed': 'seen', 'Final check of 80 % or more': 'score', Both: 'both' } as const;
+export const COURSE_RULES = { 'All lessons viewed': 'seen', 'Score of 80 % or more': 'score', Both: 'both' } as const;
 export type CourseRule = 'seen' | 'score' | 'both';
 export const PASS_MARK = 80;
 export const courseRule = (shape: Record<string, string>): CourseRule => COURSE_RULES[shape[COMPLETION_QUESTION] as keyof typeof COURSE_RULES] ?? 'seen';
@@ -45,7 +45,7 @@ export const WORDS = {
   unknownKind: 'A block has a kind that is not known', badId: 'A block has an id that is missing or not allowed', sameId: 'Two blocks have the same id',
   noLesson: 'A block points to a lesson that does not exist', lessonsFirst: 'Put every lesson before the blocks', tooManyLessons: 'Keep at most ' + C.lessons[1] + ' lessons',
   tooBig: 'The course is too large: shorten some text', sortGroup: 'give every item a group', branchGood: 'mark at least one good choice',
-  noFinalCheck: 'Add a final check (a knowledge check marked “Final check”), or choose “All lessons viewed” in Shape it', twoFinalChecks: 'Keep one final check',
+  noScoredBlock: 'Add a block that scores (a knowledge check, a sort or a calculation), or choose “All lessons viewed” in Shape it',
 };
 export const KIND_NAME: Record<BlockKind, string> = { text: 'Text', callout: 'Callout', accordion: 'Accordion', check: 'Knowledge check', sort: 'Sort into groups',
   branch: 'Branching scenario', reflect: 'Reflection', exercise: 'Calculation exercise' };
@@ -56,9 +56,13 @@ export const SHAPE_RULE: Record<BlockKind, string> = {
   reflect: 'write the prompt for the learner, up to 400 characters', exercise: 'give a question, the right number, the tolerance (0 or more) and a unit of up to 12 characters',
 };
 
+// A decimal comma read as a point when it is the only separator and 1 or 2 digits follow ("2,5" is 2.5; "2,519" stays a thousands comma).
+export const decimalPoint = (text: string) => text.trim().replace(/^(-?\d+),(\d{1,2})$/, '$1.$2');
+
 type Raw = Record<string, any>;
 const within = (v: unknown, [min, max]: readonly [number, number]): v is unknown[] => Array.isArray(v) && v.length >= min && v.length <= max;
-const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+// A number the database accepts too (private.course_shape_ok): finite and under 1e15 in size, so JSON that reads as Infinity never gets in.
+const num = (v: unknown): v is number => typeof v === 'number' && Math.abs(v) < C.number;
 const sortShape = (b: Raw) => fieldOk(C.prompt)(b.p) && within(b.bins, [2, 2]) && b.bins.every(fieldOk(C.bin)) && within(b.cards, C.cards)
   && b.cards.every((c: unknown) => Array.isArray(c) && fieldOk(C.card)(c[0]));
 const branchShape = (b: Raw) => fieldOk(C.prompt)(b.q) && within(b.choices, C.choices) && b.choices.every((c: unknown) => Array.isArray(c) && c.length === 3
@@ -67,7 +71,7 @@ const SHAPE_OK: Record<BlockKind, (b: Raw) => boolean> = {
   text: (b) => typeof b.h === 'string' && b.h.length <= C.heading && fieldOk(C.text)(b.t),
   callout: (b) => fieldOk(C.callout)(b.t),
   accordion: (b) => within(b.panels, C.panels) && b.panels.every((p: unknown) => Array.isArray(p) && p.length === 2 && fieldOk(C.panelTitle)(p[0]) && fieldOk(C.panelBody)(p[1])),
-  check: (b) => isQuestion(b.question) && typeof b.fin === 'boolean',
+  check: (b) => isQuestion(b.question),
   sort: sortShape, branch: branchShape,
   reflect: (b) => fieldOk(C.prompt)(b.p),
   exercise: (b) => fieldOk(C.prompt)(b.q) && num(b.a) && num(b.tol) && b.tol >= 0 && typeof b.unit === 'string' && b.unit.length <= C.unit,
@@ -117,12 +121,11 @@ export function courseRowProblems(items: readonly unknown[]): string[] {
   return [...new Set(out)];
 }
 
-// What still blocks sending a course (the E-learning part of private.contribution_problems): a lesson without blocks, the final check the completion rule needs, only one.
+// What still blocks sending a course (the E-learning part of private.contribution_problems): a lesson without blocks, and a completion rule that scores with no scored block.
 export function courseProblems(items: readonly unknown[], shape: Record<string, string>): string[] {
   const out = lessonsOf(items).flatMap((l, k) => (l.blocks.length ? [] : ['Lesson ' + (k + 1) + ' “' + l.title.trim() + '” has no blocks yet']));
-  const finals = items.filter((b) => isCourseBlock(b) && b.block === 'check' && b.fin).length;
-  if (finals === 0 && courseRule(shape) !== 'seen') out.push(WORDS.noFinalCheck);
-  if (finals > 1) out.push(WORDS.twoFinalChecks);
+  const scored = items.filter((b) => isCourseBlock(b) && SCORED_KINDS.includes(b.block)).length;
+  if (scored === 0 && courseRule(shape) !== 'seen') out.push(WORDS.noScoredBlock);
   return out;
 }
 
@@ -133,7 +136,7 @@ export function publicBlock(b: CourseBlock): PublicBlock {
     case 'text': return { block: 'text', id: b.id, h: t(b.h), t: t(b.t) };
     case 'callout': return { block: 'callout', id: b.id, t: t(b.t) };
     case 'accordion': return { block: 'accordion', id: b.id, panels: b.panels.map(([a, c]) => [t(a), t(c)]) };
-    case 'check': return { block: 'check', id: b.id, question: readQuestions([b.question])![0], fin: b.fin };
+    case 'check': return { block: 'check', id: b.id, question: readQuestions([b.question])![0] };
     case 'sort': return { block: 'sort', id: b.id, p: t(b.p), bins: [t(b.bins[0]), t(b.bins[1])], cards: b.cards.map(([l, g]) => [t(l), g]) };
     case 'branch': return { block: 'branch', id: b.id, q: t(b.q), choices: b.choices.map(([l, o, g]) => [t(l), t(o), g]) };
     case 'reflect': return { block: 'reflect', id: b.id, p: t(b.p) };
