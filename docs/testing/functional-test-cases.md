@@ -816,3 +816,16 @@ Each one first had an `it.fails` test, named in the case above. All seven were f
 | STU-210 | Database | A stale editor save sends a linked placeholder back as a make step (with or without its cid); two published drafts exist for one step; the author lost planning rights; the cid names another contribution | Save / publish | The link stays and is never restamped; a step with a cid links only that contribution; without one only the single matching grant draft links; several candidates, a lost planner or another existing cid link nothing; a draft of another format never links | `supabase/tests/rls.sql` TM and PD cases (I3); `logic/planDraft.sync.test.ts` |
 | STU-211 | Admin | A placeholder holds another editor's draft | Open the step; "Draft all" | No "Draft with AI", the line "A draft is already linked to this placeholder · not one of yours"; not counted or drafted in Draft all (no AI call); one refused draft never stops the others | `screens/TrajectoryDraft.test.tsx`, `trajectoryAiDraft.test.ts` |
 | STU-212 | Admin | A rule holder's placeholder draft in a line with too few peers | Look at the route warning | "Only N colleagues can peer-review you ... lowers the peer requirement" (not "get a creation rule", which is for authors without a matching rule) | `createVals.test.ts` › words the too-few-peers warning |
+
+## 26. E-learning Studio: reflections, readable only by the learner (ELR), Learner, Counsellor, Admin, Creator (E-learning Studio Task 1.5)
+
+| ID | Role | Preconditions | Steps | Expected | Covered by |
+|---|---|---|---|---|---|
+| ELR-01 | Learner | A published course with a reflect block | Open its last lesson; type a reflection; wait | The field shows what was typed and "Only you can read this"; after the save "Saved · only you can read this"; reopening the course shows the text | `CoursePanel.test.tsx`, `reflectionStore.test.ts` |
+| ELR-02 | Learner | A saved reflection | Clear the text | The row is deleted; nothing is shown as saved | `reflectionStore.test.ts` |
+| ELR-03 | Learner | A reflection | Type 2,000 characters; paste more | The field stops at 2,000; the database refuses 2,001, also when most of it is spaces, and text of only white space | `CoursePanel.test.tsx`, rls `CR` |
+| ELR-04 | Counsellor, Domain Admin, General Admin, System Admin, another learner | A learner's saved reflection | Read, update or delete it (API or SQL) | 0 rows each; an insert for someone else's user_id is refused | rls `CR` |
+| ELR-05 | Counsellor or admin | A learner's course | Open it with View as | The reflect block shows its prompt and "Reflections are private: nothing is shown in View as"; no field, no text, nothing loaded | `CoursePanel.test.tsx` |
+| ELR-06 | Creator, Reviewer | The Studio's preview or a submitted course | Open the course player | The reflect block shows "Preview: not saved"; the field takes no typing; nothing is written | `CoursePanel.test.tsx` |
+| ELR-07 | Database | A block that is not a reflect block, an unpublished course, a Podcast | Insert a reflection | Refused | rls `CR` |
+| ELR-08 | Database | A reflection | Delete the learning or the account | The reflection is removed with it | rls `CR` |

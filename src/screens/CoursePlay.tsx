@@ -2,7 +2,8 @@
 // in a scenario, calculate. It only reads the view-model (fmtCoursePlay.ts); a knowledge check is the shared question round (QuestionRound.tsx).
 import { useId } from 'react';
 import type { CSSProperties } from 'react';
-import { Button, FilterChip, Input, LinkButton } from '../ds';
+import { Button, FilterChip, Input, LinkButton, Textarea } from '../ds';
+import { REFLECTION_MAX } from '../lib/reflectionStore';
 import type { Play } from '../fmtCoursePlay';
 import Feedback from './Feedback';
 import QuestionRound from './QuestionRound';
@@ -53,6 +54,11 @@ export default function CoursePlay({ p }: { p: Play }) {
         </div>
         {p.verdict && <><Verdict v={p.verdict} />{!p.verdict.good && <div><LinkButton onClick={p.retry}>Try again</LinkButton></div>}</>}
       </div>);
-    case 'reflect': return <div style={col}><div style={bold}>{p.p}</div><div style={muted}>Think it over: your reflection is for you alone. Writing it down here is not available yet.</div></div>;
+    case 'reflect': return (
+      <div style={col}>
+        <label style={col}><span style={bold}>{p.p}</span>
+          {p.shown && <Textarea aria-label={p.p} rows={4} maxLength={REFLECTION_MAX} readOnly={p.readOnly} value={p.value} onChange={(e) => p.set(e.target.value)} />}</label>
+        <div style={muted}>{p.note}</div>
+      </div>);
   }
 }

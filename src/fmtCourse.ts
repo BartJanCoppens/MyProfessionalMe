@@ -3,8 +3,9 @@
 // (mode 'play', fmtCoursePlay.ts). The learner's run lives in AppState.course; completion and progress are saved through the one detail path
 // (saveDetail): the lessons seen and the best score, and the completion itself when the creator's rule is met. The preview runs the same view over its
 // own state and saves nothing; View as and an accepted course save nothing either.
-import { NEW_BLOCK, isAnswered, isRight, playOf } from './fmtCoursePlay';
-import type { BlockPatch, BlockRun, CourseAnswer, Play } from './fmtCoursePlay';
+import { NEW_BLOCK, NO_REFLECTION, isAnswered, isRight, playOf } from './fmtCoursePlay';
+import type { BlockPatch, BlockRun, CourseAnswer, Play, Reflection } from './fmtCoursePlay';
+import { PREVIEW_REFLECTION, reflectionOf } from './fmtReflect';
 import { NEW_ROUND } from './fmtRound';
 import type { RoundState } from './fmtRound';
 import { completedToast, detailOf, saveDetail } from './fmtShared';
@@ -20,9 +21,9 @@ export type BlockView = { id: string; kind: BlockKind; name: string; block: Cour
 export type BlockMode = 'edit' | 'play';
 
 // `on`: the block is selected in the editor; `pick` selects it. `missing` is what the creator still has to write, in their words. `play`: what a learner does with it.
-export const blockView = (b: CourseBlock, mode: BlockMode, run: BlockRun | undefined, patch: (p: BlockPatch) => void, o: { ro: boolean; on?: boolean; pick?: () => void }): BlockView =>
+export const blockView = (b: CourseBlock, mode: BlockMode, run: BlockRun | undefined, patch: (p: BlockPatch) => void, o: { ro: boolean; on?: boolean; pick?: () => void; reflection?: Reflection }): BlockView =>
   ({ id: b.id, kind: b.block, name: KIND_NAME[b.block], block: b, missing: mode === 'edit' ? missingOf(b) : null, on: !!o.on, pick: o.pick ?? (() => {}),
-    play: mode === 'play' ? playOf(b, run ?? NEW_BLOCK, patch, o.ro) : null });
+    play: mode === 'play' ? playOf(b, run ?? NEW_BLOCK, patch, o.ro, o.reflection) : null });
 
 // at: the lesson on show; seen: the lessons opened this session (the saved ones come with the options); rounds: a check's round per block; best, completed and savedSeen:
 // what this session already saved (the subject reloads later, so the saved detail is stale for a moment).
@@ -43,7 +44,7 @@ export const courseDone = (rule: CourseRule, seen: number[], lessons: number, sc
 };
 
 // ro: View as (nothing is answered or saved); seen: the lessons saved before; done: already complete; onProgress: the lessons seen and the score, when they change.
-export type CourseOpts = { ro: boolean; seen: number[]; done: boolean; onProgress: (seen: number[], score: CourseScore) => void; preview: boolean; ai?: boolean };
+export type CourseOpts = { ro: boolean; seen: number[]; done: boolean; onProgress: (seen: number[], score: CourseScore) => void; preview: boolean; ai?: boolean; reflection?: Reflection };
 
 export function courseView(c: CourseContent, run: CourseRun, patch: (p: Partial<CourseRun>) => void, o: CourseOpts) {
   const n = c.lessons.length, at = Math.min(Math.max(run.at, 0), n - 1), score = courseScore(c, run.answers);
@@ -59,7 +60,7 @@ export function courseView(c: CourseContent, run: CourseRun, patch: (p: Partial<
   return {
     ro: o.ro, preview: o.preview, ai: !!o.ai, title: c.lessons[at].title, pos: 'Lesson ' + (at + 1) + ' of ' + n, progW: Math.round(100 * (at + 1) / n) + '%',
     sub: n + ' lessons' + (o.preview ? '' : ' · counts toward your hours and trajectory steps'),
-    blocks: c.lessons[at].blocks.map((b) => blockView({ ...b, lesson: at } as CourseBlock, 'play', { answer: run.answers[b.id], round: run.rounds[b.id] ?? NEW_ROUND }, blockPatch(b.id), { ro: o.ro })),
+    blocks: c.lessons[at].blocks.map((b) => blockView({ ...b, lesson: at } as CourseBlock, 'play', { answer: run.answers[b.id], round: run.rounds[b.id] ?? NEW_ROUND }, blockPatch(b.id), { ro: o.ro, reflection: o.reflection ?? (o.preview ? PREVIEW_REFLECTION : NO_REFLECTION) })),
     prev: () => go(at - 1), next: () => go(at + 1), noPrev: at === 0, noNext: at === n - 1,
     scoreLine: score.scored ? 'Score ' + score.pct + ' % · ' + score.right + ' of ' + score.scored + ' scored items right' + (c.rule === 'seen' ? '' : ' · pass mark ' + PASS_MARK + ' %') : '',
     ruleLine: o.done ? 'Complete.' : 'To complete: ' + COURSE_TODO[c.rule] + ' · ' + parts.join(' · '),
@@ -83,5 +84,5 @@ export function courseVals(L: Logic, it: Item, c: CourseContent) {
     saveDetail(L, it, { seen, ...(best !== undefined && { best }) }, { complete, done: completedToast(it, 'Course finished') });
   };
   const run = kept && kept.key === key ? kept : { ...NEW_RUN, key };
-  return courseView(c, run, patch, { ro: L.subject.readOnly, seen: saved.seen ?? [], done: it.state === 'accepted', onProgress, preview: false });
+  return courseView(c, run, patch, { ro: L.subject.readOnly, seen: saved.seen ?? [], done: it.state === 'accepted', onProgress, preview: false, reflection: reflectionOf(L, it) });
 }

@@ -40,7 +40,7 @@ export type Play =
   | { kind: 'sort'; prompt: string; bins: [string, string]; cards: { label: string; bin: 0 | 1 | null; place: (g: 0 | 1) => void }[]; verdict: Verdict | null }
   | { kind: 'branch'; q: string; choices: { label: string; on: boolean; pick: () => void }[]; outcome: Verdict | null; retry: () => void }
   | { kind: 'exercise'; q: string; unit: string; value: string; set: (v: string) => void; check: () => void; canCheck: boolean; checked: boolean; verdict: Verdict | null; retry: () => void }
-  | { kind: 'reflect'; p: string };
+  | { kind: 'reflect'; p: string; shown: boolean; readOnly: boolean; value: string; set: (text: string) => void; note: string };
 
 // The check as a one-question round: its answer is the pick once checked, and "Try again" starts the round over (the answer clears with it).
 function checkPlay(b: Extract<CourseBlock, { block: 'check' }>, run: BlockRun, patch: (p: BlockPatch) => void, ro: boolean): Play {
@@ -71,8 +71,12 @@ function exercisePlay(b: Extract<CourseBlock, { block: 'exercise' }>, run: Block
     retry: () => { if (!ro) patch({ answer: { v: t.v, checked: false } }); } };
 }
 
+// A reflect block's text. `shown`: the field is there (not in View as, where the reflections are private); `readOnly`: it takes no typing (the preview).
+export type Reflection = { shown: boolean; readOnly: boolean; value: (blockId: string) => string; set: (blockId: string, text: string) => void; note: (blockId: string) => string };
+export const NO_REFLECTION: Reflection = { shown: false, readOnly: true, value: () => '', set: () => {}, note: () => '' };
+
 // The learner's side of a block, or null for a block that is only read (text, callout). In View as (`ro`) nothing is answered; panels still open.
-export function playOf(b: CourseBlock, run: BlockRun, patch: (p: BlockPatch) => void, ro: boolean): Play | null {
+export function playOf(b: CourseBlock, run: BlockRun, patch: (p: BlockPatch) => void, ro: boolean, reflection: Reflection = NO_REFLECTION): Play | null {
   switch (b.block) {
     case 'accordion': { const open = placed(run.answer) as Record<number, unknown>;
       return { kind: 'accordion', panels: b.panels.map(([title, body], i) => ({ title, body, open: !!open[i], toggle: () => patch({ answer: { ...open, [i]: !open[i] } as CourseAnswer }) })) }; }
@@ -80,7 +84,7 @@ export function playOf(b: CourseBlock, run: BlockRun, patch: (p: BlockPatch) => 
     case 'sort': return sortPlay(b, run, patch, ro);
     case 'branch': return branchPlay(b, run, patch, ro);
     case 'exercise': return exercisePlay(b, run, patch, ro);
-    case 'reflect': return { kind: 'reflect', p: b.p };
+    case 'reflect': return { kind: 'reflect', p: b.p, shown: reflection.shown, readOnly: reflection.readOnly, value: reflection.value(b.id), set: (t) => reflection.set(b.id, t), note: reflection.note(b.id) };
     default: return null;
   }
 }

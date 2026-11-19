@@ -34,6 +34,7 @@ import { sharedAvatarRuns } from './lib/avatarStore';
 import { loadTrajectories, loadTrajectoriesInUse } from './lib/trajectoryStore';
 import { loadMine } from './trajectoryCtx';
 import { ensurePlan } from './trajectoryAiState';
+import { ensureReflections } from './fmtReflect';
 import { certResetPatch } from './trajectoryMap';
 import { memberSummary } from './logic/team';
 import type { Subject } from './lib/useSubject';
@@ -139,6 +140,9 @@ function Shell({ auth, subject, options, select, reload, content, reloadContent 
   useEffect(() => { if (state.screen === 'adminAi') loadAiPage(logicRef.current); }, [state.screen]);
   // The plan of the trajectory shown in "Build with AI" loads once, when the panel first shows it.
   const planOf = vm.tai?.id;
+  // The signed-in learner's own reflections in the course on show load once, when its panel opens (never in View as).
+  const reflectOf = state.screen === 'detail' && vm.det.co && !vm.det.co.ro ? state.detailId : null;
+  useEffect(() => { if (reflectOf) ensureReflections(logicRef.current, reflectOf); }, [reflectOf]);
   useEffect(() => { if (planOf) ensurePlan(logicRef.current, planOf); }, [planOf]);
 
   return (

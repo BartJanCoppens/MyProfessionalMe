@@ -195,6 +195,9 @@ export type AppState = {
   fmt: FmtDraft | null;
   // The course player (E-learning): the lesson on show, what was seen and answered, for one learning of one person (key subject|learning).
   course: (CourseRun & { key: string }) | null;
+  // The signed-in learner's own reflections in courses (private: nobody else reads them), by `learning|block`; `reflectionsSaved` holds what the database confirmed.
+  reflections: Record<string, string>;
+  reflectionsSaved: Record<string, string>;
   // Classroom attendance (admins): the signed-in admin's roster for one learning, ticks not saved yet and the search.
   att: { learningId: string; rows: RosterRow[] | null; error: string | null; picks: Record<string, boolean>; q: string; busy: boolean } | null;
   // AI: the uses the app may call now (everyone), and per use whether the last attempt was answered by AI or fell back.
