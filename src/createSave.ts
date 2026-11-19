@@ -14,9 +14,9 @@ import { checkContribution, decideReview, loadCreate, removeDraft, saveDraft, su
 import type { DraftFields } from './lib/contributionStore';
 import { latestDraft, sameDraft } from './studioDraft';
 import { QUESTIONS } from './logic/avatarContent';
-import { studioById, studioFormats } from './logic/studios';
+import { studioById } from './logic/studios';
 import { changeFormat, freshPiece, reachable, studioView, uploadFormat } from './studioRules';
-import { STUDIOS } from './studioData';
+import { studioOfFormat } from './courseEmbedEdit';
 import { HUB, studioOf } from './studioVals';
 import { grantRules, linkMadeStep } from './trajectoryMade';
 
@@ -173,8 +173,9 @@ export async function saveForm(L: Logic, submit: boolean): Promise<boolean> {
 // "Make a new one in the X Studio" from a course: the course draft is saved through the one save step, then that studio opens on a blank piece
 // with a banner saying where the course is. Refused in View as, for a submitted course and when no creation rule reaches the format.
 export async function openStudioFromCourse(L: Logic, format: string): Promise<void> {
-  const nw = effective(L.state), def = STUDIOS.find((d) => studioFormats(d).includes(format));
-  if (L.readOnly() || !def) return;
+  const nw = effective(L.state), def = studioOfFormat(format);
+  if (L.readOnly()) return;
+  if (!def) { L.say('No studio makes ' + format + ' yet'); return; }
   if (submittedEdit(L.state)) { L.say('A submitted course cannot be changed: make the new learning from the studios hub'); return; }
   if (!reachable(L.state.create?.rules ?? [], nw, format)) { L.say('No creation rule for ' + format + ' in ' + (nw.line || 'your line')); return; }
   const title = nw.title.trim() || 'untitled';

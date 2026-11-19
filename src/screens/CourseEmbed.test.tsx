@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Embedded learnings in a course (E-learning Studio, Tasks 2.1 and 2.2): the learner's card and inline panel, the Studio's play-test, View as, and the panel
 // being built only while its embed is open.
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LEARN, LEARN_BY, LEARN_META } from '../data';
@@ -11,6 +11,8 @@ import { COMPLETION_QUESTION } from '../logic/courseContent';
 import { emptyParts } from '../logic/contribution';
 import { initState, Logic } from '../model';
 import { cfg, harness, member, person } from '../test/harness';
+import { Live as EditorLive, ITEMS, data } from '../test/courseEditorLive';
+import * as store from '../lib/contributionStore';
 import type { AppState, CourseContent, Learn } from '../types';
 import { DetailScreen } from './Library';
 import { courseView, NEW_RUN } from '../fmtCourse';
@@ -143,5 +145,67 @@ describe('the E-learning Studio preview with an embed', () => {
     expect(screen.getByText(/Plays on the learner's page/)).toBeTruthy();
     expect(learner.saveProgress).not.toHaveBeenCalled();
     delete LEARN_META.L60;
+  });
+});
+
+// Embedded learnings (Task 2.2): the shelf groups, the Source picker over the library, "Make a new one in the … Studio", and View as.
+describe('an embedded learning in the editor', () => {
+  const row = (id: string, title: string, format: string): Learn => [id, title, 'reg', 2, format, 'Peer contribution', 0.25, 0, '', ''];
+  const rows = [row('L9101', 'Old reel', 'Reel'), row('L9103', 'New reel', 'Reel'), row('L9102', 'Draft reel', 'Reel'), row('L9104', 'A podcast', 'Podcast'), row('L9105', 'A course', 'E-learning')];
+  beforeEach(() => {
+    rows.forEach((r) => { LEARN.push(r); LEARN_BY[r[0]] = r; });
+    LEARN_META.L9102 = { line: null, status: 'draft' };
+  });
+  afterEach(() => { rows.forEach((r) => { LEARN.splice(LEARN.indexOf(r), 1); delete LEARN_BY[r[0]]; delete LEARN_META[r[0]]; }); });
+
+  it('groups the shelf as the design does', () => {
+    render(<EditorLive />);
+    expect(within(screen.getByRole('group', { name: 'From the studios' })).getAllByRole('button').map((b) => b.textContent?.replace(/^\S+(?=[A-Z])/, ''))).toHaveLength(7);
+    expect(within(screen.getByRole('group', { name: 'Practice and reference' })).getAllByRole('button')).toHaveLength(4);
+    ['Avatar conversation', 'Reel', 'Explainer', 'Flash cards', 'Case exercise'].forEach((n) => expect(screen.getByRole('button', { name: new RegExp(n) })).toBeTruthy());
+  });
+  it('the Reel item adds an embed and opens its Source, listing only published reels, newest first', () => {
+    render(<EditorLive />);
+    fireEvent.click(within(screen.getByRole('group', { name: 'From the studios' })).getByRole('button', { name: /Reel/ }));
+    const source = screen.getByRole('combobox', { name: 'Source' }) as HTMLSelectElement;
+    const names = Array.from(source.options).map((o) => o.textContent);
+    expect(names.slice(0, 3)).toEqual(['Pick from the library…', 'New reel', 'Old reel']);
+    ['Draft reel', 'A podcast', 'A course'].forEach((n) => expect(names).not.toContain(n));
+    expect(screen.getByText('Only published learnings can be added. A new one appears here once it is published.')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toBe('Lesson 1 · Reel: pick the learning from the library');
+    fireEvent.change(source, { target: { value: 'L9103' } });
+    expect(screen.getAllByText('New reel').length).toBeGreaterThan(1);
+    expect(screen.queryByText('Lesson 1 · Reel: pick the learning from the library')).toBeNull();
+  });
+  it('says so when the library has none of that format', () => {
+    const games = LEARN.filter((r) => r[4] === 'Game').map((r) => r[0]), kept = games.map((id) => LEARN_META[id]);
+    games.forEach((id) => { LEARN_META[id] = { line: null, status: 'draft' }; });
+    render(<EditorLive />);
+    fireEvent.click(within(screen.getByRole('group', { name: 'From the studios' })).getByRole('button', { name: /Game/ }));
+    expect(Array.from((screen.getByRole('combobox', { name: 'Source' }) as HTMLSelectElement).options).map((o) => o.textContent)).toEqual(['Nothing in the library yet']);
+    games.forEach((id, i) => { if (kept[i]) LEARN_META[id] = kept[i]; else delete LEARN_META[id]; });
+  });
+  it('"Make a new one in the Reel Studio" saves the course, opens the Reel Studio and shows the banner', async () => {
+    vi.mocked(store.saveDraft).mockResolvedValue('c1'); vi.mocked(store.loadCreate).mockResolvedValue(data());
+    render(<EditorLive />);
+    fireEvent.click(within(screen.getByRole('group', { name: 'From the studios' })).getByRole('button', { name: /Reel/ }));
+    click('Make a new one in the Reel Studio');
+    expect((await screen.findByRole('note')).textContent).toBe('Your course “VAT” is saved in My contributions · open it there to continue');
+    expect(store.saveDraft).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Reel Studio')).toBeTruthy();
+  });
+  it('without a Reel rule it refuses and saves nothing', () => {
+    vi.mocked(store.saveDraft).mockClear();
+    render(<EditorLive formats={['E-learning']} />);
+    fireEvent.click(within(screen.getByRole('group', { name: 'From the studios' })).getByRole('button', { name: /Reel/ }));
+    click('Make a new one in the Reel Studio');
+    expect(screen.getByRole('status').textContent).toBe('No creation rule for Reel in Consulting');
+    expect(store.saveDraft).not.toHaveBeenCalled();
+  });
+  it('View as shows no shelf and no Source', () => {
+    render(<EditorLive readOnly items={[...ITEMS, { block: 'embed', id: 'b0009', lesson: 0, format: 'Reel', learning: 'L9103' }]} />);
+    expect(screen.getByText('New reel')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'From the studios' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Source' })).toBeNull();
   });
 });
