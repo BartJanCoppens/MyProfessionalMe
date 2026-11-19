@@ -47,7 +47,7 @@ export const WORDS = {
   tooBig: 'The course is too large: shorten some text', sortGroup: 'give every item a group', branchGood: 'mark at least one good choice',
   noFinalCheck: 'Add a final check (a knowledge check marked “Final check”), or choose “All lessons viewed” in Shape it', twoFinalChecks: 'Keep one final check',
 };
-export const KIND_NAME: Record<BlockKind, string> = { text: 'Text', callout: 'Callout', accordion: 'Accordion', check: 'Knowledge check', sort: 'Drag and sort',
+export const KIND_NAME: Record<BlockKind, string> = { text: 'Text', callout: 'Callout', accordion: 'Accordion', check: 'Knowledge check', sort: 'Sort into groups',
   branch: 'Branching scenario', reflect: 'Reflection', exercise: 'Calculation exercise' };
 export const SHAPE_RULE: Record<BlockKind, string> = {
   text: 'keep the heading to 120 characters and write the text, up to 4000', callout: 'write the callout, up to 600 characters',

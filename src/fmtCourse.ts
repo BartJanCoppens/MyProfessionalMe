@@ -24,8 +24,9 @@ export const blockView = (b: CourseBlock, mode: BlockMode, run: BlockRun | undef
   ({ id: b.id, kind: b.block, name: KIND_NAME[b.block], block: b, missing: mode === 'edit' ? missingOf(b) : null, on: !!o.on, pick: o.pick ?? (() => {}),
     play: mode === 'play' ? playOf(b, run ?? NEW_BLOCK, patch, o.ro) : null });
 
-// at: the lesson on show; seen: the lessons opened this session (the saved ones come with the options); rounds: a check's round per block.
-export type CourseRun = { at: number; seen: number[]; answers: Record<string, CourseAnswer>; rounds: Record<string, RoundState> };
+// at: the lesson on show; seen: the lessons opened this session (the saved ones come with the options); rounds: a check's round per block; best, completed and savedSeen:
+// what this session already saved (the subject reloads later, so the saved detail is stale for a moment).
+export type CourseRun = { at: number; seen: number[]; answers: Record<string, CourseAnswer>; rounds: Record<string, RoundState>; best?: number; completed?: boolean; savedSeen?: number[] };
 export const NEW_RUN: CourseRun = { at: 0, seen: [], answers: {}, rounds: {} };
 export type CourseScore = { scored: number; answered: number; right: number; pct: number };
 
@@ -72,9 +73,13 @@ export type CourseView = ReturnType<typeof courseView>;
 export function courseVals(L: Logic, it: Item, c: CourseContent) {
   const key = L.subject.id + '|' + it.id, saved = detailOf<'course'>(L, it.id), kept = L.state.course;
   const patch = (p: Partial<CourseRun>) => L.setState((s) => ({ course: { ...(s.course && s.course.key === key ? s.course : { ...NEW_RUN, key }), ...p } }));
+  // A best score is a full attempt (every scored item answered) and never goes down; the high-water mark of this session is read from the latest state.
   const onProgress = (seen: number[], score: CourseScore) => {
-    const best = score.answered ? Math.max(score.pct, saved.best ?? 0) : saved.best, complete = courseDone(c.rule, seen, c.lessons.length, score);
-    if (!complete && seen.every((k) => saved.seen?.includes(k)) && best === saved.best) return;
+    const now = L.latest().state.course, run = now && now.key === key ? now : { ...NEW_RUN, key };
+    const known = [...(saved.seen ?? []), ...(run.savedSeen ?? [])], prior = Math.max(run.best ?? -1, saved.best ?? -1), full = score.scored > 0 && score.answered === score.scored;
+    const best = full ? Math.max(prior, score.pct) : prior < 0 ? undefined : prior, complete = !run.completed && courseDone(c.rule, seen, c.lessons.length, score);
+    if (!complete && seen.every((k) => known.includes(k)) && best === (prior < 0 ? undefined : prior)) return;
+    patch({ best, completed: run.completed || complete, savedSeen: seen });
     saveDetail(L, it, { seen, ...(best !== undefined && { best }) }, { complete, done: completedToast(it, 'Course finished') });
   };
   const run = kept && kept.key === key ? kept : { ...NEW_RUN, key };

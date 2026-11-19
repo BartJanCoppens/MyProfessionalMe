@@ -88,12 +88,22 @@ describe('the learner\'s course', () => {
     click('Check');
     expect(screen.getByText('Not quite. The answer is 2520 € (± 1).')).toBeTruthy();
   });
+  it('checks a calculation on Enter too', () => {
+    render(<Live />);
+    click('Next lesson ›');
+    const box = screen.getByRole('textbox', { name: /VAT on 12,000/ });
+    fireEvent.change(box, { target: { value: '2520' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(screen.getByText('Correct.')).toBeTruthy();
+  });
   it('opens an accordion panel and keeps a reflection to the learner, saying it comes later', () => {
     render(<Live />);
     click('Next lesson ›'); click('Next lesson ›');
     expect(screen.queryByText('The customer taxes it.')).toBeNull();
+    expect(screen.getByRole('button', { name: /The B2B rule/ }).getAttribute('aria-controls')).toBeNull();
     click(/The B2B rule/);
-    expect(screen.getByText('The customer taxes it.')).toBeTruthy();
+    const body = screen.getByText('The customer taxes it.');
+    expect(screen.getByRole('button', { name: /The B2B rule/ }).getAttribute('aria-controls')).toBe(body.id);
     expect(screen.getByText('Which client?')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Next lesson ›' }) as HTMLButtonElement | null).toMatchObject({ disabled: true });
   });

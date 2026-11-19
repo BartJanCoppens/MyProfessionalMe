@@ -83,7 +83,7 @@ describe('the lesson on show', () => {
     expect(view({ ...NEW_RUN, at: 2 }).noNext).toBe(true);
   });
   it('shows the blocks of the lesson, each with its kind', () => {
-    expect(view().blocks.map((b) => [b.kind, b.name])).toEqual([['text', 'Text'], ['sort', 'Drag and sort'], ['check', 'Knowledge check']]);
+    expect(view().blocks.map((b) => [b.kind, b.name])).toEqual([['text', 'Text'], ['sort', 'Sort into groups'], ['check', 'Knowledge check']]);
   });
   it('moves with Next and Previous and passes what was seen on', () => {
     const patch = vi.fn(), onProgress = vi.fn();
@@ -168,6 +168,24 @@ describe('the learner\'s course', () => {
     expect(co(h).scoreLine).toBe('Score 0 % · 0 of 6 scored items right · pass mark 80 %');
     pickCheck(h, 0);
     expect(play(h, 'check').round).toMatchObject({ hasFb: true, fbHead: 'Not quite.', mainLabel: 'Try again' });
+  });
+  it('does not lower the best score or complete twice when a second save comes before the subject reloads', async () => {
+    const h = on();
+    playThrough(h);
+    await flush();
+    const saves = vi.mocked(learner.saveProgress).mock.calls.length;
+    play(h, 'check').round.main(); // Try again
+    pickCheck(h, 0); // 83 %, every item answered: lower than the 100 % already saved (the subject has not reloaded)
+    await flush();
+    expect(vi.mocked(learner.saveProgress).mock.calls.length).toBe(saves);
+    expect(h.toasts().filter((t) => t.startsWith('Course finished'))).toHaveLength(1);
+  });
+  it('saves a best score only once every scored item is answered', async () => {
+    const h = on();
+    play(h, 'sort').cards[0].place(0); play(h, 'sort').cards[1].place(1); pickCheck(h, 1); // 2 of 6 answered
+    co(h).next();
+    await flush();
+    expect(learner.saveProgress).toHaveBeenLastCalledWith('u1', 'L996', { detail: { seen: [0, 1] } });
   });
   it('keeps the highest best score when a lower one comes', async () => {
     const h = on({ seen: [0], best: 83 });

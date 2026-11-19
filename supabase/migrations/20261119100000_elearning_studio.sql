@@ -163,7 +163,7 @@ as $$
     ('callout', 'Callout', 'write the callout, up to 600 characters'),
     ('accordion', 'Accordion', 'give 2 to 8 panels, each with a title and a text'),
     ('check', 'Knowledge check', 'give four options, the right answer and why'),
-    ('sort', 'Drag and sort', 'give a prompt, two group names and 2 to 10 items'),
+    ('sort', 'Sort into groups', 'give a prompt, two group names and 2 to 10 items'),
     ('branch', 'Branching scenario', 'give a question and 2 to 4 choices, each with its reply and whether it is good'),
     ('reflect', 'Reflection', 'write the prompt for the learner, up to 400 characters'),
     ('exercise', 'Calculation exercise', 'give a question, the right number, the tolerance (0 or more) and a unit of up to 12 characters')

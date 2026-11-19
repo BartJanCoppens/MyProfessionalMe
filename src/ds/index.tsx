@@ -36,13 +36,13 @@ export function Button({ variant = 'primary', size = 'md', disabled = false, ful
   );
 }
 
-export function FilterChip({ selected = false, tone = 'default', children, onClick, style }: { selected?: boolean; tone?: 'default' | 'amber' | 'static'; children?: ReactNode; onClick?: () => void; style?: CSSProperties }) {
+export function FilterChip({ selected = false, tone = 'default', children, onClick, style, 'aria-label': ariaLabel }: { 'aria-label'?: string; selected?: boolean; tone?: 'default' | 'amber' | 'static'; children?: ReactNode; onClick?: () => void; style?: CSSProperties }) {
   const amber = tone === 'amber', isStatic = tone === 'static';
   const bg = selected ? 'var(--tc-ink)' : amber ? 'var(--tc-amber-bg-soft)' : isStatic ? 'var(--tc-surface-muted)' : '#fff';
   const fg = selected ? '#fff' : amber ? 'var(--tc-amber-text)' : isStatic ? 'var(--tc-ink)' : 'var(--tc-ink-3)';
   const bd = selected ? 'var(--tc-ink)' : amber ? 'var(--tc-amber-line)' : isStatic ? 'transparent' : 'var(--tc-line)';
   return (
-    <button type="button" onClick={isStatic ? undefined : onClick} aria-pressed={isStatic ? undefined : selected}
+    <button type="button" onClick={isStatic ? undefined : onClick} aria-pressed={isStatic ? undefined : selected} aria-label={ariaLabel}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 30, padding: '0 12px', border: '1px solid ' + bd, borderRadius: 999, background: bg, color: fg,
         fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, cursor: isStatic ? 'default' : 'pointer', whiteSpace: 'nowrap', ...style }}>
       {children}

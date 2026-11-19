@@ -63,8 +63,8 @@ describe('the rules of every block, in words', () => {
   });
   it('a knowledge check, a sort and a branch say what is missing', () => {
     expect(courseRowProblems(course([], patch('b0004', { question: { ...Q, o: ['a', 'b', 'c'] } })))).toEqual(['Lesson 1 · Knowledge check: give four options, the right answer and why']);
-    expect(courseRowProblems(course([], patch('b0003', { cards: [['One', 0], ['Two']] })))).toEqual(['Lesson 1 · Drag and sort: give every item a group']);
-    expect(courseRowProblems(course([], patch('b0003', { cards: [['One', 0], ['Two', 2]] })))).toEqual(['Lesson 1 · Drag and sort: give every item a group']);
+    expect(courseRowProblems(course([], patch('b0003', { cards: [['One', 0], ['Two']] })))).toEqual(['Lesson 1 · Sort into groups: give every item a group']);
+    expect(courseRowProblems(course([], patch('b0003', { cards: [['One', 0], ['Two', 2]] })))).toEqual(['Lesson 1 · Sort into groups: give every item a group']);
     expect(courseRowProblems(course([], patch('b0009', { choices: [['Agree', 'Wrong.', false], ['Charge', 'Wrong too.', false]] })))).toEqual(['Lesson 3 · Branching scenario: mark at least one good choice']);
   });
   it('an exercise with a negative tolerance, an empty text and a short accordion', () => {

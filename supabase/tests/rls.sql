@@ -4333,7 +4333,7 @@ insert into results (check_name, expected, actual) select 'EL the example course
 insert into results (check_name, expected, actual) select 'EL an unknown kind is refused in words', 'A block has a kind that is not known', pg_temp.el_problems('T el kind');
 insert into results (check_name, expected, actual) select 'EL a block that points to a lesson that does not exist is refused', 'A block points to a lesson that does not exist', pg_temp.el_problems('T el lesson');
 insert into results (check_name, expected, actual) select 'EL a knowledge check with three options is refused', 'Lesson 1 · Knowledge check: give four options, the right answer and why', pg_temp.el_problems('T el three');
-insert into results (check_name, expected, actual) select 'EL a sort with an unsorted card is refused', 'Lesson 1 · Drag and sort: give every item a group', pg_temp.el_problems('T el sort');
+insert into results (check_name, expected, actual) select 'EL a sort with an unsorted card is refused', 'Lesson 1 · Sort into groups: give every item a group', pg_temp.el_problems('T el sort');
 insert into results (check_name, expected, actual) select 'EL a branch with no good choice is refused', 'Lesson 2 · Branching scenario: mark at least one good choice', pg_temp.el_problems('T el branch');
 insert into results (check_name, expected, actual) select 'EL a duplicate id is refused', 'Two blocks have the same id', pg_temp.el_problems('T el dup');
 insert into results (check_name, expected, actual) select 'EL 21 blocks in a lesson are refused', 'Lesson 1 has more than 20 blocks', pg_temp.el_problems('T el many');

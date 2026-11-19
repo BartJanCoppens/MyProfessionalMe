@@ -628,7 +628,7 @@ The studio on the hub, its Draft step and the move to Produce. The course editor
 | ELE-04 | Creator | A check selected | Open "Right answer" and "Final check" | Answer A to D; "Knowledge check" or "Final check"; marking one final unmarks another | `CourseEditor.test.tsx`; `logic/courseEdit.test.ts` › setFinal |
 | ELE-05 | Creator | Any block selected | Type; ↑ ↓; Duplicate; Remove block; Done | Fields are capped in length; a block moves only inside its lesson, the first cannot go up; a copy gets a new id; Remove and Done leave the shelf | `CourseEditor.test.tsx`; `logic/courseEdit.test.ts` |
 | ELE-06 | Creator | Completion "Final check of 80 % or more" without a final check | Look under the editor | "Add a final check ..." and the other problems of the course show | `CourseEditor.test.tsx` › problems |
-| ELE-07 | Creator | The shelf | Look | Text, Callout, Accordion; Knowledge check, Drag and sort, Branching scenario, Reflection, Calculation exercise; no image, tutor, calculator or "coming" entries | `CourseEditor.test.tsx` |
+| ELE-07 | Creator | The shelf | Look | Text, Callout, Accordion; Knowledge check, Sort into groups, Branching scenario, Reflection, Calculation exercise; no image, tutor, calculator or "coming" entries | `CourseEditor.test.tsx` |
 | ELE-08 | Admin | View as a person's draft | Open Produce | The course shows; no shelf, inspector, lesson title input or lesson buttons; selecting changes nothing | `CourseEditor.test.tsx` › View as |
 | ELE-09 | Creator | A course with 12 lessons, blocks on the last two | Draft with AI again | Nothing changes until "This removes 2 blocks from lessons the new draft no longer has · Continue / Cancel"; the count follows edits made meanwhile; Cancel keeps the course; Continue keeps the blocks of lessons that remain | `studioElearn.test.ts` › drafting again |
 | ELE-10 | Creator | A course of three lessons; lesson 1 has 3 blocks, lesson 3 none | Remove lesson 1; Cancel; again, Continue; remove the empty lesson | "This removes 3 blocks with lesson 1 · Continue / Cancel" with focus on it; Cancel keeps all; Continue removes lesson and blocks; the empty lesson goes at once | `CourseEditor.test.tsx` › asking before blocks go |
@@ -654,6 +654,7 @@ The studio on the hub, its Draft step and the move to Produce. The course editor
 | ELP-13 | Anyone | The three rules | Read the completion text and the to-do | "It completes when you have seen every lesson" / "… score 80 % or more on the scored items" / both | `logic/record.test.ts`; `completionVals.test.ts` |
 | ELP-14 | Creator | A pending "Remove lesson" question in Produce | Go back to Draft and forward to Produce | The question is gone | `screens/CourseEditor.test.tsx` › the studio step changes |
 | ELP-15 | Creator | A calculation exercise selected | Type -1 in Tolerance; then 0.5 | "A tolerance cannot be negative: use 0 or more." and the block keeps its tolerance; 0.5 is taken | `CourseEditor.test.tsx` › a number is typed as text |
+| ELP-16 | Learner | A course with a calculation, accordion and sort | Press Enter in the calculation; open a panel; two quick saves | Enter checks; the panel button points to its text (aria-controls); the best score is saved only when every scored item is answered, never lowered, and completion fires once | `CoursePanel.test.tsx`; `fmtCourse.test.ts` |
 
 ## Bugs found and fixed
 
