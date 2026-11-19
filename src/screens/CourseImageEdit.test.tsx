@@ -61,7 +61,7 @@ describe('choosing the file', () => {
     choose('Add an image', file('Invoice (final).PNG'));
     await waitFor(() => expect(document.querySelector('img')).toBeTruthy()); // an empty alt text makes it a decoration, not role img
     const [id, sent, name] = vi.mocked(media.uploadMedia).mock.calls[0];
-    expect([id, (sent as File).name, name]).toEqual(['c1', 'Invoice (final).PNG', expect.stringMatching(/^b[0-9a-z]{10}\.png$/)]);
+    expect([id, (sent as File).name, name]).toEqual(['c1', 'Invoice (final).PNG', expect.stringMatching(/^b[0-9a-z]{10}-[0-9a-z]{6}\.png$/)]);
     expect(vi.mocked(store.saveDraft).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(media.uploadMedia).mock.invocationCallOrder[0]);
     expect(vi.mocked(store.saveDraft)).toHaveBeenCalledTimes(2);
     const saved = vi.mocked(store.saveDraft).mock.calls[1][0].items as CourseBlock[];
@@ -87,37 +87,63 @@ describe('choosing the file', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Not allowed/));
     expect(media.removePaths).not.toHaveBeenCalled();
   });
-  it('replacing with another type removes the old file once the new one is saved, and with the same type overwrites it in place', async () => {
-    render(<Live items={[...ITEMS, picture()]} />);
+  it('replacing stores a file of its own, even with the same type, and removes the old one after the save', async () => {
+    const items = [...ITEMS, picture()];
+    render(<Live items={items} saved={{ id: 'c1', items }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Select image' }));
-    choose('Replace the image', file('other.jpg', 10, 'image/jpeg'));
+    choose('Replace the image', file('other.png', 10, 'image/png'));
     await waitFor(() => expect(media.removePaths).toHaveBeenCalledWith([FOLDER + 'b0050.png'], true));
     expect(vi.mocked(store.saveDraft).mock.invocationCallOrder.at(-1)!).toBeLessThan(vi.mocked(media.removePaths).mock.invocationCallOrder[0]);
-    vi.mocked(media.removePaths).mockClear();
-    choose('Replace the image', file('again.JPG', 10, 'image/jpeg'));
-    await waitFor(() => expect(store.saveDraft).toHaveBeenCalledTimes(4));
-    expect(media.removePaths).not.toHaveBeenCalled();
+    expect(vi.mocked(media.uploadMedia).mock.calls[0][2]).not.toBe('b0050.png');
+    choose('Replace the image', file('again.png', 10, 'image/png'));
+    await waitFor(() => expect(media.uploadMedia).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(media.uploadMedia).mock.calls[1][2]).not.toBe(vi.mocked(media.uploadMedia).mock.calls[0][2]);
   });
 });
 
 describe('removing what names a file', () => {
-  it('Remove block removes the block\'s file from storage, and Duplicate keeps it while a copy still names it', () => {
-    render(<Live items={[...ITEMS, picture()]} />);
+  const saved = (items: unknown[]) => ({ id: 'c1', items });
+  const sendStep = () => { fireEvent.click(screen.getByRole('button', { name: /^Next:/ })); fireEvent.click(screen.getByRole('button', { name: /^Next:/ })); };
+  it('Remove block and leaving without saving removes no file: the saved draft still names it', () => {
+    const items = [...ITEMS, picture()];
+    const { unmount } = render(<Live items={items} saved={saved(items)} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select image' }));
+    click('Remove block');
+    unmount();
+    expect(media.removePaths).not.toHaveBeenCalled();
+  });
+  it('Remove block then Save draft removes the file after the save, not before', async () => {
+    const items = [...ITEMS, picture()];
+    render(<Live items={items} saved={saved(items)} studio={{ step: 3 }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select image' }));
+    click('Remove block');
+    expect(media.removePaths).not.toHaveBeenCalled();
+    sendStep();
+    click('Save draft');
+    await waitFor(() => expect(media.removePaths).toHaveBeenCalledWith([FOLDER + 'b0050.png'], true));
+    expect(vi.mocked(store.saveDraft).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(media.removePaths).mock.invocationCallOrder[0]);
+  });
+  it('a duplicate keeps the file while a copy still names it, even after a save', async () => {
+    const items = [...ITEMS, picture()];
+    render(<Live items={items} saved={saved(items)} />);
     fireEvent.click(screen.getByRole('button', { name: 'Select image' }));
     click('Duplicate');
     click('Remove block');
+    sendStep();
+    click('Save draft');
+    await waitFor(() => expect(store.saveDraft).toHaveBeenCalled());
     expect(media.removePaths).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Select image' }));
-    click('Remove block');
-    expect(media.removePaths).toHaveBeenCalledWith([FOLDER + 'b0050.png'], true);
   });
-  it('removing a lesson removes the files of its images', () => {
+  it('removing a lesson with an image removes its file after the save', async () => {
     const three = [ITEMS[0], ITEMS[1], ['Lesson 3', 'Third', ''], ...ITEMS.slice(2), picture({ lesson: 2 })];
-    render(<Live items={three} />);
+    render(<Live items={three} saved={saved(three)} />);
     fireEvent.click(screen.getByText(/Third/));
     click('Remove lesson');
     click('Continue');
-    expect(media.removePaths).toHaveBeenCalledWith([FOLDER + 'b0050.png'], true);
+    expect(media.removePaths).not.toHaveBeenCalled();
+    sendStep();
+    click('Save draft');
+    await waitFor(() => expect(media.removePaths).toHaveBeenCalledWith([FOLDER + 'b0050.png'], true));
   });
   it('editing the alt text removes nothing', () => {
     render(<Live items={[...ITEMS, picture()]} />);

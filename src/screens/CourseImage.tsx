@@ -1,10 +1,10 @@
-// A course's picture (E-learning Studio, Task 2.3), for the editor and the player alike: the stored file through a signed link (useAudioLinks, the same link
+// A course's picture (E-learning Studio, Task 2.3), for the editor and the player alike: the stored file through a signed link (useMediaLinks, the same link
 // reader the voice-overs use), its alt text, its caption and, for a hotspot, numbered points placed in percent of the picture. In the player each point is a
 // button that opens its title and text, and "All points as text" lists every point for those who do not use the picture. In the editor the points only show
 // where they sit, and a picture with no file says "Add an image" (never a placeholder), and one with no alt text says so.
 import type { CSSProperties } from 'react';
 import type { BlockMode } from '../fmtCourse';
-import { useAudioLinks } from './useAudioLinks';
+import { useMediaLinks } from './useMediaLinks';
 
 export type Spot = { n: number; x: number; y: number; title: string; text: string; on: boolean; pick: () => void };
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
@@ -12,7 +12,7 @@ const dot = (on: boolean): CSSProperties => ({ position: 'absolute', transform: 
   fontWeight: 700, lineHeight: '20px', textAlign: 'center', background: on ? '#86BC25' : '#1a1d18', color: on ? '#1a1d18' : '#fff', boxShadow: '0 0 0 2px rgba(134,188,37,.5)' });
 
 function Picture({ path, alt, spots, play }: { path: string; alt: string; spots: Spot[]; play: boolean }) {
-  const links = useAudioLinks(path ? [path] : []);
+  const links = useMediaLinks(path ? [path] : []);
   if (!path) return <div style={muted}>{play ? 'This image has no file' : 'Add an image'}</div>;
   if (!links) return <div style={muted}>Loading the image…</div>;
   if ('error' in links) return <div role="alert" style={muted}>The image could not be opened · {links.error}</div>;

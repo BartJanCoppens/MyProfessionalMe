@@ -13,7 +13,7 @@ import { loadSlideImages } from '../reel/slideImages';
 import { slidesCut } from '../reel/slidesCut';
 import type { SlidesContent } from '../types';
 import CutProgress from './CutProgress';
-import { useAudioLinks } from './useAudioLinks';
+import { useMediaLinks } from './useMediaLinks';
 import { useCutRun } from './useCutRun';
 
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
@@ -21,7 +21,7 @@ const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 export default function SlidesVideo({ content, title }: { content: SlidesContent; title: string }) {
   const voiced = content.slides.every((s) => s.audio), some = content.slides.some((s) => s.audio);
   const paths = useMemo(() => (voiced ? content.slides.map((s) => s.audio!.path) : []), [content, voiced]);
-  const links = useAudioLinks(paths), { state, run, cancel } = useCutRun(), urls = links && 'urls' in links ? links.urls : null, busy = state.kind === 'running';
+  const links = useMediaLinks(paths), { state, run, cancel } = useCutRun(), urls = links && 'urls' in links ? links.urls : null, busy = state.kind === 'running';
   // The deck's length, from the same cut the video is made from (once per deck, not per render).
   const seconds = useMemo(() => (urls ? slidesCut(content, urls).cut.seconds : 0), [content, urls]), over = seconds > SLIDES_MAX_SECONDS;
   const make = async () => {

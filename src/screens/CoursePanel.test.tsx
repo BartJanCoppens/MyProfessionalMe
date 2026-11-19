@@ -252,6 +252,10 @@ describe('an image and a hotspot in the learner\'s course', () => {
     const list = screen.getByText('All points as text').closest('details')!;
     expect(Array.from(list.querySelectorAll('li')).map((li) => li.textContent)).toEqual(['Supplier VAT number · It starts with BE.', 'Reverse charge · The mention is required.']);
   });
+  it('shows a reviewer the picture itself, with its alt text, in the saved content', async () => {
+    render(<SavedContent t={{ key: 'c9', content: PICTURES, hours: 0.25, still: false, drafted: false }} />);
+    expect((await screen.findByRole('img', { name: 'An invoice with the VAT line' })).getAttribute('src')).toBe('https://signed.test/' + FILE + 'b0011.png');
+  });
   it('says so when the image cannot be opened, and blocks nothing', async () => {
     const media = await import('../lib/mediaStore');
     vi.mocked(media.mediaUrl).mockRejectedValue(new Error('This file is not there, or not open to you'));

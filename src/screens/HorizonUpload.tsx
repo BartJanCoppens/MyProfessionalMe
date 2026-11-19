@@ -3,6 +3,7 @@
 // the view-model (createHorizon.ts); the reasons show through the shared Problems list.
 import type { VM } from '../model';
 import { Problems } from './CreateShared';
+import FilePick from './FilePick';
 
 type Panel = NonNullable<NonNullable<VM['create']>['horizonPanel']>;
 
@@ -13,10 +14,7 @@ export default function HorizonUpload({ p }: { p: Panel }) {
       <div style={{ fontSize: 12, color: '#5a6058', textWrap: 'pretty' }}>
         Save it in Horizon as a .horizon file ({p.max}). It is played here as in Horizon, without network; animations from Horizon Calc show their last frame.
       </div>
-      <label style={{ fontSize: 12.5, color: '#3d423b' }}>
-        {p.item ? 'Replace the file ' : 'The .horizon file '}
-        <input type="file" accept={p.accept} aria-label=".horizon file" onChange={p.pick} disabled={p.busy} style={{ fontSize: 12 }} />
-      </label>
+      <FilePick label={p.item ? 'Replace the file' : 'The .horizon file'} aria=".horizon file" accept={p.accept} onChange={p.pick} disabled={p.busy} />
       {p.busy && <div role="status" style={{ fontSize: 12.5, color: '#5a6058' }}>Adding the presentation</div>}
       {p.item && <div style={{ fontSize: 13 }}><b>{p.item.title}</b> · {p.item.line}</div>}
       <Problems list={p.problems} />

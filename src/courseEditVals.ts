@@ -10,8 +10,8 @@ import { COURSE_CAPS, KIND_NAME, SCORED_KINDS, courseProblems, courseRowProblems
 import type { BlockKind, CourseBlock, EmbedFormat, HotspotBlock, ImageBlock } from './logic/courseContent';
 import { EMBED_SHELF, embedAvailable, embedGlyph, embedSources, studioOfFormat } from './courseEmbedEdit';
 import { openStudioFromCourse } from './createSave';
-import { IMAGE_ACCEPT, IMAGE_HINT, dropImages, setCourseImage } from './courseImageEdit';
-import { addLesson, duplicateBlock, insertBlock, moveBlock, moveLesson, newBlock, newEmbed, orphanedImages, patchBlock, removeBlock, removeLesson, renameLesson } from './logic/courseEdit';
+import { IMAGE_ACCEPT, IMAGE_HINT, setCourseImage } from './courseImageEdit';
+import { addLesson, duplicateBlock, insertBlock, moveBlock, moveLesson, newBlock, newEmbed, patchBlock, removeBlock, removeLesson, renameLesson } from './logic/courseEdit';
 import { SHORT_MAX, rowFieldMax } from './logic/items';
 import type { Item } from './logic/items';
 import type { StudioEntry } from './logic/studios';
@@ -31,8 +31,7 @@ function context(L: Logic, nw: NewDraft, setNw: SetNw) {
   const lesson = Math.min(Math.max(ce.lesson, 0), Math.max(lessons.length - 1, 0)), blocks = lessons[lesson]?.blocks ?? [];
   const selected = blocks.find((b) => b.id === ce.block) ?? null;
   const show = (k: number, block: string | null) => L.setState({ courseEdit: { lesson: k, block } });
-  // An edit that leaves an image file unnamed (a removed block or lesson) removes the file too.
-  const edit = (f: (items: StudioEntry[]) => StudioEntry[]) => { if (ro) return; dropImages(L, orphanedImages(list, f(list))); setNw((cur) => (cur.items ? { items: { ...cur.items, list: f(cur.items.list as StudioEntry[]) as Item[], how: cur.items.how || 'manual', problems: [] } } : {})); };
+  const edit = (f: (items: StudioEntry[]) => StudioEntry[]) => { if (!ro) setNw((cur) => (cur.items ? { items: { ...cur.items, list: f(cur.items.list as StudioEntry[]) as Item[], how: cur.items.how || 'manual', problems: [] } } : {})); };
   return { L, nw, list, lessons, ro, ce, lesson, blocks, selected, show, edit };
 }
 

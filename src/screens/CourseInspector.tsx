@@ -4,6 +4,7 @@ import { Button, Field, Input, LinkButton, Select, Textarea } from '../ds';
 import { decimalPoint } from '../logic/courseContent';
 import type { courseEditVals } from '../courseEditVals';
 import type { FieldView, ImageSource } from '../courseFields';
+import FilePick from './FilePick';
 import { label } from './labelStyle';
 import { MoveButtons } from './MoveButtons';
 
@@ -39,10 +40,10 @@ function FieldControl({ f }: { f: FieldView }) {
 // The picture's file: the field takes one file at a time; the draft is saved and the file stored before the block names it.
 function ImagePicker({ image }: { image: ImageSource }) {
   return (
-    <Field label={image.label} hint={image.hint} size="sm">
-      <input type="file" accept={image.accept} aria-label={image.label} disabled={image.busy} style={{ fontSize: 12 }}
-        onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) image.choose(file); }} />
-    </Field>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <FilePick label={image.label} aria={image.label} accept={image.accept} disabled={image.busy} onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) image.choose(file); }} />
+      <span style={{ fontSize: 12, color: 'var(--tc-ink-5)' }}>{image.hint}</span>
+    </div>
   );
 }
 

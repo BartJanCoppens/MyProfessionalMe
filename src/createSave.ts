@@ -17,6 +17,8 @@ import { QUESTIONS } from './logic/avatarContent';
 import { studioById } from './logic/studios';
 import { changeFormat, freshPiece, reachable, studioView, uploadFormat } from './studioRules';
 import { studioOfFormat } from './courseEmbedEdit';
+import { dropUnnamed, savedItems } from './draftFiles';
+import type { StudioEntry } from './logic/studios';
 import { HUB, studioOf } from './studioVals';
 import { grantRules, linkMadeStep } from './trajectoryMade';
 
@@ -130,7 +132,9 @@ async function saveThen(L: Logic, next: (x: Saved) => Promise<void>, keep: (id: 
   L.setState({ createBusy: true });
   try {
     const first = !id;
+    const before = savedItems(s, id);
     id = await saveDraft(rowOf(nw, s.nwKb, studio, id), id);
+    dropUnnamed(L, before, (nw.items?.list ?? []) as StudioEntry[]);
     // The first save of a draft made for a placeholder links the step to it; if that is refused the draft is still saved, and it says so.
     const notLinked = first && nw.brief ? linkMadeStep(L, nw.brief.trajectoryId, nw.brief.stepId, id) : null;
     await next({ s, nw, studio, id });
@@ -146,6 +150,7 @@ export async function saveWithFile(L: Logic, attach: (id: string) => Promise<Ite
   return saveThen(L, async ({ s, nw, studio, id }) => {
     const items: DraftItems = { ...noItems(), list: await attach(id), how };
     await saveDraft(rowOf({ ...nw, items }, s.nwKb, studio, id), id);
+    dropUnnamed(L, savedItems(s, id), items.list as StudioEntry[]);
     const d = await reloaded(L);
     // The creator may have moved on while a long job ran: the build is saved to its own draft, and the screen is left as it is.
     const here = sameDraft(s, L.latest().state);

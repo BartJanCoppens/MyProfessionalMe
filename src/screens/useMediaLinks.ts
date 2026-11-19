@@ -1,9 +1,9 @@
-// The signed links of a piece's stored audio (a deck's slides, an episode's turns), in order: null while they load, or why they
+// The signed links of a piece's stored media files (a deck's voice-overs, an episode's turns, a course's pictures), in order: null while they load, or why they
 // could not be opened.
 import { useEffect, useState } from 'react';
 import { mediaUrl } from '../lib/mediaStore';
 
-export function useAudioLinks(paths: string[]): { urls: string[] } | { error: string } | null {
+export function useMediaLinks(paths: string[]): { urls: string[] } | { error: string } | null {
   const key = paths.join('|'), [got, setGot] = useState<{ key: string; urls?: string[]; error?: string } | null>(null);
   useEffect(() => {
     if (!key) return;
@@ -13,5 +13,5 @@ export function useAudioLinks(paths: string[]): { urls: string[] } | { error: st
   }, [key]);
   if (!key) return { urls: [] };
   if (!got || got.key !== key) return null;
-  return got.urls ? { urls: got.urls } : { error: got.error ?? 'The voice-over could not be opened' };
+  return got.urls ? { urls: got.urls } : { error: got.error ?? 'The file could not be opened' };
 }

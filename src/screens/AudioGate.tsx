@@ -2,12 +2,12 @@
 // note, then "loading", why the files could not be opened, or the panel itself once the signed links are there.
 import type { CSSProperties, ReactNode } from 'react';
 import { Card } from '../ds';
-import { useAudioLinks } from './useAudioLinks';
+import { useMediaLinks } from './useMediaLinks';
 
 const muted: CSSProperties = { fontSize: 12.5, color: '#5a6058' };
 // `loading` and `failed` are the panel's own words.
 export function AudioGate({ title, subtitle, note, paths, loading, failed, children }: { title: string; subtitle: string; note?: string; paths: string[]; loading: string; failed: string; children: (urls: string[]) => ReactNode }) {
-  const links = useAudioLinks(paths);
+  const links = useMediaLinks(paths);
   return (
     <Card title={title} subtitle={subtitle}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

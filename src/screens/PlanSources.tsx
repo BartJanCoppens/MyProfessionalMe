@@ -4,6 +4,7 @@ import { SOURCE_CAPS } from '../logic/planSources';
 import { PLAN_POOL } from '../logic/planPool';
 import type { SourcesPanel } from '../trajectoryAiSources';
 import { ItemRows, Problems } from './CreateShared';
+import FilePick from './FilePick';
 
 const UPLOAD = `PDF only, up to ${SOURCE_CAPS.bytes / 1024 / 1024} MB and ${SOURCE_CAPS.pages} pages. The text is read in your browser; scanned PDFs are not read. Upload only documents the firm may use for training (syllabi, regulations, public guidance): no client documents.`;
 const POOL = `Each message sends the plan, the last messages and at most ${PLAN_POOL.passages} matching or cited passages, never a whole document.`;
@@ -20,9 +21,7 @@ export default function PlanSources({ p }: { p: SourcesPanel }) {
       {p.canEdit && (
         <>
           <div style={{ fontSize: 12, color: '#5a6058', textWrap: 'pretty' }}>{UPLOAD}</div>
-          <label style={{ fontSize: 12.5, color: '#3d423b' }}>
-            Add a PDF <input type="file" accept={p.accept} aria-label="PDF source" onChange={p.add} disabled={p.busy} style={{ fontSize: 12 }} />
-          </label>
+          <FilePick label="Add a PDF" aria="PDF source" accept={p.accept} onChange={p.add} disabled={p.busy} />
         </>
       )}
       {p.busy && <div role="status" style={{ fontSize: 12.5, color: '#5a6058' }}>Reading the document</div>}

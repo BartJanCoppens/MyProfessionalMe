@@ -7,8 +7,8 @@ import CreateScreen from '../screens/Create';
 import { cfg, member, person } from './harness';
 import { ITEMS, data, nw } from './courseEditorFixtures';
 
-export function Live({ readOnly = false, shape, studio, items, formats }: { formats?: string[]; readOnly?: boolean; shape?: Record<string, string>; studio?: Partial<AppState['studio']>; items?: unknown[] }) {
-  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'create', create: data(formats), createTab: 'new', nw: { ...nw, shape, items: { ...nw.items, list: (items ?? ITEMS) as never } }, studio: { view: 'studio', step: 3, id: 'elearn', ...studio } }));
+export function Live({ readOnly = false, shape, studio, items, formats, saved }: { saved?: { id: string; items: unknown[] }; formats?: string[]; readOnly?: boolean; shape?: Record<string, string>; studio?: Partial<AppState['studio']>; items?: unknown[] }) {
+  const [st, setSt] = useState<AppState>(() => ({ ...initState(cfg), screen: 'create', create: data(formats, saved ? [{ id: saved.id, title: 'VAT', takeaway: 'x', outline: '', sources: [], bundle_ids: [], status: 'draft', author_id: 'u1', author_name: 'Me', items: saved.items } as never] : []), createTab: 'new', nw: { ...nw, savedId: saved?.id, shape, items: { ...nw.items, list: (items ?? ITEMS) as never } }, studio: { view: 'studio', step: 3, id: 'elearn', ...studio } }));
   const toastTimer = useRef<number | undefined>(undefined), drag = useRef<string | null>(null), file = useRef<HTMLInputElement | null>(null), chat = useRef<HTMLDivElement | null>(null);
   const vm = new Logic(st, (p) => setSt((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) })), cfg, { toastTimer, drag, file, chat }, member('u1'), person({ readOnly }), async () => {}).renderVals();
   return <>{vm.create && <CreateScreen c={vm.create} />}{vm.toast && <div role="status">{vm.toast}</div>}</>;
