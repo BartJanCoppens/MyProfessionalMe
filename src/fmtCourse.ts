@@ -3,6 +3,7 @@
 // (mode 'play', fmtCoursePlay.ts). The learner's run lives in AppState.course; completion and progress are saved through the one detail path
 // (saveDetail): the lessons seen and the best score, and the completion itself when the creator's rule is met. The preview runs the same view over its
 // own state and saves nothing; View as and an accepted course save nothing either.
+import { LEARN_BY, LEARN_META } from './data';
 import { NEW_BLOCK, NO_REFLECTION, isAnswered, isRight, playOf } from './fmtCoursePlay';
 import type { BlockPatch, BlockRun, CourseAnswer, Play, Reflection } from './fmtCoursePlay';
 import { PREVIEW_REFLECTION, reflectionOf } from './fmtReflect';
@@ -10,24 +11,46 @@ import { NEW_ROUND } from './fmtRound';
 import type { RoundState } from './fmtRound';
 import { completedToast, detailOf, saveDetail } from './fmtShared';
 import { COURSE_TODO } from './logic/record';
-import { KIND_NAME, PASS_MARK, SCORED_KINDS } from './logic/courseContent';
+import { EMBED_ON_PAGE, KIND_NAME, PASS_MARK, SCORED_KINDS } from './logic/courseContent';
 import type { BlockKind, CourseBlock, CourseRule } from './logic/courseContent';
 import { missingOf } from './logic/courseEdit';
+import { lengthLabel } from './logic/covers';
+import { STUDIOS } from './studioData';
+import { studioFormats } from './logic/studios';
 import type { Item, Logic } from './model';
-import type { CourseContent } from './types';
+import type { CourseContent, EmbedBlock } from './types';
 
 export type { BlockPatch, BlockRun, CourseAnswer, Play };
 export type BlockView = { id: string; kind: BlockKind; name: string; block: CourseBlock; missing: string | null; on: boolean; pick: () => void; play: Play | null };
 export type BlockMode = 'edit' | 'play';
+
+// An embedded learning in the player: its card (the studio's glyph, the title, "Reel · 2 min"). Opening plays that format's own learner panel under the card
+// (one embed at a time: CourseRun.open) or, for Avatar and Case exercise, the learning's own page (`onPage`). A learning that is no longer published, or that is
+// not the format the creator picked, is `gone`: honest note, nothing blocked.
+export type EmbedView = { kind: 'embed'; id: string; learning: string; format: string; glyph: string; title: string; meta: string; openLabel: string; isOpen: boolean; open: () => void; close: () => void;
+  gone: boolean; goneNote: string; name: string; play: null };
+export const GONE_NOTE = 'This learning is no longer available';
+// The learning behind an embed when learners can play it: published, of the picked format and not a course.
+export const embeddedRow = (learning: string, format?: string) => {
+  const row = LEARN_BY[learning];
+  return row && (LEARN_META[learning]?.status ?? 'published') === 'published' && row[4] !== 'E-learning' && (!format || row[4] === format) ? row : null;
+};
+export function embedView(b: EmbedBlock, run: CourseRun, patch: (p: Partial<CourseRun>) => void, onPage?: (learning: string) => void): EmbedView {
+  const row = embeddedRow(b.learning, b.format), glyph = STUDIOS.find((d) => studioFormats(d).includes(b.format))?.glyph ?? '';
+  const onOwnPage = !!onPage && (EMBED_ON_PAGE as readonly string[]).includes(b.format);
+  return { kind: 'embed', id: b.id, learning: b.learning, format: b.format, glyph, title: row?.[1] ?? '', meta: row ? b.format + ' · ' + lengthLabel(row) : '',
+    openLabel: b.format === 'Game' ? 'Play' : b.format === 'Avatar' ? 'Start the conversation' : 'Open', isOpen: !!row && run.open === b.id,
+    open: () => { if (onOwnPage) onPage(b.learning); else patch({ open: b.id }); }, close: () => patch({ open: undefined }), gone: !row, goneNote: GONE_NOTE, name: 'Embedded learning', play: null };
+}
 
 // `on`: the block is selected in the editor; `pick` selects it. `missing` is what the creator still has to write, in their words. `play`: what a learner does with it.
 export const blockView = (b: CourseBlock, mode: BlockMode, run: BlockRun | undefined, patch: (p: BlockPatch) => void, o: { ro: boolean; on?: boolean; pick?: () => void; reflection?: Reflection }): BlockView =>
   ({ id: b.id, kind: b.block, name: KIND_NAME[b.block], block: b, missing: mode === 'edit' ? missingOf(b) : null, on: !!o.on, pick: o.pick ?? (() => {}),
     play: mode === 'play' ? playOf(b, run ?? NEW_BLOCK, patch, o.ro, o.reflection) : null });
 
-// at: the lesson on show; seen: the lessons opened this session (the saved ones come with the options); rounds: a check's round per block; best, completed and savedSeen:
+// at: the lesson on show; open: the embed (its block id) open under its card; seen: the lessons opened this session (the saved ones come with the options); rounds: a check's round per block; best, completed and savedSeen:
 // what this session already saved (the subject reloads later, so the saved detail is stale for a moment).
-export type CourseRun = { at: number; seen: number[]; answers: Record<string, CourseAnswer>; rounds: Record<string, RoundState>; best?: number; completed?: boolean; savedSeen?: number[] };
+export type CourseRun = { at: number; open?: string; seen: number[]; answers: Record<string, CourseAnswer>; rounds: Record<string, RoundState>; best?: number; completed?: boolean; savedSeen?: number[] };
 export const NEW_RUN: CourseRun = { at: 0, seen: [], answers: {}, rounds: {} };
 export type CourseScore = { scored: number; answered: number; right: number; pct: number };
 
@@ -44,7 +67,7 @@ export const courseDone = (rule: CourseRule, seen: number[], lessons: number, sc
 };
 
 // ro: View as (nothing is answered or saved); seen: the lessons saved before; done: already complete; onProgress: the lessons seen and the score, when they change.
-export type CourseOpts = { ro: boolean; seen: number[]; done: boolean; onProgress: (seen: number[], score: CourseScore) => void; preview: boolean; ai?: boolean; reflection?: Reflection };
+export type CourseOpts = { ro: boolean; seen: number[]; done: boolean; onProgress: (seen: number[], score: CourseScore) => void; preview: boolean; ai?: boolean; reflection?: Reflection; onPage?: (learning: string) => void };
 
 export function courseView(c: CourseContent, run: CourseRun, patch: (p: Partial<CourseRun>) => void, o: CourseOpts) {
   const n = c.lessons.length, at = Math.min(Math.max(run.at, 0), n - 1), score = courseScore(c, run.answers);
@@ -60,7 +83,7 @@ export function courseView(c: CourseContent, run: CourseRun, patch: (p: Partial<
   return {
     ro: o.ro, preview: o.preview, ai: !!o.ai, title: c.lessons[at].title, pos: 'Lesson ' + (at + 1) + ' of ' + n, progW: Math.round(100 * (at + 1) / n) + '%',
     sub: n + ' lessons' + (o.preview ? '' : ' · counts toward your hours and trajectory steps'),
-    blocks: c.lessons[at].blocks.map((b) => blockView({ ...b, lesson: at } as CourseBlock, 'play', { answer: run.answers[b.id], round: run.rounds[b.id] ?? NEW_ROUND }, blockPatch(b.id), { ro: o.ro, reflection: o.reflection ?? (o.preview ? PREVIEW_REFLECTION : NO_REFLECTION) })),
+    blocks: c.lessons[at].blocks.map((b): BlockView | EmbedView => b.block === 'embed' ? embedView(b, run, patch, o.onPage) : blockView({ ...b, lesson: at } as CourseBlock, 'play', { answer: run.answers[b.id], round: run.rounds[b.id] ?? NEW_ROUND }, blockPatch(b.id), { ro: o.ro, reflection: o.reflection ?? (o.preview ? PREVIEW_REFLECTION : NO_REFLECTION) })),
     prev: () => go(at - 1), next: () => go(at + 1), noPrev: at === 0, noNext: at === n - 1,
     scoreLine: score.scored ? 'Score ' + score.pct + ' % · ' + score.right + ' of ' + score.scored + ' scored items right' + (c.rule === 'seen' ? '' : ' · pass mark ' + PASS_MARK + ' %') : '',
     ruleLine: o.done ? 'Complete.' : 'To complete: ' + COURSE_TODO[c.rule] + ' · ' + parts.join(' · '),
@@ -84,5 +107,6 @@ export function courseVals(L: Logic, it: Item, c: CourseContent) {
     saveDetail(L, it, { seen, ...(best !== undefined && { best }) }, { complete, done: completedToast(it, 'Course finished') });
   };
   const run = kept && kept.key === key ? kept : { ...NEW_RUN, key };
-  return courseView(c, run, patch, { ro: L.subject.readOnly, seen: saved.seen ?? [], done: it.state === 'accepted', onProgress, preview: false, reflection: reflectionOf(L, it) });
+  return courseView(c, run, patch, { ro: L.subject.readOnly, seen: saved.seen ?? [], done: it.state === 'accepted', onProgress, preview: false, reflection: reflectionOf(L, it),
+    onPage: (id) => L.openDetail(id, L.state.origin, it.id) });
 }

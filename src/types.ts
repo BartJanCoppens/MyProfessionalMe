@@ -1,5 +1,5 @@
 import type { CourseRun } from './fmtCourse';
-import type { CourseRule, PublicBlock } from './logic/courseContent';
+import type { CourseRule, EmbedFormat, PublicBlock } from './logic/courseContent';
 import type { GameReviewStatus } from './logic/gameContent';
 import type { DraftItems } from './logic/items';
 import type { BuildStepState } from './logic/studioBuild';
@@ -117,7 +117,9 @@ export type AvatarContent = { kind: 'avatar'; persona: string; situation: string
   language: 'English' | 'Dutch' | 'French'; difficulty: 'Gentle' | 'Realistic' | 'Tough'; minutes: 5 | 10 | 15; scoring: 'AI scores, counsellor confirms' | 'Practice only';
   counterpart: string; made: 'ai' | 'scripted' };
 // A published E-learning course (src/logic/courseContent.ts): lessons of blocks without their index, and how it completes.
-export type CourseContent = { kind: 'course'; lessons: { title: string; blocks: PublicBlock[] }[]; rule: CourseRule };
+// An embedded learning (Phase 2): a published learning of another studio, played in the course; `learning` is '' until picked.
+export type EmbedBlock = { block: 'embed'; id: string; format: EmbedFormat; learning: string };
+export type CourseContent = { kind: 'course'; lessons: { title: string; blocks: (PublicBlock | EmbedBlock)[] }[]; rule: CourseRule };
 export type FormatContent = CourseContent | AvatarContent | FlashContent | ExamContent | CaseContent | TeachContent | StretchContent | WebinarContent | AidContent | ExplainerContent | MotionContent | HorizonContent | SlidesContent | PodcastContent | GameContent | ReelContent;
 // aiMade: AI made it (learnings.ai_made, set when a contribution is published); learners see "Made with AI".
 export type LearnMeta = { line: string | null; status: 'published' | 'review' | 'draft'; content?: FormatContent | null; aiMade?: boolean };
@@ -195,6 +197,8 @@ export type AppState = {
   fmt: FmtDraft | null;
   // The course player (E-learning): the lesson on show, what was seen and answered, for one learning of one person (key subject|learning).
   course: (CourseRun & { key: string }) | null;
+  // The course to come back to when a learning embedded in it was opened on its own page (Avatar, Case exercise); null otherwise.
+  backTo: string | null;
   // The signed-in learner's own reflections in courses (private: nobody else reads them), by `learning|block`; `reflectionsSaved` holds what the database confirmed.
   reflections: Record<string, string>;
   reflectionsSaved: Record<string, string>;

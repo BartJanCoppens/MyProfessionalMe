@@ -832,3 +832,17 @@ Each one first had an `it.fails` test, named in the case above. All seven were f
 | ELR-06 | Creator, Reviewer | The Studio's preview or a submitted course | Open the course player | The reflect block shows "Preview: not saved"; the field takes no typing; nothing is written | `CoursePanel.test.tsx` |
 | ELR-07 | Database | A block that is not a reflect block, an unpublished course, a Podcast | Insert a reflection | Refused | rls `CR` |
 | ELR-08 | Database | A reflection | Delete the learning or the account | The reflection is removed with it | rls `CR` |
+
+## 27. E-learning Studio: an embedded learning in the player (ELM), Learner, Creator, Reviewer, Admin in View as (E-learning Studio Task 2.1)
+
+| ID | Role | Preconditions | Steps | Expected | Covered by |
+|---|---|---|---|---|---|
+| ELM-01 | Learner | A published course with embeds of a flash deck and a practice exam | Open the course | Each embed is a card with the studio's glyph, the title and "Flash cards · …"; nothing plays yet; no "Prototype" toast text and no SCORM note | `CoursePanel.test.tsx` |
+| ELM-02 | Learner | The same | Open the deck; flip a card; rate it | The deck's own panel plays inside the course; progress is saved on the deck's learning id only, never on the course | `CoursePanel.test.tsx`; `courseEmbed.test.ts` |
+| ELM-03 | Learner | The same | Open the second embed while the first is open | The first closes; one embed is open at a time | `CoursePanel.test.tsx` |
+| ELM-04 | Learner | An embedded learning that was retired | Open the course; move to the last lesson | The card says "This learning is no longer available" with no Open button; nothing is blocked and the course completes by its own rule | `CoursePanel.test.tsx` |
+| ELM-05 | Learner | An Avatar embed in a course | Press "Start the conversation" | The avatar's own page opens; "← Back to the course" returns to the course | `courseEmbed.test.ts`; `CoursePanel.test.tsx` |
+| ELM-06 | Learner | An embedded reel | Finish its panel | The reel saves progress on its own id, rules and hours; the course's lessons-seen line is unchanged | `courseEmbed.test.ts` |
+| ELM-07 | Creator, Reviewer | The Studio's preview or a submitted course with an embed | Open the embed | The learning's own panel plays as a play-test; nothing is saved | `CoursePanel.test.tsx` |
+| ELM-08 | Admin | View as someone else | Open an embed | The embedded panel is read only, as on the learning's own page; nothing is saved | the format panels' View as cases (`FormatPanels.test.tsx`); not separately tested for the embed |
+

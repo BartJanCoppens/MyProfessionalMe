@@ -2,9 +2,9 @@
 // explainer (ExplainerPanel.tsx), a course (CoursePanel.tsx), the Animated flow (AnimatedFlowPanel.tsx), each also its studio's preview, and a
 // Presentation (PresentationPanel.tsx) a deck of slides (SlidesPanel.tsx), an episode (PodcastPanel.tsx) and a game (GamePanel.tsx). The work formats
 // (case, stretch, webinar, job aid) are in FormatWork.tsx. They read from VM only (fmtVals.ts, fmtStudy.ts).
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Button, Card, LinkButton, ProgressRing, Textarea } from '../ds';
-import type { VM } from '../model';
+import type { fmtVals } from '../fmtVals';
 import AnimatedFlowPanel from './AnimatedFlowPanel';
 import CoursePanel from './CoursePanel';
 import ExplainerPanel from './ExplainerPanel';
@@ -16,7 +16,7 @@ import SlidesPanel from './SlidesPanel';
 import { WorkPanels } from './FormatWork';
 import QuestionRound from './QuestionRound';
 
-type Det = VM['det'];
+type Det = ReturnType<typeof fmtVals>;
 const caps: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
 const col: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
 const ViewOnly = ({ note }: { note: string }) => <div style={{ fontSize: 12.5, color: '#5a6058' }}>{note}</div>;
@@ -115,14 +115,15 @@ function TeachPanel({ tb }: { tb: NonNullable<Det['tb']> }) {
 }
 
 // Nothing renders for a learning without content.
-export function FormatPanels({ vm }: { vm: VM }) {
-  const det = vm.det;
+// `embed`: the panels of a learning embedded in a course (vm.embed), or null when it can no longer be played.
+export function FormatPanels({ det, embed }: { det: Det; embed?: (id: string) => Det | null }) {
+  const renderEmbed = (id: string): ReactNode => { const d = embed?.(id); return d ? <FormatPanels det={d} embed={embed} /> : null; };
   return (
     <>
       {det.fl && <FlashPanel fl={det.fl} />}
       {det.ex && <ExamPanel ex={det.ex} />}
       {det.tb && <TeachPanel tb={det.tb} />}
-      {det.co && <CoursePanel co={det.co} />}
+      {det.co && <CoursePanel co={det.co} renderEmbed={renderEmbed} />}
       {det.ie && <ExplainerPanel ie={det.ie} />}
       {det.af && <AnimatedFlowPanel fl={det.af} />}
       {det.hz && <PresentationPanel hz={det.hz} />}

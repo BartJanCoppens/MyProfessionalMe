@@ -1,7 +1,8 @@
 // One course block on screen, for the editor and the player alike (E-learning Studio). Everything a creator wrote is shown as plain text. In the editor
 // the block is a button that selects it and a field still empty says what is missing; in the player the kinds a learner works (CoursePlay.tsx) answer.
 import type { ReactNode } from 'react';
-import type { BlockMode, BlockView } from '../fmtCourse';
+import { Button } from '../ds';
+import type { BlockMode, BlockView, EmbedView } from '../fmtCourse';
 import type { CourseBlock as Block } from '../logic/courseContent';
 import CoursePlay from './CoursePlay';
 
@@ -34,6 +35,22 @@ export default function CourseBlock({ b, mode }: { b: BlockView; mode: BlockMode
   return (
     <div role="button" tabIndex={0} aria-label={'Select ' + b.name.toLowerCase()} aria-pressed={b.on} onClick={b.pick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); b.pick(); } }} style={{ ...box, cursor: 'pointer', border: '1px solid ' + (b.on ? '#3f6a0a' : '#e1e5dc'), boxShadow: b.on ? '0 0 0 2px #dfe9cf' : 'none' }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>{b.name}</div>{body}
+    </div>
+  );
+}
+
+// An embedded learning: its card, and, once opened, the learning's own learner panel under it (`panel`, rendered by whoever shows the course).
+export function EmbedCard({ e, panel }: { e: EmbedView; panel: ReactNode }) {
+  return (
+    <div style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e1e5dc', background: '#fff', borderRadius: 6, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 6, background: '#eef0ec', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{e.glyph}</span>
+        <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+          {e.gone ? <div style={{ fontSize: 12.5, color: '#5a6058' }}>{e.goneNote}</div> : <><div style={{ ...bold, fontSize: 13.5 }}>{e.title}</div><div style={{ fontSize: 12, color: '#5a6058' }}>{e.meta}</div></>}
+        </div>
+        {!e.gone && (e.isOpen ? <Button size="sm" variant="secondary" onClick={e.close}>Close</Button> : <Button size="sm" onClick={e.open}>{e.openLabel}</Button>)}
+      </div>
+      {e.isOpen && panel}
     </div>
   );
 }

@@ -10,6 +10,11 @@ export const BLOCK_KINDS = ['text', 'callout', 'accordion', 'check', 'sort', 'br
 export type BlockKind = typeof BLOCK_KINDS[number];
 // The blocks that score a learner (a reflection and a branching scenario do not): the completion score and the score line count these.
 export const SCORED_KINDS: readonly BlockKind[] = ['check', 'sort', 'exercise'];
+// The learnings a course can embed, in the app's format names (the design's EL_FMT_STUDIO keys). Avatar and Case exercise finish through the evaluation quiz
+// or the evidence form, which live outside their panel: those two open their own page (EMBED_ON_PAGE) and the rest play inline.
+export const EMBED_FORMATS = ['Avatar', 'Reel', 'Podcast', 'Game', 'Slides', 'Animated flow', 'Interactive explainer', 'Flash cards', 'Practice exam', 'Job aid', 'Case exercise'] as const;
+export type EmbedFormat = typeof EMBED_FORMATS[number];
+export const EMBED_ON_PAGE: readonly EmbedFormat[] = ['Avatar', 'Case exercise'];
 export const BLOCK_ID = /^b[0-9a-z]{4,20}$/;
 export const COURSE_CAPS = { lessons: [2, 12], blocksPerLesson: 20, heading: 120, text: 4000, callout: 600, panels: [2, 8], panelTitle: 120, panelBody: 1200,
   cards: [2, 10], bin: 40, card: 160, choices: [2, 4], choice: 200, outcome: 400, prompt: 400, unit: 12, bytes: 250000, number: 1e15 } as const;

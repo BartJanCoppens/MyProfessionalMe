@@ -4,6 +4,7 @@
 // show a saved studio contribution to its author and its reviewers (SavedContent), and a Presentation's file.
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { LEARN_BY, LEARN_META } from '../data';
 import { NEW_RUN, courseView } from '../fmtCourse';
 import type { CourseRun } from '../fmtCourse';
 import { explainerView } from '../fmtExplainer';
@@ -56,13 +57,14 @@ function ExplainerTry({ content }: { content: ExplainerContent }) {
 
 // The learner's course; the lesson, the answers and what was seen live in this preview only. Desktop / Phone shows the player at a phone's width.
 const DEVICES = [{ value: 'desktop', label: 'Desktop' }, { value: 'phone', label: 'Phone' }];
-function CourseTry({ content, drafted }: { content: CourseContent; drafted: boolean }) {
+// An embedded learning plays as a play-test too, on the learning's own content: nothing is saved, and a game or avatar is not recorded against the course draft.
+function CourseTry({ content, t }: { content: CourseContent; t: LearnerTry }) {
   const [run, setRun] = useState<CourseRun>(NEW_RUN), [device, setDevice] = useState('desktop');
-  const co = courseView(content, run, (p) => setRun((cur) => ({ ...cur, ...p })), { ro: false, seen: [], done: false, onProgress: () => {}, preview: true, ai: drafted });
+  const co = courseView(content, run, (p) => setRun((cur) => ({ ...cur, ...p })), { ro: false, seen: [], done: false, onProgress: () => {}, preview: true, ai: !!t.drafted });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><SegmentedControl options={DEVICES} value={device} onChange={setDevice} size="base" /><LinkButton onClick={() => setRun(NEW_RUN)}>Start over</LinkButton></div>
-      <div role="group" aria-label="Course player" style={{ maxWidth: device === 'phone' ? 380 : undefined }}><CoursePanel co={co} /></div>
+      <div role="group" aria-label="Course player" style={{ maxWidth: device === 'phone' ? 380 : undefined }}><CoursePanel co={co} renderEmbed={(id) => <EmbedTry id={id} t={t} />} /></div>
     </div>
   );
 }
@@ -111,13 +113,13 @@ export const GAME_PLAYTEST = 'Play-test · not saved, never counts as progress';
 export const REEL_PREVIEW = 'Preview · music is added in the final cut · not saved, never counts as progress';
 
 // The format's own learner panel over the content, as a play-test: its state lives here only.
-function LearnerPanel({ t }: { t: LearnerTry }) {
+export function LearnerPanel({ t }: { t: LearnerTry }) {
   const { content } = t;
   return (
     <>
       {content.kind === 'aid' && <AidTry content={content} />}
       {content.kind === 'case' && <CasePanel ce={casePreview(content, t.hours)} />}
-      {content.kind === 'course' && <CourseTry content={content} drafted={!!t.drafted} />}
+      {content.kind === 'course' && <CourseTry content={content} t={t} />}
       {content.kind === 'explainer' && <ExplainerTry content={content} />}
       {content.kind === 'motion' && <FlowTry content={content} still={t.still} />}
       {content.kind === 'horizon' && <DeckTry content={content} still={t.still} />}
@@ -128,6 +130,12 @@ function LearnerPanel({ t }: { t: LearnerTry }) {
       {content.kind === 'avatar' && <AvatarTry content={content} contributionId={t.contributionId ?? null} ai={t.ai} looks={t.looks} />}
     </>
   );
+}
+
+function EmbedTry({ id, t }: { id: string; t: LearnerTry }) {
+  const content = LEARN_META[id]?.content, row = LEARN_BY[id];
+  if (!content || !row) return <div style={note}>This learning has no preview here.</div>;
+  return <LearnerPanel t={{ ...t, key: 'embed-' + id, content, hours: row[6], contributionId: undefined, drafted: false }} />;
 }
 
 // The content as the learner's panel shows it, or what is still missing.

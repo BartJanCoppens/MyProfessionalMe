@@ -30,6 +30,7 @@ import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
 import { completionOf, completionText, completionTodo, lastActivity, lastActivityLabel, openChanges, panelOf } from './logic/record';
 import { logHour, recordVals, submit } from './recordVals';
 import { fmtCover } from './fmtCover';
+import { embedVals } from './courseEmbed';
 import { fmtVals } from './fmtVals';
 import { completionVals, loadAttendance, showsAttendance } from './completionVals';
 import { aiVals } from './aiVals';
@@ -77,7 +78,7 @@ export function initState(cfg: Config): AppState {
     create: null, createError: null, createBusy: false, createTab: 'mine', contribSel: null, revSel: null, revChecks: {}, revComment: {}, nw: blankDraft(null, null), editing: null, nwKb: [], nwKbQ: '', nwAiBusy: false,
     studio: { view: 'hub', step: 0 }, courseEdit: { lesson: 0, block: null },
     polForm: { lines: [], formats: [], domains: [], audiences: [], peers: '2', expert: true, quality: true },
-    evDraft: null, decideNote: {}, trjTalk: {}, queue: null, queueError: null, sharedRuns: null, sharedTotal: 0, sharedError: null, fbDraft: null, quiz: null, fmt: null, course: null, reflections: {}, reflectionsSaved: {}, att: null,
+    evDraft: null, decideNote: {}, trjTalk: {}, queue: null, queueError: null, sharedRuns: null, sharedTotal: 0, sharedError: null, fbDraft: null, quiz: null, fmt: null, course: null, backTo: null, reflections: {}, reflectionsSaved: {}, att: null,
     aiLive: [], aiOut: {}, aiAdmin: null, aiError: null, aiBusy: false, aiForm: null, aiConfirm: null, aiUseEdit: null, aiTests: {}, stockVoices: null, voiceForm: null, voiceHearing: null, stockLooks: null, lookForm: null,
   };
 }
@@ -209,8 +210,9 @@ export class Logic {
     };
   }
   items() { return LEARN.map((r, i) => { const it = this.item(r); return { ...it, ...cover(r, i, it.state, it.pct), ...fmtCover(this, it) }; }); }
-  openDetail(id: string, origin?: Screen) {
-    this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', noteOpen: false }); window.scrollTo(0, 0);
+  // backTo: the course this learning was embedded in; "Back" then returns to it.
+  openDetail(id: string, origin?: Screen, backTo?: string) {
+    this.setState({ screen: 'detail', detailId: id, origin: origin || 'library', backTo: backTo ?? null, noteOpen: false }); window.scrollTo(0, 0);
     // Admins see who attended a classroom (the signed-in admin's roster, whoever is being viewed).
     if (showsAttendance(this, id)) loadAttendance(this, id);
   }
@@ -568,7 +570,9 @@ export class Logic {
       navMap: navScreen(s) === 'map', navLib: navScreen(s) === 'library', navTeam: s.screen === 'team', navAdminLib: s.screen === 'adminLib', navAdminMap: s.screen === 'adminMap' || (s.screen === 'detail' && s.origin === 'adminMap'), navUsers: s.screen === 'users', showAdmin: this.isAdmin(), canManageUsers: this.canManageUsers(), showUsers: this.isAdmin(), goUsers: () => this.go('users'),
       navProj: navScreen(s) === 'projects', navProfile: navScreen(s) === 'profile',
       goMap: () => this.go('map'), goLibrary: () => this.go('library'), goTeam: () => this.go('team'), goAdminLib: () => this.go('adminLib'), goAdminMap: () => this.go('adminMap'), goProj: () => this.go('projects'), goProfile: () => this.go('profile'),
-      goBack: () => this.go(s.origin), backLabel: s.origin === 'trajectory' ? '← Back to the trajectory' : s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : s.origin === 'create' ? '← Back to Create & share' : s.origin === 'approvals' ? '← Back to approvals' : '← Back to library',
+      // The panels of a learning embedded in a course (courseEmbed.ts); null when it can no longer be played.
+      embed: (id: string): ReturnType<typeof fmtVals> | null => embedVals(this, id)?.det ?? null,
+      goBack: () => (s.backTo ? this.openDetail(s.backTo, s.origin) : this.go(s.origin)), backLabel: s.backTo ? '← Back to the course' : s.origin === 'trajectory' ? '← Back to the trajectory' : s.origin === 'projects' ? '← Back to projects' : s.origin === 'profile' ? '← Back to my profile' : s.origin === 'map' ? '← Back to my growth map' : s.origin === 'adminMap' ? '← Back to curriculum mapping' : s.origin === 'create' ? '← Back to Create & share' : s.origin === 'approvals' ? '← Back to approvals' : '← Back to library',
       libCount: String(LEARN.length), projCount: String(this.projects().length), pendingLabel: pendingN ? pendingN + ' pending' : '', noPending: pendingN === 0,
       toastHelp: () => this.say(this.subject.counsellor ? 'Prototype: opens a message to ' + this.counsellorFull() + ', your counsellor' : 'No counsellor yet · an admin can assign one in User management'),
       askLabel: this.subject.counsellor ? 'Ask ' + this.counsellorFirst() : 'Ask your counsellor',

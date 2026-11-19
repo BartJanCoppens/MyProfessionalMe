@@ -520,3 +520,12 @@ Plan: `docs/superpowers/plans/2026-11-17-studios.md`. The owner reversed D1 ("pa
 - **"Saved" is claimed after the write.** `saveReflectionSoon` takes an optional `onSaved`; `AppState.reflectionsSaved` holds what the database confirmed, so the note is "Only you can read this" while typing or when a save failed, and "Saved · only you can read this" once confirmed. The brief's `AppState.reflections` is unchanged.
 - **Preview and reviewer view:** the field is read-only with "Preview: not saved". View as: no field, "Reflections are private: nothing is shown in View as", nothing loaded.
 - **Migration is new, after the unpushed 20261119100000**, not an edit of it. Not pushed (the phase release pushes).
+
+### E-learning Studio, embedded learnings in the player (Task 2.1)
+- **What:** a course block plays a published learning inline through that format's existing learner panel; `FormatPanels` takes `det`, recursively, and the panel's view-model is built by `fmtVals` for the embedded item. **Why:** the owner's reuse rule (one learner panel per format) and the owner's answer that an embedded learning finished inside a course completes on its own rules and hours. **Alternative:** a second embedded player; rejected.
+- **`vm.embed` instead of a cycle.** `fmtCourse` cannot import `courseEmbed` (it imports `fmtVals`, which imports `fmtCourse`, and the view-model type would refer to itself), so `Logic.renderVals` exposes `embed(id)` and `Library` passes it to `FormatPanels`.
+- **A gone embed is one state.** Missing, unpublished, a course, or a learning of another format than the picked one all read "This learning is no longer available" and block nothing; the course's completion never counts embeds.
+- **Avatar and Case exercise open their own page** (owner ruling): they finish through the quiz or evidence form outside their panel. `openDetail(id, origin, backTo)` keeps the course's origin and "← Back to the course" returns to it.
+- **Preview:** the embedded learning's content plays as a play-test with no `contributionId`, so a game or avatar run is never recorded against the course draft. A flash deck has no learner panel in the preview.
+- **Carried to 2.2:** `embed` is not in `BLOCK_KINDS`, SQL, the editor, `publicBlock` or `contentStore.courseOk` yet; the player and preview read it, but no course can contain one until 2.2.
+

@@ -2,9 +2,9 @@
 // Case and stretch hand in through the evidence card (link or reflection); in View as there are no buttons or ticks to change.
 import type { CSSProperties } from 'react';
 import { Button, Card, Checkbox, LinkButton } from '../ds';
-import type { VM } from '../model';
+import type { fmtVals } from '../fmtVals';
 
-type Det = VM['det'];
+type Det = ReturnType<typeof fmtVals>;
 const caps: CSSProperties = { fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em' };
 const foot: CSSProperties = { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid #eef0ea' };
 const note: CSSProperties = { fontSize: 12.5, color: '#5a6058', textWrap: 'pretty' };

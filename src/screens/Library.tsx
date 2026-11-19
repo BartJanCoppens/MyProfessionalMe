@@ -113,7 +113,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
             </Banner>
           )}
           <Card title="Why this is on your path"><p style={{ margin: 0, textWrap: 'pretty', maxWidth: 640 }}>{det.why}</p></Card>
-          <FormatPanels vm={vm} />
+          <FormatPanels det={det} embed={vm.embed} />
           {vm.rec.showEvidence && <EvidenceCard rec={vm.rec} />}
           {vm.rec.hasHistory && <RecordCard rec={vm.rec} />}
           {det.av && <AvatarPanel key={det.av.key} av={det.av} />}
