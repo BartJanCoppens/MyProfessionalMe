@@ -107,6 +107,13 @@ describe('the steps', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(screen.queryByLabelText('Scene, or Check of item 1')).toBeNull();
   });
+  it('names the three fields of a course lesson: its number, its title and its summary', () => {
+    const lessons = [['Lesson 1', 'The rate', 'What the rate is'], ['Lesson 2', 'The invoice', 'What it says']];
+    render(<Live state={{ create: data(), createTab: 'new', nw: { ...nw, type: 'E-learning', items: { list: lessons as never, how: 'manual', problems: [], note: '' } }, studio: { view: 'studio', step: 2, id: 'elearn' } }} />);
+    expect(screen.getByText(/Items · Lesson number · Lesson title · Summary/)).toBeTruthy();
+    expect((screen.getByLabelText('Lesson title of item 1') as HTMLInputElement).value).toBe('The rate');
+    expect((screen.getByLabelText('Lesson number of item 2') as HTMLInputElement).value).toBe('Lesson 2');
+  });
   it('offers produce rows and, for the stock presenter, stock looks as chips, with nothing to play yet', () => {
     render(atStep(3, false, { shape: { 'Who presents?': 'Stock presenter and AI voice' } }));
     fireEvent.click(screen.getByRole('button', { name: 'Upbeat' }));

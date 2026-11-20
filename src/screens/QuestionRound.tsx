@@ -19,7 +19,7 @@ export default function QuestionRound({ r }: { r: Round }) {
         ))}
       </div>
       {r.hasFb && <Feedback color={r.fbColor} head={r.fbHead}>{r.why}</Feedback>}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Button size="sm" onClick={r.main} disabled={r.mainOff}>{r.mainLabel}</Button><span style={{ fontSize: 12, color: '#5a6058' }}>{r.hint}</span></div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{r.mainLabel && <Button size="sm" onClick={r.main} disabled={r.mainOff}>{r.mainLabel}</Button>}<span style={{ fontSize: 12, color: '#5a6058' }}>{r.hint}</span></div>
     </>
   );
 }

@@ -44,12 +44,13 @@ export type Play =
   | { kind: 'hotspot'; path: string; alt: string; cap: string; spots: { n: number; x: number; y: number; title: string; text: string; on: boolean; pick: () => void }[] }
   | { kind: 'reflect'; p: string; shown: boolean; readOnly: boolean; value: string; set: (text: string) => void; note: string };
 
-// The check as a one-question round: its answer is the pick once checked, and "Try again" starts the round over (the answer clears with it).
+// The check as a one-question round: its answer is the pick once checked, and "Try again" (after a wrong answer only) starts the round over (the answer clears with it).
 function checkPlay(b: Extract<CourseBlock, { block: 'check' }>, run: BlockRun, patch: (p: BlockPatch) => void, ro: boolean): Play {
   const round = roundView([b.question], run.round, (r) => patch({ round: r, ...('checked' in r && { answer: r.checked ? r.picks?.[0] ?? null : null }) }),
     { locked: () => ro, finishLabel: 'Done', onFinish: () => {} });
   const retry = () => { if (!ro) patch({ round: NEW_ROUND, answer: null }); };
-  return { kind: 'check', round: { ...round, pos: '', topic: '', hint: '', mainLabel: run.round.checked ? 'Try again' : round.mainLabel, main: run.round.checked ? retry : round.main } };
+  const right = run.round.checked && run.round.pick === b.question.a;
+  return { kind: 'check', round: { ...round, pos: '', topic: '', hint: '', mainLabel: right ? '' : run.round.checked ? 'Try again' : round.mainLabel, main: run.round.checked ? retry : round.main } };
 }
 
 function sortPlay(b: Extract<CourseBlock, { block: 'sort' }>, run: BlockRun, patch: (p: BlockPatch) => void, ro: boolean): Play {

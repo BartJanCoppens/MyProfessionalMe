@@ -1,7 +1,7 @@
 // Library (search, filters, tiles, chips, covers) and learning detail (log hours, add to path, approval, accept, notes) (FT-LIB-*, FT-DET-*).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from 'react';
-import { BLS, DOMAINS, LEARN, MAPS0 } from './data';
+import { BLS, DOMAINS, LEARN, LEARN_META, MAPS0 } from './data';
 import { SEEDED_NOTE } from './fmtAvatar';
 import * as learner from './lib/learnerStore';
 import * as record from './lib/recordStore';
@@ -127,6 +127,18 @@ describe('learning detail', () => {
     expect(det.levelSub).toBe('Advanced · L3 in Job technical skills. You are at L3; Senior consultant expects L4.');
     expect(det.ladder.map((r) => r.note)).toEqual(['Reached', 'Reached', 'This learning', 'Senior consultant', '']);
     expect(det.outcomes).toHaveLength(3);
+  });
+  it('lists the lesson titles of a course instead of the generic outcomes', () => {
+    const id = LEARN.find((l) => l[4] === 'E-learning')![0], before = LEARN_META[id];
+    LEARN_META[id] = { ...before, line: before?.line ?? null, status: 'published', content: { kind: 'course', rule: 'seen', lessons: [{ title: 'Where is it taxed?', blocks: [] }, { title: 'Reverse charge', blocks: [] }] } };
+    try {
+      const det = detail(id).vm().det;
+      expect(det.outcomesTitle).toBe('What the course covers');
+      expect(det.outcomes.map((o) => o.t)).toEqual(['Where is it taxed?', 'Reverse charge']);
+    } finally { LEARN_META[id] = before; }
+  });
+  it('keeps the generic outcomes for any other learning', () => {
+    expect(detail('L1').vm().det.outcomesTitle).toBe('What you will be able to do');
   });
   it('lists every business-line path the learning is on', () => {
     const det = detail('L7').vm().det;

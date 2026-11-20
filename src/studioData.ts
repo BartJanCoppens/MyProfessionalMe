@@ -76,5 +76,5 @@ export const STUDIOS: StudioDef[] = [
    idea: 'Cross-border services: where VAT is due and how to invoice it', title: 'Cross-border services: where is the VAT due?',
    qs: [['Who is it for?', ['Consultants who invoice clients', 'Finance and billing teams', 'Tax specialists'], 'draft'], [COMPLETION_QUESTION, ['All lessons viewed', 'Score of 80 % or more', 'Both']], [COURSE_LENGTH, ['15 min', '30 min', '60 min']]],
    items: [['Lesson 1', 'Where is a service taxed?', 'The general B2B and B2C rules, and the main exceptions'], ['Lesson 2', 'Reverse charge on the invoice', 'What the invoice must say and who pays the VAT'], ['Lesson 3', 'Reporting it', 'The intra-Community listing and how to file it']],
-   rows: [], build: null },
+   rows: [], build: null, columns: ['Lesson number', 'Lesson title', 'Summary · one sentence'] },
 ];

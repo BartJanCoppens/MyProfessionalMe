@@ -27,6 +27,7 @@ import { blankDraft } from './createSave';
 import { loadCreate } from './lib/contributionStore';
 import { mappingChanges, publishMappings, removeLearning, saveLearning } from './lib/contentStore';
 import { cover, formatTiles, lengthLabel, reelStrip } from './logic/covers';
+import { outcomesOf } from './logic/outcomes';
 import { completionOf, completionText, completionTodo, lastActivity, lastActivityLabel, openChanges, panelOf } from './logic/record';
 import { logHour, recordVals, submit } from './recordVals';
 import { fmtCover } from './fmtCover';
@@ -471,7 +472,7 @@ export class Logic {
     if (!paths.length) paths = [{ bl: 'No path', stage: 'open to everyone', ob: '' }];
     const det = {
       ...d0, ...fmtVals(this, d0),
-      outcomes: OUTCOMES[d0.dom].map((t) => ({ t })),
+      ...outcomesOf(LEARN_META[d0.id]?.content, OUTCOMES[d0.dom]),
       levelSub: LEVELS[d0.lvl - 1] + ' · L' + d0.lvl + ' in ' + d0.domLabel + '. You are at L' + myLvl + '; ' + this.nextStage() + ' expects L' + TARGET[d0.di] + '.',
       ladder: LEVELS.map((lab, i) => {
         const n = i + 1; const isThis = n === d0.lvl, mine = n <= myLvl, tgt = n === TARGET[d0.di];

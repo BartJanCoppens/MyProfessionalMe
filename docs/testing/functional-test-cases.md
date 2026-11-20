@@ -869,3 +869,6 @@ Each one first had an `it.fails` test, named in the case above. All seven were f
 | ELI-12 | Reviewer | A submitted course with a picture | Open the contribution | "As learners will see it" shows the picture with its alt text | `CoursePanel.test.tsx` |
 | ELI-11 | Admin | View as a person's draft with an image | Open Produce | The picture shows; no file field, no shelf | `CourseImageEdit.test.tsx` |
 
+| ELI-13 | Creator | E-learning Studio, Draft | Look at the item fields | They are named "Lesson number", "Lesson title" and "Summary · one sentence"; the lesson title is the second field by design | `StudioSpine.test.tsx` |
+| ELI-14 | Learner | A published course | Open its page | The card says "What the course covers" and lists the lesson titles; other formats keep "What you will be able to do" | `model.library.test.ts` |
+| ELI-15 | Learner | A course knowledge check | Answer wrongly, then rightly | "Try again" shows after the wrong answer only | `CoursePanel.test.tsx` |

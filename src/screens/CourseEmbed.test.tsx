@@ -90,7 +90,7 @@ describe('an embedded learning in the learner\'s course', () => {
   it('goes back to the course from a learning opened from it, with "← Back to the course"', () => {
     render(<Live id="L38" backTo="L994" />);
     click('← Back to the course');
-    expect(screen.getByText('Practise')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Practise' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: '← Back to the course' })).toBeNull();
   });
   it('View as: the embedded panel is read only and nothing is saved (ELM-08)', () => {

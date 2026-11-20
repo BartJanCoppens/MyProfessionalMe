@@ -69,11 +69,13 @@ describe('the learner\'s course', () => {
     click('Check answer');
     expect(screen.getByText('Not quite.')).toBeTruthy();
     expect(screen.getByText(/The customer accounts for it\./)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
     click('Try again');
     fireEvent.click(screen.getByRole('radio', { name: /^Germany, reverse charge/ }));
     click('Check answer');
     expect(screen.getByText('Correct.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Check answer' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
   it('shows what a branching choice leads to, and lets the learner try another', () => {
     render(<Live />);

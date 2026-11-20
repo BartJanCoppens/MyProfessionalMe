@@ -132,7 +132,7 @@ export function DetailScreen({ vm }: { vm: VM }) {
               </div>
             </Card>
           )}
-          <Card title="What you will be able to do">
+          <Card title={det.outcomesTitle}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {det.outcomes.map((o) => (
                 <div key={o.t} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
