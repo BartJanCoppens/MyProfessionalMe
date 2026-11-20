@@ -41,13 +41,20 @@ export function hitsOf(bundles: Bundle[], query: string, max = 8): Hit[] {
 }
 export const passagesOf = (bundles: Bundle[], query: string, max = 8): string[] => hitsOf(bundles, query, max).map((h) => h.text);
 
-export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setNw: SetNw, query: string, spec: (passages: string[]) => DraftSpec) {
-  if (L.state.nwAiBusy || L.readOnly()) return;
+// The passages a draft is grounded on: the brief's cited ones, then the picked bundles' best matches; null (said in a toast) when there are none to use.
+export function groundedPassages(L: Logic, nw: NewDraft, bundles: Bundle[], query: string): string[] | null {
   const cited = nw.brief?.passages ?? [];
-  if (!bundles.length && !cited.length) { L.say('Pick at least one knowledge bundle'); return; }
+  if (!bundles.length && !cited.length) { L.say('Pick at least one knowledge bundle'); return null; }
   // A placeholder's draft starts from the passages its module cites, then the picked bundles' best matches.
   const passages = [...cited, ...passagesOf(bundles, query)].slice(0, 8);
-  if (!passages.length) { L.say('These bundles have no passages a creator may use'); return; }
+  if (!passages.length) { L.say('These bundles have no passages a creator may use'); return null; }
+  return passages;
+}
+
+export async function draftItems(L: Logic, nw: NewDraft, bundles: Bundle[], setNw: SetNw, query: string, spec: (passages: string[]) => DraftSpec) {
+  if (L.state.nwAiBusy || L.readOnly()) return;
+  const passages = groundedPassages(L, nw, bundles, query);
+  if (!passages) return;
   const s = spec(passages);
   L.setState({ nwAiBusy: true });
   const out = await runDraft(L, s);

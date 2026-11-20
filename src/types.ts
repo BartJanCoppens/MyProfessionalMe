@@ -178,6 +178,8 @@ export type AppState = {
   studio: StudioState;
   // The E-learning Studio's editor: the lesson on show (index from 0) and the selected block's id.
   courseEdit: { lesson: number; block: string | null };
+  // AI help in that editor (UI only, never saved): the blocks the AI drafted and the creator has not edited yet, and a draft-all progress line.
+  courseAi: { ids: string[]; progress: string | null };
   polForm: { lines: string[]; formats: string[]; domains: string[]; audiences: string[]; peers: string; expert: boolean; quality: boolean };
   // Learning record (F2): the learner's evidence being typed for one learning (key subject|learning), before it is saved.
   evDraft: { key: string; note: string; link: string; ref: string } | null;

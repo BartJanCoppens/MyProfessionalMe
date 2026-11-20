@@ -25,6 +25,7 @@ function Outline({ c }: { c: Course }) {
         </div>
       ))}
       {!c.readOnly && <div><Button size="sm" variant="secondary" onClick={c.addLesson} disabled={c.noAdd}>Add lesson</Button></div>}
+      {c.ai && <div><Button size="sm" variant="secondary" onClick={c.ai.fillAll.run} disabled={c.ai.busy}>{c.ai.fillAll.label}</Button></div>}
     </div>
   );
 }
@@ -38,6 +39,12 @@ function Canvas({ c }: { c: Course }) {
           <LinkButton tone="muted" onClick={c.removeLesson}>Remove lesson</LinkButton>
         </div>
       )}
+      {c.ai && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button size="sm" variant="secondary" onClick={c.ai.fillLesson.run} disabled={c.ai.busy}>{c.ai.fillLesson.label}</Button>
+          <span style={{ fontSize: 12, color: '#5a6058' }}>{c.ai.hint}</span>
+        </div>
+      )}
       {c.blocks.map((b) => <CourseBlock key={b.id} b={b} mode="edit" />)}
       {!c.blocks.length && <div style={{ fontSize: 12.5, color: '#5a6058' }}>This lesson has no blocks yet.{c.readOnly ? '' : ' Add one from the shelf.'}</div>}
     </div>
@@ -47,11 +54,11 @@ function Canvas({ c }: { c: Course }) {
 export default function CourseEditor({ c, readOnly }: { c: Course; readOnly: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 12.5, color: '#5a6058' }}>{c.count}</div>
+      <div style={{ fontSize: 12.5, color: '#5a6058' }}>{c.count}{c.ai?.progress && <span role="status" style={{ marginLeft: 10, fontWeight: 600 }}>{c.ai.progress}…</span>}</div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <Outline c={c} />
         <Canvas c={c} />
-        {!readOnly && <div style={{ ...column, flex: '0 1 280px', minWidth: 240 }}>{c.inspector && <BlockInspector key={c.inspector.id} i={c.inspector} />}<Shelf shelf={c.shelf} /></div>}
+        {!readOnly && <div style={{ ...column, flex: '0 1 280px', minWidth: 240 }}>{c.inspector && <BlockInspector key={c.inspector.id} i={c.inspector} />}<Shelf shelf={c.shelf} busy={!!c.ai?.busy} /></div>}
       </div>
       <Problems list={c.problems} />
     </div>

@@ -63,14 +63,19 @@ export function BlockInspector({ i }: { i: Inspector }) {
   );
 }
 
-export function Shelf({ shelf }: { shelf: Course['shelf'] }) {
+export function Shelf({ shelf, busy }: { shelf: Course['shelf']; busy: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid #eef0ea', paddingTop: 10 }}>
-      <div style={{ fontSize: 12.5, color: '#5a6058' }}>Add a block after the selected one, or at the end of the lesson.</div>
+      <div style={{ fontSize: 12.5, color: '#5a6058' }}>Add a block after the selected one, or at the end of the lesson. “Suggest with AI” drafts that block from your sources · review it.</div>
       {shelf.map((g) => (
         <div key={g.group} role="group" aria-label={g.group} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={label}>{g.group}</div>
-          {g.items.map((it) => <Button key={it.label} size="sm" variant="secondary" onClick={it.add} leading={<span aria-hidden>{it.glyph}</span>} style={{ justifyContent: 'flex-start' }}>{it.label}</Button>)}
+          {g.items.map((it) => (
+            <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Button size="sm" variant="secondary" onClick={it.add} leading={<span aria-hidden>{it.glyph}</span>} style={{ flex: 1, justifyContent: 'flex-start' }}>{it.label}</Button>
+              {it.suggest && <Button size="sm" variant="accent" onClick={it.suggest} disabled={busy} aria-label={'Suggest ' + it.label.toLowerCase() + ' with AI'}>Suggest with AI</Button>}
+            </div>
+          ))}
         </div>
       ))}
     </div>

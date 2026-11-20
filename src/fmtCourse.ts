@@ -20,7 +20,7 @@ import type { Item, Logic } from './model';
 import type { CourseContent, EmbedBlock } from './types';
 
 export type { BlockPatch, BlockRun, CourseAnswer, Play };
-export type BlockView = { id: string; kind: BlockKind; name: string; title: string; block: CourseBlock; missing: string | null; on: boolean; pick: () => void; play: Play | null };
+export type BlockView = { id: string; kind: BlockKind; name: string; title: string; block: CourseBlock; missing: string | null; on: boolean; pick: () => void; ai: boolean; play: Play | null };
 export type BlockMode = 'edit' | 'play';
 
 // An embedded learning in the player: its card (the studio's glyph, the title, "Reel · 2 min"). Opening plays that format's own learner panel under the card
@@ -45,8 +45,8 @@ export function embedView(b: EmbedBlock, run: CourseRun, patch: (p: Partial<Cour
 }
 
 // `on`: the block is selected in the editor; `pick` selects it. `missing` is what the creator still has to write, in their words. `play`: what a learner does with it.
-export const blockView = (b: CourseBlock, mode: BlockMode, run: BlockRun | undefined, patch: (p: BlockPatch) => void, o: { ro: boolean; on?: boolean; pick?: () => void; reflection?: Reflection }): BlockView =>
-  ({ id: b.id, kind: b.block, name: KIND_NAME[b.block], title: b.block === 'embed' ? LEARN_BY[b.learning]?.[1] ?? '' : '', block: b, missing: mode === 'edit' ? missingOf(b) : null, on: !!o.on, pick: o.pick ?? (() => {}),
+export const blockView = (b: CourseBlock, mode: BlockMode, run: BlockRun | undefined, patch: (p: BlockPatch) => void, o: { ro: boolean; on?: boolean; pick?: () => void; ai?: boolean; reflection?: Reflection }): BlockView =>
+  ({ id: b.id, kind: b.block, name: KIND_NAME[b.block], title: b.block === 'embed' ? LEARN_BY[b.learning]?.[1] ?? '' : '', block: b, missing: mode === 'edit' ? missingOf(b) : null, on: !!o.on, pick: o.pick ?? (() => {}), ai: !!o.ai,
     play: mode === 'play' ? playOf(b, run ?? NEW_BLOCK, patch, o.ro, o.reflection) : null });
 
 // at: the lesson on show; open: the embed (its block id) open under its card; seen: the lessons opened this session (the saved ones come with the options); rounds: a check's round per block; best, completed and savedSeen:

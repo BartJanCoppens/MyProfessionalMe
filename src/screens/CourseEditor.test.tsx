@@ -41,8 +41,8 @@ describe('the outline and the canvas', () => {
 describe('the shelf and the inspector', () => {
   it('offers the blocks and interactions that work, and nothing "coming"', () => {
     render(<Live />);
-    expect(within(screen.getByRole('group', { name: 'Blocks' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['¶Text', '!Callout', '≡Accordion', '▣Image']);
-    expect(within(screen.getByRole('group', { name: 'Interactions' })).getAllByRole('button').map((b) => b.textContent?.slice(1))).toEqual(['Knowledge check', 'Sort into groups', 'Hotspot image', 'Branching scenario', 'Reflection', 'Calculation exercise']);
+    expect(within(screen.getByRole('group', { name: 'Blocks' })).getAllByRole('button', { name: /^(?!Suggest)/ }).map((b) => b.textContent)).toEqual(['¶Text', '!Callout', '≡Accordion', '▣Image']);
+    expect(within(screen.getByRole('group', { name: 'Interactions' })).getAllByRole('button', { name: /^(?!Suggest)/ }).map((b) => b.textContent?.slice(1))).toEqual(['Knowledge check', 'Sort into groups', 'Hotspot image', 'Branching scenario', 'Reflection', 'Calculation exercise']);
     ['AI tutor', 'Calculators and graphs', 'coming'].forEach((w) => expect(screen.queryByText(new RegExp(w, 'i'))).toBeNull());
   });
   it('"Knowledge check" adds a check after the selected block and opens it with what is missing', () => {

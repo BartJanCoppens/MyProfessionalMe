@@ -38,7 +38,7 @@ export default function CourseBlock({ b, mode }: { b: BlockView; mode: BlockMode
   if (mode === 'play') return <div style={{ ...box, border: '1px solid #e1e5dc' }}>{body}</div>;
   return (
     <div role="button" tabIndex={0} aria-label={'Select ' + b.name.toLowerCase()} aria-pressed={b.on} onClick={b.pick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); b.pick(); } }} style={{ ...box, cursor: 'pointer', border: '1px solid ' + (b.on ? '#3f6a0a' : '#e1e5dc'), boxShadow: b.on ? '0 0 0 2px #dfe9cf' : 'none' }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>{b.name}</div>{body}
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6058', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>{b.name}{b.ai && <span style={{ marginLeft: 8, color: '#3f6a0a' }}>· AI draft · check it</span>}</div>{body}
     </div>
   );
 }

@@ -101,7 +101,7 @@ export function stepVals(L: Logic, def: StudioDef, nw: NewDraft, setNw: SetNw, b
   // A lesson row goes with its blocks.
   const removeRow = (k: number) => (def.produce === 'course' ? setNw((cur) => { const it = cur.items ?? noItems(); return set(it, dropLesson(it.list as StudioEntry[], k)); })
     : change((rows, q) => [...rows.filter((_, i) => i !== k), ...q]));
-  const course = def.produce === 'course' ? courseEditVals(L, nw, setNw) : null;
+  const course = def.produce === 'course' ? courseEditVals(L, nw, setNw, bundles) : null;
   return {
     shape: def.qs.map(([q, options, steers]) => { const o = offered(on, q, options, nw.shape?.[q]); return choices(nw, setNw, 'shape', q, o.options, steers, o.note); }),
     produce: def.rows.map(([row, options, steers]) => choices(nw, setNw, 'produce', row, options, steers, PRODUCE_NOTES[def.id + ':' + row])),
