@@ -872,3 +872,18 @@ Each one first had an `it.fails` test, named in the case above. All seven were f
 | ELI-13 | Creator | E-learning Studio, Draft | Look at the item fields | They are named "Lesson number", "Lesson title" and "Summary · one sentence"; the lesson title is the second field by design | `StudioSpine.test.tsx` |
 | ELI-14 | Learner | A published course | Open its page | The card says "What the course covers" and lists the lesson titles; other formats keep "What you will be able to do" | `model.library.test.ts` |
 | ELI-15 | Learner | A course knowledge check | Answer wrongly, then rightly | "Try again" shows after the wrong answer only | `CoursePanel.test.tsx` |
+
+## 29. E-learning Studio: AI help in Produce (AIP), Creator, Admin in View as (E-learning Studio, 20 Nov 2026)
+
+| ID | Role | Given | Action | Expected | Test |
+|---|---|---|---|---|---|
+| AIP-01 | Creator | The course editor, Produce, AI on | Click "Draft blocks with AI" on a lesson | One request from the lesson and the chosen bundles (marked data); a text, a callout and a check are added after the existing blocks, marked "AI draft · check it"; toast "Added 3 blocks from your sources · review each one" | `courseAiDraft.test.ts` › fill a lesson |
+| AIP-02 | Creator | The same | Look at the saved draft | The contribution is AI-assisted ("Made with AI" at publish) | `courseAiDraft.test.ts` |
+| AIP-03 | Creator | An AI answer with an invalid check, an image block and a good text | Draft blocks | Only the good block is added; the toast says "2 dropped: they did not fit the course rules" | `courseAiDraft.test.ts`, `logic/courseDraft.test.ts` |
+| AIP-04 | Creator | AI answers nonsense, is off, or the daily limit is reached | Draft blocks | Nothing is added and nothing scripted is shown as AI; "AI did not return usable blocks · try again", "AI drafting is not switched on · add blocks yourself", or the limit text | `courseAiDraft.test.ts` |
+| AIP-05 | Creator | A lesson with 20 blocks; no bundle picked | Draft blocks | "A lesson holds at most 20 blocks"; "Pick at least one knowledge bundle"; no AI call | `courseAiDraft.test.ts` |
+| AIP-06 | Creator | The shelf | Click "Suggest with AI" on Reflection with a block selected; with none selected | One block of that kind after the selected block, selected for editing; at the end of the lesson when none; a block of another kind is dropped. Eight kinds offer it; Image, Hotspot and Embed do not | `courseAiDraft.test.ts` › suggest one block; `screens/CourseAi.test.tsx` |
+| AIP-07 | Creator | A course of three lessons | "Draft all lessons with AI" where lesson 2 fails | One lesson at a time with "Drafting lesson n of 3"; lessons 1 and 3 get blocks, lesson 2 is named in the toast; with the daily limit reached it stops and says which lessons were not drafted | `courseAiDraft.test.ts` › draft all lessons |
+| AIP-08 | Creator | An AI action running | Click another AI action; edit a block meanwhile | The second does nothing (one at a time); the edit is kept and the new blocks go after the existing ones | `courseAiDraft.test.ts` |
+| AIP-09 | Creator | An AI draft block | Edit one of its fields | The "AI draft" marker goes | `courseAiDraft.test.ts` |
+| AIP-10 | Admin in View as | The course editor | Look for AI actions | None (no buttons, no shelf) | `courseAiDraft.test.ts` › who may use it; `screens/CourseAi.test.tsx` |

@@ -547,3 +547,12 @@ Plan: `docs/superpowers/plans/2026-11-17-studios.md`. The owner reversed D1 ("pa
 - **No magic-byte check of the file's content (accepted, review M4).** The extension and size are checked in the browser and the bucket checks the MIME type that `uploadMedia` sends from the extension; a file that is not really an image just does not show (`<img>` never runs it). A production version would sniff the first bytes.
 - **Hotspot in the player is "all points" plus one open.** One point is open at a time (its run answer); `All points as text` (a closed `details`) lists every point for people who do not use the picture. A hotspot never scores.
 - **Course images are not resized or re-encoded (shortcut).** They are stored as uploaded, within the size cap. Production: resize and re-encode on upload (also strips metadata).
+
+## E-learning Studio: AI help in Produce (owner, 20 Nov 2026)
+
+- **Both ways of help, one path.** *What:* the owner chose both: fill a lesson (per lesson, and all lessons) and suggest one block of a chosen type on the shelf. *Why:* filling saves the most time; suggesting keeps the creator in control of one block. *Alternatives:* only one of them (rejected by the owner). Both run through one engine over the Draft step's pipeline (`runDraft`, `studio_draft`), so there is one request builder, one source pool and one strict reading.
+- **`studio_draft` is switched on in production** (linked to a connection, 50 calls per person per day): the use that already drafted the other studios' rows and the lesson rows now also drafts blocks. No new use, no migration. A draft-all run costs one call per lesson and stops at the daily limit.
+- **A failure never becomes scripted blocks.** *What:* when AI is off, refuses, times out or answers unusable JSON, nothing is added and the creator is told why. *Why:* scripted blocks presented as AI would break "never label scripted output as AI"; the lesson rows keep their scripted fallback because they are labelled scripted.
+- **Pictures and embeds are never generated;** they need an upload or a pick. Blocks that fail the course shape rules are dropped and counted, never repaired.
+- **Provenance: `how = 'ai'` on the course** (the flag the other studios set), so a course with any AI blocks is AI-assisted and shows "Made with AI". The "AI draft" marker on a block is UI only and not stored (shortcut): it disappears at the first edit or on reload. A production version could store a per-block `ai` flag if reviewers need to see which blocks the AI wrote.
+
