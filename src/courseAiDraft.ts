@@ -29,12 +29,12 @@ function addBlocks(L: Logic, setNw: SetNw, job: BlockJob, blocks: CourseBlock[],
   const suggested = 'kind' in job.ask; // a suggestion is selected so the creator sees it at once
   setNw((cur) => (cur.type === 'E-learning' && cur.items ? { items: { ...cur.items, how: 'ai', note, problems: [],
     list: blocks.reduce((list, b, i) => insertBlock(list, job.lesson, i ? blocks[i - 1].id : job.after ?? null, b), cur.items.list as StudioEntry[]) as Item[] } } : {}));
-  L.setState((s) => ({ courseAi: { ...s.courseAi, ids: [...s.courseAi.ids, ...blocks.map((b) => b.id)] }, courseEdit: suggested ? { lesson: job.lesson, block: blocks[0].id } : s.courseEdit }));
+  L.setState((s) => ({ courseAi: { ...s.courseAi, ids: [...s.courseAi.ids, ...blocks.map((b) => b.id)] }, courseEdit: suggested && s.courseEdit.lesson === job.lesson ? { lesson: job.lesson, block: blocks[0].id } : s.courseEdit }));
 }
 
 export async function draftBlocks(L: Logic, nw: NewDraft, bundles: Bundle[], setNw: SetNw, jobs: BlockJob[]) {
   if (L.state.nwAiBusy || L.readOnly() || !jobs.length) return;
-  const started = L.state, out = { added: 0, lessons: 0, dropped: 0, notes: [] as string[], limit: '', stoppedAt: -1 };
+  const started = L.state, out = { added: 0, lessons: 0, dropped: 0, notes: [] as string[], limit: '', stoppedAt: -1, noSources: false };
   L.setState({ nwAiBusy: true });
   try {
     for (const [n, job] of jobs.entries()) {
@@ -43,25 +43,26 @@ export async function draftBlocks(L: Logic, nw: NewDraft, bundles: Bundle[], set
       const room = COURSE_CAPS.blocksPerLesson - lesson.blocks.length, who = jobs.length > 1 ? 'Lesson ' + (job.lesson + 1) + ': ' : '';
       if (room <= 0) { out.notes.push(who + 'A lesson holds at most ' + COURSE_CAPS.blocksPerLesson + ' blocks'); continue; }
       const passages = groundedPassages(L, nw, bundles, lesson.title + ' ' + lesson.summary + ' ' + nw.title);
-      if (!passages) return;
+      if (!passages) { out.noSources = true; break; }
       if (jobs.length > 1) L.setState((s) => ({ courseAi: { ...s.courseAi, progress: 'Drafting lesson ' + (n + 1) + ' of ' + jobs.length } }));
       const tally = { dropped: 0 }, res = await runDraft(L, blockSpec(nw, lesson, job.lesson, passages, job.ask, room, tally), (m) => { out.limit = m; });
       if (out.limit) { out.stoppedAt = n; break; }
       if (typeof res === 'string') { out.notes.push(who + res); continue; }
       const again = lessonsOf(currentList(L))[job.lesson];
       if (!sameDraft(started, L.latest().state) || again?.title !== lesson.title) { out.notes.push(who + 'The lesson changed meanwhile · nothing added'); continue; }
-      const blocks = (res.list as unknown as CourseBlock[]).slice(0, COURSE_CAPS.blocksPerLesson - again.blocks.length);
+      const all = res.list as unknown as CourseBlock[], blocks = all.slice(0, COURSE_CAPS.blocksPerLesson - again.blocks.length);
       addBlocks(L, setNw, job, blocks, res.note);
-      out.added += blocks.length; out.lessons++; out.dropped += tally.dropped;
+      out.added += blocks.length; out.lessons++; out.dropped += tally.dropped + all.length - blocks.length;
     }
   } finally { L.setState((s) => ({ nwAiBusy: false, courseAi: { ...s.courseAi, progress: null } })); }
+  if (out.noSources && !out.added) return; // the toast already said why
   L.say(summary(out, jobs));
 }
 
-function summary(out: { added: number; lessons: number; dropped: number; notes: string[]; limit: string; stoppedAt: number }, jobs: BlockJob[]): string {
+function summary(out: { added: number; lessons: number; dropped: number; notes: string[]; limit: string; stoppedAt: number; noSources: boolean }, jobs: BlockJob[]): string {
   const parts = [
     ...(out.added ? ['Added ' + plural(out.added, 'block') + ' from your sources' + (jobs.length > 1 ? ' in ' + plural(out.lessons, 'lesson') : '') + ' · review each one'] : []),
-    ...(out.dropped ? [out.dropped + ' dropped: they did not fit the course rules'] : []), ...out.notes,
+    ...(out.dropped ? [out.dropped + ' dropped: they did not fit the course rules or the lesson\'s room'] : []), ...out.notes, ...(out.noSources ? ['no sources left to draft from'] : []),
     ...(out.limit ? [out.limit, ...(jobs.length > 1 ? [left(jobs.slice(out.stoppedAt))] : [])] : []),
   ];
   return parts.join(' · ');

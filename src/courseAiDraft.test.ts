@@ -20,6 +20,13 @@ vi.mock('./lib/learnerStore', () => ({
   acceptLearning: vi.fn(), addAmbition: vi.fn(), addInterest: vi.fn(), removeAmbition: vi.fn(), removeInterest: vi.fn(), saveProgress: vi.fn(), savePrefs: vi.fn(), loadLearner: vi.fn(),
 }));
 
+// The sources can run out partway through a draft-all (groundedPassages answers null after `cutAfter` calls).
+const sources = vi.hoisted(() => ({ cutAfter: Infinity, calls: 0 }));
+vi.mock('./studioDraft', async (orig) => {
+  const real = await orig<typeof import('./studioDraft')>();
+  return { ...real, groundedPassages: (...a: Parameters<typeof real.groundedPassages>) => (++sources.calls > sources.cutAfter ? null : real.groundedPassages(...a)) };
+});
+
 const text = (id: string, lesson: number): CourseBlock => ({ block: 'text', id, lesson, h: 'H ' + id, t: 'Words ' + id });
 const list = (): Item[] => [['Lesson 1', 'One', 'First'], ['Lesson 2', 'Two', 'Second'], ['Lesson 3', 'Three', 'Third'], text('b0001', 0), text('b0002', 0), text('b0003', 1)] as Item[];
 const Q = { block: 'check', t: 'T', q: 'Which?', o: ['a', 'b', 'c', 'd'], a: 2, why: 'Because.' };
@@ -36,7 +43,7 @@ const at = (o: { live?: boolean; items?: Item[]; state?: Partial<AppState>; read
     blocksOf: (k: number) => lessonsOf(h.state.nw.items!.list).map((l) => l.blocks)[k] });
 };
 const ai = (fn: (req: unknown) => Promise<string>) => { const complete = vi.fn(fn); stubWindow({ claude: { complete } }); return complete; };
-beforeEach(() => { stubWindow(); vi.clearAllMocks(); });
+beforeEach(() => { stubWindow(); vi.clearAllMocks(); sources.cutAfter = Infinity; sources.calls = 0; });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('fill a lesson', () => {
@@ -68,7 +75,7 @@ describe('fill a lesson', () => {
     const h = at();
     await h.ai().fillLesson.run();
     expect(h.blocksOf(0).map((b) => b.block)).toEqual(['text', 'text', 'text']);
-    expect(h.lastToast()).toBe('Added 1 block from your sources · review each one · 2 dropped: they did not fit the course rules');
+    expect(h.lastToast()).toBe('Added 1 block from your sources · review each one · 2 dropped: they did not fit the course rules or the lesson\'s room');
   });
   it('unusable JSON adds nothing, says so, and never calls scripted blocks AI', async () => {
     ai(async () => 'nope');
@@ -113,6 +120,39 @@ describe('fill a lesson', () => {
     const h = at({ state: { nwAiBusy: true } });
     await h.ai().fillLesson.run();
     expect(complete).not.toHaveBeenCalled();
+  });
+});
+
+describe('the draft changes while the AI works', () => {
+  it('adds nothing to the other draft and says so', async () => {
+    const h = at();
+    ai(async () => { h.L().setState((s) => ({ nw: { ...s.nw, key: 'another' } })); return answer(GOOD); });
+    await h.ai().fillLesson.run();
+    expect(h.items()).toEqual(list());
+    expect(h.state.courseAi.ids).toEqual([]);
+    expect(h.lastToast()).toBe('The lesson changed meanwhile · nothing added');
+  });
+  it('a suggestion does not move the selection when the creator went to another lesson', async () => {
+    const h = at({ state: { courseEdit: { lesson: 0, block: 'b0001' } } });
+    ai(async () => { h.L().setState({ courseEdit: { lesson: 1, block: null } }); return answer([{ block: 'reflect', p: 'Q?' }]); });
+    await h.course().shelf.flatMap((g) => g.items).find((i) => i.label === 'Reflection')!.suggest!();
+    expect(h.state.courseEdit).toEqual({ lesson: 1, block: null });
+  });
+  it('valid blocks beyond the lesson\'s room count as dropped, and the note says so', async () => {
+    ai(async () => answer([GOOD[0], GOOD[1], Q, { block: 'reflect', p: 'x' }, { block: 'text', h: 'a', t: 'b' }, { block: 'callout', t: 'c' }]));
+    const h = at({ items: [...list(), ...Array.from({ length: 16 }, (_, i) => text('c' + String(i).padStart(4, '0'), 0))] });
+    await h.ai().fillLesson.run();
+    expect(h.blocksOf(0)).toHaveLength(20);
+    expect(h.lastToast()).toBe('Added 2 blocks from your sources · review each one · 4 dropped: they did not fit the course rules or the lesson\'s room');
+  });
+  it('draft all keeps the summary of what it added when the sources run out', async () => {
+    ai(async () => answer([GOOD[0]]));
+    sources.cutAfter = 1;
+    const h = at();
+    await h.ai().fillAll.run();
+    expect(h.blocksOf(0)).toHaveLength(3);
+    expect(h.blocksOf(1)).toHaveLength(1);
+    expect(h.lastToast()).toBe('Added 1 block from your sources in 1 lesson · review each one · no sources left to draft from');
   });
 });
 

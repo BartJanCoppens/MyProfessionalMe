@@ -59,5 +59,6 @@ export function readBlocks(raw: string, lesson: number, title: string, kinds: re
   const list = (jsonObject(raw) as { blocks?: unknown } | null)?.blocks;
   if (!Array.isArray(list) || !list.length) return null;
   const all = list.map((x) => oneBlock(x, lesson, title, kinds)), blocks = all.filter((b): b is CourseBlock => !!b);
-  return { blocks: blocks.slice(0, max), dropped: all.length - blocks.length };
+  const kept = blocks.slice(0, max);
+  return { blocks: kept, dropped: all.length - kept.length }; // valid blocks beyond the room count as dropped
 }
